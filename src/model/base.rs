@@ -62,7 +62,7 @@ impl BaseRepo {
         <<B::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
             IntoActiveModel<B::ActiveModel> + HasId,
     {
-        let r = B::Entity::find()
+        let r = <B::Entity as EntityTrait>::find()
             .one(db)
             .await?
             .ok_or(DbError::RecordNotFound("product not found".to_owned()))?;
