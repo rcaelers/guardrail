@@ -1,5 +1,6 @@
-use sea_orm::{ActiveModelBehavior, ActiveModelTrait, DbConn, EntityTrait, IntoActiveModel};
-use sea_orm::{IdenStatic, Iterable, PrimaryKeyToColumn, PrimaryKeyTrait};
+use sea_orm::{
+    ActiveModelBehavior, ActiveModelTrait, DbConn, EntityTrait, IntoActiveModel, PrimaryKeyTrait,
+};
 use serde::Serialize;
 
 use super::error::DbError;
