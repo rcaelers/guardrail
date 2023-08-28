@@ -1,0 +1,40 @@
+version: "3.8"
+
+volumes:
+  postgresql15-storage:
+  pgadmin4-storage:
+
+services:
+
+  postgresql:
+    container_name: postgresql
+    image: postgres:15-bullseye
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgresql15-storage:/var/lib/postgresql/data
+      - ./initdb/:/docker-entrypoint-initdb.d/
+    ports:
+      - 8080:8080
+      - 5432:5432
+    restart: unless-stopped
+    healthcheck:
+      test: "pg_isready -U postgres"
+      interval: 30s
+      timeout: 10s
+      retries: 6
+
+  pgadmin4:
+    container_name: pgadmin4
+    image: dpage/pgadmin4
+    ports:
+      - 11000:80
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=rob.caelers@gmail.com
+      - PGADMIN_DEFAULT_PASSWORD=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - pgadmin4-storage:/var/lib/pgadmin
+    depends_on:
+      - postgresql
+    restart: unless-stopped

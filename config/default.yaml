@@ -1,0 +1,13 @@
+server:
+  port: 8080
+  base_path: _data
+logger:
+  directory: _data/logs
+  level: trace
+database:
+  uri: postgres://guardrail:wezei4Joozooz8To@localhost/guardrail
+  user: postgres
+  password: postgres
+  name: postgres
+auth:
+  secret: secret

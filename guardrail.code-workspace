@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": "../../workrave/guardrail"
+		}
+	],
+	"settings": {
+		"cSpell.words": [
+			"guardrail"
+		],
+		"rust-analyzer.linkedProjects": [
+			"./migration/Cargo.toml",
+			"./Cargo.toml"
+		]
+	}
+}

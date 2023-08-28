@@ -1,0 +1,6 @@
+/target
+/migration/target
+/.vscode
+/_data
+.DS_Store
+*~

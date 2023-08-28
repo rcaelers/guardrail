@@ -1,0 +1,65 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rob Caelers <rob.caelers@gmail.com>"]
+license = "MIT"
+description = "GuardRail: Gather Unanticipated Anomaly Reports, Debugging Reports and Anomaly Investigation Logs"
+homepage = ""
+repository = "https://github.com/rcaelers/guardrail"
+
+[workspace]
+members = [
+    "migration"
+]
+
+[dependencies]
+migration = { path = "migration" }
+# Tokio
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7.8", features = ["tracing", "io"] }
+# Serde / json
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_with = "3"
+# Axum/Web
+axum = { version = "0.6.16", features = ["headers", "form", "query", "macros", "multipart", "tracing"] }
+tower = { version = "0.4", features = [ "timeout" ] }
+tower-http = { version = "0.4", features = ["full"] }
+tower-cookies = "0.9"
+tera = { version = "1", default-features = false }
+# SeaORM
+sea-orm = { version = "^0.12.2", features = ["sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros", "with-uuid", "with-json"] }
+futures = "0.3.21"
+# Others
+lazy-regex = "3.0.1"
+async-trait = "0.1"
+strum_macros = "0.25.2"
+uuid = { version = "1", features = ["v4", "fast-rng", "serde"] }
+rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
+cargo-watch = "8.4.0"
+config = "0.13.3"
+#lazy_static = "1.4.0"
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.17", features = ["tracing-log", "local-time", "env-filter", "json"] }
+tracing-appender = "0.2"
+anyhow = "1"
+thiserror = "1.0.47"
+chrono = { version = "0.4.26", features = ["serde"] }
+minidump = { version = "0.17.0" }
+minidump-common = { version = "0.17.0" }
+minidump-processor = { version = "0.17.0" }
+minidump-unwind = { version = "0.17.0", features = ["debuginfo", "http"] }
+
+[features]
+# Allows construction of symbol files from native binaries
+dump_syms = ["minidump-processor/dump_syms"]
+
+# [dev-dependencies.sea-orm]
+# version = "*"
+# features = ["mock"]
+
+[dev-dependencies]
+anyhow = "1"
+httpc-test = "0.1.1"
+serial_test = "2"
