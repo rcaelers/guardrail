@@ -3,6 +3,7 @@ use sea_orm::{
     ActiveModelBehavior, ActiveModelTrait, DbConn, EntityTrait, IntoActiveModel, PrimaryKeyTrait,
 };
 use serde::Serialize;
+use tracing::debug;
 
 use super::error::DbError;
 pub trait HasId {
@@ -32,7 +33,9 @@ pub trait BaseRepo {
         <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
             IntoActiveModel<Self::ActiveModel> + HasId,
     {
+        debug!("create");
         let model = Self::ActiveModel::from(dto).insert(db).await?;
+        debug!("create: ok");
         Ok(model.id())
     }
 

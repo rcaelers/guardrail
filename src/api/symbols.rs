@@ -13,6 +13,7 @@ use tracing::{debug, error, info};
 
 use super::error::ApiError;
 use crate::app_state::AppState;
+use crate::model::base::BaseRepo;
 use crate::model::product::ProductRepo;
 use crate::model::symbols::{SymbolsDto, SymbolsRepo};
 use crate::model::version::VersionRepo;

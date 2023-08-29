@@ -23,6 +23,7 @@ pub struct VersionDto {
 impl From<VersionDto> for entity::version::ActiveModel {
     fn from(version: VersionDto) -> Self {
         Self {
+            id: Set(uuid::Uuid::new_v4()),
             name: Set(version.name),
             hash: Set(version.hash),
             tag: Set(version.tag),
@@ -36,11 +37,7 @@ impl From<(uuid::Uuid, VersionDto)> for entity::version::ActiveModel {
     fn from((id, version): (uuid::Uuid, VersionDto)) -> Self {
         Self {
             id: Set(id),
-            name: Set(version.name),
-            hash: Set(version.hash),
-            tag: Set(version.tag),
-            product_id: Set(version.product_id),
-            ..Default::default()
+            ..From::from(version)
         }
     }
 }

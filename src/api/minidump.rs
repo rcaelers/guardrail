@@ -23,6 +23,7 @@ use crate::model::attachment::{AttachmentDto, AttachmentRepo};
 use crate::model::crash::{CrashDto, CrashRepo};
 use crate::model::product::ProductRepo;
 use crate::model::version::VersionRepo;
+use crate::model::base::BaseRepo;
 use crate::settings;
 
 pub struct MinidumpHandler;

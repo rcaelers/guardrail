@@ -1,8 +1,12 @@
+use async_trait::async_trait;
 use sea_orm::*;
 use serde::Serialize;
 use uuid::Uuid;
 
-use super::error::DbError;
+use super::{
+    base::{BaseRepo, HasId},
+    error::DbError,
+};
 use crate::entity;
 
 pub use entity::attachment::Model as Attachment;
@@ -18,9 +22,9 @@ pub struct AttachmentDto {
     pub crash_id: Uuid,
 }
 
-impl AttachmentRepo {
-    pub async fn create(db: &DbConn, attachment: AttachmentDto) -> Result<uuid::Uuid, DbError> {
-        let model = entity::attachment::ActiveModel {
+impl From<AttachmentDto> for entity::attachment::ActiveModel {
+    fn from(attachment: AttachmentDto) -> Self {
+        Self {
             id: Set(uuid::Uuid::new_v4()),
             name: Set(attachment.name),
             mime_type: Set(attachment.mime_type),
@@ -29,47 +33,35 @@ impl AttachmentRepo {
             crash_id: Set(attachment.crash_id),
             ..Default::default()
         }
-        .insert(db)
-        .await?;
-
-        Ok(model.id)
     }
+}
 
-    pub async fn update(
-        db: &DbConn,
-        id: uuid::Uuid,
-        attachment: AttachmentDto,
-    ) -> Result<uuid::Uuid, DbError> {
-        entity::attachment::ActiveModel {
+impl From<(uuid::Uuid, AttachmentDto)> for entity::attachment::ActiveModel {
+    fn from((id, attachment): (uuid::Uuid, AttachmentDto)) -> Self {
+        Self {
             id: Set(id),
-            name: Set(attachment.name),
-            mime_type: Set(attachment.mime_type),
-            size: Set(attachment.size),
-            filename: Set(attachment.filename),
-            ..Default::default()
+            ..From::from(attachment)
         }
-        .update(db)
-        .await
-        .map(|_| id)
-        .map_err(|e| DbError::RecordNotFound("attachment not found".to_owned()))?;
-
-        Ok(id)
     }
+}
 
-    pub async fn get_all(db: &DbConn) -> Result<Vec<Attachment>, DbError> {
-        let attachments = entity::attachment::Entity::find().all(db).await?;
-        Ok(attachments)
+impl HasId for entity::attachment::Model {
+    fn id(&self) -> uuid::Uuid {
+        self.id
     }
+}
 
-    pub async fn get_by_id(db: &DbConn, id: uuid::Uuid) -> Result<Attachment, DbError> {
-        let attachment = entity::attachment::Entity::find_by_id(id)
-            .one(db)
-            .await?
-            .ok_or(DbError::RecordNotFound("attachment not found".to_owned()))?;
+#[async_trait]
+impl BaseRepo for AttachmentRepo {
+    type CreateDto = AttachmentDto;
+    type UpdateDto = AttachmentDto;
+    type Entity = entity::attachment::Entity;
+    type Repr = entity::attachment::Model;
+    type ActiveModel = entity::attachment::ActiveModel;
+    type PrimaryKeyType = uuid::Uuid;
+}
 
-        Ok(attachment)
-    }
-
+impl AttachmentRepo {
     pub async fn get_by_name(db: &DbConn, name: &String) -> Result<Attachment, DbError> {
         let attachment = entity::attachment::Entity::find()
             .filter(entity::attachment::Column::Name.eq(name))
@@ -78,12 +70,5 @@ impl AttachmentRepo {
             .ok_or(DbError::RecordNotFound("attachment not found".to_owned()))?;
 
         Ok(attachment)
-    }
-
-    pub async fn delete(db: &DbConn, id: uuid::Uuid) -> Result<(), DbError> {
-        entity::attachment::Entity::delete_by_id(id)
-            .exec(db)
-            .await?;
-        Ok(())
     }
 }

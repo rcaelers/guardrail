@@ -3,7 +3,7 @@
 ## Todo
 
 - [ ] Database
-  - [ ] Finish Database trait
+  - [X] Finish Database trait
   - [ ] Finish tests
   - [ ] Add user table
   - [ ] Follow annotations/attachments when retrieving crashes

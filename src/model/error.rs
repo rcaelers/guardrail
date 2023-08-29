@@ -8,7 +8,7 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum DbError {
-    #[error("general data failure")]
+    #[error("general data failure: `{0}`")]
     Failure(#[from] DbErr),
 
     #[error("record not found: `{0}`")]

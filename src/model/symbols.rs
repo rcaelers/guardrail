@@ -1,8 +1,9 @@
+use async_trait::async_trait;
 use sea_orm::*;
 use serde::Serialize;
 use uuid::Uuid;
 
-use super::error::DbError;
+use super::{error::DbError, base::{HasId, BaseRepo}};
 use crate::entity;
 
 pub use entity::symbols::Model as Symbols;
@@ -20,9 +21,10 @@ pub struct SymbolsDto {
     pub version_id: Uuid,
 }
 
-impl SymbolsRepo {
-    pub async fn create(db: &DbConn, symbols: SymbolsDto) -> Result<uuid::Uuid, DbError> {
-        let model = entity::symbols::ActiveModel {
+
+impl From<SymbolsDto> for entity::symbols::ActiveModel {
+    fn from(symbols: SymbolsDto) -> Self {
+        Self {
             id: Set(uuid::Uuid::new_v4()),
             os: Set(symbols.os),
             arch: Set(symbols.arch),
@@ -33,48 +35,35 @@ impl SymbolsRepo {
             version_id: Set(symbols.version_id),
             ..Default::default()
         }
-        .insert(db)
-        .await?;
-
-        Ok(model.id)
     }
+}
 
-    pub async fn update(
-        db: &DbConn,
-        id: uuid::Uuid,
-        symbols: SymbolsDto,
-    ) -> Result<uuid::Uuid, DbError> {
-        entity::symbols::ActiveModel {
+impl From<(uuid::Uuid, SymbolsDto)> for entity::symbols::ActiveModel {
+    fn from((id, symbols): (uuid::Uuid, SymbolsDto)) -> Self {
+        Self {
             id: Set(id),
-            os: Set(symbols.os),
-            arch: Set(symbols.arch),
-            build_id: Set(symbols.build_id),
-            module_id: Set(symbols.module_id),
-            file_location: Set(symbols.file_location),
-            ..Default::default()
+            ..From::from(symbols)
         }
-        .update(db)
-        .await
-        .map(|_| id)
-        .map_err(|e| DbError::RecordNotFound("symbols not found".to_owned()))?;
-
-        Ok(id)
     }
+}
 
-    pub async fn get_all(db: &DbConn) -> Result<Vec<Symbols>, DbError> {
-        let symbolss = entity::symbols::Entity::find().all(db).await?;
-        Ok(symbolss)
+impl HasId for entity::symbols::Model {
+    fn id(&self) -> uuid::Uuid {
+        self.id
     }
+}
 
-    pub async fn get_by_id(db: &DbConn, id: uuid::Uuid) -> Result<Symbols, DbError> {
-        let symbols = entity::symbols::Entity::find_by_id(id)
-            .one(db)
-            .await?
-            .ok_or(DbError::RecordNotFound("symbols not found".to_owned()))?;
+#[async_trait]
+impl BaseRepo for SymbolsRepo {
+    type CreateDto = SymbolsDto;
+    type UpdateDto = SymbolsDto;
+    type Entity = entity::symbols::Entity;
+    type Repr = entity::symbols::Model;
+    type ActiveModel = entity::symbols::ActiveModel;
+    type PrimaryKeyType = uuid::Uuid;
+}
 
-        Ok(symbols)
-    }
-
+impl SymbolsRepo {
     pub async fn get_by_build_id(db: &DbConn, build_id: &String) -> Result<Symbols, DbError> {
         let symbols = entity::symbols::Entity::find()
             .filter(entity::symbols::Column::BuildId.eq(build_id))
@@ -83,10 +72,5 @@ impl SymbolsRepo {
             .ok_or(DbError::RecordNotFound("symbols not found".to_owned()))?;
 
         Ok(symbols)
-    }
-
-    pub async fn delete(db: &DbConn, id: uuid::Uuid) -> Result<(), DbError> {
-        entity::symbols::Entity::delete_by_id(id).exec(db).await?;
-        Ok(())
     }
 }

@@ -1,71 +1,54 @@
+use async_trait::async_trait;
 use sea_orm::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::error::DbError;
+use super::base::{BaseRepo, HasId};
 use crate::entity;
-
 pub use entity::crash::Model as Crash;
 
-pub struct CrashRepo;
-
-#[derive(Clone, Debug, Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CrashDto {
     pub report: String,
     pub version_id: Uuid,
     pub product_id: Uuid,
 }
 
-impl CrashRepo {
-    pub async fn create(db: &DbConn, crash: CrashDto) -> Result<uuid::Uuid, DbError> {
-        let model = entity::crash::ActiveModel {
+pub struct CrashRepo;
+
+impl From<CrashDto> for entity::crash::ActiveModel {
+    fn from(crash: CrashDto) -> Self {
+        Self {
             id: Set(uuid::Uuid::new_v4()),
             report: Set(serde_json::json!(crash.report)),
             version_id: Set(crash.version_id),
             product_id: Set(crash.product_id),
             ..Default::default()
         }
-        .insert(db)
-        .await?;
-
-        Ok(model.id)
     }
+}
 
-    pub async fn update(
-        db: &DbConn,
-        id: uuid::Uuid,
-        crash: CrashDto,
-    ) -> Result<uuid::Uuid, DbError> {
-        entity::crash::ActiveModel {
+impl From<(uuid::Uuid, CrashDto)> for entity::crash::ActiveModel {
+    fn from((id, crash): (uuid::Uuid, CrashDto)) -> Self {
+        Self {
             id: Set(id),
-            report: Set(serde_json::json!(crash.report)),
-            updated_at: Set(chrono::offset::Utc::now().naive_utc()),
-            ..Default::default()
+            ..From::from(crash)
         }
-        .update(db)
-        .await
-        .map(|_| id)
-        .map_err(|e| DbError::RecordNotFound("crash not found".to_owned()))?;
-
-        Ok(id)
     }
+}
 
-    pub async fn get_all(db: &DbConn) -> Result<Vec<Crash>, DbError> {
-        let crashs = entity::crash::Entity::find().all(db).await?;
-        Ok(crashs)
+impl HasId for entity::crash::Model {
+    fn id(&self) -> uuid::Uuid {
+        self.id
     }
+}
 
-    pub async fn get_by_id(db: &DbConn, id: uuid::Uuid) -> Result<Crash, DbError> {
-        let crash = entity::crash::Entity::find_by_id(id)
-            .one(db)
-            .await?
-            .ok_or(DbError::RecordNotFound("crash not found".to_owned()))?;
-
-        Ok(crash)
-    }
-
-    pub async fn delete(db: &DbConn, id: uuid::Uuid) -> Result<(), DbError> {
-        entity::crash::Entity::delete_by_id(id).exec(db).await?;
-        Ok(())
-    }
+#[async_trait]
+impl BaseRepo for CrashRepo {
+    type CreateDto = CrashDto;
+    type UpdateDto = CrashDto;
+    type Entity = entity::crash::Entity;
+    type Repr = entity::crash::Model;
+    type ActiveModel = entity::crash::ActiveModel;
+    type PrimaryKeyType = uuid::Uuid;
 }
