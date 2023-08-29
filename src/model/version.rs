@@ -1,7 +1,11 @@
+use async_trait::async_trait;
 use sea_orm::*;
 use serde::Serialize;
 
-use super::error::DbError;
+use super::{
+    base::{BaseRepo, HasId},
+    error::DbError,
+};
 use crate::entity;
 
 pub use entity::version::Model as Version;
@@ -16,54 +20,48 @@ pub struct VersionDto {
     pub product_id: uuid::Uuid,
 }
 
-impl VersionRepo {
-    pub async fn create(db: &DbConn, version: VersionDto) -> Result<uuid::Uuid, DbError> {
-        let model = entity::version::ActiveModel {
-            id: Set(uuid::Uuid::new_v4()),
+impl From<VersionDto> for entity::version::ActiveModel {
+    fn from(version: VersionDto) -> Self {
+        Self {
             name: Set(version.name),
             hash: Set(version.hash),
             tag: Set(version.tag),
             product_id: Set(version.product_id),
             ..Default::default()
         }
-        .insert(db)
-        .await?;
-
-        Ok(model.id)
     }
+}
 
-    pub async fn update(
-        db: &DbConn,
-        id: uuid::Uuid,
-        version: VersionDto,
-    ) -> Result<uuid::Uuid, DbError> {
-        entity::version::ActiveModel {
+impl From<(uuid::Uuid, VersionDto)> for entity::version::ActiveModel {
+    fn from((id, version): (uuid::Uuid, VersionDto)) -> Self {
+        Self {
             id: Set(id),
             name: Set(version.name),
+            hash: Set(version.hash),
+            tag: Set(version.tag),
+            product_id: Set(version.product_id),
             ..Default::default()
         }
-        .update(db)
-        .await
-        .map(|_| id)
-        .map_err(|e| DbError::RecordNotFound("version not found".to_owned()))?;
-
-        Ok(id)
     }
+}
 
-    pub async fn get_all(db: &DbConn) -> Result<Vec<Version>, DbError> {
-        let versions = entity::version::Entity::find().all(db).await?;
-        Ok(versions)
+impl HasId for entity::version::Model {
+    fn id(&self) -> uuid::Uuid {
+        self.id
     }
+}
 
-    pub async fn get_by_id(db: &DbConn, id: uuid::Uuid) -> Result<Version, DbError> {
-        let version = entity::version::Entity::find_by_id(id)
-            .one(db)
-            .await?
-            .ok_or(DbError::RecordNotFound("version not found".to_owned()))?;
+#[async_trait]
+impl BaseRepo for VersionRepo {
+    type CreateDto = VersionDto;
+    type UpdateDto = VersionDto;
+    type Entity = entity::version::Entity;
+    type Repr = entity::version::Model;
+    type ActiveModel = entity::version::ActiveModel;
+    type PrimaryKeyType = uuid::Uuid;
+}
 
-        Ok(version)
-    }
-
+impl VersionRepo {
     pub async fn get_by_name(db: &DbConn, name: &String) -> Result<Version, DbError> {
         let version = entity::version::Entity::find()
             .filter(entity::version::Column::Name.eq(name))
@@ -72,10 +70,5 @@ impl VersionRepo {
             .ok_or(DbError::RecordNotFound("version not found".to_owned()))?;
 
         Ok(version)
-    }
-
-    pub async fn delete(db: &DbConn, id: uuid::Uuid) -> Result<(), DbError> {
-        entity::version::Entity::delete_by_id(id).exec(db).await?;
-        Ok(())
     }
 }

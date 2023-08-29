@@ -1,7 +1,8 @@
+use async_trait::async_trait;
 use sea_orm::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use super::base::{BaseRepoDef, HasId};
+use super::base::{BaseRepo, HasId};
 use super::error::DbError;
 use crate::{entity, utils::make_api_key};
 
@@ -9,15 +10,15 @@ pub use entity::product::Model as Product;
 
 pub struct ProductRepo;
 
-#[derive(Clone, Debug, Serialize, serde::Deserialize)]
-pub struct ProductCreateDto {
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ProductDto {
     pub name: String,
     pub report_api_key: Option<String>,
     pub symbol_api_key: Option<String>,
 }
 
-impl From<ProductCreateDto> for entity::product::ActiveModel {
-    fn from(product: ProductCreateDto) -> Self {
+impl From<ProductDto> for entity::product::ActiveModel {
+    fn from(product: ProductDto) -> Self {
         Self {
             id: Set(uuid::Uuid::new_v4()),
             name: Set(product.name),
@@ -28,18 +29,10 @@ impl From<ProductCreateDto> for entity::product::ActiveModel {
     }
 }
 
-#[derive(Clone, Debug, Serialize, serde::Deserialize)]
-pub struct ProductUpdateDto {
-    pub id: uuid::Uuid,
-    pub name: String,
-    pub report_api_key: Option<String>,
-    pub symbol_api_key: Option<String>,
-}
-
-impl From<ProductUpdateDto> for entity::product::ActiveModel {
-    fn from(product: ProductUpdateDto) -> Self {
+impl From<(uuid::Uuid, ProductDto)> for entity::product::ActiveModel {
+    fn from((id, product): (uuid::Uuid, ProductDto)) -> Self {
         let mut model = Self {
-            id: Set(product.id),
+            id: Set(id),
             name: Set(product.name),
             ..Default::default()
         };
@@ -59,43 +52,17 @@ impl HasId for entity::product::Model {
     }
 }
 
-impl BaseRepoDef for ProductRepo {
-    type CreateDto = ProductCreateDto;
-    type UpdateDto = ProductUpdateDto;
+#[async_trait]
+impl BaseRepo for ProductRepo {
+    type CreateDto = ProductDto;
+    type UpdateDto = ProductDto;
     type Entity = entity::product::Entity;
     type Repr = entity::product::Model;
     type ActiveModel = entity::product::ActiveModel;
-    type PrimaryType = uuid::Uuid;
+    type PrimaryKeyType = uuid::Uuid;
 }
 
 impl ProductRepo {
-    pub async fn create(db: &DbConn, product: ProductCreateDto) -> Result<uuid::Uuid, DbError> {
-        let model = entity::product::ActiveModel::from(product)
-            .insert(db)
-            .await?;
-        Ok(model.id)
-    }
-
-    pub async fn update(db: &DbConn, product: ProductUpdateDto) -> Result<(), DbError> {
-        entity::product::ActiveModel::from(product)
-            .update(db)
-            .await?;
-        Ok(())
-    }
-
-    pub async fn get_all(db: &DbConn) -> Result<Vec<Product>, DbError> {
-        let products = entity::product::Entity::find().all(db).await?;
-        Ok(products)
-    }
-
-    pub async fn get_by_id(db: &DbConn, id: uuid::Uuid) -> Result<Product, DbError> {
-        let product = entity::product::Entity::find_by_id(id)
-            .one(db)
-            .await?
-            .ok_or(DbError::RecordNotFound("product not found".to_owned()))?;
-        Ok(product)
-    }
-
     pub async fn get_by_name(db: &DbConn, name: &String) -> Result<Product, DbError> {
         let product = entity::product::Entity::find()
             .filter(entity::product::Column::Name.eq(name))
@@ -105,18 +72,14 @@ impl ProductRepo {
 
         Ok(product)
     }
-
-    pub async fn delete(db: &DbConn, id: uuid::Uuid) -> Result<(), DbError> {
-        entity::product::Entity::delete_by_id(id).exec(db).await?;
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::entity;
+    use crate::model::base::BaseRepo;
     use crate::model::error::DbError;
-    use crate::model::product::{ProductCreateDto, ProductRepo, ProductUpdateDto};
+    use crate::model::product::{ProductDto, ProductRepo};
     use serial_test::serial;
 
     use migration::{Migrator, MigratorTrait};
@@ -128,14 +91,14 @@ mod tests {
         let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
         Migrator::up(&db, None).await.unwrap();
 
-        let product1 = ProductCreateDto {
+        let product1 = ProductDto {
             name: "Workrave".to_owned(),
             report_api_key: Some("test_report_api_key1".to_owned()),
             symbol_api_key: Some("test_symbol_api_key1".to_owned()),
         };
         let id1 = ProductRepo::create(&db, product1.clone()).await.unwrap();
 
-        let product2 = ProductCreateDto {
+        let product2 = ProductDto {
             name: "Scroom".to_owned(),
             report_api_key: Some("test_report_api_key2".to_owned()),
             symbol_api_key: Some("test_symbol_api_key2".to_owned()),
@@ -179,7 +142,7 @@ mod tests {
         let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
         Migrator::up(&db, None).await.unwrap();
 
-        let product1 = ProductCreateDto {
+        let product1 = ProductDto {
             name: "Workrave".to_owned(),
             report_api_key: None,
             symbol_api_key: None,
@@ -202,7 +165,7 @@ mod tests {
         let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
         Migrator::up(&db, None).await.unwrap();
 
-        let product1 = ProductCreateDto {
+        let product1 = ProductDto {
             name: "Workrave".to_owned(),
             report_api_key: Some("test_report_api_key1".to_owned()),
             symbol_api_key: Some("test_symbol_api_key1".to_owned()),
@@ -224,16 +187,17 @@ mod tests {
             product1.symbol_api_key.as_deref().unwrap_or("")
         );
 
-        let product2 = ProductUpdateDto {
-            id,
+        let product2 = ProductDto {
             name: "Scroom".to_owned(),
             report_api_key: Some("test_report_api_key2".to_owned()),
             symbol_api_key: None,
         };
 
-        ProductRepo::update(&db, product2.clone()).await.unwrap();
+        ProductRepo::update(&db, id, product2.clone())
+            .await
+            .unwrap();
 
-        let model = entity::product::Entity::find_by_id(product2.id)
+        let model = entity::product::Entity::find_by_id(id)
             .one(&db)
             .await
             .unwrap()
@@ -248,9 +212,10 @@ mod tests {
             product1.symbol_api_key.as_deref().unwrap_or("")
         );
 
-        let mut product3 = product2.clone();
-        product3.id = uuid::Uuid::new_v4();
-        let err = ProductRepo::update(&db, product3).await.unwrap_err();
+        let product3 = product2.clone();
+        let err = ProductRepo::update(&db, uuid::Uuid::new_v4(), product3)
+            .await
+            .unwrap_err();
         // TODO assert!(matches!(err, DbError::RecordNotFound { .. }));
     }
 
@@ -260,7 +225,7 @@ mod tests {
         let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
         Migrator::up(&db, None).await.unwrap();
 
-        let product = ProductCreateDto {
+        let product = ProductDto {
             name: "Workrave".to_owned(),
             report_api_key: Some("test_report_api_key1".to_owned()),
             symbol_api_key: Some("test_symbol_api_key1".to_owned()),
@@ -290,7 +255,7 @@ mod tests {
         let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
         Migrator::up(&db, None).await.unwrap();
 
-        let product = ProductCreateDto {
+        let product = ProductDto {
             name: "Workrave".to_owned(),
             report_api_key: Some("test_report_api_key1".to_owned()),
             symbol_api_key: Some("test_symbol_api_key1".to_owned()),
@@ -323,14 +288,14 @@ mod tests {
         let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
         Migrator::up(&db, None).await.unwrap();
 
-        let product1 = ProductCreateDto {
+        let product1 = ProductDto {
             name: "Workrave".to_owned(),
             report_api_key: Some("test_report_api_key1".to_owned()),
             symbol_api_key: Some("test_symbol_api_key1".to_owned()),
         };
         let id1 = ProductRepo::create(&db, product1.clone()).await.unwrap();
 
-        let product2 = ProductCreateDto {
+        let product2 = ProductDto {
             name: "Scroom".to_owned(),
             report_api_key: Some("test_report_api_key2".to_owned()),
             symbol_api_key: Some("test_symbol_api_key2".to_owned()),
@@ -367,14 +332,14 @@ mod tests {
         let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
         Migrator::up(&db, None).await.unwrap();
 
-        let product1: ProductCreateDto = ProductCreateDto {
+        let product1: ProductDto = ProductDto {
             name: "Workrave".to_owned(),
             report_api_key: Some("test_report_api_key1".to_owned()),
             symbol_api_key: Some("test_symbol_api_key1".to_owned()),
         };
         let id1 = ProductRepo::create(&db, product1.clone()).await.unwrap();
 
-        let product2 = ProductCreateDto {
+        let product2 = ProductDto {
             name: "Scroom".to_owned(),
             report_api_key: Some("test_report_api_key2".to_owned()),
             symbol_api_key: Some("test_symbol_api_key2".to_owned()),

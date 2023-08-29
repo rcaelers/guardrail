@@ -6,6 +6,7 @@ use axum::response::IntoResponse;
 use serde::Deserialize;
 
 use crate::app_state::AppState;
+use crate::model::base::BaseRepo;
 use crate::model::product::ProductRepo;
 use crate::model::version::{VersionDto, VersionRepo};
 

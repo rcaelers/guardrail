@@ -1,87 +1,90 @@
+use async_trait::async_trait;
 use sea_orm::{
     ActiveModelBehavior, ActiveModelTrait, DbConn, EntityTrait, IntoActiveModel, PrimaryKeyTrait,
 };
 use serde::Serialize;
 
 use super::error::DbError;
+pub trait HasId {
+    fn id(&self) -> uuid::Uuid;
+}
 
-pub trait BaseRepoDef {
-    // type Repr: Serialize + From<<Self::Entity as EntityTrait>::Model>;
+#[async_trait]
+pub trait BaseRepo {
     type Repr: Serialize;
     type Entity: EntityTrait + 'static;
     type ActiveModel: ActiveModelTrait<Entity = Self::Entity>
         + From<Self::CreateDto>
         + From<Self::UpdateDto>
+        + From<(Self::PrimaryKeyType, Self::UpdateDto)>
         + ActiveModelBehavior
         + Send;
-    type CreateDto;
-    type UpdateDto;
-    type PrimaryType: Into<<<Self::Entity as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType>
+    type CreateDto: Send;
+    type UpdateDto: Send;
+    type PrimaryKeyType: Into<<<Self::Entity as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType>
         + Clone
         + Sync
         + Send;
-}
 
-pub trait HasId {
-    fn id(&self) -> uuid::Uuid;
-}
-
-pub struct BaseRepo;
-
-impl BaseRepo {
-    pub async fn create<'a, 'async_trait, B>(
-        db: &DbConn,
-        dto: B::CreateDto,
-    ) -> Result<uuid::Uuid, DbError>
+    async fn create(db: &DbConn, dto: Self::CreateDto) -> Result<uuid::Uuid, DbError>
     where
-        B: BaseRepoDef,
-        B::ActiveModel: 'a + 'async_trait + 'static,
-        <<B::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
-            IntoActiveModel<B::ActiveModel> + HasId,
+        Self::ActiveModel: 'static,
+        <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
+            IntoActiveModel<Self::ActiveModel> + HasId,
     {
-        let model = B::ActiveModel::from(dto).insert(db).await?;
+        let model = Self::ActiveModel::from(dto).insert(db).await?;
         Ok(model.id())
     }
 
-    pub async fn update<'a, 'async_trait, B>(db: &DbConn, dto: B::UpdateDto) -> Result<(), DbError>
+    async fn update(
+        db: &DbConn,
+        id: Self::PrimaryKeyType,
+        dto: Self::UpdateDto,
+    ) -> Result<(), DbError>
     where
-        B: BaseRepoDef,
-        B::ActiveModel: 'a + 'async_trait + 'static,
-        <<B::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
-            IntoActiveModel<B::ActiveModel> + HasId,
+        Self::ActiveModel: 'static,
+        <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
+            IntoActiveModel<Self::ActiveModel> + HasId,
     {
-        B::ActiveModel::from(dto).update(db).await?;
+        Self::ActiveModel::from((id, dto)).update(db).await?;
         Ok(())
     }
-    pub async fn get_by_id<'a, 'async_trait, B>(
-        db: &DbConn,
-        id: B::PrimaryType,
-    ) -> Result<<B::Entity as EntityTrait>::Model, DbError>
+
+    async fn get_all(db: &DbConn) -> Result<Vec<<Self::Entity as EntityTrait>::Model>, DbError>
     where
-        B: BaseRepoDef,
-        B::ActiveModel: 'a + 'async_trait + 'static,
-        <<B::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
-            IntoActiveModel<B::ActiveModel> + HasId,
+        Self::ActiveModel: 'static,
+        <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
+            IntoActiveModel<Self::ActiveModel> + HasId,
     {
-        let r = <B::Entity as EntityTrait>::find()
+        let r = <Self::Entity as EntityTrait>::find().all(db).await?;
+        Ok(r)
+    }
+
+    async fn get_by_id(
+        db: &DbConn,
+        id: Self::PrimaryKeyType,
+    ) -> Result<<Self::Entity as EntityTrait>::Model, DbError>
+    where
+        Self::Entity: EntityTrait,
+        Self::ActiveModel: 'static,
+        <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
+            IntoActiveModel<Self::ActiveModel> + HasId,
+    {
+        let r = Self::Entity::find_by_id(id)
             .one(db)
             .await?
             .ok_or(DbError::RecordNotFound("product not found".to_owned()))?;
         Ok(r)
     }
 
-    pub async fn get_all<'a, 'async_trait, B>(
-        db: &DbConn,
-        id: B::PrimaryType,
-    ) -> Result<Vec<<B::Entity as EntityTrait>::Model>, DbError>
+    async fn delete(db: &DbConn, id: Self::PrimaryKeyType) -> Result<(), DbError>
     where
-        B: BaseRepoDef,
-        B::Entity: EntityTrait,
-        B::ActiveModel: 'a + 'async_trait + 'static,
-        <<B::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
-            IntoActiveModel<B::ActiveModel> + HasId,
+        Self::Entity: EntityTrait,
+        Self::ActiveModel: 'static,
+        <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
+            IntoActiveModel<Self::ActiveModel> + HasId,
     {
-        let r = B::Entity::find_by_id(id).all(db).await?;
-        Ok(r)
+        Self::Entity::delete_by_id(id).exec(db).await?;
+        Ok(())
     }
 }

@@ -6,14 +6,14 @@ use axum::response::IntoResponse;
 use serde::Deserialize;
 
 use crate::app_state::AppState;
-use crate::model::product::{ProductCreateDto, ProductUpdateDto, ProductRepo};
-
+use crate::model::base::BaseRepo;
+use crate::model::product::{ProductDto, ProductRepo};
 pub struct Product;
 
 impl Product {
     pub async fn create(
         State(state): State<Arc<AppState>>,
-        Json(payload): Json<ProductCreateDto>,
+        Json(payload): Json<ProductDto>,
     ) -> impl IntoResponse {
         ProductRepo::create(&state.db, payload)
             .await
@@ -29,11 +29,9 @@ impl Product {
     pub async fn update_by_id(
         Path(id): Path<uuid::Uuid>,
         State(state): State<Arc<AppState>>,
-        Json(payload): Json<ProductUpdateDto>,
+        Json(payload): Json<ProductDto>,
     ) -> impl IntoResponse {
-        let mut payload = payload;
-        payload.id = id;
-        ProductRepo::update(&state.db, payload)
+        ProductRepo::update(&state.db, id, payload)
             .await
             .map(|_| (StatusCode::OK, Json(serde_json::json!({ "result": "ok" }))))
             .map_err(|e| {
