@@ -3,7 +3,6 @@ use sea_orm::{
     ActiveModelBehavior, ActiveModelTrait, DbConn, EntityTrait, IntoActiveModel, PrimaryKeyTrait,
 };
 use serde::Serialize;
-use tracing::debug;
 
 use super::error::DbError;
 pub trait HasId {
@@ -12,7 +11,7 @@ pub trait HasId {
 
 #[async_trait]
 pub trait BaseRepo {
-    type Repr: Serialize;
+    type Repr: Serialize + From<<Self::Entity as sea_orm::EntityTrait>::Model> + Send;
     type Entity: EntityTrait + 'static;
     type ActiveModel: ActiveModelTrait<Entity = Self::Entity>
         + From<Self::CreateDto>
@@ -33,9 +32,7 @@ pub trait BaseRepo {
         <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
             IntoActiveModel<Self::ActiveModel> + HasId,
     {
-        debug!("create");
         let model = Self::ActiveModel::from(dto).insert(db).await?;
-        debug!("create: ok");
         Ok(model.id())
     }
 
@@ -53,20 +50,17 @@ pub trait BaseRepo {
         Ok(())
     }
 
-    async fn get_all(db: &DbConn) -> Result<Vec<<Self::Entity as EntityTrait>::Model>, DbError>
+    async fn get_all(db: &DbConn) -> Result<Vec<Self::Repr>, DbError>
     where
         Self::ActiveModel: 'static,
         <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
             IntoActiveModel<Self::ActiveModel> + HasId,
     {
         let r = <Self::Entity as EntityTrait>::find().all(db).await?;
-        Ok(r)
+        Ok(r.into_iter().map(Self::Repr::from).collect())
     }
 
-    async fn get_by_id(
-        db: &DbConn,
-        id: Self::PrimaryKeyType,
-    ) -> Result<<Self::Entity as EntityTrait>::Model, DbError>
+    async fn get_by_id(db: &DbConn, id: Self::PrimaryKeyType) -> Result<Self::Repr, DbError>
     where
         Self::Entity: EntityTrait,
         Self::ActiveModel: 'static,
@@ -77,7 +71,7 @@ pub trait BaseRepo {
             .one(db)
             .await?
             .ok_or(DbError::RecordNotFound("product not found".to_owned()))?;
-        Ok(r)
+        Ok(Self::Repr::from(r))
     }
 
     async fn delete(db: &DbConn, id: Self::PrimaryKeyType) -> Result<(), DbError>

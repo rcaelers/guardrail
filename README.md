@@ -6,7 +6,7 @@
   - [X] Finish Database trait
   - [ ] Finish tests
   - [ ] Add user table
-  - [ ] Follow annotations/attachments when retrieving crashes
+  - [X] Follow annotations/attachments when retrieving crashes
 - [ ] API
   - [ ] Error Reporting
   - [ ] Move minidump processing to a separate module
@@ -20,3 +20,6 @@
   - [ ] Tests
 - [ ] Web interface
   - [ ] ...
+- Infra
+  - [ ] GitHub action
+  - [ ] K8S deployment
