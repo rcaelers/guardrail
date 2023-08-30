@@ -10,9 +10,14 @@ pub trait HasId {
 }
 
 #[async_trait]
-pub trait BaseRepo {
+pub trait BaseRepo
+where
+    <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
+        IntoActiveModel<Self::ActiveModel> + HasId,
+{
     type Repr: Serialize + From<<Self::Entity as sea_orm::EntityTrait>::Model> + Send;
-    type Entity: EntityTrait + 'static;
+    type Entity: EntityTrait;
+
     type ActiveModel: ActiveModelTrait<Entity = Self::Entity>
         + From<Self::CreateDto>
         + From<Self::UpdateDto>
@@ -27,10 +32,6 @@ pub trait BaseRepo {
         + Send;
 
     async fn create(db: &DbConn, dto: Self::CreateDto) -> Result<uuid::Uuid, DbError>
-    where
-        Self::ActiveModel: 'static,
-        <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
-            IntoActiveModel<Self::ActiveModel> + HasId,
     {
         let model = Self::ActiveModel::from(dto).insert(db).await?;
         Ok(model.id())
@@ -41,31 +42,18 @@ pub trait BaseRepo {
         id: Self::PrimaryKeyType,
         dto: Self::UpdateDto,
     ) -> Result<(), DbError>
-    where
-        Self::ActiveModel: 'static,
-        <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
-            IntoActiveModel<Self::ActiveModel> + HasId,
     {
         Self::ActiveModel::from((id, dto)).update(db).await?;
         Ok(())
     }
 
     async fn get_all(db: &DbConn) -> Result<Vec<Self::Repr>, DbError>
-    where
-        Self::ActiveModel: 'static,
-        <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
-            IntoActiveModel<Self::ActiveModel> + HasId,
     {
         let r = <Self::Entity as EntityTrait>::find().all(db).await?;
         Ok(r.into_iter().map(Self::Repr::from).collect())
     }
 
     async fn get_by_id(db: &DbConn, id: Self::PrimaryKeyType) -> Result<Self::Repr, DbError>
-    where
-        Self::Entity: EntityTrait,
-        Self::ActiveModel: 'static,
-        <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
-            IntoActiveModel<Self::ActiveModel> + HasId,
     {
         let r = Self::Entity::find_by_id(id)
             .one(db)
@@ -76,8 +64,6 @@ pub trait BaseRepo {
 
     async fn delete(db: &DbConn, id: Self::PrimaryKeyType) -> Result<(), DbError>
     where
-        Self::Entity: EntityTrait,
-        Self::ActiveModel: 'static,
         <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
             IntoActiveModel<Self::ActiveModel> + HasId,
     {
