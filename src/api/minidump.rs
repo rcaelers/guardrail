@@ -20,13 +20,13 @@ use tokio::task;
 use super::error::ApiError;
 use crate::app_state::AppState;
 use crate::model::attachment::{AttachmentDto, AttachmentRepo};
+use crate::model::base::{BaseRepo, BaseRepoWithSecondaryKey};
 use crate::model::crash::{CrashDto, CrashRepo};
 use crate::model::product::ProductRepo;
 use crate::model::version::VersionRepo;
-use crate::model::base::BaseRepo;
 use crate::settings;
 
-pub struct MinidumpHandler;
+pub struct MinidumpApi;
 
 #[derive(Debug, Deserialize)]
 pub struct MinidumpRequestParams {
@@ -39,7 +39,7 @@ pub struct MinidumpResponse {
     pub result: String,
 }
 
-impl MinidumpHandler {
+impl MinidumpApi {
     async fn stream_to_file<S, E>(path: &std::path::PathBuf, stream: S) -> Result<(), ApiError>
     where
         S: Stream<Item = Result<Bytes, E>>,
@@ -65,7 +65,7 @@ impl MinidumpHandler {
         state: &Arc<AppState>,
         params: &MinidumpRequestParams,
     ) -> Result<crate::model::product::Product, ApiError> {
-        let product = ProductRepo::get_by_name(&state.db, &params.product).await;
+        let product = ProductRepo::get_by_secondary_id(&state.db, params.product.clone()).await;
         let product = match product {
             Ok(product) => product,
             Err(e) => {
@@ -81,7 +81,7 @@ impl MinidumpHandler {
         state: &Arc<AppState>,
         params: &MinidumpRequestParams,
     ) -> Result<crate::model::version::Version, ApiError> {
-        let version = VersionRepo::get_by_name(&state.db, &params.version).await;
+        let version = VersionRepo::get_by_secondary_id(&state.db, params.version.clone()).await;
         let version = match version {
             Ok(product) => product,
             Err(e) => {
@@ -161,8 +161,8 @@ impl MinidumpHandler {
         debug!("provider: {:?}", path);
         let provider = Symbolizer::new(simple_symbol_supplier(vec![path]));
 
-        let state = minidump_processor::process_minidump_with_options(&dump, &provider, options)
-            .await?;
+        let state =
+            minidump_processor::process_minidump_with_options(&dump, &provider, options).await?;
 
         let mut json_output = Vec::new();
         state.print_json(&mut json_output, false)?;

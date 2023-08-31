@@ -8,4 +8,5 @@ pub mod crash;
 pub mod product;
 pub mod sea_orm_active_enums;
 pub mod symbols;
+pub mod user;
 pub mod version;

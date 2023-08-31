@@ -3,10 +3,7 @@ use sea_orm::*;
 use serde::Serialize;
 use uuid::Uuid;
 
-use super::{
-    base::{BaseRepo, HasId},
-    error::DbError,
-};
+use super::base::{BaseRepo, BaseRepoWithSecondaryKey, HasId};
 use crate::entity;
 
 pub use entity::attachment::Model as Attachment;
@@ -61,14 +58,12 @@ impl BaseRepo for AttachmentRepo {
     type PrimaryKeyType = uuid::Uuid;
 }
 
-impl AttachmentRepo {
-    pub async fn get_by_name(db: &DbConn, name: &String) -> Result<Attachment, DbError> {
-        let attachment = entity::attachment::Entity::find()
-            .filter(entity::attachment::Column::Name.eq(name))
-            .one(db)
-            .await?
-            .ok_or(DbError::RecordNotFound("attachment not found".to_owned()))?;
+#[async_trait]
+impl BaseRepoWithSecondaryKey for AttachmentRepo {
+    type Column = entity::attachment::Column;
+    type SecondaryKeyType = String;
 
-        Ok(attachment)
+    fn secondary_column() -> Self::Column {
+        entity::attachment::Column::Name
     }
 }

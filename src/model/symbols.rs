@@ -3,7 +3,7 @@ use sea_orm::*;
 use serde::Serialize;
 use uuid::Uuid;
 
-use super::{error::DbError, base::{HasId, BaseRepo}};
+use super::base::{BaseRepo, BaseRepoWithSecondaryKey, HasId};
 use crate::entity;
 
 pub use entity::symbols::Model as Symbols;
@@ -20,7 +20,6 @@ pub struct SymbolsDto {
     pub product_id: Uuid,
     pub version_id: Uuid,
 }
-
 
 impl From<SymbolsDto> for entity::symbols::ActiveModel {
     fn from(symbols: SymbolsDto) -> Self {
@@ -63,14 +62,12 @@ impl BaseRepo for SymbolsRepo {
     type PrimaryKeyType = uuid::Uuid;
 }
 
-impl SymbolsRepo {
-    pub async fn get_by_build_id(db: &DbConn, build_id: &String) -> Result<Symbols, DbError> {
-        let symbols = entity::symbols::Entity::find()
-            .filter(entity::symbols::Column::BuildId.eq(build_id))
-            .one(db)
-            .await?
-            .ok_or(DbError::RecordNotFound("symbols not found".to_owned()))?;
+#[async_trait]
+impl BaseRepoWithSecondaryKey for SymbolsRepo {
+    type Column = entity::symbols::Column;
+    type SecondaryKeyType = String;
 
-        Ok(symbols)
+    fn secondary_column() -> Self::Column {
+        entity::symbols::Column::BuildId
     }
 }

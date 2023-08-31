@@ -2,8 +2,7 @@ use async_trait::async_trait;
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
 
-use super::base::{BaseRepo, HasId};
-use super::error::DbError;
+use super::base::{BaseRepo, BaseRepoWithSecondaryKey, HasId};
 use crate::{entity, utils::make_api_key};
 
 pub use entity::product::Model as Product;
@@ -62,22 +61,20 @@ impl BaseRepo for ProductRepo {
     type PrimaryKeyType = uuid::Uuid;
 }
 
-impl ProductRepo {
-    pub async fn get_by_name(db: &DbConn, name: &String) -> Result<Product, DbError> {
-        let product = entity::product::Entity::find()
-            .filter(entity::product::Column::Name.eq(name))
-            .one(db)
-            .await?
-            .ok_or(DbError::RecordNotFound("product not found".to_owned()))?;
+#[async_trait]
+impl BaseRepoWithSecondaryKey for ProductRepo {
+    type Column = entity::product::Column;
+    type SecondaryKeyType = String;
 
-        Ok(product)
+    fn secondary_column() -> Self::Column {
+        entity::product::Column::Name
     }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::entity;
-    use crate::model::base::BaseRepo;
+    use crate::model::base::{BaseRepo, BaseRepoWithSecondaryKey};
     use crate::model::error::DbError;
     use crate::model::product::{ProductDto, ProductRepo};
     use serial_test::serial;
@@ -262,7 +259,7 @@ mod tests {
         };
         let id = ProductRepo::create(&db, product.clone()).await.unwrap();
 
-        let model = ProductRepo::get_by_name(&db, &"Workrave".to_string())
+        let model = ProductRepo::get_by_secondary_id(&db, "Workrave".to_string())
             .await
             .unwrap();
         assert_eq!(model.id, id);
@@ -276,7 +273,7 @@ mod tests {
             product.symbol_api_key.unwrap_or("".to_owned())
         );
 
-        let err = ProductRepo::get_by_name(&db, &"Foo".to_string())
+        let err = ProductRepo::get_by_secondary_id(&db, "Foo".to_string())
             .await
             .unwrap_err();
         assert!(matches!(err, DbError::RecordNotFound { .. }));

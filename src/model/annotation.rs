@@ -3,10 +3,7 @@ use sea_orm::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::{
-    base::{BaseRepo, HasId},
-    error::DbError,
-};
+use super::base::{BaseRepo, BaseRepoWithSecondaryKey, HasId};
 use crate::entity;
 
 pub use crate::entity::sea_orm_active_enums::AnnotationKind;
@@ -60,14 +57,12 @@ impl BaseRepo for AnnotationRepo {
     type PrimaryKeyType = uuid::Uuid;
 }
 
-impl AnnotationRepo {
-    pub async fn get_by_name(db: &DbConn, name: &String) -> Result<Annotation, DbError> {
-        let annotation = entity::annotation::Entity::find()
-            .filter(entity::annotation::Column::Key.eq(name))
-            .one(db)
-            .await?
-            .ok_or(DbError::RecordNotFound("annotation not found".to_owned()))?;
+#[async_trait]
+impl BaseRepoWithSecondaryKey for AnnotationRepo {
+    type Column = entity::annotation::Column;
+    type SecondaryKeyType = String;
 
-        Ok(annotation)
+    fn secondary_column() -> Self::Column {
+        entity::annotation::Column::Key
     }
 }

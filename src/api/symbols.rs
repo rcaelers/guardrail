@@ -13,7 +13,7 @@ use tracing::{debug, error, info};
 
 use super::error::ApiError;
 use crate::app_state::AppState;
-use crate::model::base::BaseRepo;
+use crate::model::base::{BaseRepo, BaseRepoWithSecondaryKey};
 use crate::model::product::ProductRepo;
 use crate::model::symbols::{SymbolsDto, SymbolsRepo};
 use crate::model::version::VersionRepo;
@@ -41,7 +41,12 @@ struct SymbolsData {
     pub file_location: String,
 }
 
-impl SymbolsHandler {
+use super::base::BaseApi;
+
+pub struct SymbolsApi;
+impl BaseApi<SymbolsRepo> for SymbolsApi {}
+
+impl SymbolsApi {
     async fn stream_to_file<S, E>(path: &std::path::PathBuf, stream: S) -> Result<(), ApiError>
     where
         S: Stream<Item = Result<Bytes, E>>,
@@ -69,7 +74,7 @@ impl SymbolsHandler {
         state: &Arc<AppState>,
         params: &SymbolsRequestParams,
     ) -> Result<crate::model::product::Product, ApiError> {
-        let product = ProductRepo::get_by_name(&state.db, &params.product).await;
+        let product = ProductRepo::get_by_secondary_id(&state.db, params.product.clone()).await;
         let product = match product {
             Ok(product) => product,
             Err(e) => {
@@ -85,7 +90,7 @@ impl SymbolsHandler {
         state: &Arc<AppState>,
         params: &SymbolsRequestParams,
     ) -> Result<crate::model::version::Version, ApiError> {
-        let version = VersionRepo::get_by_name(&state.db, &params.version).await;
+        let version = VersionRepo::get_by_secondary_id(&state.db, params.version.clone()).await;
         let version = match version {
             Ok(product) => product,
             Err(e) => {

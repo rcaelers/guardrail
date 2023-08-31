@@ -26,7 +26,12 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default(Expr::current_timestamp()),
                     )
-                    .col(ColumnDef::new(Version::Name).string().not_null())
+                    .col(
+                        ColumnDef::new(Version::Name)
+                            .string()
+                            .not_null()
+                            .unique_key(),
+                    )
                     .col(ColumnDef::new(Version::Hash).string().not_null())
                     .col(ColumnDef::new(Version::Tag).string().not_null())
                     .col(ColumnDef::new(Version::ProductId).uuid().not_null())
