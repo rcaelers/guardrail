@@ -63,5 +63,6 @@ dump_syms = ["minidump-processor/dump_syms"]
 
 [dev-dependencies]
 anyhow = "1"
-httpc-test = "0.1.1"
+axum-test = "12.2.0"
+httpc-test = { version = "0.1.5", features = ["color-output", "colored", "colored_json", "url"] }
 serial_test = "2"

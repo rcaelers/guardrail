@@ -115,7 +115,7 @@ where
     async fn query(State(state): State<Arc<AppState>>) -> Result<String, ApiError> {
         Repo::get_all(&state.db)
             .await
-            .map(|p| (serde_json::json!({ "result": "ok", "id": p }).to_string()))
+            .map(|p| (serde_json::json!({ "result": "ok", "payload": p }).to_string()))
             .map_err(ApiError::DatabaseError)
     }
 
@@ -128,7 +128,7 @@ where
     {
         Repo::get_by_id(&state.db, id)
             .await
-            .map(|p| (serde_json::json!({ "result": "ok", "id": p }).to_string()))
+            .map(|p| (serde_json::json!({ "result": "ok", "payload": p }).to_string()))
             .map_err(ApiError::DatabaseError)
     }
 
