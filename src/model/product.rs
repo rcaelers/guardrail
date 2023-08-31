@@ -75,7 +75,6 @@ impl BaseRepoWithSecondaryKey for ProductRepo {
 mod tests {
     use crate::entity;
     use crate::model::base::{BaseRepo, BaseRepoWithSecondaryKey};
-    use crate::model::error::DbError;
     use crate::model::product::{ProductDto, ProductRepo};
     use serial_test::serial;
 
@@ -229,7 +228,7 @@ mod tests {
         };
         let id = ProductRepo::create(&db, product.clone()).await.unwrap();
 
-        let model = ProductRepo::get_by_id(&db, id).await.unwrap();
+        let model = ProductRepo::get_by_id(&db, id).await.unwrap().unwrap();
         assert_eq!(model.name, product.name);
         assert_eq!(
             model.report_api_key,
@@ -242,8 +241,8 @@ mod tests {
 
         let err = ProductRepo::get_by_id(&db, uuid::Uuid::new_v4())
             .await
-            .unwrap_err();
-        assert!(matches!(err, DbError::RecordNotFound { .. }));
+            .unwrap();
+        assert!(err.is_none())
     }
 
     #[serial]
@@ -261,6 +260,7 @@ mod tests {
 
         let model = ProductRepo::get_by_secondary_id(&db, "Workrave".to_string())
             .await
+            .unwrap()
             .unwrap();
         assert_eq!(model.id, id);
         assert_eq!(model.name, product.name);
@@ -274,9 +274,8 @@ mod tests {
         );
 
         let err = ProductRepo::get_by_secondary_id(&db, "Foo".to_string())
-            .await
-            .unwrap_err();
-        assert!(matches!(err, DbError::RecordNotFound { .. }));
+            .await.unwrap();
+        assert!(err.is_none())
     }
 
     #[serial]

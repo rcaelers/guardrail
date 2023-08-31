@@ -6,5 +6,3 @@ pub mod symbols;
 pub mod version;
 pub mod base;
 pub mod user;
-
-pub mod error;

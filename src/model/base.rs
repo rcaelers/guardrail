@@ -1,8 +1,7 @@
 use async_trait::async_trait;
 use sea_orm::*;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{de::DeserializeOwned, Serialize};
 
-use super::error::DbError;
 pub trait HasId {
     fn id(&self) -> uuid::Uuid;
 }
@@ -29,7 +28,7 @@ where
         + Sync
         + Send;
 
-    async fn create(db: &DbConn, dto: Self::CreateDto) -> Result<uuid::Uuid, DbError> {
+    async fn create(db: &DbConn, dto: Self::CreateDto) -> Result<uuid::Uuid, DbErr> {
         let model = Self::ActiveModel::from(dto).insert(db).await?;
         Ok(model.id())
     }
@@ -38,25 +37,26 @@ where
         db: &DbConn,
         id: Self::PrimaryKeyType,
         dto: Self::UpdateDto,
-    ) -> Result<(), DbError> {
+    ) -> Result<(), DbErr> {
         Self::ActiveModel::from((id, dto)).update(db).await?;
         Ok(())
     }
 
-    async fn get_all(db: &DbConn) -> Result<Vec<Self::Repr>, DbError> {
+    async fn get_all(db: &DbConn) -> Result<Vec<Self::Repr>, DbErr> {
         let r = <Self::Entity as EntityTrait>::find().all(db).await?;
         Ok(r.into_iter().map(Self::Repr::from).collect())
     }
 
-    async fn get_by_id(db: &DbConn, id: Self::PrimaryKeyType) -> Result<Self::Repr, DbError> {
+    async fn get_by_id(db: &DbConn, id: Self::PrimaryKeyType) -> Result<Option<Self::Repr>, DbErr> {
         let r = Self::Entity::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(DbError::RecordNotFound("product not found".to_owned()))?;
-        Ok(Self::Repr::from(r))
+            .map(Self::Repr::from);
+            //.ok_or(DbErr::RecordNotFound("not found".to_owned()))?;
+        Ok(r)
     }
 
-    async fn delete(db: &DbConn, id: Self::PrimaryKeyType) -> Result<(), DbError> {
+    async fn delete(db: &DbConn, id: Self::PrimaryKeyType) -> Result<(), DbErr> {
         Self::Entity::delete_by_id(id).exec(db).await?;
         Ok(())
     }
@@ -76,7 +76,7 @@ where
     async fn get_by_secondary_id(
         db: &DbConn,
         key: Self::SecondaryKeyType,
-    ) -> Result<Self::Repr, DbError>
+    ) -> Result<Option<Self::Repr>, DbErr>
     where
         <Self as BaseRepoWithSecondaryKey>::SecondaryKeyType: 'async_trait,
         sea_orm::Value: From<<Self as BaseRepoWithSecondaryKey>::SecondaryKeyType>,
@@ -85,7 +85,7 @@ where
             .filter(Self::secondary_column().eq(key))
             .one(db)
             .await?
-            .ok_or(DbError::RecordNotFound("not found".to_owned()))?;
-        Ok(Self::Repr::from(r))
+            .map(Self::Repr::from);
+        Ok(r)
     }
 }

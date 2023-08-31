@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use super::base::{BaseRepo, HasId};
-use super::error::DbError;
 use crate::entity;
 pub use entity::annotation::Model as Annotation;
 pub use entity::attachment::Model as Attachment;
@@ -84,11 +83,11 @@ impl BaseRepo for CrashRepo {
 }
 
 impl CrashRepo {
-    async fn get_by_id(db: &DbConn, id: uuid::Uuid) -> Result<Crash, DbError> {
+    async fn get_by_id(db: &DbConn, id: uuid::Uuid) -> Result<Crash, DbErr> {
         let model = entity::crash::Entity::find_by_id(id)
             .one(db)
             .await?
-            .ok_or(DbError::RecordNotFound("product not found".to_owned()))?;
+            .ok_or(DbErr::RecordNotFound("crash not found".to_owned()))?;
 
         let annotations: Vec<entity::annotation::Model> = model
             .find_related(entity::annotation::Entity)

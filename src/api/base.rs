@@ -49,18 +49,9 @@ where
     where
         T: DeserializeOwned,
     {
-        let deserializer = &mut serde_json::Deserializer::from_str(s.as_str());
-        let value = match serde_path_to_error::deserialize(deserializer) {
+        let value = match serde_json::from_str::<T>(s.as_str()) {
             Ok(value) => value,
-            Err(err) => {
-                let apierror = match err.inner().classify() {
-                    serde_json::error::Category::Data => ApiError::Failure,
-                    serde_json::error::Category::Syntax => ApiError::Failure,
-                    serde_json::error::Category::Eof => ApiError::Failure,
-                    serde_json::error::Category::Io => ApiError::Failure,
-                };
-                return Err(apierror);
-            }
+            Err(err) => return Err(ApiError::JsonError(err)),
         };
         Ok(value)
     }
@@ -74,7 +65,9 @@ where
         T: DeserializeOwned,
     {
         if !Self::json_content_type(&headers) {
-            return Err(ApiError::Failure);
+            return Err(ApiError::APIFailure(
+                "Content-Type must be application/json".to_owned(),
+            ));
         }
         let j = serde_json::from_str(payload.as_str())?;
         let j = Self::req(db, j).await?;

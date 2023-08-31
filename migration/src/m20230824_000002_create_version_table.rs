@@ -26,12 +26,7 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default(Expr::current_timestamp()),
                     )
-                    .col(
-                        ColumnDef::new(Version::Name)
-                            .string()
-                            .not_null()
-                            .unique_key(),
-                    )
+                    .col(ColumnDef::new(Version::Name).string().not_null())
                     .col(ColumnDef::new(Version::Hash).string().not_null())
                     .col(ColumnDef::new(Version::Tag).string().not_null())
                     .col(ColumnDef::new(Version::ProductId).uuid().not_null())
@@ -42,6 +37,13 @@ impl MigrationTrait for Migration {
                             .to(Product::Table, Product::Id)
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
+                    )
+                    .index(
+                        Index::create()
+                            .unique()
+                            .name("idx-unique-product-and-name")
+                            .col(Version::Name)
+                            .col(Version::ProductId),
                     )
                     .to_owned(),
             )

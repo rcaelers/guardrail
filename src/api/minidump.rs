@@ -72,7 +72,8 @@ impl MinidumpApi {
                 error!("error: {:?}", e);
                 return Err(ApiError::Failure);
             }
-        };
+        }
+        .ok_or(ApiError::Failure)?;
         info!("product: {:?}", product.id);
         Ok(product)
     }
@@ -88,7 +89,8 @@ impl MinidumpApi {
                 error!("error: {:?}", e);
                 return Err(ApiError::Failure);
             }
-        };
+        }
+        .ok_or(ApiError::Failure)?;
         info!("version: {:?}", version.id);
         Ok(version)
     }

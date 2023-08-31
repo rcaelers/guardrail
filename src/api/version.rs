@@ -13,14 +13,15 @@ impl BaseApi<VersionRepo> for VersionApi {
         db: &DatabaseConnection,
         json: serde_json::Value,
     ) -> Result<serde_json::Value, ApiError> {
-        let product = &json["product"];
-        if !product.is_null() {
-            let product_id = ProductRepo::get_by_secondary_id(
-                db,
-                product.as_str().ok_or(ApiError::Failure)?.to_owned(),
-            )
-            .await
-            .map(|product| product.id)?;
+        let product = json["product"].as_str();
+        if let Some(product) = product {
+            let product_id = ProductRepo::get_by_secondary_id(db, product.to_owned())
+                .await?
+                .map(|product| product.id)
+                .ok_or_else(|| {
+                    ApiError::ForeignKeyError("product".to_owned(), product.to_owned())
+                })?;
+
             let mut json = json.clone();
             json["product_id"] = serde_json::Value::String(product_id.to_string());
             return Ok(json);
@@ -74,6 +75,12 @@ mod tests {
     #[derive(serde::Deserialize, Debug)]
     struct ApiResponse {
         result: String,
+    }
+
+    #[derive(serde::Deserialize, Debug)]
+    struct ApiResponseFailed {
+        result: String,
+        error: String,
     }
 
     #[derive(serde::Deserialize, Debug)]
@@ -146,7 +153,7 @@ mod tests {
         .post("/api/version")
         .content_type("application/json")
         .json(&serde_json::json!({
-            "name":"0.1", "hash":"1234567890", "tag": "v0.1", "product_id": format!("{}", product2.id)
+            "name":"1.12", "hash":"1234567890", "tag": "v1.12", "product_id": format!("{}", product2.id)
         }))
         .await;
         response.assert_status_ok();
@@ -163,7 +170,7 @@ mod tests {
         assert_eq!(versions.payload.len(), 3);
         assert_eq!(versions.payload[0].name, "1.11");
         assert_eq!(versions.payload[1].name, "1.12");
-        assert_eq!(versions.payload[2].name, "0.1");
+        assert_eq!(versions.payload[2].name, "1.12");
         assert_eq!(versions.payload[0].id.to_string(), version1.id);
         assert_eq!(versions.payload[1].id.to_string(), version2.id);
         assert_eq!(versions.payload[2].id.to_string(), version3.id);
@@ -172,7 +179,7 @@ mod tests {
         assert_eq!(versions.payload[2].product_id.to_string(), product2.id);
         assert_eq!(versions.payload[0].tag, "v1.11");
         assert_eq!(versions.payload[1].tag, "v1.12");
-        assert_eq!(versions.payload[2].tag, "v0.1");
+        assert_eq!(versions.payload[2].tag, "v1.12");
         assert_eq!(versions.payload[0].hash, "1234567890");
         assert_eq!(versions.payload[1].hash, "1234567890");
         assert_eq!(versions.payload[2].hash, "1234567890");
@@ -234,5 +241,99 @@ mod tests {
         assert_eq!(versions.payload.len(), 2);
         assert_eq!(versions.payload[0].id.to_string(), version1.id);
         assert_eq!(versions.payload[1].id.to_string(), version3.id);
+    }
+
+    #[serial]
+    #[tokio::test]
+    async fn test_product_not_found() {
+        let server = run_server().await;
+
+        let response = server
+            .post("/api/version")
+            .content_type("application/json")
+            .json(&serde_json::json!({
+                "name":"1.11", "hash":"1234567890", "tag": "v1.11", "product": "Workrave"
+            }))
+            .await;
+        println!("{:?}", response);
+        response.assert_status_not_found();
+        let version1 = response.json::<ApiResponseFailed>();
+        println!("{:?}", version1);
+        assert_eq!(version1.result, "failed");
+    }
+
+    #[serial]
+    #[tokio::test]
+    async fn test_not_unique() {
+        //init_logging().await;
+        let server = run_server().await;
+
+        let response = server
+            .post("/api/product")
+            .content_type("application/json")
+            .json(&serde_json::json!({
+                "name":"Workrave" ,
+            }))
+            .await;
+        response.assert_status_ok();
+        let product1 = response.json::<ApiResponseWithId>();
+
+        let response = server
+            .post("/api/version")
+            .content_type("application/json")
+            .json(&serde_json::json!({
+                "name":"1.11", "hash":"1234567890", "tag": "v1.11", "product": "Workrave"
+            }))
+            .await;
+        println!("{:?}", response);
+        response.assert_status_ok();
+        let version = response.json::<ApiResponse>();
+        println!("{:?}", version);
+        assert_eq!(version.result, "ok");
+
+        let response = server
+            .post("/api/version")
+            .content_type("application/json")
+            .json(&serde_json::json!({
+                "name":"1.11", "hash":"1234567890", "tag": "v1.11", "product": "Workrave"
+            }))
+            .await;
+        println!("{:?}", response);
+
+        response.assert_status_bad_request();
+        let version = response.json::<ApiResponseFailed>();
+        println!("{:?}", version);
+        assert_eq!(version.result, "failed");
+    }
+
+    #[serial]
+    #[tokio::test]
+    async fn test_incomplete_json() {
+        //init_logging().await;
+        let server = run_server().await;
+
+        let response = server
+            .post("/api/product")
+            .content_type("application/json")
+            .json(&serde_json::json!({
+                "name":"Workrave" ,
+            }))
+            .await;
+        response.assert_status_ok();
+        let product1 = response.json::<ApiResponseWithId>();
+
+        let response = server
+            .post("/api/version")
+            .content_type("application/json")
+            .json(&serde_json::json!({
+                "hash":"1234567890", "tag": "v1.11", "product": "Workrave"
+            }))
+            .await;
+        println!("{:?}", response);
+
+        response.assert_status_bad_request();
+        let version = response.json::<ApiResponseFailed>();
+        println!("{:?}", version);
+        assert_eq!(version.result, "failed");
     }
 }
