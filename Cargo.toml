@@ -18,51 +18,39 @@ migration = { path = "migration" }
 # Tokio
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0.7.8", features = ["tracing", "io"] }
+# Tower
+tower-http = { version = "0.4", features = ["full"] }
+# Axum/Web
+axum = { version = "0.6.20", features = ["headers", "form", "query", "macros", "multipart", "tracing"] }
+tera = { version = "1", default-features = false }
 # Serde / json
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_with = "3"
-# Axum/Web
-axum = { version = "0.6.16", features = ["headers", "form", "query", "macros", "multipart", "tracing"] }
-tower = { version = "0.4", features = [ "timeout" ] }
-tower-http = { version = "0.4", features = ["full"] }
-tower-cookies = "0.9"
-tera = { version = "1", default-features = false }
 # SeaORM
 sea-orm = { version = "^0.12.2", features = ["sqlx-postgres", "sqlx-sqlite", "runtime-tokio-rustls", "macros", "with-uuid", "with-json"] }
-futures = "0.3.21"
-# Others
-lazy-regex = "3.0.1"
-async-trait = "0.1.73"
-strum_macros = "0.25.2"
-uuid = { version = "1", features = ["v4", "fast-rng", "serde", "std"] }
-rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
-cargo-watch = "8.4.0"
-config = "0.13.3"
-#lazy_static = "1.4.0"
+# Tracing
 tracing = "0.1.37"
 tracing-subscriber = { version = "0.3.17", features = ["tracing-log", "local-time", "env-filter", "json"] }
 tracing-appender = "0.2"
-anyhow = "1"
-thiserror = "1.0.47"
-chrono = { version = "0.4.26", features = ["serde"] }
+# Minidump processing
 minidump = { version = "0.17.0" }
-minidump-common = { version = "0.17.0" }
 minidump-processor = { version = "0.17.0" }
 minidump-unwind = { version = "0.17.0", features = ["debuginfo", "http"] }
-serde_path_to_error = "0.1.14"
+# Others
+futures = "0.3.28"
+async-trait = "0.1.73"
+uuid = { version = "1", features = ["v4", "fast-rng", "serde", "std"] }
 mime = "0.3.17"
+rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
+config = "0.13.3"
+
+# anyhow = "1"
+thiserror = "1.0.47"
+chrono = { version = "0.4.28", features = ["serde"] }
 
 [features]
-# Allows construction of symbol files from native binaries
 dump_syms = ["minidump-processor/dump_syms"]
 
-# [dev-dependencies.sea-orm]
-# version = "*"
-# features = ["mock"]
-
 [dev-dependencies]
-anyhow = "1"
 axum-test = "12.2.0"
-httpc-test = { version = "0.1.5", features = ["color-output", "colored", "colored_json", "url"] }
 serial_test = "2"
