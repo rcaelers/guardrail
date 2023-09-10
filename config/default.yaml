@@ -1,6 +1,7 @@
 server:
   port: 8080
   base_path: _data
+  site: http://localhost:8080
 logger:
   directory: _data/logs
   level: trace
@@ -11,3 +12,14 @@ database:
   name: postgres
 auth:
   secret: secret
+  issuer: https://idp.krandor.org
+  client_id: 231190805631533098@guardrail 
+  client_secret: ''
+  redirect_uri: http://localhost:8080/auth/callback
+  audiences:
+    - '230305869814824983'
+    - '230305928417706007@guardrail'
+  scopes:
+    - 'urn:zitadel:iam:org:project:roles' 
+    - 'urn:zitadel:iam:user:metadata' 
+    - 'urn:zitadel:iam:org:project:id:zitadel:aud'

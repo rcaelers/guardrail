@@ -45,8 +45,14 @@ rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
 config = "0.13.3"
 
 # anyhow = "1"
-thiserror = "1.0.47"
-chrono = { version = "0.4.28", features = ["serde"] }
+thiserror = "1.0.48"
+chrono = { version = "0.4.30", features = ["serde"] }
+jwt-authorizer = "0.10.1"
+openidconnect = { version = "3.3.1", features = ["accept-rfc3339-timestamps", "accept-string-booleans"] }
+oauth2 = "4.4.2"
+url = { version = "2.4.1", features = ["serde"] }
+dashmap = "5.5.3"
+axum-sessions = "0.5.0"
 
 [features]
 dump_syms = ["minidump-processor/dump_syms"]

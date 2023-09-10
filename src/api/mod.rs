@@ -10,3 +10,10 @@ mod symbols;
 mod user;
 mod version;
 pub use routes::routes;
+use serde::Deserialize;
+
+// TODO: Merge with oidc user
+#[derive(Debug, Deserialize, Clone)]
+pub struct User {
+    sub: String,
+}

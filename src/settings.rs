@@ -11,6 +11,7 @@ pub fn settings() -> &'static Settings {
 pub struct Server {
     pub port: u16,
     pub base_path: String,
+    pub site: String,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -35,12 +36,17 @@ impl Default for Database {
     }
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize)]
 pub struct Auth {
     pub secret: String,
+    pub issuer: String,
+    pub client_id: String,
+    pub client_secret: Option<String>,
+    pub audiences: Vec<String>,
+    pub scopes: Option<Vec<String>>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Debug, Deserialize)]
 pub struct Settings {
     pub server: Server,
     pub logger: Logger,

@@ -40,8 +40,8 @@ mod tests {
     use tracing::Level;
     use tracing_subscriber::FmtSubscriber;
 
-    use crate::model::base::BaseRepo;
     use crate::model::version::VersionRepo;
+    use crate::{auth::oidc::OidcClient, model::base::BaseRepo};
     use ::axum::Router;
     use ::axum_test::TestServer;
 
@@ -61,7 +61,9 @@ mod tests {
         let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
         Migrator::up(&db, None).await.unwrap();
 
-        let state = Arc::new(AppState { db });
+        // TODO: create dummy auth client
+        let auth_client = OidcClient::new().await.unwrap();
+        let state = Arc::new(AppState { db, auth_client });
 
         let app = Router::new()
             .nest("/api", api::routes())
