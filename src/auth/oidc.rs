@@ -100,8 +100,6 @@ impl OidcClient {
 
         let (auth_url, csrf_token, nonce) = request.url();
 
-        info!("Browse to: {}", auth_url);
-
         let context: AuthenticationContext = AuthenticationContext {
             nonce,
             csrf_token,
@@ -110,7 +108,6 @@ impl OidcClient {
         };
 
         let key = context.csrf_token.secret().clone();
-        info!("Pending {:?}", key);
         let url = context.auth_url.clone();
         self.pending.insert(key, context);
 
@@ -122,7 +119,6 @@ impl OidcClient {
         code: String,
         state: String,
     ) -> Result<UserClaims, AuthError> {
-        info!("Pending get {:?}", state);
         let (_, context) = self
             .pending
             .remove(state.as_str())
@@ -179,8 +175,6 @@ impl OidcClient {
         info!("Claims : {:?}", claims);
         info!("Scopes: {:?}", token_response.scopes());
 
-        info!("Requesting User Claims");
-
         let user_claims: UserInfoClaims<ExtraClaims, CoreGenderClaim> = self
             .client
             .user_info(token_response.access_token().to_owned(), None)
@@ -190,6 +184,16 @@ impl OidcClient {
             .map_err(|_err| AuthError::Failure)?;
 
         info!("User Claims : {:?}", user_claims);
+
+        let validity = token_response
+            .expires_in()
+            .ok_or(AuthError::ResponseFieldError {
+                field: "expired_in".to_string(),
+                reason: "missing".to_string(),
+            })?;
+
+        // TODO: use validity
+        info!("Token is valid for {} seconds", validity.as_secs());
 
         let user = UserClaims {
             id: claims.subject().clone(),
@@ -220,26 +224,6 @@ impl OidcClient {
                 .collect(),
         };
 
-        let validity = token_response
-            .expires_in()
-            .ok_or(AuthError::ResponseFieldError {
-                field: "expired_in".to_string(),
-                reason: "missing".to_string(),
-            })?;
-
         Ok(user)
     }
-
-    fn id_token_verifier(&self) -> CoreIdTokenVerifier {
-        self.client
-            .id_token_verifier()
-            .require_audience_match(true)
-            .require_issuer_match(true)
-    }
 }
-
-//     let userinfo: CoreUserInfoClaims = client
-//         .user_info(token_response.access_token().to_owned(), None)
-//         .map_err(|err| anyhow!("No user info endpoint: {:?}", err))?
-//         .request(http_client)
-//         .map_err(|err| anyhow!("Failed requesting user info: {:?}", err))?;
