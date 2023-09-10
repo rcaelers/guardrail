@@ -60,7 +60,7 @@ async fn main() {
 
     let db = init_db().await.unwrap();
 
-    let auth_client = OidcClient::new().await.unwrap();
+    let auth_client = Arc::new(OidcClient::new().await.unwrap());
     let state = Arc::new(AppState { db, auth_client });
 
     let url = "https://idp.krandor.org/oauth/v2/keys";

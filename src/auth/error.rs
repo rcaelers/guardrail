@@ -13,6 +13,15 @@ pub enum AuthError {
     #[error("response error. field: {field}, reason: {reason}")]
     ResponseFieldError { field: String, reason: String },
 
+    #[error("invalid issuer url: {0}")]
+    InvalidIssuerURL(String),
+
+    #[error("invalid redirect url: {0}")]
+    InvalidRedirectURL(String),
+
+    #[error("discovery error: {0}")]
+    DiscoveryError(String),
+
     #[error("invalid token exchange")]
     InvalidTokenExchange,
 

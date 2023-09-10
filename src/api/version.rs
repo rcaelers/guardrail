@@ -32,6 +32,7 @@ impl BaseApi<VersionRepo> for VersionApi {
 
 #[cfg(test)]
 mod tests {
+    use async_trait::async_trait;
     use axum::extract::DefaultBodyLimit;
     use migration::{Migrator, MigratorTrait};
     use sea_orm::{Database, DatabaseConnection};
@@ -40,12 +41,30 @@ mod tests {
     use tracing::Level;
     use tracing_subscriber::FmtSubscriber;
 
+    use crate::auth::oidc::OidcClientTrait;
+    use crate::model::base::BaseRepo;
     use crate::model::version::VersionRepo;
-    use crate::{auth::oidc::OidcClient, model::base::BaseRepo};
     use ::axum::Router;
     use ::axum_test::TestServer;
 
     use crate::{api, app_state::AppState};
+
+    struct OidcClientStub;
+
+    #[async_trait]
+    impl OidcClientTrait for OidcClientStub {
+        async fn authorize(&self) -> Result<url::Url, crate::auth::error::AuthError> {
+            Ok(url::Url::parse("http://localhost").unwrap())
+        }
+
+        async fn exchange_code(
+            &self,
+            _code: String,
+            _state: String,
+        ) -> Result<crate::auth::oidc::UserClaims, crate::auth::error::AuthError> {
+            Err(crate::auth::error::AuthError::Failure)
+        }
+    }
 
     async fn init_logging() {
         let subscriber = FmtSubscriber::builder()
@@ -62,7 +81,7 @@ mod tests {
         Migrator::up(&db, None).await.unwrap();
 
         // TODO: create dummy auth client
-        let auth_client = OidcClient::new().await.unwrap();
+        let auth_client = Arc::new(OidcClientStub {});
         let state = Arc::new(AppState { db, auth_client });
 
         let app = Router::new()

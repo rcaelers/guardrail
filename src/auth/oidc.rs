@@ -1,10 +1,8 @@
+use async_trait::async_trait;
 use dashmap::DashMap;
 use oauth2::PkceCodeVerifier;
 use openidconnect::{
-    core::{
-        CoreAuthenticationFlow, CoreClient, CoreGenderClaim, CoreIdTokenVerifier,
-        CoreProviderMetadata,
-    },
+    core::{CoreAuthenticationFlow, CoreClient, CoreGenderClaim, CoreProviderMetadata},
     reqwest::async_http_client,
     AccessTokenHash, AdditionalClaims, AuthorizationCode, ClientId, ClientSecret, CsrfToken,
     IssuerUrl, Nonce, OAuth2TokenResponse, PkceCodeChallenge, RedirectUrl, Scope,
@@ -39,6 +37,12 @@ struct ExtraClaims {
 }
 impl AdditionalClaims for ExtraClaims {}
 
+#[async_trait]
+pub trait OidcClientTrait {
+    async fn authorize(&self) -> Result<Url, AuthError>;
+    async fn exchange_code(&self, code: String, state: String) -> Result<UserClaims, AuthError>;
+}
+
 #[derive(Debug)]
 pub struct OidcClient {
     pub client: CoreClient,
@@ -47,15 +51,15 @@ pub struct OidcClient {
 
 impl OidcClient {
     pub async fn new() -> Result<Self, AuthError> {
-        let issuer_url =
-            IssuerUrl::new(settings().auth.issuer.clone()).map_err(|_err| AuthError::Failure)?;
+        let issuer_url = IssuerUrl::new(settings().auth.issuer.clone())
+            .map_err(|err| AuthError::InvalidIssuerURL(err.to_string()))?;
 
         let redirect_uri = RedirectUrl::new(format!("{}/auth/callback", settings().server.site))
-            .map_err(|_err| AuthError::Failure)?;
+            .map_err(|err| AuthError::InvalidRedirectURL(err.to_string()))?;
 
         let provider_metadata = CoreProviderMetadata::discover_async(issuer_url, async_http_client)
             .await
-            .map_err(|_err| AuthError::Failure)?;
+            .map_err(|err| AuthError::DiscoveryError(err.to_string()))?;
 
         let client_secret = settings().auth.client_secret.clone();
         let client = CoreClient::from_provider_metadata(
@@ -74,8 +78,11 @@ impl OidcClient {
             pending: DashMap::new(),
         })
     }
+}
 
-    pub async fn authorize(&self) -> Result<Url, AuthError> {
+#[async_trait]
+impl OidcClientTrait for OidcClient {
+    async fn authorize(&self) -> Result<Url, AuthError> {
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
         let mut request = self
@@ -114,11 +121,7 @@ impl OidcClient {
         Ok(url)
     }
 
-    pub async fn exchange_code(
-        &self,
-        code: String,
-        state: String,
-    ) -> Result<UserClaims, AuthError> {
+    async fn exchange_code(&self, code: String, state: String) -> Result<UserClaims, AuthError> {
         let (_, context) = self
             .pending
             .remove(state.as_str())
