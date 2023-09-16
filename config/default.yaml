@@ -13,6 +13,7 @@ database:
 auth:
   secret: secret
   issuer: https://idp.krandor.org
+  jwks_url: https://idp.krandor.org/oauth/v2/keys
   client_id: 231190805631533098@guardrail 
   client_secret: ''
   redirect_uri: http://localhost:8080/auth/callback

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use axum::routing::{delete, get, post, put};
 use axum::Router;
+use jwt_authorizer::{Authorizer, IntoLayer, JwtAuthorizer};
 
 use super::annotation::AnnotationApi;
 use super::attachment::AttachmentApi;
@@ -11,10 +12,15 @@ use super::product::ProductApi;
 use super::symbols::SymbolsApi;
 use super::user::UserApi;
 use super::version::VersionApi;
+use super::User;
 use crate::api::base::BaseApi;
 use crate::app_state::AppState;
+use crate::settings;
 
-pub fn routes() -> Router<Arc<AppState>> {
+pub async fn routes() -> Router<Arc<AppState>> {
+    let url = settings().auth.jwks_url.as_str();
+    let auth: Authorizer<User> = JwtAuthorizer::from_jwks_url(url).build().await.unwrap();
+
     // TODO: delegate Data API to BaseApi
     Router::new()
         // Annotation
@@ -63,4 +69,5 @@ pub fn routes() -> Router<Arc<AppState>> {
         .route("/symbols/upload", post(SymbolsApi::upload))
         // Minidump
         .route("/minidump/upload", post(MinidumpApi::upload))
+        .layer(auth.into_layer())
 }

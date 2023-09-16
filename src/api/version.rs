@@ -85,7 +85,7 @@ mod tests {
         let state = Arc::new(AppState { db, auth_client });
 
         let app = Router::new()
-            .nest("/api", api::routes())
+            .nest("/api", api::routes().await)
             .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
             .with_state(state)
             .into_make_service();

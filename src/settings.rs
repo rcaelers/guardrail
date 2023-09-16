@@ -40,6 +40,7 @@ impl Default for Database {
 pub struct Auth {
     pub secret: String,
     pub issuer: String,
+    pub jwks_url: String,
     pub client_id: String,
     pub client_secret: Option<String>,
     pub audiences: Vec<String>,
