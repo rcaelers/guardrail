@@ -1,14 +1,19 @@
 use axum::{response::IntoResponse, routing::get, Router};
 use std::sync::Arc;
 
-use crate::app_state::AppState;
+use crate::{app_state::AppState, auth::layer::AuthLayer};
 
-use super::error::WebError;
-
-pub async fn routes() -> Router<Arc<AppState>> {
-    Router::new().route("/test", get(handle_get_test))
+pub async fn routes(state: Arc<AppState>) -> Router<Arc<AppState>> {
+    Router::new()
+        .route("/test", get(handle_get_test))
+        .layer(AuthLayer::new(Arc::clone(&state.auth_client)))
+        .route("/", get(handle_get_root))
 }
 
 async fn handle_get_test() -> impl IntoResponse {
-    WebError::Failure.into_response()
+    "Test: Hello, world!"
+}
+
+async fn handle_get_root() -> impl IntoResponse {
+    "Root: Hello, world!"
 }

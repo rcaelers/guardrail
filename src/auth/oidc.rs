@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use dashmap::DashMap;
 use oauth2::PkceCodeVerifier;
 use openidconnect::{
     core::{CoreAuthenticationFlow, CoreClient, CoreGenderClaim, CoreProviderMetadata},
@@ -9,6 +8,7 @@ use openidconnect::{
     SubjectIdentifier, TokenResponse, UserInfoClaims,
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use tracing::{debug, info};
 use url::Url;
 
@@ -23,12 +23,12 @@ pub struct UserClaims {
     pub scopes: Vec<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AuthenticationContext {
-    auth_url: Url,
-    csrf_token: CsrfToken,
-    nonce: Nonce,
-    pkce_verifier: PkceCodeVerifier,
+    pub auth_url: Url,
+    pub csrf_token: CsrfToken,
+    pub nonce: Nonce,
+    pub pkce_verifier: PkceCodeVerifier,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -39,14 +39,20 @@ impl AdditionalClaims for ExtraClaims {}
 
 #[async_trait]
 pub trait OidcClientTrait {
-    async fn authorize(&self) -> Result<Url, AuthError>;
-    async fn exchange_code(&self, code: String, state: String) -> Result<UserClaims, AuthError>;
+    async fn authorize(&self) -> Result<AuthenticationContext, AuthError>;
+    async fn exchange_code(
+        &self,
+        context: AuthenticationContext,
+        code: String,
+        state: String,
+    ) -> Result<UserClaims, AuthError>;
 }
+
+pub type OidcClientTraitArc = Arc<dyn OidcClientTrait + Sync + Send>;
 
 #[derive(Debug)]
 pub struct OidcClient {
     pub client: CoreClient,
-    pub pending: DashMap<String, AuthenticationContext>,
 }
 
 impl OidcClient {
@@ -73,16 +79,13 @@ impl OidcClient {
         )
         .set_redirect_uri(redirect_uri);
 
-        Ok(Self {
-            client,
-            pending: DashMap::new(),
-        })
+        Ok(Self { client })
     }
 }
 
 #[async_trait]
 impl OidcClientTrait for OidcClient {
-    async fn authorize(&self) -> Result<Url, AuthError> {
+    async fn authorize(&self) -> Result<AuthenticationContext, AuthError> {
         let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
 
         let mut request = self
@@ -107,26 +110,21 @@ impl OidcClientTrait for OidcClient {
 
         let (auth_url, csrf_token, nonce) = request.url();
 
-        let context: AuthenticationContext = AuthenticationContext {
+        let context = AuthenticationContext {
             nonce,
             csrf_token,
             auth_url,
             pkce_verifier,
         };
-
-        let key = context.csrf_token.secret().clone();
-        let url = context.auth_url.clone();
-        self.pending.insert(key, context);
-
-        Ok(url)
+        Ok(context)
     }
 
-    async fn exchange_code(&self, code: String, state: String) -> Result<UserClaims, AuthError> {
-        let (_, context) = self
-            .pending
-            .remove(state.as_str())
-            .ok_or(AuthError::InvalidTokenExchange)?;
-
+    async fn exchange_code(
+        &self,
+        context: AuthenticationContext,
+        code: String,
+        state: String,
+    ) -> Result<UserClaims, AuthError> {
         let token_response = self
             .client
             .exchange_code(AuthorizationCode::new(code))

@@ -34,35 +34,49 @@ impl BaseApi<VersionRepo> for VersionApi {
 mod tests {
     use async_trait::async_trait;
     use axum::extract::DefaultBodyLimit;
+    use axum::routing::{delete, get, post, put};
     use migration::{Migrator, MigratorTrait};
+    use oauth2::CsrfToken;
+    use openidconnect::Nonce;
     use sea_orm::{Database, DatabaseConnection};
     use serial_test::serial;
     use std::{io::IsTerminal, sync::Arc};
     use tracing::Level;
     use tracing_subscriber::FmtSubscriber;
 
-    use crate::auth::oidc::OidcClientTrait;
+    use crate::api::base::BaseApi;
+    use crate::api::product::ProductApi;
+    use crate::auth::oidc::{AuthenticationContext, OidcClientTrait};
     use crate::model::base::BaseRepo;
     use crate::model::version::VersionRepo;
     use ::axum::Router;
     use ::axum_test::TestServer;
 
-    use crate::{api, app_state::AppState};
+    use super::VersionApi;
+    use crate::app_state::AppState;
 
     struct OidcClientStub;
 
     #[async_trait]
     impl OidcClientTrait for OidcClientStub {
-        async fn authorize(&self) -> Result<url::Url, crate::auth::error::AuthError> {
-            Ok(url::Url::parse("http://localhost").unwrap())
+        async fn authorize(&self) -> Result<AuthenticationContext, crate::auth::error::AuthError> {
+            let context: AuthenticationContext = AuthenticationContext {
+                nonce: Nonce::new_random(),
+                csrf_token: CsrfToken::new_random(),
+                auth_url: url::Url::parse("http://localhost").unwrap(),
+                pkce_verifier: oauth2::PkceCodeVerifier::new("x".to_string()),
+            };
+
+            Ok(context)
         }
 
         async fn exchange_code(
             &self,
+            _context: AuthenticationContext,
             _code: String,
             _state: String,
         ) -> Result<crate::auth::oidc::UserClaims, crate::auth::error::AuthError> {
-            Err(crate::auth::error::AuthError::Failure)
+            Err(crate::auth::error::AuthError::InvalidTokenExchange)
         }
     }
 
@@ -80,12 +94,17 @@ mod tests {
         let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
         Migrator::up(&db, None).await.unwrap();
 
-        // TODO: create dummy auth client
         let auth_client = Arc::new(OidcClientStub {});
         let state = Arc::new(AppState { db, auth_client });
 
         let app = Router::new()
-            .nest("/api", api::routes().await)
+            // FIXME: duplicate code
+            .route("/api/version", post(VersionApi::create))
+            .route("/api/version", get(VersionApi::query))
+            .route("/api/version/:id", get(VersionApi::get_by_id))
+            .route("/api/version/:id", delete(VersionApi::remove_by_id))
+            .route("/api/version/:id", put(VersionApi::update_by_id))
+            .route("/api/product", post(ProductApi::create))
             .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
             .with_state(state)
             .into_make_service();

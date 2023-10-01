@@ -3,30 +3,35 @@ mod api;
 mod app_state;
 mod auth;
 mod entity;
-//mod middleware;
+mod middleware;
 mod model;
+mod session_store;
 mod settings;
 mod utils;
 mod web;
 
+use axum::error_handling::HandleErrorLayer;
 use axum::extract::DefaultBodyLimit;
+use axum::http::StatusCode;
 use axum::routing::get_service;
-use axum::Router;
-use axum_sessions::{async_session::MemoryStore, SessionLayer};
-use rand::RngCore;
+use axum::{BoxError, Router};
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use std::io::IsTerminal;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use time::Duration;
+use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, trace::TraceLayer};
+use tower_sessions::cookie::SameSite;
+use tower_sessions::SessionManagerLayer;
 use tracing::{info, Level};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{fmt, FmtSubscriber};
 
+use crate::auth::oidc::OidcClient;
+use crate::session_store::SeaOrmSessionStore;
 use app_state::AppState;
 use settings::settings;
-
-use crate::auth::oidc::OidcClient;
 
 async fn init_logging() {
     let directory = &settings().logger.directory;
@@ -59,21 +64,32 @@ async fn main() {
     let db = init_db().await.unwrap();
 
     let auth_client = Arc::new(OidcClient::new().await.unwrap());
-    let state = Arc::new(AppState { db, auth_client });
+    let state = Arc::new(AppState {
+        db: db.clone(),
+        auth_client,
+    });
 
-    let store = MemoryStore::new();
-    let mut secret = [0u8; 128];
-    rand::thread_rng().fill_bytes(&mut secret[..]);
-    let session_layer = SessionLayer::new(store, &secret).with_cookie_name("guardrailsid");
+    let session_store = SeaOrmSessionStore::new(db);
+    let session_service = ServiceBuilder::new()
+        .layer(HandleErrorLayer::new(|_: BoxError| async {
+            StatusCode::BAD_REQUEST
+        }))
+        .layer(
+            SessionManagerLayer::new(session_store)
+                .with_name("guardrail")
+                .with_same_site(SameSite::Lax)
+                .with_max_age(Duration::hours(1))
+                .with_secure(false),
+        );
 
     let routes_all = Router::new()
         .nest("/api", api::routes().await)
         .nest("/auth", auth::routes().await)
-        .nest("/", web::routes().await)
+        .nest("/", web::routes(Arc::clone(&state)).await)
         .fallback_service(routes_static())
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
         .layer(TraceLayer::new_for_http())
-        .layer(session_layer)
+        .layer(session_service)
         .with_state(state);
 
     let port = settings().server.port;

@@ -10,10 +10,10 @@
 - [ ] API
   - [ ] Error Reporting
   - [ ] Move minidump processing to a separate module
-  - [ ] Authentication
-    - [ ] Minidump upload
-    - [ ] Symbol upload
-    - [ ] CRUD
+  - [X] Authentication
+    - [X] Minidump upload
+    - [X] Symbol upload
+    - [X] CRUD
   - [X] Implement remaining API endpoints
     - [X] Symbols
     - [X] Crashes (including annotations/attachments)
@@ -23,7 +23,14 @@
   - [ ] Remove minidump after processing
   - [ ] Periodically clean up left over minidumps
 - [ ] Web interface
-  - [ ] ...
+  - [ ] Authentication
+- [ ] Authentication
+  - [X] Login
+  - [ ] Logout
+  - [ ] Roles
+- Misc
+  - [ ] Remove unwrap's
 - Infra
   - [X] GitHub action
   - [ ] K8S deployment
+  

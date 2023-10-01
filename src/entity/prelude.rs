@@ -4,6 +4,7 @@ pub use super::annotation::Entity as Annotation;
 pub use super::attachment::Entity as Attachment;
 pub use super::crash::Entity as Crash;
 pub use super::product::Entity as Product;
+pub use super::session::Entity as Session;
 pub use super::symbols::Entity as Symbols;
 pub use super::user::Entity as User;
 pub use super::version::Entity as Version;
