@@ -28,9 +28,9 @@
   - [X] Login
   - [ ] Logout
   - [ ] Roles
-- Misc
+- [ ] Misc
   - [ ] Remove unwrap's
-- Infra
+- [ ] Infra
   - [X] GitHub action
   - [ ] K8S deployment
   
