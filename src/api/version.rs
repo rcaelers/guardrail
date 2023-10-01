@@ -32,12 +32,9 @@ impl BaseApi<VersionRepo> for VersionApi {
 
 #[cfg(test)]
 mod tests {
-    use async_trait::async_trait;
     use axum::extract::DefaultBodyLimit;
     use axum::routing::{delete, get, post, put};
     use migration::{Migrator, MigratorTrait};
-    use oauth2::CsrfToken;
-    use openidconnect::Nonce;
     use sea_orm::{Database, DatabaseConnection};
     use serial_test::serial;
     use std::{io::IsTerminal, sync::Arc};
@@ -46,7 +43,6 @@ mod tests {
 
     use crate::api::base::BaseApi;
     use crate::api::product::ProductApi;
-    use crate::auth::oidc::{AuthenticationContext, OidcClientTrait};
     use crate::model::base::BaseRepo;
     use crate::model::version::VersionRepo;
     use ::axum::Router;
@@ -54,31 +50,6 @@ mod tests {
 
     use super::VersionApi;
     use crate::app_state::AppState;
-
-    struct OidcClientStub;
-
-    #[async_trait]
-    impl OidcClientTrait for OidcClientStub {
-        async fn authorize(&self) -> Result<AuthenticationContext, crate::auth::error::AuthError> {
-            let context: AuthenticationContext = AuthenticationContext {
-                nonce: Nonce::new_random(),
-                csrf_token: CsrfToken::new_random(),
-                auth_url: url::Url::parse("http://localhost").unwrap(),
-                pkce_verifier: oauth2::PkceCodeVerifier::new("x".to_string()),
-            };
-
-            Ok(context)
-        }
-
-        async fn exchange_code(
-            &self,
-            _context: AuthenticationContext,
-            _code: String,
-            _state: String,
-        ) -> Result<crate::auth::oidc::UserClaims, crate::auth::error::AuthError> {
-            Err(crate::auth::error::AuthError::InvalidTokenExchange)
-        }
-    }
 
     async fn init_logging() {
         let subscriber = FmtSubscriber::builder()
@@ -94,7 +65,7 @@ mod tests {
         let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
         Migrator::up(&db, None).await.unwrap();
 
-        let auth_client = Arc::new(OidcClientStub {});
+        let auth_client = Arc::new(crate::auth::oidc::test_stubs::OidcClientStub {});
         let state = Arc::new(AppState { db, auth_client });
 
         let app = Router::new()

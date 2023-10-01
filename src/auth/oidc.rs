@@ -228,3 +228,37 @@ impl OidcClientTrait for OidcClient {
         Ok(user)
     }
 }
+
+#[cfg(test)]
+pub mod test_stubs {
+    use async_trait::async_trait;
+    use oauth2::CsrfToken;
+    use openidconnect::Nonce;
+
+    use crate::auth::oidc::{AuthenticationContext, OidcClientTrait};
+
+    pub struct OidcClientStub;
+
+    #[async_trait]
+    impl OidcClientTrait for OidcClientStub {
+        async fn authorize(&self) -> Result<AuthenticationContext, crate::auth::error::AuthError> {
+            let context: AuthenticationContext = AuthenticationContext {
+                nonce: Nonce::new_random(),
+                csrf_token: CsrfToken::new_random(),
+                auth_url: url::Url::parse("http://localhost").unwrap(),
+                pkce_verifier: oauth2::PkceCodeVerifier::new("x".to_string()),
+            };
+
+            Ok(context)
+        }
+
+        async fn exchange_code(
+            &self,
+            _context: AuthenticationContext,
+            _code: String,
+            _state: String,
+        ) -> Result<crate::auth::oidc::UserClaims, crate::auth::error::AuthError> {
+            Err(crate::auth::error::AuthError::InvalidTokenExchange)
+        }
+    }
+}
