@@ -3,7 +3,6 @@ mod api;
 mod app_state;
 mod auth;
 mod entity;
-mod middleware;
 mod model;
 mod session_store;
 mod settings;
