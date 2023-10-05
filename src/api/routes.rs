@@ -21,7 +21,15 @@ pub async fn routes() -> Router<Arc<AppState>> {
     let url = settings().auth.jwks_url.as_str();
     let auth: Authorizer<User> = JwtAuthorizer::from_jwks_url(url).build().await.unwrap();
 
-    // TODO: delegate Data API to BaseApi
+    routes_api().await.layer(auth.into_layer())
+}
+
+#[cfg(test)]
+pub async fn routes_test() -> Router<Arc<AppState>> {
+    routes_api().await
+}
+
+async fn routes_api() -> Router<Arc<AppState>> {
     Router::new()
         // Annotation
         .route("/annotation", post(AnnotationApi::create))
@@ -69,5 +77,4 @@ pub async fn routes() -> Router<Arc<AppState>> {
         .route("/symbols/upload", post(SymbolsApi::upload))
         // Minidump
         .route("/minidump/upload", post(MinidumpApi::upload))
-        .layer(auth.into_layer())
 }

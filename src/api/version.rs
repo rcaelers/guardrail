@@ -32,84 +32,23 @@ impl BaseApi<VersionRepo> for VersionApi {
 
 #[cfg(test)]
 mod tests {
-    use axum::extract::DefaultBodyLimit;
-    use axum::routing::{delete, get, post, put};
-    use migration::{Migrator, MigratorTrait};
-    use sea_orm::{Database, DatabaseConnection};
+    use crate::api::base::tests::*;
     use serial_test::serial;
-    use std::{io::IsTerminal, sync::Arc};
-    use tracing::Level;
-    use tracing_subscriber::FmtSubscriber;
 
-    use crate::api::base::BaseApi;
-    use crate::api::product::ProductApi;
+    use crate::api::base::tests::*;
     use crate::model::base::BaseRepo;
     use crate::model::version::VersionRepo;
-    use ::axum::Router;
-    use ::axum_test::TestServer;
 
-    use super::VersionApi;
-    use crate::app_state::AppState;
-
-    async fn init_logging() {
-        let subscriber = FmtSubscriber::builder()
-            .with_max_level(Level::DEBUG)
-            .with_ansi(std::io::stdout().is_terminal())
-            .finish();
-
-        tracing::subscriber::set_global_default(subscriber)
-            .expect("setting default subscriber failed");
-    }
-
-    async fn run_server() -> TestServer {
-        let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
-        Migrator::up(&db, None).await.unwrap();
-
-        let auth_client = Arc::new(crate::auth::oidc::test_stubs::OidcClientStub {});
-        let state = Arc::new(AppState { db, auth_client });
-
-        let app = Router::new()
-            // FIXME: duplicate code
-            .route("/api/version", post(VersionApi::create))
-            .route("/api/version", get(VersionApi::query))
-            .route("/api/version/:id", get(VersionApi::get_by_id))
-            .route("/api/version/:id", delete(VersionApi::remove_by_id))
-            .route("/api/version/:id", put(VersionApi::update_by_id))
-            .route("/api/product", post(ProductApi::create))
-            .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
-            .with_state(state)
-            .into_make_service();
-
-        TestServer::new(app).unwrap()
+    #[derive(serde::Deserialize, Debug)]
+    pub struct ApiResponseWithPayload {
+        pub result: String,
+        pub payload: <VersionRepo as BaseRepo>::Repr,
     }
 
     #[derive(serde::Deserialize, Debug)]
-    struct ApiResponse {
-        result: String,
-    }
-
-    #[derive(serde::Deserialize, Debug)]
-    struct ApiResponseFailed {
-        result: String,
-        error: String,
-    }
-
-    #[derive(serde::Deserialize, Debug)]
-    struct ApiResponseWithId {
-        result: String,
-        id: String,
-    }
-
-    #[derive(serde::Deserialize, Debug)]
-    struct ApiResponseWithPayload {
-        result: String,
-        payload: <VersionRepo as BaseRepo>::Repr,
-    }
-
-    #[derive(serde::Deserialize, Debug)]
-    struct ApiResponseWithVecPayload {
-        result: String,
-        payload: Vec<<VersionRepo as BaseRepo>::Repr>,
+    pub struct ApiResponseWithVecPayload {
+        pub result: String,
+        pub payload: Vec<<VersionRepo as BaseRepo>::Repr>,
     }
 
     #[serial]

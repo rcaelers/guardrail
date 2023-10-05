@@ -171,3 +171,64 @@ where
         r
     }
 }
+
+#[cfg(test)]
+pub mod tests {
+    use axum::extract::DefaultBodyLimit;
+    use migration::{Migrator, MigratorTrait};
+    use sea_orm::{Database, DatabaseConnection, EntityTrait, IntoActiveModel};
+    use std::{io::IsTerminal, sync::Arc};
+    use tracing::Level;
+    use tracing_subscriber::FmtSubscriber;
+
+    use crate::api::routes::routes_test;
+    use crate::model::base::{BaseRepo, HasId};
+    use ::axum::Router;
+    use ::axum_test::TestServer;
+
+    use crate::app_state::AppState;
+
+    pub async fn init_logging() {
+        let subscriber = FmtSubscriber::builder()
+            .with_max_level(Level::DEBUG)
+            .with_ansi(std::io::stdout().is_terminal())
+            .finish();
+
+        tracing::subscriber::set_global_default(subscriber)
+            .expect("setting default subscriber failed");
+    }
+
+    pub async fn run_server() -> TestServer {
+        let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
+        Migrator::up(&db, None).await.unwrap();
+
+        let auth_client = Arc::new(crate::auth::oidc::test_stubs::OidcClientStub {});
+        let state = Arc::new(AppState { db, auth_client });
+
+        let app = Router::new()
+            // FIXME: duplicate code
+            .nest("/api", routes_test().await)
+            .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
+            .with_state(state)
+            .into_make_service();
+
+        TestServer::new(app).unwrap()
+    }
+
+    #[derive(serde::Deserialize, Debug)]
+    pub struct ApiResponse {
+        pub result: String,
+    }
+
+    #[derive(serde::Deserialize, Debug)]
+    pub struct ApiResponseFailed {
+        pub result: String,
+        pub error: String,
+    }
+
+    #[derive(serde::Deserialize, Debug)]
+    pub struct ApiResponseWithId {
+        pub result: String,
+        pub id: String,
+    }
+}
