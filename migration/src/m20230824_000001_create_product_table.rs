@@ -31,8 +31,6 @@ impl MigrationTrait for Migration {
                             .unique_key()
                             .not_null(),
                     )
-                    .col(ColumnDef::new(Product::ReportApiKey).string().not_null())
-                    .col(ColumnDef::new(Product::SymbolApiKey).string().not_null())
                     .to_owned(),
             )
             .await
@@ -52,6 +50,4 @@ pub enum Product {
     CreatedAt,
     UpdatedAt,
     Name,
-    ReportApiKey,
-    SymbolApiKey,
 }

@@ -12,8 +12,6 @@ pub struct Model {
     pub updated_at: DateTime,
     #[sea_orm(unique)]
     pub name: String,
-    pub report_api_key: String,
-    pub symbol_api_key: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

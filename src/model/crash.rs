@@ -127,8 +127,6 @@ mod tests {
 
         let product = ProductDto {
             name: "Wprkrave".to_owned(),
-            report_api_key: Some("test_report_api_key1".to_owned()),
-            symbol_api_key: Some("test_symbol_api_key1".to_owned()),
         };
         let idp = ProductRepo::create(&db, product).await.unwrap();
 
