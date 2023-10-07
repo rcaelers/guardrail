@@ -20,12 +20,17 @@ pub async fn routes() -> Router<Arc<AppState>> {
     let url = settings().auth.jwks_url.as_str();
     let auth: Authorizer<User> = JwtAuthorizer::from_jwks_url(url).build().await.unwrap();
 
-    routes_api().await.layer(auth.into_layer())
+    routes_api()
+        .await
+        .layer(auth.into_layer())
+        .route("/minidump/upload", post(MinidumpApi::upload))
 }
 
 #[cfg(test)]
 pub async fn routes_test() -> Router<Arc<AppState>> {
-    routes_api().await
+    routes_api()
+        .await
+        .route("/minidump/upload", post(MinidumpApi::upload))
 }
 
 async fn routes_api() -> Router<Arc<AppState>> {
@@ -68,6 +73,4 @@ async fn routes_api() -> Router<Arc<AppState>> {
         .route("/version/:id", put(VersionApi::update_by_id))
         // Symbols
         .route("/symbols/upload", post(SymbolsApi::upload))
-        // Minidump
-        .route("/minidump/upload", post(MinidumpApi::upload))
 }
