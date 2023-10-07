@@ -10,7 +10,6 @@ use super::crash::CrashApi;
 use super::minidump::MinidumpApi;
 use super::product::ProductApi;
 use super::symbols::SymbolsApi;
-use super::user::UserApi;
 use super::version::VersionApi;
 use super::User;
 use crate::api::base::BaseApi;
@@ -61,12 +60,6 @@ async fn routes_api() -> Router<Arc<AppState>> {
         .route("/symbols/:id", get(SymbolsApi::get_by_id))
         .route("/symbols/:id", delete(SymbolsApi::remove_by_id))
         .route("/symbols/:id", put(SymbolsApi::update_by_id))
-        // User
-        .route("/user", post(UserApi::create))
-        .route("/user", get(UserApi::query))
-        .route("/user/:id", get(UserApi::get_by_id))
-        .route("/user/:id", delete(UserApi::remove_by_id))
-        .route("/user/:id", put(UserApi::update_by_id))
         // Version
         .route("/version", post(VersionApi::create))
         .route("/version", get(VersionApi::query))

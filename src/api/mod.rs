@@ -7,7 +7,6 @@ mod minidump;
 mod product;
 mod routes;
 mod symbols;
-mod user;
 mod version;
 pub use routes::routes;
 use serde::Deserialize;
