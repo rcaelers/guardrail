@@ -80,9 +80,12 @@ impl MinidumpApi {
 
     async fn get_version(
         state: &Arc<AppState>,
+        product_id: uuid::Uuid,
         params: &MinidumpRequestParams,
     ) -> Result<crate::model::version::Version, ApiError> {
-        let version = VersionRepo::get_by_secondary_id(&state.db, params.version.clone()).await;
+        let version =
+            VersionRepo::get_by_product_and_name(&state.db, product_id, params.version.clone())
+                .await;
         let version = match version {
             Ok(product) => product,
             Err(e) => {
@@ -186,7 +189,7 @@ impl MinidumpApi {
         let minidump_file = Self::get_minidump_file(filename).await?;
 
         let product = Self::get_product(&state, params).await?;
-        let version = Self::get_version(&state, params).await?;
+        let version = Self::get_version(&state, product.id, params).await?;
 
         Self::stream_to_file(&minidump_file, field).await?;
 

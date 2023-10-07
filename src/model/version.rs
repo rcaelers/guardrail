@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use sea_orm::*;
 use serde::Serialize;
+use uuid::Uuid;
 
-use super::base::{BaseRepo, BaseRepoWithSecondaryKey, HasId};
+use super::base::{BaseRepo, HasId};
 use crate::entity;
 
 pub use entity::version::Model as Version;
@@ -55,12 +56,21 @@ impl BaseRepo for VersionRepo {
     type PrimaryKeyType = uuid::Uuid;
 }
 
-#[async_trait]
-impl BaseRepoWithSecondaryKey for VersionRepo {
-    type Column = entity::version::Column;
-    type SecondaryKeyType = String;
-
-    fn secondary_column() -> Self::Column {
-        entity::version::Column::Name
+impl VersionRepo {
+    pub async fn get_by_product_and_name(
+        db: &DatabaseConnection,
+        product_id: Uuid,
+        name: String,
+    ) -> Result<Option<entity::version::Model>, DbErr> {
+        let version = entity::version::Entity::find()
+            .filter(
+                Condition::all()
+                    .add(entity::version::Column::Name.eq(name))
+                    .add(entity::version::Column::ProductId.eq(product_id)),
+            )
+            .one(db)
+            .await?
+            .map(entity::version::Model::from);
+        Ok(version)
     }
 }

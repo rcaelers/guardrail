@@ -35,7 +35,7 @@ mod tests {
     use crate::api::base::tests::*;
     use serial_test::serial;
 
-    use crate::api::base::tests::*;
+    
     use crate::model::base::BaseRepo;
     use crate::model::version::VersionRepo;
 

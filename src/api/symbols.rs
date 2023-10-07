@@ -10,6 +10,7 @@ use tokio::fs::{self, File};
 use tokio::io::{self, AsyncBufReadExt, BufReader, BufWriter};
 use tokio_util::io::StreamReader;
 use tracing::{debug, error, info};
+use uuid::Uuid;
 
 use super::error::ApiError;
 use crate::app_state::AppState;
@@ -89,9 +90,12 @@ impl SymbolsApi {
 
     async fn get_version(
         state: &Arc<AppState>,
+        product_id: Uuid,
         params: &SymbolsRequestParams,
     ) -> Result<crate::model::version::Version, ApiError> {
-        let version = VersionRepo::get_by_secondary_id(&state.db, params.version.clone()).await;
+        let version =
+            VersionRepo::get_by_product_and_name(&state.db, product_id, params.version.clone())
+                .await;
         let version = match version {
             Ok(product) => product,
             Err(e) => {
@@ -185,7 +189,7 @@ impl SymbolsApi {
         let symbol_file = Self::get_temp_symbols_file().await?;
 
         let product = Self::get_product(&state, params).await?;
-        let version = Self::get_version(&state, params).await?;
+        let version = Self::get_version(&state, product.id, params).await?;
 
         Self::stream_to_file(&symbol_file, field).await?;
         debug!("received symbol file: {:?}", symbol_file);
