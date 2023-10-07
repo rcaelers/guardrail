@@ -176,13 +176,12 @@ where
 pub mod tests {
     use axum::extract::DefaultBodyLimit;
     use migration::{Migrator, MigratorTrait};
-    use sea_orm::{Database, DatabaseConnection, EntityTrait, IntoActiveModel};
+    use sea_orm::{Database, DatabaseConnection};
     use std::{io::IsTerminal, sync::Arc};
     use tracing::Level;
     use tracing_subscriber::FmtSubscriber;
 
     use crate::api::routes::routes_test;
-    use crate::model::base::{BaseRepo, HasId};
     use ::axum::Router;
     use ::axum_test::TestServer;
 
