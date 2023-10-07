@@ -1,7 +1,7 @@
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Query, State};
 use axum::Json;
-use futures::prelude::*;
+
 use minidump::Minidump;
 use minidump_processor::ProcessorOptions;
 use minidump_unwind::{simple_symbol_supplier, Symbolizer};
@@ -13,7 +13,6 @@ use tokio::task;
 use tracing::{debug, error, info};
 
 use super::error::ApiError;
-use super::User;
 use crate::app_state::AppState;
 use crate::model::attachment::{AttachmentDto, AttachmentRepo};
 use crate::model::base::{BaseRepo, BaseRepoWithSecondaryKey};
