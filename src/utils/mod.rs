@@ -1,3 +1,6 @@
+pub mod error;
+pub mod stream_to_file;
+
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
 pub fn make_api_key() -> String {

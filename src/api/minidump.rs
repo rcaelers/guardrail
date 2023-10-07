@@ -1,7 +1,6 @@
-use axum::body::Bytes;
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Query, State};
-use axum::{BoxError, Json};
+use axum::Json;
 use futures::prelude::*;
 use minidump::Minidump;
 use minidump_processor::ProcessorOptions;
@@ -10,14 +9,11 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tokio::fs::File;
-use tokio::io::{self, BufWriter};
-use tokio_util::io::StreamReader;
+use tokio::task;
 use tracing::{debug, error, info};
 
-use tokio::task;
-
 use super::error::ApiError;
+use super::User;
 use crate::app_state::AppState;
 use crate::model::attachment::{AttachmentDto, AttachmentRepo};
 use crate::model::base::{BaseRepo, BaseRepoWithSecondaryKey};
@@ -25,6 +21,7 @@ use crate::model::crash::{CrashDto, CrashRepo};
 use crate::model::product::ProductRepo;
 use crate::model::version::VersionRepo;
 use crate::settings;
+use crate::utils::stream_to_file::stream_to_file;
 
 pub struct MinidumpApi;
 
@@ -40,27 +37,6 @@ pub struct MinidumpResponse {
 }
 
 impl MinidumpApi {
-    async fn stream_to_file<S, E>(path: &std::path::PathBuf, stream: S) -> Result<(), ApiError>
-    where
-        S: Stream<Item = Result<Bytes, E>>,
-        E: Into<BoxError>,
-    {
-        async {
-            let body_with_io_error =
-                stream.map_err(|err| io::Error::new(io::ErrorKind::Other, err));
-            let body_reader = StreamReader::new(body_with_io_error);
-            futures::pin_mut!(body_reader);
-
-            let mut file = BufWriter::new(File::create(path).await?);
-            let r = tokio::io::copy(&mut body_reader, &mut file).await;
-            info!("r: {:?}", r);
-
-            Ok::<(), ApiError>(())
-        }
-        .await
-        .map_err(|_err| (ApiError::Failure))
-    }
-
     async fn get_product(
         state: &Arc<AppState>,
         params: &MinidumpRequestParams,
@@ -191,7 +167,7 @@ impl MinidumpApi {
         let product = Self::get_product(&state, params).await?;
         let version = Self::get_version(&state, product.id, params).await?;
 
-        Self::stream_to_file(&minidump_file, field).await?;
+        stream_to_file(&minidump_file, field).await?;
 
         let data = task::spawn_blocking(move || Self::process_minidump_file(minidump_file))
             .await?
@@ -219,7 +195,7 @@ impl MinidumpApi {
             .unwrap_or("application/octet-stream")
             .to_owned();
 
-        Self::stream_to_file(&attachment_file, field).await?;
+        stream_to_file(&attachment_file, field).await?;
 
         Self::store_attachment(
             crash_id,
