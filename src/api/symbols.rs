@@ -3,6 +3,7 @@ use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Query, State};
 use axum::{BoxError, Json};
 use futures::prelude::*;
+use jwt_authorizer::JwtClaims;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -13,6 +14,7 @@ use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use super::error::ApiError;
+use super::User;
 use crate::app_state::AppState;
 use crate::model::base::{BaseRepo, BaseRepoWithSecondaryKey};
 use crate::model::product::ProductRepo;
@@ -209,8 +211,10 @@ impl SymbolsApi {
     pub async fn upload(
         State(state): State<Arc<AppState>>,
         Query(params): Query<SymbolsRequestParams>,
+        //JwtClaims(user): JwtClaims<User>,
         mut multipart: Multipart,
     ) -> Result<Json<SymbolsResponse>, ApiError> {
+        //info!("user: {:?}", user);
         while let Some(field) = multipart.next_field().await? {
             match field.name() {
                 Some("upload_file_symbols") => {

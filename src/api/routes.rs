@@ -22,7 +22,7 @@ pub async fn routes() -> Router<Arc<AppState>> {
 
     routes_api()
         .await
-        .layer(auth.into_layer())
+       // .layer(auth.into_layer())
         .route("/minidump/upload", post(MinidumpApi::upload))
 }
 

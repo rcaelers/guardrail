@@ -71,11 +71,7 @@ impl OidcClient {
         let client = CoreClient::from_provider_metadata(
             provider_metadata,
             ClientId::new(settings().auth.client_id.clone()),
-            if client_secret.is_some() {
-                Some(ClientSecret::new(client_secret.unwrap()))
-            } else {
-                None
-            },
+            client_secret.map(ClientSecret::new),
         )
         .set_redirect_uri(redirect_uri);
 

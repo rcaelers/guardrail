@@ -34,12 +34,6 @@ async fn handle_auth_login(
 ) -> impl IntoResponse {
     let user = session.get::<UserClaims>("user").unwrap_or(None);
 
-    if let Some(user) = user {
-        if session.active() {
-            return AuthError::AlreadyAuthenticated.into_response();
-        }
-    }
-
     if let Some(next_url) = &query.next {
         session.insert("next_url", next_url).unwrap();
     }

@@ -16,13 +16,12 @@ use axum::routing::get_service;
 use axum::{BoxError, Router};
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use std::io::IsTerminal;
-use std::net::SocketAddr;
 use std::sync::Arc;
 use time::Duration;
 use tower::ServiceBuilder;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tower_sessions::cookie::SameSite;
-use tower_sessions::SessionManagerLayer;
+use tower_sessions::{Expiry, SessionManagerLayer};
 use tracing::{info, Level};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{fmt, FmtSubscriber};
@@ -77,7 +76,7 @@ async fn main() {
             SessionManagerLayer::new(session_store)
                 .with_name("guardrail")
                 .with_same_site(SameSite::Lax)
-                .with_max_age(Duration::hours(1))
+                .with_expiry(Expiry::OnInactivity(Duration::hours(1)))
                 .with_secure(false),
         );
 
@@ -92,10 +91,10 @@ async fn main() {
         .with_state(state);
 
     let port = settings().server.port;
-    let address = SocketAddr::from(([127, 0, 0, 1], port));
-
-    axum::Server::bind(&address)
-        .serve(routes_all.into_make_service())
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.0:{}", port))
+        .await
+        .unwrap();
+    axum::serve(listener, routes_all.into_make_service())
         .await
         .unwrap();
 }

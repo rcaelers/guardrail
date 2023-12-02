@@ -12,7 +12,7 @@ impl MigrationTrait for Migration {
                     .table(Session::Table)
                     .if_not_exists()
                     .col(ColumnDef::new(Session::Id).text().not_null().primary_key())
-                    .col(ColumnDef::new(Session::ExpiresAt).date_time())
+                    .col(ColumnDef::new(Session::ExpiresAt).date_time().not_null())
                     .col(ColumnDef::new(Session::Data).binary().not_null())
                     .to_owned(),
             )

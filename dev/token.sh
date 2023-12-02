@@ -46,13 +46,15 @@ SIGNED_JWT="$UNSIGNED_JWT.$SIGNATURE"
 
 # Request token using the JWT
 TOKEN_RESPONSE=$(curl -s -X POST \
-  "$TOKEN_ENDPOINT" \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  --data-urlencode "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer" \
-  --data-urlencode "client_assertion=$SIGNED_JWT" \
+  --url "$TOKEN_ENDPOINT" \
+  --header "Content-Type: application/x-www-form-urlencoded" \
   --data-urlencode "assertion=$SIGNED_JWT" \
   --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer" \
-  --data-urlencode "scope=openid profile email urn:zitadel:iam:org:project:roles urn:zitadel:iam:user:metadata urn:zitadel:iam:org:project:id:zitadel:aud")
+  --data scope='openid profile email urn:zitadel:iam:org:project:id:zitadel:aud urn:zitadel:iam:user:metadata urn:zitadel:iam:org:project:roles urn:zitadel:iam:org:project:230305869814824983:roles')
+
+#  --data-urlencode "scope=openid profile email urn:zitadel:iam:org:project:roles urn:iam:org:project:roles urn:zitadel:iam:user:metadata urn:zitadel:iam:org:project:id:zitadel:aud urn:zitadel:iam:org:project:id:230305869814824983")
+#  --data-urlencode "client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer" \
+#  --data-urlencode "client_assertion=$SIGNED_JWT" \
 
 # Extract and print the access token
 ACCESS_TOKEN=$(echo "$TOKEN_RESPONSE" | jq -r .access_token)
@@ -62,3 +64,5 @@ if [ "$ACCESS_TOKEN" != "null" ]; then
 else
     exit 1
 fi
+
+curl -X POST https://idp.krandor.org/oidc/v1/userinfo -H 'Content-Type: application/json' -H "Authorization: Bearer $ACCESS_TOKEN" 

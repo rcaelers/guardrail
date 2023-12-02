@@ -20,6 +20,7 @@ auth:
   audiences:
     - '230305869814824983'
     - '230305928417706007@guardrail'
+    - '231190805631533098@guardrail'
   scopes:
     - 'urn:zitadel:iam:org:project:roles' 
     - 'urn:zitadel:iam:user:metadata' 
