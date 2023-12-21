@@ -4,12 +4,12 @@ use std::task::{Context, Poll};
 use tower::{Layer, Service};
 use tower_sessions::Session;
 
-use super::user::AuthenticatedUser;
+use super::oidc::{OidcClientTraitArc, UserClaims};
 use crate::settings::settings;
 
 #[derive(Debug, Clone)]
 pub struct AuthContext {
-    pub current_user: Option<AuthenticatedUser>,
+    pub current_user: Option<UserClaims>,
     session: Session,
 }
 
@@ -23,7 +23,9 @@ impl AuthContext {
 }
 
 #[derive(Clone)]
-struct AuthState {}
+struct AuthState {
+    auth_client: OidcClientTraitArc,
+}
 
 #[derive(Clone)]
 pub struct AuthLayer {
@@ -31,8 +33,8 @@ pub struct AuthLayer {
 }
 
 impl AuthLayer {
-    pub fn new() -> Self {
-        let state = AuthState {};
+    pub fn new(auth_client: OidcClientTraitArc) -> Self {
+        let state = AuthState { auth_client };
         Self { state }
     }
 }
@@ -77,7 +79,7 @@ where
                 .extract_parts()
                 .await
                 .expect("Session extension missing");
-            let user = session.get::<AuthenticatedUser>("authenticated_user").await.unwrap_or(None);
+            let user = session.get::<UserClaims>("user").unwrap_or(None);
 
             match user {
                 Some(e) => inner.call(request).await,

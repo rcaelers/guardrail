@@ -35,7 +35,7 @@ mod tests {
     use crate::api::base::tests::*;
     use serial_test::serial;
 
-    
+
     use crate::model::base::BaseRepo;
     use crate::model::version::VersionRepo;
 
@@ -54,7 +54,6 @@ mod tests {
     #[serial]
     #[tokio::test]
     async fn test_add_version() {
-        //init_logging().await;
         let server = run_server().await;
 
         let response = server
@@ -215,7 +214,6 @@ mod tests {
     #[serial]
     #[tokio::test]
     async fn test_not_unique() {
-        //init_logging().await;
         let server = run_server().await;
 
         let response = server
@@ -259,7 +257,6 @@ mod tests {
     #[serial]
     #[tokio::test]
     async fn test_incomplete_json() {
-        //init_logging().await;
         let server = run_server().await;
 
         let response = server

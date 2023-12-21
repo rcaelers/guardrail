@@ -1,8 +1,8 @@
 use sea_orm::DatabaseConnection;
-
-use crate::auth::oidc::OidcClientTraitArc;
+use std::sync::Arc;
+use webauthn_rs::prelude::*;
 
 pub struct AppState {
     pub db: DatabaseConnection,
-    pub auth_client: OidcClientTraitArc,
+    pub webauthn: Arc<Webauthn>,
 }

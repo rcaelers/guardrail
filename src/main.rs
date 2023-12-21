@@ -1,6 +1,7 @@
 #![allow(dead_code, unused_variables)]
 mod api;
 mod app_state;
+//mod auth;
 mod auth;
 mod entity;
 mod model;
@@ -12,22 +13,24 @@ mod web;
 use axum::error_handling::HandleErrorLayer;
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
-use axum::routing::get_service;
+use axum::response::IntoResponse;
 use axum::{BoxError, Router};
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use std::io::IsTerminal;
 use std::sync::Arc;
 use time::Duration;
 use tower::ServiceBuilder;
-use tower_http::{services::ServeDir, trace::TraceLayer};
+use tower_http::trace::TraceLayer;
 use tower_sessions::cookie::SameSite;
 use tower_sessions::{Expiry, SessionManagerLayer};
 use tracing::{info, Level};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{fmt, FmtSubscriber};
+use webauthn_rs::prelude::*;
 
-use crate::auth::oidc::OidcClient;
+//use crate::auth::oidc::OidcClient;
 use crate::session_store::SeaOrmSessionStore;
+
 use app_state::AppState;
 use settings::settings;
 
@@ -53,6 +56,15 @@ async fn init_db() -> Result<DatabaseConnection, sea_orm::DbErr> {
     Database::connect(connect_options).await
 }
 
+fn create_webauthn() -> Arc<Webauthn> {
+    let rp_id = "localhost";
+    let rp_origin = Url::parse("http://localhost:8080").expect("Invalid URL");
+    let builder = WebauthnBuilder::new(rp_id, &rp_origin).expect("Invalid configuration");
+    let builder = builder.rp_name("Guardrail");
+
+    Arc::new(builder.build().expect("Invalid configuration"))
+}
+
 #[tokio::main]
 async fn main() {
     init_logging().await;
@@ -60,11 +72,10 @@ async fn main() {
     info!("Starting server on port {}", settings().server.port);
 
     let db = init_db().await.unwrap();
-
-    let auth_client = Arc::new(OidcClient::new().await.unwrap());
+    let webauthn = create_webauthn();
     let state = Arc::new(AppState {
         db: db.clone(),
-        auth_client,
+        webauthn,
     });
 
     let session_store = SeaOrmSessionStore::new(db);
@@ -81,17 +92,18 @@ async fn main() {
         );
 
     let routes_all = Router::new()
+        .nest_service("/static", tower_http::services::ServeDir::new("static"))
         .nest("/api", api::routes().await)
-        .nest("/auth", auth::routes().await)
+        .nest("/auth", auth::routes(Arc::clone(&state)).await)
         .nest("/", web::routes(Arc::clone(&state)).await)
-        .fallback_service(routes_static())
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
         .layer(TraceLayer::new_for_http())
         .layer(session_service)
-        .with_state(state);
+        .with_state(state)
+        .fallback(handler_404);
 
     let port = settings().server.port;
-    let listener = tokio::net::TcpListener::bind(format!("127.0.0.0:{}", port))
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port))
         .await
         .unwrap();
     axum::serve(listener, routes_all.into_make_service())
@@ -99,6 +111,6 @@ async fn main() {
         .unwrap();
 }
 
-fn routes_static() -> Router {
-    Router::new().nest_service("/", get_service(ServeDir::new("./web")))
+async fn handler_404() -> impl IntoResponse {
+    (StatusCode::NOT_FOUND, "nothing to see here")
 }

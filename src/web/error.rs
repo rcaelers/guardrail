@@ -9,9 +9,6 @@ use tracing::debug;
 pub enum WebError {
     #[error("general failure")]
     Failure,
-
-    #[error("authentication error. {0}")]
-    AuthError(#[from] crate::auth::error::AuthError),
 }
 
 impl IntoResponse for WebError {

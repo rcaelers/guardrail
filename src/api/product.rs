@@ -8,7 +8,7 @@ impl BaseApi<ProductRepo> for ProductApi {}
 mod tests {
     use serial_test::serial;
     use crate::{api::base::tests::*, model::{product::ProductRepo, base::BaseRepo}};
-    
+
     #[derive(serde::Deserialize, Debug)]
     pub struct ApiResponseWithPayload {
         pub result: String,
@@ -20,11 +20,10 @@ mod tests {
         pub result: String,
         pub payload: Vec<<ProductRepo as BaseRepo>::Repr>,
     }
-    
+
     #[serial]
     #[tokio::test]
     async fn test_add_product() {
-        //init_logging().await;
         let server = run_server().await;
 
         let response = server
@@ -115,7 +114,6 @@ mod tests {
     #[serial]
     #[tokio::test]
     async fn test_not_unique() {
-        //init_logging().await;
         let server = run_server().await;
 
         let response = server
@@ -149,7 +147,6 @@ mod tests {
     #[serial]
     #[tokio::test]
     async fn test_incomplete_json() {
-        //init_logging().await;
         let server = run_server().await;
 
         let response = server

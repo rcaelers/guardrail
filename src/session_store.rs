@@ -4,7 +4,10 @@ use sea_orm::{
     sea_query::OnConflict, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
 };
 use time::OffsetDateTime;
-use tower_sessions::{session::Id, ExpiredDeletion, Session, SessionStore};
+use tower_sessions::{
+    session::{Id, Record},
+    session_store, ExpiredDeletion, Session, SessionStore,
+};
 
 use crate::entity;
 
@@ -20,33 +23,32 @@ impl SeaOrmSessionStore {
 }
 #[async_trait]
 impl ExpiredDeletion for SeaOrmSessionStore {
-    async fn delete_expired(&self) -> Result<(), Self::Error> {
+    async fn delete_expired(&self) -> session_store::Result<()> {
         let now = Utc::now().naive_utc();
         entity::session::Entity::delete_many()
             .filter(entity::session::Column::ExpiresAt.lt(now))
             .exec(&self.db)
-            .await?;
+            .await
+            .map_err(SeaStoreError::SeaError)?;
         Ok(())
     }
 }
 
 #[async_trait]
 impl SessionStore for SeaOrmSessionStore {
-    type Error = SeaStoreError;
-
-    async fn save(&self, session: &Session) -> Result<(), Self::Error> {
+    async fn save(&self, record: &Record) -> session_store::Result<()> {
         let expiry_date = NaiveDateTime::from_timestamp_opt(
-            session
-                .expiry_date()
+            record
+                .expiry_date
                 .to_offset(time::UtcOffset::UTC)
                 .unix_timestamp(),
             0,
         );
 
         let data = entity::session::ActiveModel {
-            id: Set(session.id().to_string()),
+            id: Set(record.id.to_string()),
             expires_at: Set(expiry_date),
-            data: Set(rmp_serde::to_vec(&session)?),
+            data: Set(rmp_serde::to_vec(&record).map_err(SeaStoreError::Encode)?),
         };
         entity::session::Entity::insert(data)
             .on_conflict(
@@ -55,19 +57,20 @@ impl SessionStore for SeaOrmSessionStore {
                     .to_owned(),
             )
             .exec(&self.db)
-            .await?;
+            .await
+            .map_err(SeaStoreError::SeaError)?;
 
         Ok(())
     }
 
-    async fn load(&self, session_id: &Id) -> Result<Option<Session>, Self::Error> {
+    async fn load(&self, session_id: &Id) -> session_store::Result<Option<Record>> {
         let now = Utc::now().naive_utc();
         let record = crate::entity::prelude::Session::find_by_id(session_id.to_string())
             .one(&self.db)
-            .await?;
+            .await
+            .map_err(SeaStoreError::SeaError)?;
 
         if let Some(record) = record {
-            let session_id = Id::try_from(record.id);
             let expires_at = record.expires_at.and_then(|t| {
                 time::OffsetDateTime::from_unix_timestamp(t.timestamp())
                     .ok()
@@ -76,38 +79,44 @@ impl SessionStore for SeaOrmSessionStore {
 
             if let Some(expires_at) = expires_at {
                 if expires_at > OffsetDateTime::now_utc() {
-                    Ok(Some(rmp_serde::from_slice(&record.data)?))
-                } else {
-                    Ok(None)
+                    return Ok(Some(
+                        rmp_serde::from_slice(&record.data).map_err(SeaStoreError::Decode)?,
+                    ));
                 }
-            } else {
-                Ok(None)
             }
-        } else {
-            Ok(None)
         }
+        Ok(None)
     }
 
-    async fn delete(&self, session_id: &Id) -> Result<(), Self::Error> {
+    async fn delete(&self, session_id: &Id) -> session_store::Result<()> {
         crate::entity::prelude::Session::delete_by_id(session_id.to_string())
             .exec(&self.db)
-            .await?;
+            .await
+            .map_err(SeaStoreError::SeaError)?;
         Ok(())
     }
 }
 
 #[derive(thiserror::Error, Debug)]
 pub enum SeaStoreError {
-    //#[error("Session error: {0}")]
-    //SessionError(#[from] SessionError),
-    #[error("SeaORM error: {0}")]
+    #[error(transparent)]
     SeaError(#[from] sea_orm::error::DbErr),
 
-    #[error("Rust MsgPack encode error: {0}")]
-    SerdeMsgPackEncode(#[from] rmp_serde::encode::Error),
+    #[error(transparent)]
+    Encode(#[from] rmp_serde::encode::Error),
 
-    #[error("Rust MsgPack decode error: {0}")]
-    SerdeMsgPackDecode(#[from] rmp_serde::decode::Error),
+    #[error(transparent)]
+    Decode(#[from] rmp_serde::decode::Error),
+}
+
+impl From<SeaStoreError> for session_store::Error {
+    fn from(err: SeaStoreError) -> Self {
+        match err {
+            SeaStoreError::SeaError(inner) => session_store::Error::Backend(inner.to_string()),
+            SeaStoreError::Decode(inner) => session_store::Error::Decode(inner.to_string()),
+            SeaStoreError::Encode(inner) => session_store::Error::Encode(inner.to_string()),
+        }
+    }
 }
 
 fn is_active(session: &Session) -> bool {

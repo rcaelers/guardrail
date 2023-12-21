@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <meta description="Crashdump server">
+    <title>Guardrail</title>
+    <link rel="shortcut icon" type="image/x-icon" href="/static/images/favicon.ico">
+    <link rel="stylesheet" href="/static/css/style.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Montserrat:300,400,500&display=swap">
+    <script src="https://unpkg.com/htmx.org@1.9.9"></script>
+    {% block head %}{% endblock %}
+</head>
+
+<body class="px-4 bg-gray-200 dark:bg-zinc-900 dark:text-white">
+    <div class="container min-h-screen max-w-full">
+        {% block navigation_bar %}{% include "partials/navigation-bar.html" %}{% endblock %}
+        {% block content %}{% endblock %}
+    </div>
+</body>
+
+</html>

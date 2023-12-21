@@ -180,6 +180,8 @@ pub mod tests {
     use std::{io::IsTerminal, sync::Arc};
     use tracing::Level;
     use tracing_subscriber::FmtSubscriber;
+    use url::Url;
+    use webauthn_rs::WebauthnBuilder;
 
     use crate::api::routes::routes_test;
     use ::axum::Router;
@@ -201,8 +203,18 @@ pub mod tests {
         let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
         Migrator::up(&db, None).await.unwrap();
 
-        let auth_client = Arc::new(crate::auth::oidc::test_stubs::OidcClientStub {});
-        let state = Arc::new(AppState { db, auth_client });
+        let rp_id = "localhost";
+        let rp_origin = Url::parse("http://localhost:8080").expect("Invalid URL");
+        let builder = WebauthnBuilder::new(rp_id, &rp_origin).expect("Invalid configuration");
+
+        let builder = builder.rp_name("Guardrail");
+
+        // let auth_client = Arc::new(crate::auth::oidc::test_stubs::OidcClientStub {});
+        let state = Arc::new(AppState {
+            db,
+            // auth_client,
+            webauthn: Arc::new(builder.build().expect("Invalid configuration")),
+        });
 
         let app = Router::new()
             // FIXME: duplicate code

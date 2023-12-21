@@ -15,7 +15,6 @@ services:
       - postgresql15-storage:/var/lib/postgresql/data
       - ./initdb/:/docker-entrypoint-initdb.d/
     ports:
-      - 8080:8080
       - 5432:5432
     restart: unless-stopped
     healthcheck:

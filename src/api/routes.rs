@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use axum::routing::{delete, get, post, put};
 use axum::Router;
-use jwt_authorizer::{Authorizer, IntoLayer, JwtAuthorizer};
+use jwt_authorizer::{Authorizer, JwtAuthorizer};
 
 use super::annotation::AnnotationApi;
 use super::attachment::AttachmentApi;
@@ -11,18 +11,18 @@ use super::minidump::MinidumpApi;
 use super::product::ProductApi;
 use super::symbols::SymbolsApi;
 use super::version::VersionApi;
-use super::User;
 use crate::api::base::BaseApi;
 use crate::app_state::AppState;
+use crate::auth::user::AuthenticatedUser;
 use crate::settings;
 
 pub async fn routes() -> Router<Arc<AppState>> {
     let url = settings().auth.jwks_url.as_str();
-    let auth: Authorizer<User> = JwtAuthorizer::from_jwks_url(url).build().await.unwrap();
+    let auth: Authorizer<AuthenticatedUser> = JwtAuthorizer::from_jwks_url(url).build().await.unwrap();
 
     routes_api()
         .await
-       // .layer(auth.into_layer())
+        //.layer(auth.into_layer())
         .route("/minidump/upload", post(MinidumpApi::upload))
 }
 

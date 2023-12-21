@@ -3,7 +3,6 @@ use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Query, State};
 use axum::{BoxError, Json};
 use futures::prelude::*;
-use jwt_authorizer::JwtClaims;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,7 +13,6 @@ use tracing::{debug, error, info};
 use uuid::Uuid;
 
 use super::error::ApiError;
-use super::User;
 use crate::app_state::AppState;
 use crate::model::base::{BaseRepo, BaseRepoWithSecondaryKey};
 use crate::model::product::ProductRepo;

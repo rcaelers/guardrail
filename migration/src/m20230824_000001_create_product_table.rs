@@ -22,7 +22,6 @@ impl MigrationTrait for Migration {
                         ColumnDef::new(Product::UpdatedAt)
                             .date_time()
                             .not_null()
-                            // .default(SimpleExpr::Keyword(Keyword::CurrentTimestamp))
                             .default(Expr::current_timestamp()),
                     )
                     .col(
