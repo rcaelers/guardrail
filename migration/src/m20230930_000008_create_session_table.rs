@@ -14,6 +14,18 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Session::Id).text().not_null().primary_key())
                     .col(ColumnDef::new(Session::ExpiresAt).date_time())
                     .col(ColumnDef::new(Session::Data).binary().not_null())
+                    .col(
+                        ColumnDef::new(Session::CreatedAt)
+                            .date_time()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .col(
+                        ColumnDef::new(Session::UpdatedAt)
+                            .date_time()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
                     .to_owned(),
             )
             .await
@@ -32,4 +44,6 @@ pub enum Session {
     Id,
     ExpiresAt,
     Data,
+    CreatedAt,
+    UpdatedAt,
 }

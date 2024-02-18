@@ -1,27 +1,44 @@
 use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
 
-use super::{base::BaseApi, error::ApiError};
+use crate::{
+    entity::{prelude::Version, version},
+    model::{
+        base::Repo,
+        version::{VersionCreateDto, VersionUpdateDto},
+    },
+};
 
-use crate::model::{base::BaseRepoWithSecondaryKey, product::ProductRepo, version::VersionRepo};
+use super::{
+    base::{Resource, ResourceFilter},
+    error::ApiError,
+};
 
-pub struct VersionApi;
+impl Resource for Version {
+    type Entity = version::Entity;
+    type ActiveModel = version::ActiveModel;
+    type Data = version::Model;
+    type CreateData = VersionCreateDto;
+    type UpdateData = VersionUpdateDto;
+    type Filter = Version;
+}
 
 #[async_trait]
-impl BaseApi<VersionRepo> for VersionApi {
+impl ResourceFilter for Version {
     async fn req(
         db: &DatabaseConnection,
         json: serde_json::Value,
     ) -> Result<serde_json::Value, ApiError> {
         let product = json["product"].as_str();
         if let Some(product) = product {
-            let product_id = ProductRepo::get_by_secondary_id(db, product.to_owned())
-                .await?
-                .map(|product| product.id)
-                .ok_or_else(|| {
-                    ApiError::ForeignKeyError("product".to_owned(), product.to_owned())
-                })?;
-
+            let product_id = Repo::get_by_column::<crate::entity::product::Entity, _, _>(
+                db,
+                crate::entity::product::Column::Name,
+                product.to_owned(),
+            )
+            .await?
+            .map(|product| product.id)
+            .ok_or_else(|| ApiError::ForeignKeyError("product".to_owned(), product.to_owned()))?;
             let mut json = json.clone();
             json["product_id"] = serde_json::Value::String(product_id.to_string());
             return Ok(json);
@@ -33,22 +50,19 @@ impl BaseApi<VersionRepo> for VersionApi {
 #[cfg(test)]
 mod tests {
     use crate::api::base::tests::*;
+    use crate::entity::version;
     use serial_test::serial;
-
-
-    use crate::model::base::BaseRepo;
-    use crate::model::version::VersionRepo;
 
     #[derive(serde::Deserialize, Debug)]
     pub struct ApiResponseWithPayload {
         pub result: String,
-        pub payload: <VersionRepo as BaseRepo>::Repr,
+        pub payload: version::Model,
     }
 
     #[derive(serde::Deserialize, Debug)]
     pub struct ApiResponseWithVecPayload {
         pub result: String,
-        pub payload: Vec<<VersionRepo as BaseRepo>::Repr>,
+        pub payload: Vec<version::Model>,
     }
 
     #[serial]
@@ -204,10 +218,8 @@ mod tests {
                 "name":"1.11", "hash":"1234567890", "tag": "v1.11", "product": "Workrave"
             }))
             .await;
-        println!("{:?}", response);
         response.assert_status_not_found();
         let version1 = response.json::<ApiResponseFailed>();
-        println!("{:?}", version1);
         assert_eq!(version1.result, "failed");
     }
 
@@ -233,10 +245,8 @@ mod tests {
                 "name":"1.11", "hash":"1234567890", "tag": "v1.11", "product": "Workrave"
             }))
             .await;
-        println!("{:?}", response);
         response.assert_status_ok();
         let version = response.json::<ApiResponse>();
-        println!("{:?}", version);
         assert_eq!(version.result, "ok");
 
         let response = server
@@ -246,11 +256,9 @@ mod tests {
                 "name":"1.11", "hash":"1234567890", "tag": "v1.11", "product": "Workrave"
             }))
             .await;
-        println!("{:?}", response);
 
         response.assert_status_bad_request();
         let version = response.json::<ApiResponseFailed>();
-        println!("{:?}", version);
         assert_eq!(version.result, "failed");
     }
 
@@ -276,11 +284,9 @@ mod tests {
                 "hash":"1234567890", "tag": "v1.11", "product": "Workrave"
             }))
             .await;
-        println!("{:?}", response);
 
         response.assert_status_bad_request();
         let version = response.json::<ApiResponseFailed>();
-        println!("{:?}", version);
         assert_eq!(version.result, "failed");
     }
 }

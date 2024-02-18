@@ -1,29 +1,36 @@
-use super::base::BaseApi;
-use crate::model::annotation::AnnotationRepo;
+use crate::{
+    entity::{annotation, prelude::Annotation},
+    model::annotation::{AnnotationCreateDto, AnnotationUpdateDto},
+};
 
-pub struct AnnotationApi;
-impl BaseApi<AnnotationRepo> for AnnotationApi {}
+use super::base::{NoneFilter, Resource};
+
+impl Resource for Annotation {
+    type Entity = annotation::Entity;
+    type ActiveModel = annotation::ActiveModel;
+    type Data = annotation::Model;
+    type CreateData = AnnotationCreateDto;
+    type UpdateData = AnnotationUpdateDto;
+    type Filter = NoneFilter;
+}
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        api::base::tests::*,
-        entity::sea_orm_active_enums::AnnotationKind,
-        model::{annotation::AnnotationRepo, base::BaseRepo},
-    };
+    use crate::entity::annotation;
+    use crate::{api::base::tests::*, entity::sea_orm_active_enums::AnnotationKind};
     use axum_test::TestServer;
     use serial_test::serial;
 
     #[derive(serde::Deserialize, Debug)]
     struct ApiResponseWithPayload {
         pub result: String,
-        pub payload: <AnnotationRepo as BaseRepo>::Repr,
+        pub payload: annotation::Model,
     }
 
     #[derive(serde::Deserialize, Debug)]
     struct ApiResponseWithVecPayload {
         pub result: String,
-        pub payload: Vec<<AnnotationRepo as BaseRepo>::Repr>,
+        pub payload: Vec<annotation::Model>,
     }
 
     struct Context {
@@ -245,11 +252,9 @@ mod tests {
             .content_type("application/json")
             .json(&serde_json::json!({}))
             .await;
-        println!("{:?}", response);
 
         response.assert_status_bad_request();
         let annotation = response.json::<ApiResponseFailed>();
-        println!("{:?}", annotation);
         assert_eq!(annotation.result, "failed");
     }
 }

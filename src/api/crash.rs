@@ -1,18 +1,31 @@
-use std::str::FromStr;
-
+use super::{
+    base::{Resource, ResourceFilter},
+    error::ApiError,
+};
+use crate::{
+    entity::{crash, prelude::Crash},
+    model::{
+        base::Repo,
+        crash::{CrashCreateDto, CrashUpdateDto},
+        version::VersionRepo,
+    },
+};
 use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
+use std::str::FromStr;
 use uuid::Uuid;
 
-use super::{base::BaseApi, error::ApiError};
-use crate::model::{
-    base::BaseRepoWithSecondaryKey, crash::CrashRepo, product::ProductRepo, version::VersionRepo,
-};
-
-pub struct CrashApi;
+impl Resource for Crash {
+    type Entity = crash::Entity;
+    type ActiveModel = crash::ActiveModel;
+    type Data = crash::Model;
+    type CreateData = CrashCreateDto;
+    type UpdateData = CrashUpdateDto;
+    type Filter = crash::Model;
+}
 
 #[async_trait]
-impl BaseApi<CrashRepo> for CrashApi {
+impl ResourceFilter for crash::Model {
     async fn req(
         db: &DatabaseConnection,
         json: serde_json::Value,
@@ -20,12 +33,14 @@ impl BaseApi<CrashRepo> for CrashApi {
         let mut json = json.clone();
         let product = json["product"].as_str();
         if let Some(product) = product {
-            let product_id = ProductRepo::get_by_secondary_id(db, product.to_owned())
-                .await?
-                .map(|product| product.id)
-                .ok_or_else(|| {
-                    ApiError::ForeignKeyError("product".to_owned(), product.to_owned())
-                })?;
+            let product_id = Repo::get_by_column::<crate::entity::product::Entity, _, _>(
+                db,
+                crate::entity::product::Column::Name,
+                product.to_owned(),
+            )
+            .await?
+            .map(|product| product.id)
+            .ok_or_else(|| ApiError::ForeignKeyError("product".to_owned(), product.to_owned()))?;
             json["product_id"] = serde_json::Value::String(product_id.to_string());
         }
         let version = json["version"].as_str();
@@ -52,23 +67,20 @@ impl BaseApi<CrashRepo> for CrashApi {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        api::base::tests::*,
-        model::{base::BaseRepo, crash::CrashRepo},
-    };
+    use crate::{api::base::tests::*, entity::crash};
     use axum_test::TestServer;
     use serial_test::serial;
 
     #[derive(serde::Deserialize, Debug)]
     struct ApiResponseWithPayload {
         pub result: String,
-        pub payload: <CrashRepo as BaseRepo>::Repr,
+        pub payload: crash::Model,
     }
 
     #[derive(serde::Deserialize, Debug)]
     struct ApiResponseWithVecPayload {
         pub result: String,
-        pub payload: Vec<<CrashRepo as BaseRepo>::Repr>,
+        pub payload: Vec<crash::Model>,
     }
 
     struct Context {
@@ -244,11 +256,9 @@ mod tests {
             .content_type("application/json")
             .json(&serde_json::json!({}))
             .await;
-        println!("{:?}", response);
 
         response.assert_status_bad_request();
         let crash = response.json::<ApiResponseFailed>();
-        println!("{:?}", crash);
         assert_eq!(crash.result, "failed");
     }
 }

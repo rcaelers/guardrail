@@ -21,7 +21,18 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Credential::UserId).uuid().not_null())
                     .col(ColumnDef::new(Credential::Name).string().not_null())
-                    .col(ColumnDef::new(Credential::CreatedAt).timestamp().not_null())
+                    .col(
+                        ColumnDef::new(Credential::CreatedAt)
+                            .date_time()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .col(
+                        ColumnDef::new(Credential::UpdatedAt)
+                            .date_time()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
                     .col(ColumnDef::new(Credential::LastUsed).timestamp().not_null())
                     .col(ColumnDef::new(Credential::Credential).json().not_null())
                     .foreign_key(
@@ -50,6 +61,7 @@ pub enum Credential {
     UserId,
     Name,
     CreatedAt,
+    UpdatedAt,
     LastUsed,
     Credential,
 }

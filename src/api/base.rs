@@ -1,37 +1,71 @@
 use async_trait::async_trait;
 use axum::http::{header, HeaderMap};
-use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, IntoActiveModel};
-use serde::de::DeserializeOwned;
+use sea_orm::{
+    ActiveModelBehavior, ActiveModelTrait, DatabaseConnection, EntityTrait, IntoActiveModel,
+    ModelTrait,
+};
+use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
 
 use axum::extract::{Json, Path, State};
 
-use crate::app_state::AppState;
-use crate::model::base::{BaseRepo, BaseRepoWithSecondaryKey, HasId};
+use crate::{
+    app_state::AppState,
+    model::base::{HasId, Repo},
+};
 
 use super::error::ApiError;
 
+pub struct Api;
+
 #[async_trait]
-pub trait BaseApi<Repo: BaseRepo + Send>
-where
-    // TODO: this implementation detail should be hidden
-    <<Repo::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
-        IntoActiveModel<Repo::ActiveModel> + HasId,
-{
+pub trait ResourceFilter {
     async fn req(
-        _db: &DatabaseConnection,
+        db: &DatabaseConnection,
+        json: serde_json::Value,
+    ) -> Result<serde_json::Value, ApiError>;
+}
+
+pub trait Resource {
+    type Entity: EntityTrait<Model = Self::Data> + Send;
+    type ActiveModel: ActiveModelTrait<Entity = Self::Entity> + ActiveModelBehavior + Send;
+
+    type Data: ModelTrait<Entity = Self::Entity>
+        + IntoActiveModel<Self::ActiveModel>
+        + Clone
+        + Send
+        + Serialize
+        + DeserializeOwned
+        + HasId;
+
+    type CreateData: IntoActiveModel<Self::ActiveModel>
+        + Clone
+        + Send
+        + Serialize
+        + DeserializeOwned;
+
+    type UpdateData: IntoActiveModel<Self::ActiveModel>
+        + Clone
+        + Send
+        + Serialize
+        + DeserializeOwned;
+
+    type Filter: ResourceFilter;
+}
+
+pub struct NoneFilter;
+
+#[async_trait]
+impl ResourceFilter for NoneFilter {
+    async fn req(
+        db: &DatabaseConnection,
         json: serde_json::Value,
     ) -> Result<serde_json::Value, ApiError> {
         Ok(json)
     }
+}
 
-    async fn resp(
-        _db: &DatabaseConnection,
-        json: serde_json::Value,
-    ) -> Result<serde_json::Value, ApiError> {
-        Ok(json)
-    }
-
+impl Api {
     fn json_content_type(headers: &HeaderMap) -> bool {
         let mime = headers
             .get(header::CONTENT_TYPE)
@@ -56,13 +90,24 @@ where
         Ok(value)
     }
 
-    async fn process_payload<T>(
+    async fn req<R>(
+        db: &DatabaseConnection,
+        json: serde_json::Value,
+    ) -> Result<serde_json::Value, ApiError>
+    where
+        R: Resource,
+    {
+        <R::Filter as ResourceFilter>::req(db, json).await
+    }
+
+    async fn process_payload<R, T>(
         db: &DatabaseConnection,
         payload: String,
         headers: HeaderMap,
     ) -> Result<T, ApiError>
     where
         T: DeserializeOwned,
+        R: Resource,
     {
         if !Self::json_content_type(&headers) {
             return Err(ApiError::APIFailure(
@@ -70,105 +115,77 @@ where
             ));
         }
         let j = serde_json::from_str(payload.as_str())?;
-        let j = Self::req(db, j).await?;
-        Ok(Self::to_json::<T>(j.to_string()).await?)
+        let j = Self::req::<R>(db, j).await?;
+        Self::to_json::<T>(j.to_string()).await
     }
 
-    async fn create(
+    pub async fn create<R>(
         State(state): State<Arc<AppState>>,
         headers: HeaderMap,
         payload: String,
     ) -> Result<String, ApiError>
     where
-        <Repo as BaseRepo>::CreateDto: 'async_trait,
+        R: Resource,
     {
-        let p: <Repo as BaseRepo>::CreateDto =
-            Self::process_payload(&state.db, payload, headers).await?;
+        let p: R::CreateData = Self::process_payload::<R, _>(&state.db, payload, headers).await?;
         Repo::create(&state.db, p)
             .await
             .map(|id| (serde_json::json!({ "result": "ok", "id": id }).to_string()))
             .map_err(ApiError::DatabaseError)
     }
 
-    async fn update_by_id(
-        Path(id): Path<Repo::PrimaryKeyType>,
+    pub async fn update<R>(
+        Path(id): Path<uuid::Uuid>,
         State(state): State<Arc<AppState>>,
-        Json(payload): Json<Repo::UpdateDto>,
+        Json(payload): Json<R::UpdateData>,
     ) -> Result<String, ApiError>
     where
-        <Repo as BaseRepo>::UpdateDto: 'async_trait,
-        <Repo as BaseRepo>::PrimaryKeyType: 'async_trait,
+        R: Resource,
     {
-        Repo::update(&state.db, id, payload)
+        Repo::update(&state.db, payload)
             .await
             .map(|_| (serde_json::json!({ "result": "ok"}).to_string()))
             .map_err(ApiError::DatabaseError)
     }
 
-    async fn query(State(state): State<Arc<AppState>>) -> Result<String, ApiError> {
-        Repo::get_all(&state.db)
+    pub async fn get_all<R>(State(state): State<Arc<AppState>>) -> Result<String, ApiError>
+    where
+        R: Resource,
+    {
+        Repo::get_all::<R::Entity>(&state.db)
             .await
             .map(|p| (serde_json::json!({ "result": "ok", "payload": p }).to_string()))
             .map_err(ApiError::DatabaseError)
     }
 
-    async fn get_by_id(
-        Path(id): Path<Repo::PrimaryKeyType>,
+    pub async fn get_by_id<R>(
+        Path(id): Path<uuid::Uuid>,
         State(state): State<Arc<AppState>>,
     ) -> Result<String, ApiError>
     where
-        <Repo as BaseRepo>::PrimaryKeyType: 'async_trait,
+        R: Resource,
+        <<R::Entity as sea_orm::EntityTrait>::PrimaryKey as sea_orm::PrimaryKeyTrait>::ValueType:
+            From<uuid::Uuid>,
     {
-        Repo::get_by_id(&state.db, id)
+        Repo::get_by_id::<R::Entity>(&state.db, id)
             .await
             .map(|p| (serde_json::json!({ "result": "ok", "payload": p }).to_string()))
             .map_err(ApiError::DatabaseError)
     }
 
-    async fn remove_by_id(
-        Path(id): Path<Repo::PrimaryKeyType>,
+    pub async fn remove_by_id<R>(
+        Path(id): Path<uuid::Uuid>,
         State(state): State<Arc<AppState>>,
     ) -> Result<String, ApiError>
     where
-        <Repo as BaseRepo>::PrimaryKeyType: 'async_trait,
+        R: Resource,
+        <<R::Entity as sea_orm::EntityTrait>::PrimaryKey as sea_orm::PrimaryKeyTrait>::ValueType:
+            From<uuid::Uuid>,
     {
-        Repo::delete(&state.db, id)
+        Repo::delete_by_id::<R::Entity>(&state.db, id)
             .await
             .map(|p| (serde_json::json!({ "result": "ok", "id": p }).to_string()))
             .map_err(ApiError::DatabaseError)
-    }
-}
-
-#[async_trait]
-pub trait BaseApiWithSecondaryKey<Repo: BaseRepoWithSecondaryKey + Send>
-where
-    // TODO: this implementation detail should be hidden
-    <<Repo::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
-        IntoActiveModel<Repo::ActiveModel> + HasId,
-{
-    async fn get_by_id(
-        Path(id): Path<Repo::SecondaryKeyType>,
-        State(state): State<Arc<AppState>>,
-    ) -> Result<String, ApiError>
-    where
-        <Repo as BaseRepo>::PrimaryKeyType: 'async_trait,
-        sea_orm::Value: From<<Repo as BaseRepoWithSecondaryKey>::SecondaryKeyType> + 'async_trait,
-        Repo::PrimaryKeyType:
-            From<<Repo as BaseRepoWithSecondaryKey>::SecondaryKeyType> + 'async_trait,
-        <Repo as BaseRepoWithSecondaryKey>::SecondaryKeyType: 'async_trait,
-    {
-        let mut r = Repo::get_by_id(&state.db, Repo::PrimaryKeyType::from(id.clone()))
-            .await
-            .map(|p| (serde_json::json!({ "result": "ok", "id": p }).to_string()))
-            .map_err(ApiError::DatabaseError);
-
-        if r.is_err() {
-            r = Repo::get_by_secondary_id(&state.db, id)
-                .await
-                .map(|p| (serde_json::json!({ "result": "ok", "id": p }).to_string()))
-                .map_err(ApiError::DatabaseError);
-        }
-        r
     }
 }
 

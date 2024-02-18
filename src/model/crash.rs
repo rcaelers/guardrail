@@ -1,19 +1,26 @@
-use async_trait::async_trait;
+use super::base::HasId;
+use crate::entity;
+pub use entity::annotation::Model as Annotation;
+pub use entity::attachment::Model as Attachment;
+
 use chrono::NaiveDateTime;
 use sea_orm::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use super::base::{BaseRepo, HasId};
-use crate::entity;
-pub use entity::annotation::Model as Annotation;
-pub use entity::attachment::Model as Attachment;
+pub type CrashCreateDto = entity::crash::CreateModel;
+pub type CrashUpdateDto = entity::crash::UpdateModel;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CrashDto {
-    pub report: String,
-    pub version_id: Uuid,
-    pub product_id: Uuid,
+impl HasId for Crash {
+    fn id(&self) -> uuid::Uuid {
+        self.id
+    }
+}
+
+impl HasId for entity::crash::Model {
+    fn id(&self) -> uuid::Uuid {
+        self.id
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -42,59 +49,21 @@ impl From<entity::crash::Model> for Crash {
         }
     }
 }
-
 pub struct CrashRepo;
-
-impl From<CrashDto> for entity::crash::ActiveModel {
-    fn from(crash: CrashDto) -> Self {
-        Self {
-            id: Set(uuid::Uuid::new_v4()),
-            report: Set(serde_json::json!(crash.report)),
-            version_id: Set(crash.version_id),
-            product_id: Set(crash.product_id),
-            ..Default::default()
-        }
-    }
-}
-
-impl From<(uuid::Uuid, CrashDto)> for entity::crash::ActiveModel {
-    fn from((id, crash): (uuid::Uuid, CrashDto)) -> Self {
-        Self {
-            id: Set(id),
-            ..From::from(crash)
-        }
-    }
-}
-
-impl HasId for entity::crash::Model {
-    fn id(&self) -> uuid::Uuid {
-        self.id
-    }
-}
-
-#[async_trait]
-impl BaseRepo for CrashRepo {
-    type CreateDto = CrashDto;
-    type UpdateDto = CrashDto;
-    type Entity = entity::crash::Entity;
-    type Repr = Crash;
-    type ActiveModel = entity::crash::ActiveModel;
-    type PrimaryKeyType = uuid::Uuid;
-}
 
 impl CrashRepo {
     async fn get_by_id(db: &DbConn, id: uuid::Uuid) -> Result<Crash, DbErr> {
-        let model = entity::crash::Entity::find_by_id(id)
+        let model = entity::prelude::Crash::find_by_id(id)
             .one(db)
             .await?
             .ok_or(DbErr::RecordNotFound("crash not found".to_owned()))?;
 
         let annotations: Vec<entity::annotation::Model> = model
-            .find_related(entity::annotation::Entity)
+            .find_related(entity::prelude::Annotation)
             .all(db)
             .await?;
         let attachments: Vec<entity::attachment::Model> = model
-            .find_related(entity::attachment::Entity)
+            .find_related(entity::prelude::Attachment)
             .all(db)
             .await?;
 
@@ -106,18 +75,13 @@ impl CrashRepo {
 }
 #[cfg(test)]
 mod tests {
-    use crate::entity::sea_orm_active_enums::AnnotationKind;
-    use crate::model::annotation::{AnnotationDto, AnnotationRepo};
-    use crate::model::attachment::{AttachmentDto, AttachmentRepo};
-    use crate::model::product::{ProductDto, ProductRepo};
-    use crate::model::version::{VersionDto, VersionRepo};
+    use crate::{entity::sea_orm_active_enums::AnnotationKind, model::crash::CrashRepo};
     use serial_test::serial;
 
     use migration::{Migrator, MigratorTrait};
     use sea_orm::{Database, DatabaseConnection};
 
-    use super::{CrashDto, CrashRepo};
-    use crate::model::base::BaseRepo;
+    use crate::model::base::Repo;
 
     #[serial]
     #[tokio::test]
@@ -125,51 +89,51 @@ mod tests {
         let db: DatabaseConnection = Database::connect("sqlite::memory:").await.unwrap();
         Migrator::up(&db, None).await.unwrap();
 
-        let product = ProductDto {
-            name: "Wprkrave".to_owned(),
+        let product = crate::entity::product::CreateModel {
+            name: "Workrave".to_owned(),
         };
-        let idp = ProductRepo::create(&db, product).await.unwrap();
+        let idp = Repo::create(&db, product).await.unwrap();
 
-        let version = VersionDto {
+        let version = crate::entity::version::CreateModel {
             name: "1.0.0".to_owned(),
             hash: "test_hash1".to_owned(),
             tag: "test_tag1".to_owned(),
             product_id: idp,
         };
-        let idv = VersionRepo::create(&db, version).await.unwrap();
+        let idv = Repo::create(&db, version).await.unwrap();
 
-        let crash = CrashDto {
-            report: "test_report1".to_owned(),
+        let crash = crate::entity::crash::CreateModel {
+            report: serde_json::json!("test_report1"),
             version_id: idv,
             product_id: idp,
         };
-        let idc = CrashRepo::create(&db, crash).await.unwrap();
+        let idc = Repo::create(&db, crash).await.unwrap();
 
-        let attachment1 = AttachmentDto {
+        let attachment1 = crate::entity::attachment::CreateModel {
             name: "test_name1".to_owned(),
             mime_type: "test_mime_type1".to_owned(),
             size: 1,
             filename: "test_filename1".to_owned(),
             crash_id: idc,
         };
-        let idat1 = AttachmentRepo::create(&db, attachment1).await.unwrap();
+        let idat1 = Repo::create(&db, attachment1).await.unwrap();
 
-        let attachment2 = AttachmentDto {
+        let attachment2 = crate::entity::attachment::CreateModel {
             name: "test_name2".to_owned(),
             mime_type: "test_mime_type2".to_owned(),
             size: 2,
             filename: "test_filename2".to_owned(),
             crash_id: idc,
         };
-        let idat2 = AttachmentRepo::create(&db, attachment2).await.unwrap();
+        let idat2 = Repo::create(&db, attachment2).await.unwrap();
 
-        let annotation = AnnotationDto {
+        let annotation = crate::entity::annotation::CreateModel {
             key: "test_key1".to_owned(),
             kind: AnnotationKind::System,
             value: "test_value1".to_owned(),
             crash_id: idc,
         };
-        let idan = AnnotationRepo::create(&db, annotation).await.unwrap();
+        let idan = Repo::create(&db, annotation).await.unwrap();
 
         let c = CrashRepo::get_by_id(&db, idc).await.unwrap();
 

@@ -1,3 +1,14 @@
+use super::base::NoneFilter;
+use super::base::Resource;
+use super::error::ApiError;
+use crate::app_state::AppState;
+use crate::model::base::Repo;
+use crate::model::version::VersionRepo;
+use crate::settings;
+use crate::{
+    entity::{prelude::Symbols, symbols},
+    model::symbols::{SymbolsCreateDto, SymbolsUpdateDto},
+};
 use axum::body::Bytes;
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Query, State};
@@ -12,14 +23,14 @@ use tokio_util::io::StreamReader;
 use tracing::{debug, error, info};
 use uuid::Uuid;
 
-use super::error::ApiError;
-use crate::app_state::AppState;
-use crate::model::base::{BaseRepo, BaseRepoWithSecondaryKey};
-use crate::model::product::ProductRepo;
-use crate::model::symbols::{SymbolsDto, SymbolsRepo};
-use crate::model::version::VersionRepo;
-use crate::settings;
-
+impl Resource for Symbols {
+    type Entity = symbols::Entity;
+    type ActiveModel = symbols::ActiveModel;
+    type Data = symbols::Model;
+    type CreateData = SymbolsCreateDto;
+    type UpdateData = SymbolsUpdateDto;
+    type Filter = NoneFilter;
+}
 pub struct SymbolsHandler;
 
 #[derive(Debug, Deserialize)]
@@ -42,10 +53,7 @@ struct SymbolsData {
     pub file_location: String,
 }
 
-use super::base::BaseApi;
-
 pub struct SymbolsApi;
-impl BaseApi<SymbolsRepo> for SymbolsApi {}
 
 impl SymbolsApi {
     async fn stream_to_file<S, E>(path: &std::path::PathBuf, stream: S) -> Result<(), ApiError>
@@ -75,7 +83,12 @@ impl SymbolsApi {
         state: &Arc<AppState>,
         params: &SymbolsRequestParams,
     ) -> Result<crate::model::product::Product, ApiError> {
-        let product = ProductRepo::get_by_secondary_id(&state.db, params.product.clone()).await;
+        let product = Repo::get_by_column::<crate::entity::product::Entity, _, _>(
+            &state.db,
+            crate::entity::product::Column::Name,
+            params.product.clone(),
+        )
+        .await;
         let product = match product {
             Ok(product) => product,
             Err(e) => {
@@ -162,7 +175,7 @@ impl SymbolsApi {
         version: crate::model::version::Version,
         state: Arc<AppState>,
     ) -> Result<(), ApiError> {
-        let dto = SymbolsDto {
+        let dto = SymbolsCreateDto {
             os: data.os,
             arch: data.arch,
             build_id: data.build_id,
@@ -171,7 +184,7 @@ impl SymbolsApi {
             product_id: product.id,
             version_id: version.id,
         };
-        SymbolsRepo::create(&state.db, dto)
+        Repo::create(&state.db, dto)
             .await
             .map(|_| ())
             .map_err(|e| {

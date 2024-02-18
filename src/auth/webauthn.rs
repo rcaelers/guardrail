@@ -108,6 +108,7 @@ pub async fn finish_register(
             username: Set(registration_state.username),
             role: Set("user".to_string()),
             created_at: Set(Utc::now().naive_utc()),
+            updated_at: Set(Utc::now().naive_utc()),
             last_authenticated: Set(Utc::now().naive_utc()),
         };
         user.insert(&state.db).await?;
@@ -118,6 +119,7 @@ pub async fn finish_register(
         user_id: Set(registration_state.user_unique_id),
         name: Set("name".to_string()),
         created_at: Set(Utc::now().naive_utc()),
+        updated_at: Set(Utc::now().naive_utc()),
         last_used: Set(Utc::now().naive_utc()),
         credential: Set(serde_json::to_value(&passkey)?),
     };

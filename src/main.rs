@@ -1,7 +1,6 @@
 #![allow(dead_code, unused_variables)]
 mod api;
 mod app_state;
-//mod auth;
 mod auth;
 mod entity;
 mod model;
@@ -10,16 +9,14 @@ mod settings;
 mod utils;
 mod web;
 
-use axum::error_handling::HandleErrorLayer;
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::response::IntoResponse;
-use axum::{BoxError, Router};
+use axum::Router;
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use std::io::IsTerminal;
 use std::sync::Arc;
 use time::Duration;
-use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use tower_sessions::cookie::SameSite;
 use tower_sessions::{Expiry, SessionManagerLayer};
@@ -79,17 +76,11 @@ async fn main() {
     });
 
     let session_store = SeaOrmSessionStore::new(db);
-    let session_service = ServiceBuilder::new()
-        .layer(HandleErrorLayer::new(|_: BoxError| async {
-            StatusCode::BAD_REQUEST
-        }))
-        .layer(
-            SessionManagerLayer::new(session_store)
-                .with_name("guardrail")
-                .with_same_site(SameSite::Lax)
-                .with_expiry(Expiry::OnInactivity(Duration::hours(1)))
-                .with_secure(false),
-        );
+    let session_layer = SessionManagerLayer::new(session_store)
+        .with_name("guardrail")
+        .with_same_site(SameSite::Lax)
+        .with_expiry(Expiry::OnInactivity(Duration::hours(1)))
+        .with_secure(false);
 
     let routes_all = Router::new()
         .nest_service("/static", tower_http::services::ServeDir::new("static"))
@@ -98,7 +89,7 @@ async fn main() {
         .nest("/", web::routes(Arc::clone(&state)).await)
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
         .layer(TraceLayer::new_for_http())
-        .layer(session_service)
+        .layer(session_layer)
         .with_state(state)
         .fallback(handler_404);
 

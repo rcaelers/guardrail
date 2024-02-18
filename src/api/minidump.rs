@@ -14,13 +14,10 @@ use tracing::{debug, error, info};
 
 use super::error::ApiError;
 use crate::app_state::AppState;
-use crate::model::attachment::{AttachmentDto, AttachmentRepo};
-use crate::model::base::{BaseRepo, BaseRepoWithSecondaryKey};
-use crate::model::crash::{CrashDto, CrashRepo};
-use crate::model::product::ProductRepo;
+use crate::model::base::Repo;
 use crate::model::version::VersionRepo;
-use crate::settings;
 use crate::utils::stream_to_file::stream_to_file;
+use crate::{entity, settings};
 
 pub struct MinidumpApi;
 
@@ -40,7 +37,12 @@ impl MinidumpApi {
         state: &Arc<AppState>,
         params: &MinidumpRequestParams,
     ) -> Result<crate::model::product::Product, ApiError> {
-        let product = ProductRepo::get_by_secondary_id(&state.db, params.product.clone()).await;
+        let product = Repo::get_by_column::<entity::product::Entity, _, _>(
+            &state.db,
+            entity::product::Column::Name,
+            params.product.clone(),
+        )
+        .await;
         let product = match product {
             Ok(product) => product,
             Err(e) => {
@@ -95,12 +97,12 @@ impl MinidumpApi {
         version: crate::model::version::Version,
         state: Arc<AppState>,
     ) -> Result<uuid::Uuid, ApiError> {
-        let dto = CrashDto {
-            report: report.to_string(),
+        let dto = entity::crash::CreateModel {
+            report, //: report, // TODO: .to_string(),
             product_id: product.id,
             version_id: version.id,
         };
-        let id = CrashRepo::create(&state.db, dto).await.map_err(|e| {
+        let id = Repo::create(&state.db, dto).await.map_err(|e| {
             error!("error: {:?}", e);
             ApiError::Failure
         })?;
@@ -114,14 +116,17 @@ impl MinidumpApi {
         mime_type: String,
         state: Arc<AppState>,
     ) -> Result<uuid::Uuid, ApiError> {
-        let dto = AttachmentDto {
+        let dto = entity::attachment::Model {
             name: "minidump".to_string(),
             mime_type,
             size: filesize,
             filename,
             crash_id,
+            id: Default::default(),
+            created_at: Default::default(),
+            updated_at: Default::default(),
         };
-        let id = AttachmentRepo::create(&state.db, dto).await.map_err(|e| {
+        let id = Repo::create(&state.db, dto).await.map_err(|e| {
             error!("error: {:?}", e);
             ApiError::Failure
         })?;

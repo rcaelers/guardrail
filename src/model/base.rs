@@ -1,91 +1,86 @@
-use async_trait::async_trait;
 use sea_orm::*;
-use serde::{de::DeserializeOwned, Serialize};
 
 pub trait HasId {
     fn id(&self) -> uuid::Uuid;
 }
+pub struct Repo;
 
-#[async_trait]
-pub trait BaseRepo
-where
-    <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
-        IntoActiveModel<Self::ActiveModel> + HasId,
-{
-    type Repr: Serialize + From<<Self::Entity as sea_orm::EntityTrait>::Model> + Send;
-    type Entity: EntityTrait;
-
-    type ActiveModel: ActiveModelTrait<Entity = Self::Entity>
-        + From<Self::CreateDto>
-        + From<Self::UpdateDto>
-        + From<(Self::PrimaryKeyType, Self::UpdateDto)>
-        + ActiveModelBehavior
-        + Send;
-    type CreateDto: Send + DeserializeOwned;
-    type UpdateDto: Send + DeserializeOwned;
-    type PrimaryKeyType: Into<<<Self::Entity as EntityTrait>::PrimaryKey as PrimaryKeyTrait>::ValueType>
-        + Clone
-        + Sync
-        + Send;
-
-    async fn create(db: &DbConn, dto: Self::CreateDto) -> Result<uuid::Uuid, DbErr> {
-        let model = Self::ActiveModel::from(dto).insert(db).await?;
+impl Repo {
+    pub async fn create<E, D, A>(db: &DbConn, data: D) -> Result<uuid::Uuid, DbErr>
+    where
+        E: EntityTrait,
+        E::Model: IntoActiveModel<A> + HasId,
+        D: IntoActiveModel<A>,
+        A: ActiveModelTrait<Entity = E> + ActiveModelBehavior + Send,
+    {
+        let model = data.into_active_model().insert(db).await?;
         Ok(model.id())
     }
 
-    async fn update(
-        db: &DbConn,
-        id: Self::PrimaryKeyType,
-        dto: Self::UpdateDto,
-    ) -> Result<(), DbErr> {
-        Self::ActiveModel::from((id, dto)).update(db).await?;
-        Ok(())
-    }
-
-    async fn get_all(db: &DbConn) -> Result<Vec<Self::Repr>, DbErr> {
-        let r = <Self::Entity as EntityTrait>::find().all(db).await?;
-        Ok(r.into_iter().map(Self::Repr::from).collect())
-    }
-
-    async fn get_by_id(db: &DbConn, id: Self::PrimaryKeyType) -> Result<Option<Self::Repr>, DbErr> {
-        let r = Self::Entity::find_by_id(id)
-            .one(db)
-            .await?
-            .map(Self::Repr::from);
-            //.ok_or(DbErr::RecordNotFound("not found".to_owned()))?;
-        Ok(r)
-    }
-
-    async fn delete(db: &DbConn, id: Self::PrimaryKeyType) -> Result<(), DbErr> {
-        Self::Entity::delete_by_id(id).exec(db).await?;
-        Ok(())
-    }
-}
-
-#[async_trait]
-pub trait BaseRepoWithSecondaryKey: BaseRepo
-where
-    <<Self::ActiveModel as ActiveModelTrait>::Entity as EntityTrait>::Model:
-        IntoActiveModel<Self::ActiveModel> + HasId,
-{
-    type Column: ColumnTrait + Clone + Sync + Send;
-    type SecondaryKeyType: Clone + Sync + Send;
-
-    fn secondary_column() -> Self::Column;
-
-    async fn get_by_secondary_id(
-        db: &DbConn,
-        key: Self::SecondaryKeyType,
-    ) -> Result<Option<Self::Repr>, DbErr>
+    pub async fn update<E, D, A>(db: &DbConn, data: D) -> Result<uuid::Uuid, DbErr>
     where
-        <Self as BaseRepoWithSecondaryKey>::SecondaryKeyType: 'async_trait,
-        sea_orm::Value: From<<Self as BaseRepoWithSecondaryKey>::SecondaryKeyType>,
+        E: EntityTrait,
+        E::Model: IntoActiveModel<A> + HasId,
+        D: IntoActiveModel<A>,
+        A: ActiveModelTrait<Entity = E> + ActiveModelBehavior + Send,
     {
-        let r = Self::Entity::find()
-            .filter(Self::secondary_column().eq(key))
-            .one(db)
-            .await?
-            .map(Self::Repr::from);
-        Ok(r)
+        // let now = chrono::NaiveDateTime::from_timestamp_opt(chrono::Utc::now().timestamp(), 0)
+        //     .ok_or(DbErr::Custom("invalid timestamp".to_owned()))?;
+        let model = data.into_active_model().update(db).await?;
+        Ok(model.id())
+    }
+
+    pub async fn delete_by_id<E>(db: &DbConn, id: uuid::Uuid) -> Result<(), DbErr>
+    where
+        E: EntityTrait,
+        <<E as sea_orm::EntityTrait>::PrimaryKey as sea_orm::PrimaryKeyTrait>::ValueType:
+            From<uuid::Uuid>,
+    {
+        <E as EntityTrait>::delete_by_id(id).exec(db).await?;
+        Ok(())
+    }
+
+    pub async fn get_all<E>(db: &DbConn) -> Result<Vec<<E as EntityTrait>::Model>, DbErr>
+    where
+        E: EntityTrait,
+    {
+        <E as EntityTrait>::find().all(db).await
+    }
+
+    pub async fn get_by_id<E>(
+        db: &DbConn,
+        id: uuid::Uuid,
+    ) -> Result<Option<<E as EntityTrait>::Model>, DbErr>
+    where
+        E: EntityTrait,
+        <E::PrimaryKey as sea_orm::PrimaryKeyTrait>::ValueType: From<uuid::Uuid>,
+    {
+        <E as EntityTrait>::find_by_id(id).one(db).await
+    }
+
+    pub async fn get_by_column<E, Id, C>(
+        db: &DbConn,
+        column: C,
+        key: Id,
+    ) -> Result<Option<<E as EntityTrait>::Model>, DbErr>
+    where
+        E: EntityTrait,
+        Id: Into<sea_orm::Value>,
+        C: ColumnTrait + Clone + Sync + Send,
+    {
+        E::find().filter(column.eq(key)).one(db).await
+    }
+
+    pub async fn get_all_by_column<E, Id, C>(
+        db: &DbConn,
+        column: C,
+        key: Id,
+    ) -> Result<Vec<<E as EntityTrait>::Model>, DbErr>
+    where
+        E: EntityTrait,
+        Id: Into<sea_orm::Value>,
+        C: ColumnTrait + Clone + Sync + Send,
+    {
+        E::find().filter(column.eq(key)).all(db).await
     }
 }

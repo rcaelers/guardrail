@@ -1,28 +1,35 @@
-use super::base::BaseApi;
-use crate::model::attachment::AttachmentRepo;
+use crate::{
+    entity::{attachment, prelude::Attachment},
+    model::attachment::{AttachmentCreateDto, AttachmentUpdateDto},
+};
 
-pub struct AttachmentApi;
-impl BaseApi<AttachmentRepo> for AttachmentApi {}
+use super::base::{NoneFilter, Resource};
+
+impl Resource for Attachment {
+    type Entity = attachment::Entity;
+    type ActiveModel = attachment::ActiveModel;
+    type Data = attachment::Model;
+    type CreateData = AttachmentCreateDto;
+    type UpdateData = AttachmentUpdateDto;
+    type Filter = NoneFilter;
+}
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        api::base::tests::*,
-        model::{attachment::AttachmentRepo, base::BaseRepo},
-    };
+    use crate::{api::base::tests::*, entity::attachment};
     use axum_test::TestServer;
     use serial_test::serial;
 
     #[derive(serde::Deserialize, Debug)]
     struct ApiResponseWithPayload {
         pub result: String,
-        pub payload: <AttachmentRepo as BaseRepo>::Repr,
+        pub payload: attachment::Model,
     }
 
     #[derive(serde::Deserialize, Debug)]
     struct ApiResponseWithVecPayload {
         pub result: String,
-        pub payload: Vec<<AttachmentRepo as BaseRepo>::Repr>,
+        pub payload: Vec<attachment::Model>,
     }
 
     struct Context {
@@ -256,11 +263,9 @@ mod tests {
             .content_type("application/json")
             .json(&serde_json::json!({}))
             .await;
-        println!("{:?}", response);
 
         response.assert_status_bad_request();
         let attachment = response.json::<ApiResponseFailed>();
-        println!("{:?}", attachment);
         assert_eq!(attachment.result, "failed");
     }
 }

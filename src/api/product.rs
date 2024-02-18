@@ -1,24 +1,35 @@
-use super::base::BaseApi;
-use crate::model::product::ProductRepo;
+use crate::{
+    entity::{prelude::Product, product},
+    model::product::{ProductCreateDto, ProductUpdateDto},
+};
 
-pub struct ProductApi;
-impl BaseApi<ProductRepo> for ProductApi {}
+use super::base::{NoneFilter, Resource};
+
+impl Resource for Product {
+    type Entity = product::Entity;
+    type ActiveModel = product::ActiveModel;
+    type Data = product::Model;
+    type CreateData = ProductCreateDto;
+    type UpdateData = ProductUpdateDto;
+    type Filter = NoneFilter;
+}
 
 #[cfg(test)]
 mod tests {
+    use crate::api::base::tests::*;
+    use crate::entity::product;
     use serial_test::serial;
-    use crate::{api::base::tests::*, model::{product::ProductRepo, base::BaseRepo}};
 
     #[derive(serde::Deserialize, Debug)]
     pub struct ApiResponseWithPayload {
         pub result: String,
-        pub payload: <ProductRepo as BaseRepo>::Repr,
+        pub payload: product::Model,
     }
 
     #[derive(serde::Deserialize, Debug)]
     pub struct ApiResponseWithVecPayload {
         pub result: String,
-        pub payload: Vec<<ProductRepo as BaseRepo>::Repr>,
+        pub payload: Vec<product::Model>,
     }
 
     #[serial]
@@ -123,10 +134,8 @@ mod tests {
                 "name": "Workrave"
             }))
             .await;
-        println!("{:?}", response);
         response.assert_status_ok();
         let product = response.json::<ApiResponse>();
-        println!("{:?}", product);
         assert_eq!(product.result, "ok");
 
         let response = server
@@ -136,11 +145,9 @@ mod tests {
                 "name": "Workrave"
             }))
             .await;
-        println!("{:?}", response);
 
         response.assert_status_bad_request();
         let product = response.json::<ApiResponseFailed>();
-        println!("{:?}", product);
         assert_eq!(product.result, "failed");
     }
 
@@ -154,11 +161,9 @@ mod tests {
             .content_type("application/json")
             .json(&serde_json::json!({}))
             .await;
-        println!("{:?}", response);
 
         response.assert_status_bad_request();
         let product = response.json::<ApiResponseFailed>();
-        println!("{:?}", product);
         assert_eq!(product.result, "failed");
     }
 }

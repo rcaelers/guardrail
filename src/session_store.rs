@@ -25,7 +25,7 @@ impl SeaOrmSessionStore {
 impl ExpiredDeletion for SeaOrmSessionStore {
     async fn delete_expired(&self) -> session_store::Result<()> {
         let now = Utc::now().naive_utc();
-        entity::session::Entity::delete_many()
+        entity::prelude::Session::delete_many()
             .filter(entity::session::Column::ExpiresAt.lt(now))
             .exec(&self.db)
             .await
@@ -48,9 +48,11 @@ impl SessionStore for SeaOrmSessionStore {
         let data = entity::session::ActiveModel {
             id: Set(record.id.to_string()),
             expires_at: Set(expiry_date),
+            created_at: Set(Utc::now().naive_utc()),
+            updated_at: Set(Utc::now().naive_utc()),
             data: Set(rmp_serde::to_vec(&record).map_err(SeaStoreError::Encode)?),
         };
-        entity::session::Entity::insert(data)
+        entity::prelude::Session::insert(data)
             .on_conflict(
                 OnConflict::column(migration::SessionColumns::Id)
                     .update_columns([migration::SessionColumns::Data])

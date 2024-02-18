@@ -50,7 +50,8 @@ impl MigrationTrait for Migration {
                     .col(
                         ColumnDef::new(Annotation::Kind)
                             .enumeration(AnnotationKind::Table, AnnotationKind::iter().skip(1))
-                            .not_null(),
+                            .not_null()
+                            .default("system"),
                     )
                     .col(ColumnDef::new(Annotation::Value).string().not_null())
                     .col(ColumnDef::new(Annotation::CrashId).uuid().not_null())
