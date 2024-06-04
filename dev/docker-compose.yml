@@ -37,3 +37,13 @@ services:
     depends_on:
       - postgresql
     restart: unless-stopped
+
+#  traefik:
+#    image: traefik:latest
+#    ports:
+#      - "443:443"
+#    volumes:
+#      - "./traefik.yaml:/etc/traefik/traefik.yaml"
+#      - acme:/acme
+#    env_file: ../../env
+#

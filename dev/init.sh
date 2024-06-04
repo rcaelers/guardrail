@@ -1,7 +1,22 @@
 BASEDIR=$(dirname "$0")
-JWTTOKEN=`$BASEDIR/token.sh 230306291224936471 $BASEDIR/230306311793803287-sa-guardrail.json`
+TOKEN="not-yet"
+URI=https://guardrail.home.krandor.org:4433/
 
-curl -X POST http://localhost:8080/api/product -H 'Content-Type: application/json' -H "Authorization: Bearer $JWTTOKEN" -d '{ "name":"Workrave" }' 
-curl -X POST http://localhost:8080/api/version -H 'Content-Type: application/json' -H "Authorization: Bearer $JWTTOKEN" -d '{ "name":"1.11", "hash":"1234567890", "tag": "v1.11", "product": "Workrave" }'
-curl -vv -X POST "http://localhost:8080/api/symbols/upload?product=Workrave&version=1.11" -H "Authorization: Bearer $JWTTOKEN" -Fupload_file_symbols=@dev/crash.sym
-curl -vv -X POST "http://localhost:8080/api/minidump/upload?product=Workrave&version=1.11" -Fupload_file_minidump=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp -Fattach=@dev/init.sh
+curl -X POST ${URI}api/product --insecure -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" -d '{ "name":"Workrave" }'
+curl -X POST ${URI}api/product --insecure -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" -d '{ "name":"Guardrail" }'
+
+curl -X POST ${URI}api/version --insecure -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" -d '{ "name":"1.11", "hash":"1234567890", "tag": "v1.11", "product":"Workrave" }'
+curl -X POST ${URI}api/version --insecure -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" -d '{ "name":"1.11", "hash":"1234567890", "tag": "v1.11", "product":"Guardrail" }'
+
+for i in {1..20}; do
+  curl -X POST ${URI}api/product --insecure -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" -d '{ "name":"GuardrailTest'$i'" }'
+done
+
+for i in {1..20}; do
+  for v in {1..20}; do
+    curl -X POST ${URI}api/version --insecure -H 'Content-Type: application/json' -H "Authorization: Bearer $TOKEN" -d '{ "name":"1.'$v'", "hash":"1234567890", "tag": "v1.11", "product":"GuardrailTest'$i'" }'
+  done
+done
+
+curl -vv -X POST "${URI}api/symbols/upload?product=Workrave&version=1.11" --insecure -H "Authorization: Bearer $TOKEN" -Fupload_file_symbols=@dev/crash.sym
+curl -vv -X POST "${URI}api/minidump/upload?product=Workrave&version=1.11" --insecure -Fupload_file_minidump=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp -Fattach=@dev/init.sh

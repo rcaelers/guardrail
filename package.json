@@ -1,6 +1,10 @@
 {
   "devDependencies": {
-    "a17t": "^0.10.1",
-    "tailwindcss": "^3.3.6"
+    "@tailwindcss/typography": "^0.5.13",
+    "daisyui": "^4.11.1",
+    "tailwindcss": "^3.4.3"
+  },
+  "optionalDependencies": {
+    "fsevents": "^2.3.3"
   }
 }

@@ -1,0 +1,63 @@
+[package]
+name = "server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+app = { path = "../app", default-features = false, features = ["ssr"] }
+macros = { path = "../macros" }
+migration = { path = "../migration" }
+
+# Leptos
+leptos = { workspace = true, features = ["ssr", "tracing"] }
+leptos_axum.workspace = true
+leptos_router.workspace = true
+leptos-use.workspace = true
+
+# Serde / json
+serde.workspace = true
+serde_json.workspace = true
+rmp-serde.workspace = true
+
+# SeaORM
+sea-orm.workspace = true
+
+# Tokio / Axum
+tokio.workspace = true
+tokio-util.workspace = true
+axum.workspace = true
+axum-server.workspace = true
+
+# Tower
+tower.workspace = true
+tower-http.workspace = true
+tower-sessions.workspace = true
+
+# Tracing
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true
+
+# Minidump processing
+minidump.workspace = true
+minidump-processor.workspace = true
+minidump-unwind.workspace = true
+
+# Misc
+async-trait.workspace = true
+cfg-if.workspace = true
+chrono.workspace = true
+console_error_panic_hook.workspace = true
+console_log.workspace = true
+futures.workspace = true
+mime.workspace = true
+rand.workspace = true
+thiserror.workspace = true
+time.workspace = true
+uuid.workspace = true
+url.workspace = true
+webauthn-rs.workspace = true
+
+[dev-dependencies]
+axum-test.workspace = true
+serial_test.workspace = true

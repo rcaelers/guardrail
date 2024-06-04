@@ -1,0 +1,89 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+macros = { path = "../macros" }
+migration = { path = "../migration", optional = true }
+
+# Leptos
+leptos = { workspace = true, features = ["tracing"] }
+leptos_meta.workspace = true
+leptos_router.workspace = true
+leptos_axum = { workspace = true, optional = true }
+leptos-use = { workspace = true }
+leptos-struct-table = { workspace = true }
+wasm-bindgen-futures.workspace = true
+
+# Serde / json
+serde.workspace = true
+serde_json.workspace = true
+serde-wasm-bindgen.workspace = true
+rmp-serde.workspace = true
+
+# Tokio
+tokio = { workspace = true, optional = true }
+
+# Tower / Axum
+tower = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
+tower-sessions = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+
+# Tracing
+tracing.workspace = true
+tracing-subscriber-wasm.workspace = true
+
+# SeaORM
+sea-orm = { workspace = true, optional = true }
+
+# Misc
+async-trait.workspace = true
+cfg-if.workspace = true
+chrono.workspace = true
+config.workspace = true
+futures.workspace = true
+http.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+webauthn-rs-proto.workspace = true
+
+[dev-dependencies]
+serial_test.workspace = true
+
+[features]
+default = []
+hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
+ssr = [
+  "leptos/ssr",
+  "leptos_meta/ssr",
+  "leptos_router/ssr",
+  "leptos-use/ssr",
+  "dep:leptos_axum",
+  "dep:sea-orm",
+  "dep:tokio",
+  "dep:axum",
+  "dep:tower",
+  "dep:tower-sessions",
+  "dep:migration",
+]
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+  "CredentialCreationOptions",
+  "CredentialRequestOptions",
+  "CredentialsContainer",
+  "Location",
+  "Navigator",
+  "PublicKeyCredential",
+  "PublicKeyCredentialCreationOptions",
+  "Window",
+  "PublicKeyCredentialUserEntity",
+  "PublicKeyCredentialRpEntity",
+  "AuthenticatorResponse",
+  "AuthenticationExtensionsClientOutputs",
+  "PublicKeyCredentialParameters",
+  "PublicKeyCredentialType",
+]

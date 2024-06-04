@@ -1,87 +1,172 @@
-[package]
-name = "api"
-version = "0.1.0"
-edition = "2021"
-authors = ["Rob Caelers <rob.caelers@gmail.com>"]
-license = "MIT"
-description = "GuardRail: Gather Unanticipated Anomaly Reports, Debugging Reports and Anomaly Investigation Logs"
-homepage = ""
-repository = "https://github.com/rcaelers/guardrail"
 
 [workspace]
-members = ["migration", "macros"]
+resolver = "2"
+members = ["crates/*"]
+default-members = ["crates/server"]
 
-[dependencies]
-migration = { path = "migration" }
-macros = { path = "macros" }
-# Tokio
-tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7.10", features = ["tracing", "io"] }
-# Tower
-tower = "0.4"
-tower-http = { version = "0.5", features = ["full"] }
-tower-sessions = "0.10.2"
-axum = { version = "0.7.4", features = [
-    "form",
-    "query",
-    "macros",
-    "multipart",
-    "tracing",
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 'z'
+
+[workspace.dependencies]
+# Leptos
+leptos = { version = "0.6", features = ["nightly"] }
+leptos_meta = { version = "0.6", features = ["nightly"] }
+leptos_router = { version = "0.6", features = ["nightly"] }
+leptos_axum = { version = "0.6" }
+leptos-use = { version = "0.10.10" }
+leptos-struct-table = { version = "0.10.0", features = ["chrono", "uuid"] }
+
+# Wasm
+wasm-bindgen = { version = "=0.2.92", features = ["serde-serialize"] }
+wasm-bindgen-futures = { version = "0.4" }
+
+# WebAuthn
+webauthn-rs-proto = { version = "0.5.0", features = ["wasm"] }
+webauthn-rs = { version = "0.5.0", features = [
+  "danger-allow-state-serialisation",
 ] }
+
 # Serde / json
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-rmp-serde = "1.1.2"
-# SeaORM
-sea-orm = { version = "^0.12.14", features = [
-    "sqlx-postgres",
-    "sqlx-sqlite",
-    "runtime-tokio-rustls",
-    "macros",
-    "with-uuid",
-    "with-json",
+serde-wasm-bindgen = "0.6.5"
+rmp-serde = "1.3.0"
+
+# Tokio
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0.7.11", features = ["tracing", "io"] }
+
+# Tower / Axum
+tower = { version = "0.4", features = ["full"] }
+tower-http = { version = "0.5", features = ["full"] }
+tower-sessions = "0.12.2"
+axum = { version = "0.7.5", features = [
+  "form",
+  "query",
+  "macros",
+  "multipart",
+  "tracing",
 ] }
+axum-server = { version = "0.6.0", features = ["tls-rustls"] }
+
 # Tracing
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = [
-    "tracing-log",
-    "local-time",
-    "env-filter",
-    "json",
+  "tracing-log",
+  "local-time",
+  "env-filter",
+  "json",
 ] }
 tracing-appender = "0.2"
-# Minidump processing
-minidump = { version = "0.20.0" }
-minidump-processor = { version = "0.20.0" }
-minidump-unwind = { version = "0.20.0", features = ["debuginfo", "http"] }
-# Others
-async-trait = "0.1.77"
-chrono = { version = "0.4.34", features = ["serde"] }
-config = "0.14.0"
-dashmap = "5.5.3"
-futures = "0.3.30"
-jwt-authorizer = "0.14.0"
-mime = "0.3.17"
-oauth2 = "4.4.2"
-openidconnect = { version = "3.5.0", features = [
-    "accept-rfc3339-timestamps",
-    "accept-string-booleans",
+tracing-subscriber-wasm = "0.1.0"
+
+# SeaORM
+sea-orm = { version = "1.0.0-rc.5", features = [
+  "sqlx-postgres",
+  "sqlx-sqlite",
+  "runtime-tokio-rustls",
+  "macros",
+  "with-uuid",
+  "with-json",
 ] }
+
+minidump = { version = "0.21.2" }
+minidump-processor = { version = "0.21.2" }
+minidump-unwind = { version = "0.21.2", features = ["debuginfo", "http"] }
+
+# Misc
+async-trait = "0.1.80"
+cfg-if = "1"
+chrono = { version = "0.4.38", features = ["serde"] }
+config = "0.14.0"
+console_error_panic_hook = "0.1.7"
+console_log = "1"
+futures = "0.3.30"
+http = "1"
+log = "0.4.21"
+mime = "0.3.17"
 rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
-thiserror = "1.0.57"
-time = "0.3.34"
+thiserror = "1.0.61"
+time = "0.3.36"
 url = { version = "2.5.0", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "fast-rng", "serde", "std"] }
-webauthn-rs = { version = "0.5.0-dev", features = [
-    "danger-allow-state-serialisation",
-] }
-askama = { version = "0.12.1", features = ["with-axum"] }
-askama_axum = "0.4.0"
 
+# jwt-authorizer = "0.14.0"
+# oauth2 = "4.4.2"
+# openidconnect = { version = "3.5.0", features = [
+#     "accept-rfc3339-timestamps",
+#     "accept-string-booleans",
+# ] }
 
-#[features]
-#dump_syms = ["minidump-processor/dump_syms"]
-
-[dev-dependencies]
-axum-test = "14.3.0"
+# Dev dependencies
+axum-test = "14.10.0"
 serial_test = "3"
+
+[[workspace.metadata.leptos]]
+# this name is used for the wasm, js and css file names
+name = "site"
+
+# the package in the workspace that contains the server binary (binary crate)
+bin-package = "server"
+
+# the package in the workspace that contains the frontend wasm binary (library crate)
+lib-package = "frontend"
+
+# The site root folder is where cargo-leptos generate all output. WARNING: all content of this folder will be erased on a rebuild. Use it in your server setup.
+site-root = "target/site"
+
+# The site-root relative folder where all compiled output (JS, WASM and CSS) is written
+# Defaults to pkg
+site-pkg-dir = "pkg"
+
+# [Optional] The source CSS file. If it ends with .sass or .scss then it will be compiled by dart-sass into CSS. The CSS is optimized by Lightning CSS before being written to <site-root>/<site-pkg>/app.css
+style-file = "crates/server/static/css/style.css"
+
+# Assets source dir. All files found here will be copied and synchronized to site-root.
+# The assets-dir cannot have a sub directory with the same name/path as site-pkg-dir.
+#
+# Optional. Env: LEPTOS_ASSETS_DIR.
+assets-dir = "crates/server/static"
+
+# The IP and port (ex: 127.0.0.1:3000) where the server serves the content. Use it in your server setup.
+site-addr = "127.0.0.1:4433"
+
+# The port to use for automatic reload monitoring
+reload-port = 3001
+
+# [Optional] Command to use when running end2end tests. It will run in the end2end dir.
+#   [Windows] for non-WSL use "npx.cmd playwright test"
+#   This binary name can be checked in Powershell with Get-Command npx
+end2end-cmd = "npx playwright test"
+end2end-dir = "end2end"
+
+#  The browserlist query used for optimizing the CSS.
+browserquery = "defaults"
+
+# Set by cargo-leptos watch when building with that tool. Controls whether autoreload JS will be included in the head
+watch = false
+
+# The environment Leptos will run in, usually either "DEV" or "PROD"
+env = "DEV"
+
+# The features to use when compiling the bin target
+#
+# Optional. Can be over-ridden with the command line parameter --bin-features
+bin-features = []
+
+# If the --no-default-features flag should be used when compiling the bin target
+#
+# Optional. Defaults to false.
+bin-default-features = false
+
+# The features to use when compiling the lib target
+#
+# Optional. Can be over-ridden with the command line parameter --lib-features
+lib-features = []
+
+# If the --no-default-features flag should be used when compiling the lib target
+#
+# Optional. Defaults to false.
+lib-default-features = false
