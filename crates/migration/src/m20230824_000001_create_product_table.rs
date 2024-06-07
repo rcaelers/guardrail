@@ -1,3 +1,4 @@
+use sea_orm::DbBackend;
 use sea_orm_migration::prelude::*;
 
 #[derive(DeriveMigrationName)]
@@ -35,24 +36,26 @@ impl MigrationTrait for Migration {
             .await?;
 
         let db = manager.get_connection();
-        let _ = db
-            .execute_unprepared(
-                "
+        if let DbBackend::Postgres = db.get_database_backend() {
+            let _ = db
+                .execute_unprepared(
+                    "
                 CREATE TRIGGER trigger_product_updated_at
                 BEFORE UPDATE ON product
                 FOR EACH ROW EXECUTE PROCEDURE update_updated_timestamp();
             ",
-            )
-            .await?;
-
+                )
+                .await?;
+        }
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
         let db = manager.get_connection();
-        db.execute_unprepared("DROP TRIGGER IF EXISTS trigger_product_updated_at ON product")
-            .await?;
-
+        if let DbBackend::Postgres = db.get_database_backend() {
+            db.execute_unprepared("DROP TRIGGER IF EXISTS trigger_product_updated_at ON product")
+                .await?;
+        }
         manager
             .drop_table(Table::drop().table(Product::Table).to_owned())
             .await
