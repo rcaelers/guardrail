@@ -16,7 +16,7 @@ leptos_meta = { version = "0.6", features = ["nightly"] }
 leptos_router = { version = "0.6", features = ["nightly"] }
 leptos_axum = { version = "0.6" }
 leptos-use = { version = "0.10.10" }
-leptos-struct-table = { version = "0.10.0", features = ["chrono", "uuid"] }
+leptos-struct-table = { version = "0.10.2", features = ["chrono", "uuid"] }
 
 # Wasm
 wasm-bindgen = { version = "=0.2.92", features = ["serde-serialize"] }

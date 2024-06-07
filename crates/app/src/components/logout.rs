@@ -4,6 +4,7 @@ use leptos::*;
 #[cfg(feature = "ssr")]
 use crate::auth;
 
+#[allow(non_snake_case)]
 #[component]
 pub fn LogoutButton(trigger: RwSignal<i64>) -> impl IntoView {
     let logout_action = create_server_action::<Logout>();

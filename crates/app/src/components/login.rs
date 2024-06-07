@@ -5,6 +5,7 @@ use web_sys::SubmitEvent;
 
 use crate::{auth::passkeys::login_passkey, components::passkey_logo::PasskeyLogo};
 
+#[allow(non_snake_case)]
 #[component]
 pub fn LoginPage(trigger: RwSignal<i64>) -> impl IntoView {
     let input_element: NodeRef<html::Input> = create_node_ref();

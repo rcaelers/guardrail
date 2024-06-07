@@ -1,3 +1,4 @@
+pub mod confirmation;
 pub mod error_template;
 pub mod login;
 pub mod logout;

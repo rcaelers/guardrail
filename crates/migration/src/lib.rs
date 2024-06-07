@@ -1,5 +1,6 @@
 pub use sea_orm_migration::prelude::*;
 
+mod m20230824_000000_create_functions;
 mod m20230824_000001_create_product_table;
 mod m20230824_000002_create_version_table;
 mod m20230824_000003_create_crash_table;
@@ -17,6 +18,7 @@ pub use m20230930_000008_create_session_table::Session as SessionColumns;
 impl MigratorTrait for Migrator {
     fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         vec![
+            Box::new(m20230824_000000_create_functions::Migration),
             Box::new(m20230824_000001_create_product_table::Migration),
             Box::new(m20230824_000002_create_version_table::Migration),
             Box::new(m20230824_000003_create_crash_table::Migration),

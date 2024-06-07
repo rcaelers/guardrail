@@ -1,16 +1,12 @@
 {
-	"folders": [
-		{
-			"path": "../../workrave/guardrail"
-		}
-	],
-	"settings": {
-		"cSpell.words": [
-			"guardrail"
-		],
-		"rust-analyzer.linkedProjects": [
-			"./migration/Cargo.toml",
-			"./Cargo.toml"
-		]
-	}
+  "folders": [
+    {
+      "path": "../../workrave/guardrail"
+    }
+  ],
+  "settings": {
+    "cSpell.words": ["guardrail"],
+    "rust-analyzer.linkedProjects": ["./crates/migration/Cargo.toml", "./Cargo.toml"],
+    "rust-analyzer.showUnlinkedFileNotification": false
+  }
 }

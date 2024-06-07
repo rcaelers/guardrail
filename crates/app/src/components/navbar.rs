@@ -2,6 +2,7 @@ use leptos::*;
 
 use crate::{components::logout::LogoutButton, UserResource};
 
+#[allow(non_snake_case)]
 #[component]
 pub fn Navbar(trigger: RwSignal<i64>, user: UserResource) -> impl IntoView {
     let user_area = move || match user.get().and_then(|u| u) {

@@ -6,7 +6,7 @@ pub struct Migration;
 #[async_trait::async_trait]
 impl MigrationTrait for Migration {
     async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
+        let _ = manager
             .create_table(
                 Table::create()
                     .table(Product::Table)
@@ -32,10 +32,27 @@ impl MigrationTrait for Migration {
                     )
                     .to_owned(),
             )
-            .await
+            .await?;
+
+        let db = manager.get_connection();
+        let _ = db
+            .execute_unprepared(
+                "
+                CREATE TRIGGER trigger_product_updated_at
+                BEFORE UPDATE ON product
+                FOR EACH ROW EXECUTE PROCEDURE update_updated_timestamp();
+            ",
+            )
+            .await?;
+
+        Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        let db = manager.get_connection();
+        db.execute_unprepared("DROP TRIGGER IF EXISTS trigger_product_updated_at ON product")
+            .await?;
+
         manager
             .drop_table(Table::drop().table(Product::Table).to_owned())
             .await

@@ -11,6 +11,7 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false, column_type = "Text")]
     pub id: String,
     pub expires_at: Option<DateTime>,
+    #[sea_orm(column_type = "VarBinary(StringLen::None)")]
     pub data: Vec<u8>,
     pub created_at: DateTime,
     pub updated_at: DateTime,

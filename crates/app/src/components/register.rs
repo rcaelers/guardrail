@@ -3,6 +3,7 @@ use web_sys::SubmitEvent;
 
 use crate::{auth::passkeys::register_passkey, components::passkey_logo::PasskeyLogo};
 
+#[allow(non_snake_case)]
 #[component]
 pub fn RegisterPage() -> impl IntoView {
     let input_element: NodeRef<html::Input> = create_node_ref();

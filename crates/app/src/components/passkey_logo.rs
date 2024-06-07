@@ -1,5 +1,6 @@
 use leptos::*;
 
+#[allow(non_snake_case)]
 #[component]
 pub fn PasskeyLogo() -> impl IntoView {
     view! {

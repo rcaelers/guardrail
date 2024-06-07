@@ -3,6 +3,7 @@ use cfg_if::cfg_if;
 pub mod auth;
 pub mod classes;
 pub mod components;
+pub mod data;
 pub mod data_provider;
 pub mod settings;
 
@@ -32,6 +33,7 @@ pub async fn authenticated_user() -> Result<Option<AuthenticatedUser>, ServerFnE
     Ok(use_context::<Option<AuthenticatedUser>>().and_then(|u| u))
 }
 
+#[allow(non_snake_case)]
 #[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
@@ -78,6 +80,7 @@ pub fn App() -> impl IntoView {
     }
 }
 
+#[allow(non_snake_case)]
 #[component]
 fn HomePage() -> impl IntoView {
     view! { <h1>"Welcome to Guardrail!"</h1> }

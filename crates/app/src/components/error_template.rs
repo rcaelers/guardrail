@@ -22,6 +22,7 @@ impl AppError {
 
 // A basic function to display errors served by the error boundaries.
 // Feel free to do more complicated things here than just displaying the error.
+#[allow(non_snake_case)]
 #[component]
 pub fn ErrorTemplate(
     #[prop(optional)] outside_errors: Option<Errors>,

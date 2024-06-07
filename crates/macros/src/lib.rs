@@ -83,6 +83,7 @@ fn expand_derive_dtos(input: DeriveInput) -> syn::Result<TokenStream> {
             }
         }
       }
+
       #[automatically_derived]
       #[derive(Clone, Debug, Deserialize, Serialize)]
       pub struct #update_ident {
