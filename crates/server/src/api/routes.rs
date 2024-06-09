@@ -1,5 +1,9 @@
+use app::settings::settings;
 use axum::routing::{delete, get, post, put};
 use axum::Router;
+use jsonwebtoken::DecodingKey;
+use jwt_authorizer::{Authorizer, IntoLayer, JwtAuthorizer, RegisteredClaims, Validation};
+use tracing::info;
 
 use super::minidump::MinidumpApi;
 use super::symbols::SymbolsApi;
@@ -8,9 +12,19 @@ use crate::app_state::AppState;
 use crate::entity::prelude;
 
 pub async fn routes() -> Router<AppState> {
+    let validation = Validation::new().aud(&["Guardrail"]).leeway(20);
+
+    let auth: Authorizer<RegisteredClaims> =
+        JwtAuthorizer::from_ed_pem(settings().auth.jwk.key.as_str())
+            .validation(validation)
+            .build()
+            .await
+            .unwrap();
+
     routes_api()
         .await
         .route("/minidump/upload", post(MinidumpApi::upload))
+        .layer(auth.into_layer())
 }
 
 #[cfg(test)]

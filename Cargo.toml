@@ -92,8 +92,10 @@ thiserror = "1.0.61"
 time = "0.3.36"
 url = { version = "2.5.0", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "fast-rng", "serde", "std"] }
+jwt-authorizer = "0.14.0"
+jsonwebtoken = "9.3.0"
 
-# jwt-authorizer = "0.14.0"
+#
 # oauth2 = "4.4.2"
 # openidconnect = { version = "3.5.0", features = [
 #     "accept-rfc3339-timestamps",

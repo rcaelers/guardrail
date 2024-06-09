@@ -152,6 +152,7 @@ async fn main() {
         .layer(session_layer)
         .with_state(state);
 
+    //TODO: Make configurable
     let config = RustlsConfig::from_pem_file(
         PathBuf::from("dev").join("cert.pem"),
         PathBuf::from("dev").join("key.pem"),

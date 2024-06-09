@@ -57,6 +57,8 @@ time.workspace = true
 uuid.workspace = true
 url.workspace = true
 webauthn-rs.workspace = true
+jwt-authorizer.workspace = true
+jsonwebtoken.workspace = true
 
 [dev-dependencies]
 axum-test.workspace = true

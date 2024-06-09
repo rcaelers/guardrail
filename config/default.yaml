@@ -14,3 +14,5 @@ auth:
   id: guardrail.home.krandor.org
   origin: https://guardrail.home.krandor.org:4433
   name: Guardrail
+  jwk:
+    key: "dev/ed25519-public.pem"
