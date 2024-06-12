@@ -19,6 +19,12 @@ pub struct Auth {
     pub id: String,
     pub origin: String,
     pub name: String,
+    pub jwk: Jwk,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct Jwk {
+    pub key: String,
 }
 
 #[derive(Debug, Deserialize, Default)]

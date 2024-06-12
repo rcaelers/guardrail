@@ -1,15 +1,11 @@
 use app::settings::settings;
 use axum::routing::{delete, get, post, put};
 use axum::Router;
-use jsonwebtoken::DecodingKey;
 use jwt_authorizer::{Authorizer, IntoLayer, JwtAuthorizer, RegisteredClaims, Validation};
-use tracing::info;
 
-use super::minidump::MinidumpApi;
-use super::symbols::SymbolsApi;
-use crate::api::base::Api;
-use crate::app_state::AppState;
+use super::{minidump::MinidumpApi, symbols::SymbolsApi};
 use crate::entity::prelude;
+use crate::{api::base::Api, app_state::AppState};
 
 pub async fn routes() -> Router<AppState> {
     let validation = Validation::new().aud(&["Guardrail"]).leeway(20);

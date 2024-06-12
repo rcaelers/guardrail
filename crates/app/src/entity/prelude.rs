@@ -5,6 +5,7 @@ pub use super::attachment::Entity as Attachment;
 pub use super::crash::Entity as Crash;
 pub use super::credential::Entity as Credential;
 pub use super::product::Entity as Product;
+pub use super::role::Entity as Role;
 pub use super::session::Entity as Session;
 pub use super::symbols::Entity as Symbols;
 pub use super::user::Entity as User;

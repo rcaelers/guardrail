@@ -10,6 +10,7 @@ mod m20230824_000006_create_symbols_table;
 mod m20230930_000008_create_session_table;
 mod m20231210_000009_create_user_table;
 mod m20231210_000010_create_credential_table;
+mod m20240608_000011_create_role_table;
 
 pub struct Migrator;
 pub use m20230930_000008_create_session_table::Session as SessionColumns;
@@ -28,6 +29,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20230930_000008_create_session_table::Migration),
             Box::new(m20231210_000009_create_user_table::Migration),
             Box::new(m20231210_000010_create_credential_table::Migration),
+            Box::new(m20240608_000011_create_role_table::Migration),
         ]
     }
 }

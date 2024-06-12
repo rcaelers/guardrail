@@ -6,34 +6,31 @@ use serde::{Deserialize, Serialize};
 #[derive(
     Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, macros :: DeriveDtoModel,
 )]
-#[sea_orm(table_name = "user")]
+#[sea_orm(table_name = "role")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
-    #[sea_orm(unique)]
-    pub username: String,
     pub created_at: DateTime,
     pub updated_at: DateTime,
-    pub last_authenticated: Option<DateTime>,
+    pub name: String,
+    pub user_id: Uuid,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::credential::Entity")]
-    Credential,
-    #[sea_orm(has_many = "super::role::Entity")]
-    Role,
+    #[sea_orm(
+        belongs_to = "super::user::Entity",
+        from = "Column::UserId",
+        to = "super::user::Column::Id",
+        on_update = "Cascade",
+        on_delete = "Cascade"
+    )]
+    User,
 }
 
-impl Related<super::credential::Entity> for Entity {
+impl Related<super::user::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Credential.def()
-    }
-}
-
-impl Related<super::role::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Role.def()
+        Relation::User.def()
     }
 }
 

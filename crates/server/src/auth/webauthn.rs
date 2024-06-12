@@ -105,10 +105,9 @@ pub async fn finish_register(
         let user = entity::user::ActiveModel {
             id: Set(registration_state.user_unique_id),
             username: Set(registration_state.username),
-            role: Set("user".to_string()),
             created_at: Set(Utc::now().naive_utc()),
             updated_at: Set(Utc::now().naive_utc()),
-            last_authenticated: Set(Utc::now().naive_utc()),
+            last_authenticated: Set(None),
         };
         user.insert(&state.db).await?;
     }

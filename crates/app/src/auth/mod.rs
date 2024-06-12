@@ -2,7 +2,6 @@ pub mod error;
 pub mod passkeys;
 
 use cfg_if::cfg_if;
-use leptos::{create_rw_signal, RwSignal};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -28,16 +27,6 @@ impl AuthenticatedUser {
             id: user.id,
             username: user.username,
         }
-    }
-}
-#[derive(Debug, Clone)]
-pub struct AuthContext {
-    pub user: RwSignal<Option<String>>,
-}
-impl AuthContext {
-    pub fn new(auth_user: Option<AuthenticatedUser>) -> Self {
-        let user = create_rw_signal(auth_user.clone().map(|u| u.username));
-        AuthContext { user }
     }
 }
 

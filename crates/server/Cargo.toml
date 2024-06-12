@@ -59,6 +59,7 @@ url.workspace = true
 webauthn-rs.workspace = true
 jwt-authorizer.workspace = true
 jsonwebtoken.workspace = true
+trait-variant.workspace = true
 
 [dev-dependencies]
 axum-test.workspace = true

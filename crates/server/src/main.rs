@@ -31,6 +31,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{fmt, EnvFilter, FmtSubscriber};
 use webauthn_rs::prelude::*;
 
+use crate::entity;
 use app::settings::settings;
 use app::*;
 use app_state::AppState;
