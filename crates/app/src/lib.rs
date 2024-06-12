@@ -4,7 +4,7 @@ pub mod auth;
 pub mod classes;
 pub mod components;
 pub mod data;
-pub mod data_provider;
+pub mod data_providers;
 pub mod settings;
 
 cfg_if! { if #[cfg(feature="ssr")] {
@@ -24,6 +24,8 @@ use components::{
     products::ProductsPage,
     profile::ProfilePage,
     register::RegisterPage,
+    users::UsersPage,
+    versions::VersionsPage,
 };
 
 type UserResource = Resource<i64, Option<AuthenticatedUser>>;
@@ -63,18 +65,24 @@ pub fn App() -> impl IntoView {
             outside_errors.insert_with_default_key(AppError::NotFound);
             view! { <ErrorTemplate outside_errors/> }.into_view()
         }>
-            <div class="container min-h-screen max-w-full">
-                <Navbar trigger=user_info_trigger user=user/>
-                <Routes>
-                    <Route path="" view=HomePage/>
-                    <Route
-                        path="/auth/login"
-                        view=move || view! { <LoginPage trigger=user_info_trigger/> }
-                    />
-                    <Route path="/auth/register" view=RegisterPage/>
-                    <Route path="/auth/profile" view=ProfilePage/>
-                    <Route path="/admin/products" view=ProductsPage/>
-                </Routes>
+            <div class="container h-screen max-w-full flex flex-col">
+                <header class="sticky top-0 z-50 p-1">
+                    <Navbar trigger=user_info_trigger user=user/>
+                </header>
+                <main class="flex-1 overflow-hidden p-1 flex flex-col">
+                    <Routes>
+                        <Route path="" view=HomePage/>
+                        <Route
+                            path="/auth/login"
+                            view=move || view! { <LoginPage trigger=user_info_trigger/> }
+                        />
+                        <Route path="/auth/register" view=RegisterPage/>
+                        <Route path="/auth/profile" view=ProfilePage/>
+                        <Route path="/admin/users" view=UsersPage/>
+                        <Route path="/admin/products" view=ProductsPage/>
+                        <Route path="/admin/versions/:product_id" view=VersionsPage/>
+                    </Routes>
+                </main>
             </div>
         </Router>
     }

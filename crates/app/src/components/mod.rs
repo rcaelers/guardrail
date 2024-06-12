@@ -1,5 +1,8 @@
 pub mod confirmation;
+pub mod dataform;
 pub mod error_template;
+pub mod form;
+pub mod header;
 pub mod login;
 pub mod logout;
 pub mod navbar;
@@ -7,3 +10,5 @@ pub mod passkey_logo;
 pub mod products;
 pub mod profile;
 pub mod register;
+pub mod users;
+pub mod versions;

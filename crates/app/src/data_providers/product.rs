@@ -7,6 +7,8 @@ use std::collections::VecDeque;
 use std::ops::Range;
 use uuid::Uuid;
 
+use super::{ExtraRowTrait, ExtraTableDataProvider};
+
 #[derive(TableRow, Debug, Clone)]
 #[table(sortable, classes_provider = ClassesPreset)]
 pub struct ProductRow {
@@ -18,11 +20,30 @@ pub struct ProductRow {
     pub updated_at: NaiveDateTime,
 }
 
+impl ExtraRowTrait for ProductRow {
+    fn get_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn get_name(&self) -> String {
+        self.name.clone()
+    }
+}
 #[derive(Debug, Clone)]
 pub struct ProductTableDataProvider {
     sort: VecDeque<(usize, ColumnSort)>,
     name: RwSignal<String>,
     update: RwSignal<u64>,
+}
+
+impl ExtraTableDataProvider<ProductRow> for ProductTableDataProvider {
+    fn get_filter_signal(&self) -> RwSignal<String> {
+        self.name
+    }
+
+    fn update(&self) {
+        self.update.set(self.update.get() + 1);
+    }
 }
 
 impl ProductTableDataProvider {
@@ -32,14 +53,6 @@ impl ProductTableDataProvider {
             name: RwSignal::new("".to_string()),
             update: RwSignal::new(0),
         }
-    }
-
-    pub fn get_name_signal(&self) -> RwSignal<String> {
-        self.name
-    }
-
-    pub fn update(&self) {
-        self.update.set(self.update.get() + 1);
     }
 }
 

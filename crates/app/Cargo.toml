@@ -48,6 +48,8 @@ http.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 webauthn-rs-proto.workspace = true
+indexmap.workspace = true
+trait-variant.workspace = true
 
 [dev-dependencies]
 serial_test.workspace = true

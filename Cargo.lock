@@ -174,6 +174,7 @@ dependencies = [
  "config",
  "futures",
  "http 1.1.0",
+ "indexmap 2.2.6",
  "leptos",
  "leptos-struct-table",
  "leptos-use",
@@ -195,6 +196,7 @@ dependencies = [
  "tower-sessions",
  "tracing",
  "tracing-subscriber-wasm",
+ "trait-variant",
  "uuid",
  "wasm-bindgen-futures",
  "web-sys",
@@ -5310,6 +5312,7 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
+ "trait-variant",
  "url",
  "uuid",
  "webauthn-rs",
@@ -6413,6 +6416,17 @@ dependencies = [
  "gloo",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "trait-variant"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70977707304198400eb4835a78f6a9f928bf41bba420deb8fdb175cd965d77a7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.66",
 ]
 
 [[package]]

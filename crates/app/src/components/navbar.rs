@@ -42,7 +42,7 @@ pub fn Navbar(trigger: RwSignal<i64>, user: UserResource) -> impl IntoView {
 
         </script>
 
-        <div class="navbar bg-base-200 rounded-lg mt-2 relative z-10">
+        <div class="navbar bg-base-200 rounded-lg relative z-10 p-0">
             <div class="navbar-start">
                 <div class="dropdown">
                     <div tabindex="0" role="button" class="btn btn-ghost lg:hidden">
@@ -63,7 +63,7 @@ pub fn Navbar(trigger: RwSignal<i64>, user: UserResource) -> impl IntoView {
                     </div>
                     <ul
                         tabindex="0"
-                        class="menu menu-sm dropdown-content mt-3 z-[1] p-2 shadow bg-base-100 rounded-box w-52"
+                        class="menu menu-sm dropdown-content mt-3 z-[1] p-1 shadow bg-base-100 rounded-box w-52"
                     >
                         <li>
                             <a href="/crashes">Crashes</a>
@@ -89,7 +89,7 @@ pub fn Navbar(trigger: RwSignal<i64>, user: UserResource) -> impl IntoView {
                         </li>
                     </ul>
                 </div>
-                <a class="btn btn-ghost text-xl">Guardrail</a>
+                <a class="btn btn-ghost text-l">Guardrail</a>
             </div>
             <div class="navbar-center hidden lg:flex">
                 <ul class="menu menu-horizontal px-1">
