@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+use std::fmt::Debug;
 use std::marker::PhantomData;
 
 use indexmap::IndexMap;
@@ -6,6 +7,7 @@ use leptos::html::Div;
 use leptos::*;
 use leptos_router::*;
 use leptos_struct_table::*;
+use tracing::info;
 use uuid::Uuid;
 
 use crate::components::confirmation::ConfirmationModal;
@@ -27,7 +29,7 @@ pub trait LocalDataFormTrait {
         + ExtraTableDataProvider<Self::RowType>
         + Clone
         + 'static;
-    type DataType: Default + Clone + 'static;
+    type DataType: Default + Clone + Debug + 'static;
 
     fn new_provider(parent_id: Option<Uuid>) -> Self::TableDataProvider;
     fn get_data_type_name() -> String;
@@ -36,7 +38,11 @@ pub trait LocalDataFormTrait {
 
     fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, parent_id: Option<uuid::Uuid>);
     fn update_fields(fields: RwSignal<IndexMap<String, Field>>, data: Self::DataType);
-    fn update_data(data: &mut Self::DataType, fields: RwSignal<IndexMap<String, Field>>);
+    fn update_data(
+        data: &mut Self::DataType,
+        fields: RwSignal<IndexMap<String, Field>>,
+        parent_id: Option<uuid::Uuid>,
+    );
 
     async fn list(
         parent_id: Option<Uuid>,
@@ -177,15 +183,17 @@ pub fn DataFormPage<T: DataFormTrait>(#[prop(optional)] _ty: PhantomData<T>) -> 
         match state.get() {
             State::Add => {
                 let mut data = T::DataType::default();
-                T::update_data(&mut data, fields);
+                T::update_data(&mut data, fields, product_id);
+                info!("Adding data: {:?}", product_id);
                 spawn_local(async move {
+                    info!("Adding data: {:?}", data);
                     T::add(data).await.unwrap();
                     state.set(State::Idle);
                 });
             }
             State::Edit => {
                 let mut data = current_row.get().unwrap();
-                T::update_data(&mut data, fields);
+                T::update_data(&mut data, fields, product_id);
                 spawn_local(async move {
                     T::update(data).await.unwrap();
                     state.set(State::Idle);

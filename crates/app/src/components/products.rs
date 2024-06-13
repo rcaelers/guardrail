@@ -7,11 +7,11 @@ use uuid::Uuid;
 
 use crate::components::dataform::DataFormPage;
 use crate::components::form::Field;
-use crate::data::{
+use crate::data::QueryParams;
+use crate::data_providers::product::{
     product_add, product_count, product_get, product_list, product_list_names, product_remove,
-    product_update, Product, QueryParams,
+    product_update, Product, ProductRow, ProductTableDataProvider,
 };
-use crate::data_providers::product::{ProductRow, ProductTableDataProvider};
 
 use super::dataform::{DataFormTrait, ParamsTrait};
 
@@ -50,8 +50,7 @@ impl DataFormTrait for ProductTable {
         format!("/admin/versions/{}", parent_id)
     }
 
-    fn get_related_name() -> Option<String>
-    {
+    fn get_related_name() -> Option<String> {
         Some("Versions".to_string())
     }
 
@@ -84,8 +83,15 @@ impl DataFormTrait for ProductTable {
         });
     }
 
-    fn update_data(product: &mut Product, fields: RwSignal<IndexMap<String, Field>>) {
+    fn update_data(
+        product: &mut Product,
+        fields: RwSignal<IndexMap<String, Field>>,
+        _parent_id: Option<Uuid>,
+    ) {
         product.name = fields.get().get("Name").unwrap().value.get();
+        if product.id.is_nil() {
+            product.id = Uuid::new_v4();
+        }
     }
 
     async fn get(id: Uuid) -> Result<Product, ServerFnError<String>> {

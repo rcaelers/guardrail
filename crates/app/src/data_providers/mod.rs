@@ -1,6 +1,7 @@
 pub mod product;
 pub mod user;
 pub mod version;
+pub mod symbols;
 
 use leptos::*;
 //use leptos_struct_table::*;

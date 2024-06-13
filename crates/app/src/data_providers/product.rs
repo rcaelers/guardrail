@@ -1,11 +1,21 @@
 use crate::classes::ClassesPreset;
-use crate::data::{product_count, product_list, QueryParams};
+use crate::data::QueryParams;
+#[cfg(feature = "ssr")]
+use crate::data::{
+    add, count, delete_by_id, get_all, get_all_names, get_by_id, update, ColumnInfo,
+};
+#[cfg(feature = "ssr")]
+use crate::entity;
 use ::chrono::NaiveDateTime;
 use leptos::*;
 use leptos_struct_table::*;
-use std::collections::VecDeque;
+use serde::{Deserialize, Serialize};
+use std::collections::{HashSet, VecDeque};
 use std::ops::Range;
 use uuid::Uuid;
+
+#[cfg(feature = "ssr")]
+use sea_orm::*;
 
 use super::{ExtraRowTrait, ExtraTableDataProvider};
 
@@ -20,6 +30,55 @@ pub struct ProductRow {
     pub updated_at: NaiveDateTime,
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Product {
+    pub id: Uuid,
+    pub name: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[cfg(feature = "ssr")]
+impl ColumnInfo for entity::product::Column {
+    fn name_column() -> Self {
+        entity::product::Column::Name
+    }
+
+    fn from_index(index: usize) -> Option<Self> {
+        match index {
+            0 => Some(entity::product::Column::Id),
+            1 => Some(entity::product::Column::Name),
+            2 => Some(entity::product::Column::CreatedAt),
+            3 => Some(entity::product::Column::UpdatedAt),
+            _ => None,
+        }
+    }
+}
+
+#[cfg(feature = "ssr")]
+impl From<entity::product::Model> for Product {
+    fn from(model: entity::product::Model) -> Self {
+        Self {
+            id: model.id,
+            name: model.name,
+            created_at: model.created_at,
+            updated_at: model.updated_at,
+        }
+    }
+}
+
+#[cfg(feature = "ssr")]
+impl From<Product> for entity::product::ActiveModel {
+    fn from(product: Product) -> Self {
+        Self {
+            id: Set(product.id),
+            name: Set(product.name),
+            created_at: sea_orm::NotSet,
+            updated_at: sea_orm::NotSet,
+        }
+    }
+}
+
 impl ExtraRowTrait for ProductRow {
     fn get_id(&self) -> Uuid {
         self.id
@@ -29,6 +88,7 @@ impl ExtraRowTrait for ProductRow {
         self.name.clone()
     }
 }
+
 #[derive(Debug, Clone)]
 pub struct ProductTableDataProvider {
     sort: VecDeque<(usize, ColumnSort)>,
@@ -99,4 +159,39 @@ impl TableDataProvider<ProductRow> for ProductTableDataProvider {
         self.name.track();
         self.update.track();
     }
+}
+
+#[server]
+pub async fn product_get(id: Uuid) -> Result<Product, ServerFnError<String>> {
+    get_by_id::<Product, entity::product::Entity>(id).await
+}
+
+#[server]
+pub async fn product_list(query: QueryParams) -> Result<Vec<Product>, ServerFnError<String>> {
+    get_all::<Product, entity::product::Entity>(query).await
+}
+
+#[server]
+pub async fn product_list_names() -> Result<HashSet<String>, ServerFnError<String>> {
+    get_all_names::<entity::product::Entity>().await
+}
+
+#[server]
+pub async fn product_add(product: Product) -> Result<(), ServerFnError<String>> {
+    add::<Product, entity::product::Entity>(product).await
+}
+
+#[server]
+pub async fn product_update(product: Product) -> Result<(), ServerFnError<String>> {
+    update::<Product, entity::product::Entity>(product).await
+}
+
+#[server]
+pub async fn product_remove(id: Uuid) -> Result<(), ServerFnError<String>> {
+    delete_by_id::<entity::product::Entity>(id).await
+}
+
+#[server]
+pub async fn product_count() -> Result<usize, ServerFnError<String>> {
+    count::<entity::product::Entity>().await
 }

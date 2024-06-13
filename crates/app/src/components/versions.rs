@@ -3,15 +3,16 @@ use std::collections::HashSet;
 use indexmap::IndexMap;
 use leptos::*;
 use leptos_router::*;
+use tracing::error;
 use uuid::Uuid;
 
 use crate::components::dataform::DataFormPage;
 use crate::components::form::Field;
-use crate::data::{
+use crate::data::QueryParams;
+use crate::data_providers::version::{
     version_add, version_count, version_get, version_list, version_list_names, version_remove,
-    version_update, QueryParams, Version,
+    version_update, Version, VersionRow, VersionTableDataProvider,
 };
-use crate::data_providers::version::{VersionRow, VersionTableDataProvider};
 
 use super::dataform::{DataFormTrait, ParamsTrait};
 
@@ -97,10 +98,23 @@ impl DataFormTrait for VersionTable {
         });
     }
 
-    fn update_data(version: &mut Version, fields: RwSignal<IndexMap<String, Field>>) {
+    fn update_data(
+        version: &mut Version,
+        fields: RwSignal<IndexMap<String, Field>>,
+        product_id: Option<uuid::Uuid>,
+    ) {
         version.name = fields.get().get("Name").unwrap().value.get();
         version.tag = fields.get().get("Tag").unwrap().value.get();
         version.hash = fields.get().get("Hash").unwrap().value.get();
+        match product_id {
+            None => error!("Product ID is missing"),
+            Some(product_id) => {
+                version.product_id = product_id;
+            }
+        }
+        if version.id.is_nil() {
+            version.id = Uuid::new_v4();
+        }
     }
 
     async fn get(id: Uuid) -> Result<Version, ServerFnError<String>> {

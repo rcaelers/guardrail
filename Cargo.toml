@@ -90,7 +90,7 @@ mime = "0.3.17"
 rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
 thiserror = "1.0.61"
 time = "0.3.36"
-url = { version = "2.5.0", features = ["serde"] }
+url = { version = "2.5.1", features = ["serde"] }
 uuid = { version = "1", features = ["v4", "fast-rng", "serde", "std"] }
 jwt-authorizer = "0.14.0"
 jsonwebtoken = "9.3.0"
