@@ -2,7 +2,7 @@ use crate::classes::ClassesPreset;
 use crate::data::QueryParams;
 #[cfg(feature = "ssr")]
 use crate::data::{
-    add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
+    add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
 };
 #[cfg(feature = "ssr")]
 use crate::entity;
@@ -10,6 +10,8 @@ use ::chrono::NaiveDateTime;
 use leptos::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "ssr")]
+use std::collections::HashMap;
 use std::collections::{HashSet, VecDeque};
 use std::ops::Range;
 use uuid::Uuid;
@@ -56,7 +58,7 @@ impl EntityInfo for entity::product::Entity {
         entity::product::Column::Name
     }
 
-    fn from_index(index: usize) -> Option<Self::Column> {
+    fn index_to_column(index: usize) -> Option<Self::Column> {
         match index {
             0 => Some(entity::product::Column::Id),
             1 => Some(entity::product::Column::Name),
@@ -180,12 +182,12 @@ pub async fn product_get(id: Uuid) -> Result<Product, ServerFnError<String>> {
 
 #[server]
 pub async fn product_list(query: QueryParams) -> Result<Vec<Product>, ServerFnError<String>> {
-    get_all::<Product, entity::product::Entity>(query, vec![]).await
+    get_all2::<Product, entity::product::Entity>(query, HashMap::new()).await
 }
 
 #[server]
 pub async fn product_list_names() -> Result<HashSet<String>, ServerFnError<String>> {
-    get_all_names::<entity::product::Entity>(vec![]).await
+    get_all_names2::<entity::product::Entity>(HashMap::new()).await
 }
 
 #[server]
@@ -205,5 +207,5 @@ pub async fn product_remove(id: Uuid) -> Result<(), ServerFnError<String>> {
 
 #[server]
 pub async fn product_count() -> Result<usize, ServerFnError<String>> {
-    count::<entity::product::Entity>(vec![]).await
+    count2::<entity::product::Entity>(HashMap::new()).await
 }

@@ -2,7 +2,7 @@ use crate::classes::ClassesPreset;
 use crate::data::QueryParams;
 #[cfg(feature = "ssr")]
 use crate::data::{
-    add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
+    add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
 };
 #[cfg(feature = "ssr")]
 use crate::entity;
@@ -40,7 +40,7 @@ pub struct User {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub last_login_at: Option<NaiveDateTime>,
-    pub roles: Vec<String>,
+    // pub roles: Vec<String>,
 }
 
 #[cfg(feature = "ssr")]
@@ -51,7 +51,7 @@ pub struct User {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub last_login_at: Option<NaiveDateTime>,
-    pub roles: Vec<String>,
+    //pub roles: Vec<String>,
 }
 #[cfg(feature = "ssr")]
 impl EntityInfo for entity::user::Entity {
@@ -61,7 +61,7 @@ impl EntityInfo for entity::user::Entity {
         entity::user::Column::Username
     }
 
-    fn from_index(index: usize) -> Option<Self::Column> {
+    fn index_to_column(index: usize) -> Option<Self::Column> {
         match index {
             0 => Some(entity::user::Column::Id),
             1 => Some(entity::user::Column::Username),
@@ -81,7 +81,7 @@ impl From<entity::user::Model> for User {
             created_at: model.created_at,
             updated_at: model.updated_at,
             last_login_at: model.last_authenticated,
-            roles: vec![],
+            // roles: vec![],
         }
     }
 }
@@ -185,7 +185,7 @@ pub async fn user_get(id: Uuid) -> Result<User, ServerFnError<String>> {
 
 #[server]
 pub async fn user_list(query: QueryParams) -> Result<Vec<User>, ServerFnError<String>> {
-    get_all::<User, entity::user::Entity>(query, vec![]).await
+    get_all2::<User, entity::user::Entity>(query, HashMap::new()).await
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -225,7 +225,7 @@ async fn list_users_with_roles() -> Result<Vec<UserWithRoles>, ServerFnError<Str
 
 #[server]
 pub async fn user_list_names() -> Result<HashSet<String>, ServerFnError<String>> {
-    get_all_names::<entity::user::Entity>(vec![]).await
+    get_all_names2::<entity::user::Entity>(HashMap::new()).await
 }
 
 #[server]
@@ -245,5 +245,5 @@ pub async fn user_remove(id: Uuid) -> Result<(), ServerFnError<String>> {
 
 #[server]
 pub async fn user_count() -> Result<usize, ServerFnError<String>> {
-    count::<entity::user::Entity>(vec![]).await
+    count2::<entity::user::Entity>(HashMap::new()).await
 }

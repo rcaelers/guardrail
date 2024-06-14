@@ -2,7 +2,7 @@ use crate::classes::ClassesPreset;
 use crate::data::QueryParams;
 #[cfg(feature = "ssr")]
 use crate::data::{
-    add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
+    add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
 };
 #[cfg(feature = "ssr")]
 use crate::entity;
@@ -69,7 +69,7 @@ impl EntityInfo for entity::version::Entity {
         entity::version::Column::Name
     }
 
-    fn from_index(index: usize) -> Option<Self::Column> {
+    fn index_to_column(index: usize) -> Option<Self::Column> {
         match index {
             0 => Some(entity::version::Column::Id),
             1 => Some(entity::version::Column::Name),
@@ -78,7 +78,6 @@ impl EntityInfo for entity::version::Entity {
             4 => Some(entity::version::Column::ProductId),
             5 => Some(entity::version::Column::CreatedAt),
             6 => Some(entity::version::Column::UpdatedAt),
-
             _ => None,
         }
     }
@@ -87,6 +86,12 @@ impl EntityInfo for entity::version::Entity {
         query
             .join(JoinType::LeftJoin, entity::version::Relation::Product.def())
             .column_as(entity::product::Column::Name, "product")
+    }
+    fn id_to_column(id_name: String) -> Option<Self::Column> {
+        match id_name.as_str() {
+            "product_id" => Some(entity::version::Column::ProductId),
+            _ => None,
+        }
     }
 }
 
@@ -165,10 +170,8 @@ impl TableDataProvider<VersionRow> for VersionTableDataProvider {
         &self,
         range: Range<usize>,
     ) -> Result<(Vec<VersionRow>, Range<usize>), String> {
-        let product_id = self.parents.get("product_id").cloned();
-
         let versions = version_list(
-            product_id,
+            self.parents.clone(),
             QueryParams {
                 filter: self.name.get_untracked().trim().to_string(),
                 sorting: self.sort.clone(),
@@ -195,9 +198,7 @@ impl TableDataProvider<VersionRow> for VersionTableDataProvider {
     }
 
     async fn row_count(&self) -> Option<usize> {
-        let product_id = self.parents.get("product_id").cloned();
-
-        version_count(product_id).await.ok()
+        version_count(self.parents.clone()).await.ok()
     }
 
     fn set_sorting(&mut self, sorting: &VecDeque<(usize, ColumnSort)>) {
@@ -217,25 +218,17 @@ pub async fn version_get(id: Uuid) -> Result<Version, ServerFnError<String>> {
 
 #[server]
 pub async fn version_list(
-    product_id: Option<Uuid>,
+    parents: HashMap<String, Uuid>,
     query_params: QueryParams,
 ) -> Result<Vec<Version>, ServerFnError<String>> {
-    let mut parents = vec![];
-    if let Some(product_id) = product_id {
-        parents.push((entity::version::Column::ProductId, product_id));
-    }
-    get_all::<Version, entity::version::Entity>(query_params, parents).await
+    get_all2::<Version, entity::version::Entity>(query_params, parents).await
 }
 
 #[server]
 pub async fn version_list_names(
-    product_id: Option<Uuid>,
+    parents: HashMap<String, Uuid>,
 ) -> Result<HashSet<String>, ServerFnError<String>> {
-    let mut parents = vec![];
-    if let Some(product_id) = product_id {
-        parents.push((entity::version::Column::ProductId, product_id));
-    }
-    get_all_names::<entity::version::Entity>(parents).await
+    get_all_names2::<entity::version::Entity>(parents).await
 }
 
 #[server]
@@ -254,10 +247,6 @@ pub async fn version_remove(id: Uuid) -> Result<(), ServerFnError<String>> {
 }
 
 #[server]
-pub async fn version_count(product_id: Option<Uuid>) -> Result<usize, ServerFnError<String>> {
-    let mut parents = vec![];
-    if let Some(product_id) = product_id {
-        parents.push((entity::version::Column::ProductId, product_id));
-    }
-    count::<entity::version::Entity>(parents).await
+pub async fn version_count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>> {
+    count2::<entity::version::Entity>(parents).await
 }

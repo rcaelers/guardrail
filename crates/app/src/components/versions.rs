@@ -44,10 +44,11 @@ impl DataFormTrait for VersionTable {
     }
 
     fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, parents: HashMap<String, Uuid>) {
+        let parents = parents.clone();
         create_effect(move |_| {
-            let product_id = parents.get("product_id").cloned();
+            let parents = parents.clone();
             spawn_local(async move {
-                match version_list_names(product_id).await {
+                match version_list_names(parents).await {
                     Ok(fetched_names) => {
                         fields.update(|field| {
                             field
@@ -115,14 +116,12 @@ impl DataFormTrait for VersionTable {
         parents: HashMap<String, Uuid>,
         query_params: QueryParams,
     ) -> Result<Vec<Version>, ServerFnError<String>> {
-        let product_id = parents.get("product_id").cloned();
-        version_list(product_id, query_params).await
+        version_list(parents, query_params).await
     }
     async fn list_names(
         parents: HashMap<String, Uuid>,
     ) -> Result<HashSet<String>, ServerFnError<String>> {
-        let product_id = parents.get("product_id").cloned();
-        version_list_names(product_id).await
+        version_list_names(parents).await
     }
     async fn add(data: Version) -> Result<(), ServerFnError<String>> {
         version_add(data).await
@@ -134,8 +133,7 @@ impl DataFormTrait for VersionTable {
         version_remove(id).await
     }
     async fn count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>> {
-        let product_id = parents.get("product_id").cloned();
-        version_count(product_id).await
+        version_count(parents).await
     }
 }
 

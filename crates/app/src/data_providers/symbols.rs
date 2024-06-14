@@ -3,7 +3,7 @@ use crate::classes::ClassesPreset;
 use crate::data::EntityInfo;
 use crate::data::QueryParams;
 #[cfg(feature = "ssr")]
-use crate::data::{add, count, delete_by_id, get_all, get_all_names, get_by_id, update};
+use crate::data::{add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update};
 #[cfg(feature = "ssr")]
 use crate::entity;
 use ::chrono::NaiveDateTime;
@@ -83,7 +83,7 @@ impl EntityInfo for entity::symbols::Entity {
         entity::symbols::Column::BuildId
     }
 
-    fn from_index(index: usize) -> Option<Self::Column> {
+    fn index_to_column(index: usize) -> Option<Self::Column> {
         match index {
             0 => Some(entity::symbols::Column::Id),
             1 => Some(entity::symbols::Column::Os),
@@ -103,6 +103,14 @@ impl EntityInfo for entity::symbols::Entity {
             .join(JoinType::LeftJoin, entity::symbols::Relation::Version.def())
             .column_as(entity::product::Column::Name, "product")
             .column_as(entity::version::Column::Name, "version")
+    }
+
+    fn id_to_column(id_name: String) -> Option<Self::Column> {
+        match id_name.as_str() {
+            "product_id" => Some(entity::symbols::Column::ProductId),
+            "version_id" => Some(entity::symbols::Column::VersionId),
+            _ => None,
+        }
     }
 }
 impl From<Symbols> for SymbolsRow {
@@ -206,11 +214,8 @@ impl TableDataProvider<SymbolsRow> for SymbolsTableDataProvider {
         &self,
         range: Range<usize>,
     ) -> Result<(Vec<SymbolsRow>, Range<usize>), String> {
-        let product_id = self.parents.get("product_id").cloned();
-        let version_id = self.parents.get("version_id").cloned();
         let symbols = symbols_list(
-            product_id,
-            version_id,
+            self.parents.clone(),
             QueryParams {
                 filter: self.filter.get_untracked().trim().to_string(),
                 sorting: self.sort.clone(),
@@ -228,9 +233,7 @@ impl TableDataProvider<SymbolsRow> for SymbolsTableDataProvider {
     }
 
     async fn row_count(&self) -> Option<usize> {
-        let product_id = self.parents.get("product_id").cloned();
-        let version_id = self.parents.get("version_id").cloned();
-        symbols_count(product_id, version_id).await.ok()
+        symbols_count(self.parents.clone()).await.ok()
     }
 
     fn set_sorting(&mut self, sorting: &VecDeque<(usize, ColumnSort)>) {
@@ -250,33 +253,17 @@ pub async fn symbols_get(id: Uuid) -> Result<Symbols, ServerFnError<String>> {
 
 #[server]
 pub async fn symbols_list(
-    product_id: Option<Uuid>,
-    version_id: Option<Uuid>,
+    parents: HashMap<String, Uuid>,
     query_params: QueryParams,
 ) -> Result<Vec<Symbols>, ServerFnError<String>> {
-    let mut parents = vec![];
-    if let Some(product_id) = product_id {
-        parents.push((entity::symbols::Column::ProductId, product_id));
-    }
-    if let Some(version_id) = version_id {
-        parents.push((entity::symbols::Column::VersionId, version_id));
-    }
-    get_all::<Symbols, entity::symbols::Entity>(query_params, parents).await
+    get_all2::<Symbols, entity::symbols::Entity>(query_params, parents).await
 }
 
 #[server]
 pub async fn symbols_list_names(
-    product_id: Option<Uuid>,
-    version_id: Option<Uuid>,
+    parents: HashMap<String, Uuid>,
 ) -> Result<HashSet<String>, ServerFnError<String>> {
-    let mut parents = vec![];
-    if let Some(product_id) = product_id {
-        parents.push((entity::symbols::Column::ProductId, product_id));
-    }
-    if let Some(version_id) = version_id {
-        parents.push((entity::symbols::Column::VersionId, version_id));
-    }
-    get_all_names::<entity::symbols::Entity>(parents).await
+    get_all_names2::<entity::symbols::Entity>(parents).await
 }
 
 #[server]
@@ -295,16 +282,6 @@ pub async fn symbols_remove(id: Uuid) -> Result<(), ServerFnError<String>> {
 }
 
 #[server]
-pub async fn symbols_count(
-    product_id: Option<Uuid>,
-    version_id: Option<Uuid>,
-) -> Result<usize, ServerFnError<String>> {
-    let mut parents = vec![];
-    if let Some(product_id) = product_id {
-        parents.push((entity::symbols::Column::ProductId, product_id));
-    }
-    if let Some(version_id) = version_id {
-        parents.push((entity::symbols::Column::VersionId, version_id));
-    }
-    count::<entity::symbols::Entity>(parents).await
+pub async fn symbols_count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>> {
+    count2::<entity::symbols::Entity>(parents).await
 }
