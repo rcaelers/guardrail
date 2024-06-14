@@ -2,7 +2,7 @@ use crate::classes::ClassesPreset;
 use crate::data::QueryParams;
 #[cfg(feature = "ssr")]
 use crate::data::{
-    add, count, delete_by_id, get_all, get_all_names, get_by_id, update, ColumnInfo,
+    add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
 };
 #[cfg(feature = "ssr")]
 use crate::entity;
@@ -32,6 +32,7 @@ pub struct UserRow {
     pub updated_at: NaiveDateTime,
 }
 
+#[cfg(not(feature = "ssr"))]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct User {
     pub id: Uuid,
@@ -43,12 +44,24 @@ pub struct User {
 }
 
 #[cfg(feature = "ssr")]
-impl ColumnInfo for entity::user::Column {
-    fn filter_column() -> Self {
+#[derive(Debug, Clone, Default, Serialize, Deserialize, FromQueryResult)]
+pub struct User {
+    pub id: Uuid,
+    pub username: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub last_login_at: Option<NaiveDateTime>,
+    pub roles: Vec<String>,
+}
+#[cfg(feature = "ssr")]
+impl EntityInfo for entity::user::Entity {
+    type View = User;
+
+    fn filter_column() -> Self::Column {
         entity::user::Column::Username
     }
 
-    fn from_index(index: usize) -> Option<Self> {
+    fn from_index(index: usize) -> Option<Self::Column> {
         match index {
             0 => Some(entity::user::Column::Id),
             1 => Some(entity::user::Column::Username),

@@ -1,7 +1,9 @@
 use crate::classes::ClassesPreset;
+#[cfg(feature = "ssr")]
+use crate::data::EntityInfo;
 use crate::data::QueryParams;
 #[cfg(feature = "ssr")]
-use crate::data::{add, count, delete_by_id, get_all_names, get_by_id, update, ColumnInfo};
+use crate::data::{add, count, delete_by_id, get_all, get_all_names, get_by_id, update};
 #[cfg(feature = "ssr")]
 use crate::entity;
 use ::chrono::NaiveDateTime;
@@ -74,12 +76,14 @@ pub struct Symbols {
 }
 
 #[cfg(feature = "ssr")]
-impl ColumnInfo for entity::symbols::Column {
-    fn filter_column() -> Self {
+impl EntityInfo for entity::symbols::Entity {
+    type View = Symbols;
+
+    fn filter_column() -> Self::Column {
         entity::symbols::Column::BuildId
     }
 
-    fn from_index(index: usize) -> Option<Self> {
+    fn from_index(index: usize) -> Option<Self::Column> {
         match index {
             0 => Some(entity::symbols::Column::Id),
             1 => Some(entity::symbols::Column::Os),
@@ -92,8 +96,15 @@ impl ColumnInfo for entity::symbols::Column {
             _ => None,
         }
     }
-}
 
+    fn extend_query(query: Select<Self>) -> Select<Self> {
+        query
+            .join(JoinType::LeftJoin, entity::symbols::Relation::Product.def())
+            .join(JoinType::LeftJoin, entity::symbols::Relation::Version.def())
+            .column_as(entity::product::Column::Name, "product")
+            .column_as(entity::version::Column::Name, "version")
+    }
+}
 impl From<Symbols> for SymbolsRow {
     fn from(symbols: Symbols) -> Self {
         Self {
@@ -243,66 +254,14 @@ pub async fn symbols_list(
     version_id: Option<Uuid>,
     query_params: QueryParams,
 ) -> Result<Vec<Symbols>, ServerFnError<String>> {
-    let QueryParams {
-        sorting,
-        range,
-        filter,
-    } = query_params;
-
-    let db = use_context::<DatabaseConnection>().ok_or(ServerFnError::WrappedServerError(
-        "No database connection".to_string(),
-    ))?;
-
-    let mut query = <entity::symbols::Entity as EntityTrait>::find()
-        .join(JoinType::LeftJoin, entity::symbols::Relation::Product.def())
-        .join(JoinType::LeftJoin, entity::symbols::Relation::Version.def())
-        .column_as(entity::product::Column::Name, "product")
-        .column_as(entity::version::Column::Name, "version");
-
-    if !filter.is_empty() {
-        query = query.filter(
-            <entity::symbols::Entity as EntityTrait>::Column::filter_column().contains(filter),
-        );
-    }
-
+    let mut parents = vec![];
     if let Some(product_id) = product_id {
-        query =
-            query.filter(Condition::all().add(entity::symbols::Column::ProductId.eq(product_id)))
+        parents.push((entity::symbols::Column::ProductId, product_id));
     }
     if let Some(version_id) = version_id {
-        query =
-            query.filter(Condition::all().add(entity::symbols::Column::VersionId.eq(version_id)))
+        parents.push((entity::symbols::Column::VersionId, version_id));
     }
-
-    for (col, col_sort) in sorting {
-        query = match col_sort {
-            ColumnSort::Ascending => {
-                match <entity::symbols::Entity as EntityTrait>::Column::from_index(col) {
-                    Some(column) => query.order_by_asc(column),
-                    None => query,
-                }
-            }
-            ColumnSort::Descending => {
-                match <entity::symbols::Entity as EntityTrait>::Column::from_index(col) {
-                    Some(column) => query.order_by_desc(column),
-                    None => query,
-                }
-            }
-            ColumnSort::None => query,
-        };
-    }
-
-    let items = query
-        .limit(Some(range.len() as u64))
-        .offset(range.start as u64)
-        .into_model::<Symbols>()
-        .all(&db)
-        .await
-        .map_err(|e| ServerFnError::WrappedServerError(format!("{e:?}")))?
-        .into_iter()
-        .collect();
-
-    Ok(items)
+    get_all::<Symbols, entity::symbols::Entity>(query_params, parents).await
 }
 
 #[server]

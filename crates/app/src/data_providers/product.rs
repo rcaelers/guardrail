@@ -2,7 +2,7 @@ use crate::classes::ClassesPreset;
 use crate::data::QueryParams;
 #[cfg(feature = "ssr")]
 use crate::data::{
-    add, count, delete_by_id, get_all, get_all_names, get_by_id, update, ColumnInfo,
+    add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
 };
 #[cfg(feature = "ssr")]
 use crate::entity;
@@ -30,6 +30,7 @@ pub struct ProductRow {
     pub updated_at: NaiveDateTime,
 }
 
+#[cfg(not(feature = "ssr"))]
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Product {
     pub id: Uuid,
@@ -39,12 +40,23 @@ pub struct Product {
 }
 
 #[cfg(feature = "ssr")]
-impl ColumnInfo for entity::product::Column {
-    fn filter_column() -> Self {
+#[derive(Debug, Clone, Default, Serialize, Deserialize, FromQueryResult)]
+pub struct Product {
+    pub id: Uuid,
+    pub name: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[cfg(feature = "ssr")]
+impl EntityInfo for entity::product::Entity {
+    type View = Product;
+
+    fn filter_column() -> Self::Column {
         entity::product::Column::Name
     }
 
-    fn from_index(index: usize) -> Option<Self> {
+    fn from_index(index: usize) -> Option<Self::Column> {
         match index {
             0 => Some(entity::product::Column::Id),
             1 => Some(entity::product::Column::Name),

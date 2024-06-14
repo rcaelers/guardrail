@@ -1,7 +1,9 @@
 use crate::classes::ClassesPreset;
 use crate::data::QueryParams;
 #[cfg(feature = "ssr")]
-use crate::data::{add, count, delete_by_id, get_all_names, get_by_id, update, ColumnInfo};
+use crate::data::{
+    add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
+};
 #[cfg(feature = "ssr")]
 use crate::entity;
 use ::chrono::NaiveDateTime;
@@ -60,12 +62,14 @@ pub struct Version {
 }
 
 #[cfg(feature = "ssr")]
-impl ColumnInfo for entity::version::Column {
-    fn filter_column() -> Self {
+impl EntityInfo for entity::version::Entity {
+    type View = Version;
+
+    fn filter_column() -> Self::Column {
         entity::version::Column::Name
     }
 
-    fn from_index(index: usize) -> Option<Self> {
+    fn from_index(index: usize) -> Option<Self::Column> {
         match index {
             0 => Some(entity::version::Column::Id),
             1 => Some(entity::version::Column::Name),
@@ -77,6 +81,12 @@ impl ColumnInfo for entity::version::Column {
 
             _ => None,
         }
+    }
+
+    fn extend_query(query: Select<Self>) -> Select<Self> {
+        query
+            .join(JoinType::LeftJoin, entity::version::Relation::Product.def())
+            .column_as(entity::product::Column::Name, "product")
     }
 }
 
@@ -210,55 +220,11 @@ pub async fn version_list(
     product_id: Option<Uuid>,
     query_params: QueryParams,
 ) -> Result<Vec<Version>, ServerFnError<String>> {
-    let QueryParams {
-        sorting,
-        range,
-        filter,
-    } = query_params;
-
-    let db = use_context::<DatabaseConnection>().ok_or(ServerFnError::WrappedServerError(
-        "No database connection".to_string(),
-    ))?;
-
-    let mut query = <entity::version::Entity as EntityTrait>::find()
-        .join(JoinType::LeftJoin, entity::version::Relation::Product.def())
-        .column_as(entity::product::Column::Name, "product")
-        .filter(<entity::version::Entity as EntityTrait>::Column::filter_column().contains(filter));
-
+    let mut parents = vec![];
     if let Some(product_id) = product_id {
-        query =
-            query.filter(Condition::all().add(entity::version::Column::ProductId.eq(product_id)))
+        parents.push((entity::version::Column::ProductId, product_id));
     }
-
-    for (col, col_sort) in sorting {
-        query = match col_sort {
-            ColumnSort::Ascending => {
-                match <entity::version::Entity as EntityTrait>::Column::from_index(col) {
-                    Some(column) => query.order_by_asc(column),
-                    None => query,
-                }
-            }
-            ColumnSort::Descending => {
-                match <entity::version::Entity as EntityTrait>::Column::from_index(col) {
-                    Some(column) => query.order_by_desc(column),
-                    None => query,
-                }
-            }
-            ColumnSort::None => query,
-        };
-    }
-
-    let items = query
-        .limit(Some(range.len() as u64))
-        .offset(range.start as u64)
-        .into_model::<Version>()
-        .all(&db)
-        .await
-        .map_err(|e| ServerFnError::WrappedServerError(format!("{e:?}")))?
-        .into_iter()
-        .collect();
-
-    Ok(items)
+    get_all::<Version, entity::version::Entity>(query_params, parents).await
 }
 
 #[server]

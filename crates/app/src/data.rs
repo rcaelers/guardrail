@@ -11,11 +11,16 @@ use std::collections::HashSet;
 use std::{collections::VecDeque, ops::Range};
 
 #[cfg(feature = "ssr")]
-pub trait ColumnInfo: ColumnTrait {
-    fn filter_column() -> Self;
-    fn from_index(index: usize) -> Option<Self>
-    where
-        Self: Sized;
+pub trait EntityInfo
+where
+    Self: EntityTrait,
+{
+    type View: FromQueryResult;
+    fn filter_column() -> Self::Column;
+    fn from_index(index: usize) -> Option<Self::Column>;
+    fn extend_query(query: Select<Self>) -> Select<Self> {
+        query
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -50,11 +55,10 @@ where
 pub async fn get_all<Type, E>(
     query_params: QueryParams,
     related: Vec<(E::Column, uuid::Uuid)>,
-) -> Result<Vec<Type>, ServerFnError<String>>
+) -> Result<Vec<E::View>, ServerFnError<String>>
 where
-    E: EntityTrait,
+    E: EntityTrait + EntityInfo,
     Type: From<E::Model>,
-    E::Column: ColumnInfo,
 {
     let QueryParams {
         sorting,
@@ -68,8 +72,10 @@ where
 
     let mut query = <E as EntityTrait>::find();
 
+    query = <E as EntityInfo>::extend_query(query);
+
     if !filter.is_empty() {
-        query = query.filter(E::Column::filter_column().contains(filter));
+        query = query.filter(E::filter_column().contains(filter));
     }
 
     for (related_column, related_id) in related {
@@ -78,11 +84,11 @@ where
 
     for (col, col_sort) in sorting {
         query = match col_sort {
-            ColumnSort::Ascending => match E::Column::from_index(col) {
+            ColumnSort::Ascending => match E::from_index(col) {
                 Some(column) => query.order_by_asc(column),
                 None => query,
             },
-            ColumnSort::Descending => match E::Column::from_index(col) {
+            ColumnSort::Descending => match E::from_index(col) {
                 Some(column) => query.order_by_desc(column),
                 None => query,
             },
@@ -93,11 +99,11 @@ where
     let items = query
         .limit(Some(range.len() as u64))
         .offset(range.start as u64)
+        .into_model::<<E as EntityInfo>::View>()
         .all(&db)
         .await
         .map_err(|e| ServerFnError::WrappedServerError(format!("{e:?}")))?
         .into_iter()
-        .map(|item| item.into())
         .collect();
     Ok(items)
 }
@@ -107,8 +113,7 @@ pub async fn get_all_names<E>(
     related: Vec<(E::Column, uuid::Uuid)>,
 ) -> Result<HashSet<String>, ServerFnError<String>>
 where
-    E: EntityTrait,
-    E::Column: ColumnInfo,
+    E: EntityTrait + EntityInfo,
 {
     use std::collections::HashSet;
 
@@ -129,7 +134,7 @@ where
 
     let items: HashSet<String> = query
         .select_only()
-        .column_as(E::Column::filter_column(), QueryAs::Name)
+        .column_as(E::filter_column(), QueryAs::Name)
         .into_values::<_, QueryAs>()
         .all(&db)
         .await
@@ -144,7 +149,6 @@ where
 pub async fn add<Type, E>(item: Type) -> Result<(), ServerFnError<String>>
 where
     E: EntityTrait,
-    E::Column: ColumnInfo,
     E::ActiveModel: ActiveModelTrait<Entity = E> + ActiveModelBehavior + Send,
     Type: Into<E::ActiveModel>,
     <E as EntityTrait>::Model: IntoActiveModel<<E as EntityTrait>::ActiveModel>,
@@ -164,7 +168,6 @@ where
 pub async fn update<Type, E>(item: Type) -> Result<(), ServerFnError<String>>
 where
     E: EntityTrait,
-    E::Column: ColumnInfo,
     E::ActiveModel: ActiveModelTrait<Entity = E> + ActiveModelBehavior + Send,
     Type: Into<E::ActiveModel>,
     <E as EntityTrait>::Model: IntoActiveModel<<E as EntityTrait>::ActiveModel>,
