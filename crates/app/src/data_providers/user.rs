@@ -10,7 +10,9 @@ use ::chrono::NaiveDateTime;
 use leptos::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
+#[cfg(feature = "ssr")]
+use std::collections::HashMap;
+use std::collections::{HashSet, VecDeque};
 use std::ops::Range;
 use uuid::Uuid;
 
@@ -42,7 +44,7 @@ pub struct User {
 
 #[cfg(feature = "ssr")]
 impl ColumnInfo for entity::user::Column {
-    fn name_column() -> Self {
+    fn filter_column() -> Self {
         entity::user::Column::Username
     }
 
@@ -101,16 +103,6 @@ pub struct UserTableDataProvider {
     update: RwSignal<u64>,
 }
 
-impl ExtraTableDataProvider<UserRow> for UserTableDataProvider {
-    fn get_filter_signal(&self) -> RwSignal<String> {
-        self.name
-    }
-
-    fn update(&self) {
-        self.update.set(self.update.get() + 1);
-    }
-}
-
 impl UserTableDataProvider {
     pub fn new() -> Self {
         Self {
@@ -118,6 +110,16 @@ impl UserTableDataProvider {
             name: RwSignal::new("".to_string()),
             update: RwSignal::new(0),
         }
+    }
+}
+
+impl ExtraTableDataProvider<UserRow> for UserTableDataProvider {
+    fn get_filter_signal(&self) -> RwSignal<String> {
+        self.name
+    }
+
+    fn update(&self) {
+        self.update.set(self.update.get() + 1);
     }
 }
 
@@ -130,7 +132,7 @@ impl Default for UserTableDataProvider {
 impl TableDataProvider<UserRow> for UserTableDataProvider {
     async fn get_rows(&self, range: Range<usize>) -> Result<(Vec<UserRow>, Range<usize>), String> {
         let users = user_list(QueryParams {
-            name: self.name.get_untracked().trim().to_string(),
+            filter: self.name.get_untracked().trim().to_string(),
             sorting: self.sort.clone(),
             range: range.clone(),
         })
@@ -170,7 +172,7 @@ pub async fn user_get(id: Uuid) -> Result<User, ServerFnError<String>> {
 
 #[server]
 pub async fn user_list(query: QueryParams) -> Result<Vec<User>, ServerFnError<String>> {
-    get_all::<User, entity::user::Entity>(query).await
+    get_all::<User, entity::user::Entity>(query, vec![]).await
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -210,7 +212,7 @@ async fn list_users_with_roles() -> Result<Vec<UserWithRoles>, ServerFnError<Str
 
 #[server]
 pub async fn user_list_names() -> Result<HashSet<String>, ServerFnError<String>> {
-    get_all_names::<entity::user::Entity>().await
+    get_all_names::<entity::user::Entity>(vec![]).await
 }
 
 #[server]
@@ -230,5 +232,5 @@ pub async fn user_remove(id: Uuid) -> Result<(), ServerFnError<String>> {
 
 #[server]
 pub async fn user_count() -> Result<usize, ServerFnError<String>> {
-    count::<entity::user::Entity>().await
+    count::<entity::user::Entity>(vec![]).await
 }

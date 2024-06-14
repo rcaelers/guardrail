@@ -1,8 +1,7 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 use leptos::*;
-use leptos_router::*;
 use uuid::Uuid;
 
 use crate::components::dataform::DataFormPage;
@@ -13,32 +12,16 @@ use crate::data_providers::product::{
     product_update, Product, ProductRow, ProductTableDataProvider,
 };
 
-use super::dataform::{DataFormTrait, ParamsTrait};
-
-#[derive(Params, PartialEq, Clone, Debug)]
-pub struct ProductParams {
-    product_id: String,
-}
-
-impl ParamsTrait for ProductParams {
-    fn get_id(self) -> String {
-        self.product_id
-    }
-
-    fn get_param_name() -> String {
-        "Product".to_string()
-    }
-}
+use super::dataform::DataFormTrait;
 
 pub struct ProductTable;
 
 impl DataFormTrait for ProductTable {
-    type RequestParams = ProductParams;
     type TableDataProvider = ProductTableDataProvider;
     type RowType = ProductRow;
     type DataType = Product;
 
-    fn new_provider(_product_id: Option<Uuid>) -> ProductTableDataProvider {
+    fn new_provider(_parents: HashMap<String, Uuid>) -> ProductTableDataProvider {
         ProductTableDataProvider::new()
     }
 
@@ -46,15 +29,20 @@ impl DataFormTrait for ProductTable {
         "product".to_string()
     }
 
-    fn get_related_url(parent_id: Uuid) -> String {
-        format!("/admin/versions/{}", parent_id)
+    fn get_related() -> Vec<super::dataform::Related> {
+        vec![
+            super::dataform::Related {
+                name: "Versions".to_string(),
+                url: "/admin/versions?product=".to_string(),
+            },
+            super::dataform::Related {
+                name: "Symbols".to_string(),
+                url: "/admin/symbols?product=".to_string(),
+            },
+        ]
     }
 
-    fn get_related_name() -> Option<String> {
-        Some("Versions".to_string())
-    }
-
-    fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, _parent_id: Option<uuid::Uuid>) {
+    fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, _parents: HashMap<String, Uuid>) {
         create_effect(move |_| {
             spawn_local(async move {
                 match product_list_names().await {
@@ -86,7 +74,7 @@ impl DataFormTrait for ProductTable {
     fn update_data(
         product: &mut Product,
         fields: RwSignal<IndexMap<String, Field>>,
-        _parent_id: Option<Uuid>,
+        _parents: HashMap<String, Uuid>,
     ) {
         product.name = fields.get().get("Name").unwrap().value.get();
         if product.id.is_nil() {
@@ -98,13 +86,13 @@ impl DataFormTrait for ProductTable {
         product_get(id).await
     }
     async fn list(
-        _parent_id: Option<Uuid>,
+        _parents: HashMap<String, Uuid>,
         query_params: QueryParams,
     ) -> Result<Vec<Product>, ServerFnError<String>> {
         product_list(query_params).await
     }
     async fn list_names(
-        _parent_id: Option<Uuid>,
+        _parents: HashMap<String, Uuid>,
     ) -> Result<HashSet<String>, ServerFnError<String>> {
         product_list_names().await
     }
@@ -117,7 +105,7 @@ impl DataFormTrait for ProductTable {
     async fn remove(id: Uuid) -> Result<(), ServerFnError<String>> {
         product_remove(id).await
     }
-    async fn count(_parent_id: Option<Uuid>) -> Result<usize, ServerFnError<String>> {
+    async fn count(_parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>> {
         product_count().await
     }
 }

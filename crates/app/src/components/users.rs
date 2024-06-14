@@ -1,41 +1,27 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 use leptos::*;
-use leptos_router::*;
 use uuid::Uuid;
 
 use crate::components::dataform::DataFormPage;
 use crate::components::form::Field;
 use crate::data::QueryParams;
-use crate::data_providers::user::{user_add, user_count, user_get, user_list, user_list_names, user_remove, user_update, User, UserRow, UserTableDataProvider};
+use crate::data_providers::user::{
+    user_add, user_count, user_get, user_list, user_list_names, user_remove, user_update, User,
+    UserRow, UserTableDataProvider,
+};
 
-use super::dataform::{DataFormTrait, ParamsTrait};
-
-#[derive(Params, PartialEq, Clone, Debug)]
-pub struct UserParams {
-    user_id: String,
-}
-
-impl ParamsTrait for UserParams {
-    fn get_id(self) -> String {
-        self.user_id
-    }
-
-    fn get_param_name() -> String {
-        "User".to_string()
-    }
-}
+use super::dataform::DataFormTrait;
 
 pub struct UserTable;
 
 impl DataFormTrait for UserTable {
-    type RequestParams = UserParams;
     type TableDataProvider = UserTableDataProvider;
     type RowType = UserRow;
     type DataType = User;
 
-    fn new_provider(_user_id: Option<Uuid>) -> UserTableDataProvider {
+    fn new_provider(_parents: HashMap<String, Uuid>) -> UserTableDataProvider {
         UserTableDataProvider::new()
     }
 
@@ -43,15 +29,7 @@ impl DataFormTrait for UserTable {
         "user".to_string()
     }
 
-    fn get_related_url(_parent_id: Uuid) -> String {
-        "".to_string()
-    }
-
-    fn get_related_name() -> Option<String> {
-        None
-    }
-
-    fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, _parent_id: Option<uuid::Uuid>) {
+    fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, _parents: HashMap<String, Uuid>) {
         create_effect(move |_| {
             spawn_local(async move {
                 match user_list_names().await {
@@ -83,7 +61,7 @@ impl DataFormTrait for UserTable {
     fn update_data(
         user: &mut User,
         fields: RwSignal<IndexMap<String, Field>>,
-        _parent_id: Option<Uuid>,
+        _parents: HashMap<String, Uuid>,
     ) {
         user.username = fields.get().get("Name").unwrap().value.get();
         if user.id.is_nil() {
@@ -95,13 +73,13 @@ impl DataFormTrait for UserTable {
         user_get(id).await
     }
     async fn list(
-        _parent_id: Option<Uuid>,
+        _parents: HashMap<String, Uuid>,
         query_params: QueryParams,
     ) -> Result<Vec<User>, ServerFnError<String>> {
         user_list(query_params).await
     }
     async fn list_names(
-        _parent_id: Option<Uuid>,
+        _pparents: HashMap<String, Uuid>,
     ) -> Result<HashSet<String>, ServerFnError<String>> {
         user_list_names().await
     }
@@ -114,7 +92,7 @@ impl DataFormTrait for UserTable {
     async fn remove(id: Uuid) -> Result<(), ServerFnError<String>> {
         user_remove(id).await
     }
-    async fn count(_parent_id: Option<Uuid>) -> Result<usize, ServerFnError<String>> {
+    async fn count(_parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>> {
         user_count().await
     }
 }

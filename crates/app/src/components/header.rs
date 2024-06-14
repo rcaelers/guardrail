@@ -1,16 +1,20 @@
+use enumflags2::BitFlags;
 use ev::MouseEvent;
 use leptos::*;
+
+use super::dataform::{Capabilities, Related};
 
 #[allow(non_snake_case)]
 #[component]
 pub fn Header(
     filter: RwSignal<String>,
     enabled: Memo<bool>,
-    related: RwSignal<Option<String>>,
+    capabilities: RwSignal<BitFlags<Capabilities, u8>>,
+    related: RwSignal<Vec<Related>>,
     on_add_click: Callback<MouseEvent>,
     on_edit_click: Callback<MouseEvent>,
     on_delete_click: Callback<MouseEvent>,
-    on_related_click: Callback<MouseEvent>,
+    on_related_click: Callback<usize>,
 ) -> impl IntoView {
     view! {
         <header class="sticky top-0 z-40 pb-1">
@@ -40,12 +44,16 @@ pub fn Header(
                 </div>
 
                 <div class="flex space-x-2">
-                    <button class="btn btn-primary" on:click=on_add_click>
+                    <button class="btn btn-primary"
+                            class:hidden=move || !capabilities.get().contains(Capabilities::CanAdd)
+                            on:click=on_add_click
+                    >
                         "Add"
                     </button>
                     <button
                         class="btn btn-primary"
                         class:btn-disabled=move || !enabled.get()
+                        class:hidden=move || !capabilities.get().contains(Capabilities::CanEdit)
                         on:click=on_edit_click
                     >
                         "Edit"
@@ -53,18 +61,26 @@ pub fn Header(
                     <button
                         class="btn btn-primary"
                         class:btn-disabled=move || !enabled.get()
+                        class:hidden=move || !capabilities.get().contains(Capabilities::CanDelete)
                         on:click=on_delete_click
                     >
                         "Delete"
                     </button>
-                    <button
-                        class="btn btn-primary"
-                        class:btn-disabled=move || !enabled.get()
-                        class:hidden= move || related.get().is_none()
-                        on:click=on_related_click
-                    >
-                        "Show " { related }
-                    </button>
+                    <For
+                        each=move || {related.get().into_iter().enumerate().collect::<Vec<_>>()}
+                        key=|(_index,related)| related.clone()
+                        children=move |(index, related)| {
+                        view! {
+                            <button
+                                class="btn btn-primary"
+                                class:btn-disabled=move || !enabled.get()
+                                on:click=move|_| { on_related_click(index); }
+                            >
+                                "Show " { related.name }
+                            </button>
+                        }
+                    }
+                    />
                 </div>
             </div>
         </header>

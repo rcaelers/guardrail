@@ -10,5 +10,6 @@ pub mod passkey_logo;
 pub mod products;
 pub mod profile;
 pub mod register;
+pub mod symbols;
 pub mod users;
 pub mod versions;

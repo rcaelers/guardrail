@@ -43,6 +43,7 @@ async-trait.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
 config.workspace = true
+enumflags2.workspace = true
 futures.workspace = true
 http.workspace = true
 thiserror.workspace = true

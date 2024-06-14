@@ -40,7 +40,7 @@ pub struct Product {
 
 #[cfg(feature = "ssr")]
 impl ColumnInfo for entity::product::Column {
-    fn name_column() -> Self {
+    fn filter_column() -> Self {
         entity::product::Column::Name
     }
 
@@ -92,27 +92,27 @@ impl ExtraRowTrait for ProductRow {
 #[derive(Debug, Clone)]
 pub struct ProductTableDataProvider {
     sort: VecDeque<(usize, ColumnSort)>,
-    name: RwSignal<String>,
+    filter: RwSignal<String>,
     update: RwSignal<u64>,
-}
-
-impl ExtraTableDataProvider<ProductRow> for ProductTableDataProvider {
-    fn get_filter_signal(&self) -> RwSignal<String> {
-        self.name
-    }
-
-    fn update(&self) {
-        self.update.set(self.update.get() + 1);
-    }
 }
 
 impl ProductTableDataProvider {
     pub fn new() -> Self {
         Self {
             sort: VecDeque::new(),
-            name: RwSignal::new("".to_string()),
+            filter: RwSignal::new("".to_string()),
             update: RwSignal::new(0),
         }
+    }
+}
+
+impl ExtraTableDataProvider<ProductRow> for ProductTableDataProvider {
+    fn get_filter_signal(&self) -> RwSignal<String> {
+        self.filter
+    }
+
+    fn update(&self) {
+        self.update.set(self.update.get() + 1);
     }
 }
 
@@ -128,7 +128,7 @@ impl TableDataProvider<ProductRow> for ProductTableDataProvider {
         range: Range<usize>,
     ) -> Result<(Vec<ProductRow>, Range<usize>), String> {
         let products = product_list(QueryParams {
-            name: self.name.get_untracked().trim().to_string(),
+            filter: self.filter.get_untracked().trim().to_string(),
             sorting: self.sort.clone(),
             range: range.clone(),
         })
@@ -156,7 +156,7 @@ impl TableDataProvider<ProductRow> for ProductTableDataProvider {
     }
 
     fn track(&self) {
-        self.name.track();
+        self.filter.track();
         self.update.track();
     }
 }
@@ -168,12 +168,12 @@ pub async fn product_get(id: Uuid) -> Result<Product, ServerFnError<String>> {
 
 #[server]
 pub async fn product_list(query: QueryParams) -> Result<Vec<Product>, ServerFnError<String>> {
-    get_all::<Product, entity::product::Entity>(query).await
+    get_all::<Product, entity::product::Entity>(query, vec![]).await
 }
 
 #[server]
 pub async fn product_list_names() -> Result<HashSet<String>, ServerFnError<String>> {
-    get_all_names::<entity::product::Entity>().await
+    get_all_names::<entity::product::Entity>(vec![]).await
 }
 
 #[server]
@@ -193,5 +193,5 @@ pub async fn product_remove(id: Uuid) -> Result<(), ServerFnError<String>> {
 
 #[server]
 pub async fn product_count() -> Result<usize, ServerFnError<String>> {
-    count::<entity::product::Entity>().await
+    count::<entity::product::Entity>(vec![]).await
 }

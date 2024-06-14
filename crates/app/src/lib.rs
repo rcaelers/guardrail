@@ -24,6 +24,7 @@ use components::{
     products::ProductsPage,
     profile::ProfilePage,
     register::RegisterPage,
+    symbols::SymbolsPage,
     users::UsersPage,
     versions::VersionsPage,
 };
@@ -81,7 +82,7 @@ pub fn App() -> impl IntoView {
                         <Route path="/admin/users" view=UsersPage/>
                         <Route path="/admin/products" view=ProductsPage/>
                         <Route path="/admin/versions" view=VersionsPage/>
-                        <Route path="/admin/versions/:product_id" view=VersionsPage/>
+                        <Route path="/admin/symbols" view=SymbolsPage/>
                     </Routes>
                 </main>
             </div>

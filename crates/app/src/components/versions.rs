@@ -1,8 +1,7 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use indexmap::IndexMap;
 use leptos::*;
-use leptos_router::*;
 use tracing::error;
 use uuid::Uuid;
 
@@ -14,49 +13,39 @@ use crate::data_providers::version::{
     version_update, Version, VersionRow, VersionTableDataProvider,
 };
 
-use super::dataform::{DataFormTrait, ParamsTrait};
-
-#[derive(Params, PartialEq, Clone, Debug)]
-pub struct VersionParams {
-    product_id: String,
-}
-
-impl ParamsTrait for VersionParams {
-    fn get_id(self) -> String {
-        self.product_id
-    }
-
-    fn get_param_name() -> String {
-        "Product".to_string()
-    }
-}
+use super::dataform::DataFormTrait;
 
 pub struct VersionTable;
 
 impl DataFormTrait for VersionTable {
-    type RequestParams = VersionParams;
     type TableDataProvider = VersionTableDataProvider;
     type RowType = VersionRow;
     type DataType = Version;
 
-    fn new_provider(product_id: Option<Uuid>) -> VersionTableDataProvider {
-        VersionTableDataProvider::new(product_id)
+    fn new_provider(parents: HashMap<String, Uuid>) -> VersionTableDataProvider {
+        VersionTableDataProvider::new(parents)
     }
 
     fn get_data_type_name() -> String {
         "version".to_string()
     }
 
-    fn get_related_url(_parent_id: Uuid) -> String {
-        "".to_string()
+    fn get_related() -> Vec<super::dataform::Related> {
+        vec![super::dataform::Related {
+            name: "Symbols".to_string(),
+            url: "/admin/symbols?version=".to_string(),
+        }]
+    }
+    fn get_foreign() -> Vec<super::dataform::Foreign> {
+        vec![super::dataform::Foreign {
+            id_name: "product_id".to_string(),
+            query: "product".to_string(),
+        }]
     }
 
-    fn get_related_name() -> Option<String> {
-        None
-    }
-
-    fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, product_id: Option<uuid::Uuid>) {
+    fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, parents: HashMap<String, Uuid>) {
         create_effect(move |_| {
+            let product_id = parents.get("product_id").cloned();
             spawn_local(async move {
                 match version_list_names(product_id).await {
                     Ok(fetched_names) => {
@@ -101,8 +90,10 @@ impl DataFormTrait for VersionTable {
     fn update_data(
         version: &mut Version,
         fields: RwSignal<IndexMap<String, Field>>,
-        product_id: Option<uuid::Uuid>,
+        parents: HashMap<String, Uuid>,
     ) {
+        let product_id = parents.get("product_id").cloned();
+
         version.name = fields.get().get("Name").unwrap().value.get();
         version.tag = fields.get().get("Tag").unwrap().value.get();
         version.hash = fields.get().get("Hash").unwrap().value.get();
@@ -121,13 +112,17 @@ impl DataFormTrait for VersionTable {
         version_get(id).await
     }
     async fn list(
-        parent_id: Option<Uuid>,
+        parents: HashMap<String, Uuid>,
         query_params: QueryParams,
     ) -> Result<Vec<Version>, ServerFnError<String>> {
-        version_list(parent_id, query_params).await
+        let product_id = parents.get("product_id").cloned();
+        version_list(product_id, query_params).await
     }
-    async fn list_names(parent_id: Option<Uuid>) -> Result<HashSet<String>, ServerFnError<String>> {
-        version_list_names(parent_id).await
+    async fn list_names(
+        parents: HashMap<String, Uuid>,
+    ) -> Result<HashSet<String>, ServerFnError<String>> {
+        let product_id = parents.get("product_id").cloned();
+        version_list_names(product_id).await
     }
     async fn add(data: Version) -> Result<(), ServerFnError<String>> {
         version_add(data).await
@@ -138,8 +133,9 @@ impl DataFormTrait for VersionTable {
     async fn remove(id: Uuid) -> Result<(), ServerFnError<String>> {
         version_remove(id).await
     }
-    async fn count(parent_id: Option<Uuid>) -> Result<usize, ServerFnError<String>> {
-        version_count(parent_id).await
+    async fn count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>> {
+        let product_id = parents.get("product_id").cloned();
+        version_count(product_id).await
     }
 }
 

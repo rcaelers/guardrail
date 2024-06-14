@@ -1,17 +1,16 @@
 use crate::classes::ClassesPreset;
 use crate::data::QueryParams;
 #[cfg(feature = "ssr")]
-use crate::data::{
-    add, count_with, delete_by_id, get_all_names_with, get_by_id, update, ColumnInfo,
-};
+use crate::data::{add, count, delete_by_id, get_all_names, get_by_id, update, ColumnInfo};
 #[cfg(feature = "ssr")]
 use crate::entity;
 use ::chrono::NaiveDateTime;
 use leptos::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
+use std::vec;
 use uuid::Uuid;
 
 #[cfg(feature = "ssr")]
@@ -23,7 +22,7 @@ use super::{ExtraRowTrait, ExtraTableDataProvider};
 #[table(sortable, classes_provider = ClassesPreset)]
 pub struct SymbolsRow {
     pub id: Uuid,
-    pub symbols: String,
+    pub product: String,
     pub version: String,
     pub os: String,
     pub arch: String,
@@ -53,6 +52,8 @@ pub struct Symbols {
     pub file_location: String,
     pub product_id: Uuid,
     pub version_id: Uuid,
+    pub product: String,
+    pub version: String,
 }
 
 #[cfg(not(feature = "ssr"))]
@@ -68,20 +69,13 @@ pub struct Symbols {
     pub file_location: String,
     pub product_id: Uuid,
     pub version_id: Uuid,
-}
-impl ExtraRowTrait for SymbolsRow {
-    fn get_id(&self) -> Uuid {
-        self.id
-    }
-
-    fn get_name(&self) -> String {
-        self.build_id.clone()
-    }
+    pub product: String,
+    pub version: String,
 }
 
 #[cfg(feature = "ssr")]
 impl ColumnInfo for entity::symbols::Column {
-    fn name_column() -> Self {
+    fn filter_column() -> Self {
         entity::symbols::Column::BuildId
     }
 
@@ -113,8 +107,8 @@ impl From<Symbols> for SymbolsRow {
             updated_at: symbols.updated_at,
             product_id: Some(symbols.product_id),
             version_id: Some(symbols.version_id),
-            symbols: "".to_string(),
-            version: "".to_string(),
+            product: symbols.product,
+            version: symbols.version,
         }
     }
 }
@@ -133,6 +127,8 @@ impl From<entity::symbols::Model> for Symbols {
             updated_at: model.updated_at,
             product_id: model.product_id,
             version_id: model.version_id,
+            product: "".to_string(),
+            version: "".to_string(),
         }
     }
 }
@@ -155,30 +151,38 @@ impl From<Symbols> for entity::symbols::ActiveModel {
     }
 }
 
+impl ExtraRowTrait for SymbolsRow {
+    fn get_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn get_name(&self) -> String {
+        self.build_id.clone()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SymbolsTableDataProvider {
     sort: VecDeque<(usize, ColumnSort)>,
-    name: RwSignal<String>,
+    filter: RwSignal<String>,
     update: RwSignal<u64>,
-    product_id: Option<Uuid>,
-    version_id: Option<Uuid>,
+    parents: HashMap<String, Uuid>,
 }
 
 impl SymbolsTableDataProvider {
-    pub fn new(product_id: Option<Uuid>, version_id: Option<Uuid>) -> Self {
+    pub fn new(parents: HashMap<String, Uuid>) -> Self {
         Self {
             sort: VecDeque::new(),
-            name: RwSignal::new("".to_string()),
+            filter: RwSignal::new("".to_string()),
             update: RwSignal::new(0),
-            product_id,
-            version_id,
+            parents,
         }
     }
 }
 
 impl ExtraTableDataProvider<SymbolsRow> for SymbolsTableDataProvider {
     fn get_filter_signal(&self) -> RwSignal<String> {
-        self.name
+        self.filter
     }
 
     fn update(&self) {
@@ -191,11 +195,13 @@ impl TableDataProvider<SymbolsRow> for SymbolsTableDataProvider {
         &self,
         range: Range<usize>,
     ) -> Result<(Vec<SymbolsRow>, Range<usize>), String> {
-        let symbolss = symbols_list(
-            self.product_id,
-            self.version_id,
+        let product_id = self.parents.get("product_id").cloned();
+        let version_id = self.parents.get("version_id").cloned();
+        let symbols = symbols_list(
+            product_id,
+            version_id,
             QueryParams {
-                name: self.name.get_untracked().trim().to_string(),
+                filter: self.filter.get_untracked().trim().to_string(),
                 sorting: self.sort.clone(),
                 range: range.clone(),
             },
@@ -206,12 +212,14 @@ impl TableDataProvider<SymbolsRow> for SymbolsTableDataProvider {
         .map(|symbols| symbols.into())
         .collect::<Vec<SymbolsRow>>();
 
-        let len = symbolss.len();
-        Ok((symbolss, range.start..range.start + len))
+        let len = symbols.len();
+        Ok((symbols, range.start..range.start + len))
     }
 
     async fn row_count(&self) -> Option<usize> {
-        symbols_count(self.product_id).await.ok()
+        let product_id = self.parents.get("product_id").cloned();
+        let version_id = self.parents.get("version_id").cloned();
+        symbols_count(product_id, version_id).await.ok()
     }
 
     fn set_sorting(&mut self, sorting: &VecDeque<(usize, ColumnSort)>) {
@@ -219,7 +227,7 @@ impl TableDataProvider<SymbolsRow> for SymbolsTableDataProvider {
     }
 
     fn track(&self) {
-        self.name.track();
+        self.filter.track();
         self.update.track();
     }
 }
@@ -238,7 +246,7 @@ pub async fn symbols_list(
     let QueryParams {
         sorting,
         range,
-        name,
+        filter,
     } = query_params;
 
     let db = use_context::<DatabaseConnection>().ok_or(ServerFnError::WrappedServerError(
@@ -249,14 +257,18 @@ pub async fn symbols_list(
         .join(JoinType::LeftJoin, entity::symbols::Relation::Product.def())
         .join(JoinType::LeftJoin, entity::symbols::Relation::Version.def())
         .column_as(entity::product::Column::Name, "product")
-        .column_as(entity::version::Column::Name, "version")
-        .filter(<entity::symbols::Entity as EntityTrait>::Column::name_column().contains(name));
+        .column_as(entity::version::Column::Name, "version");
+
+    if !filter.is_empty() {
+        query = query.filter(
+            <entity::symbols::Entity as EntityTrait>::Column::filter_column().contains(filter),
+        );
+    }
 
     if let Some(product_id) = product_id {
         query =
             query.filter(Condition::all().add(entity::symbols::Column::ProductId.eq(product_id)))
     }
-
     if let Some(version_id) = version_id {
         query =
             query.filter(Condition::all().add(entity::symbols::Column::VersionId.eq(version_id)))
@@ -298,8 +310,14 @@ pub async fn symbols_list_names(
     product_id: Option<Uuid>,
     version_id: Option<Uuid>,
 ) -> Result<HashSet<String>, ServerFnError<String>> {
-    get_all_names_with::<entity::symbols::Entity>(entity::symbols::Column::ProductId, product_id)
-        .await
+    let mut parents = vec![];
+    if let Some(product_id) = product_id {
+        parents.push((entity::symbols::Column::ProductId, product_id));
+    }
+    if let Some(version_id) = version_id {
+        parents.push((entity::symbols::Column::VersionId, version_id));
+    }
+    get_all_names::<entity::symbols::Entity>(parents).await
 }
 
 #[server]
@@ -318,6 +336,16 @@ pub async fn symbols_remove(id: Uuid) -> Result<(), ServerFnError<String>> {
 }
 
 #[server]
-pub async fn symbols_count(product_id: Option<Uuid>) -> Result<usize, ServerFnError<String>> {
-    count_with::<entity::symbols::Entity>(entity::symbols::Column::ProductId, product_id).await
+pub async fn symbols_count(
+    product_id: Option<Uuid>,
+    version_id: Option<Uuid>,
+) -> Result<usize, ServerFnError<String>> {
+    let mut parents = vec![];
+    if let Some(product_id) = product_id {
+        parents.push((entity::symbols::Column::ProductId, product_id));
+    }
+    if let Some(version_id) = version_id {
+        parents.push((entity::symbols::Column::VersionId, version_id));
+    }
+    count::<entity::symbols::Entity>(parents).await
 }

@@ -1,7 +1,8 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
+use enumflags2::{bitflags, BitFlags};
 use indexmap::IndexMap;
 use leptos::html::Div;
 use leptos::*;
@@ -16,14 +17,29 @@ use crate::components::header::Header;
 use crate::data::QueryParams;
 use crate::data_providers::{ExtraRowTrait, ExtraTableDataProvider};
 
-pub trait ParamsTrait {
-    fn get_id(self) -> String;
-    fn get_param_name() -> String;
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Related {
+    pub name: String,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Foreign {
+    pub id_name: String,
+    pub query: String,
+}
+
+#[bitflags]
+#[repr(u8)]
+#[derive(Copy, Clone, Debug, PartialEq)]
+pub enum Capabilities {
+    CanEdit = 0b0001,
+    CanAdd = 0b0010,
+    CanDelete = 0b0100,
 }
 
 #[trait_variant::make(DataFormTrait: Send)]
 pub trait LocalDataFormTrait {
-    type RequestParams: leptos_router::Params + PartialEq + Clone + ParamsTrait + 'static;
     type RowType: leptos_struct_table::TableRow + ExtraRowTrait + Clone + 'static;
     type TableDataProvider: leptos_struct_table::TableDataProvider<Self::RowType>
         + ExtraTableDataProvider<Self::RowType>
@@ -31,50 +47,71 @@ pub trait LocalDataFormTrait {
         + 'static;
     type DataType: Default + Clone + Debug + 'static;
 
-    fn new_provider(parent_id: Option<Uuid>) -> Self::TableDataProvider;
-    fn get_data_type_name() -> String;
-    fn get_related_name() -> Option<String>;
-    fn get_related_url(parent_id: Uuid) -> String;
+    fn new_provider(parents: HashMap<String, Uuid>) -> Self::TableDataProvider;
 
-    fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, parent_id: Option<uuid::Uuid>);
+    fn capabilities() -> BitFlags<Capabilities, u8> {
+        Capabilities::CanEdit | Capabilities::CanAdd | Capabilities::CanDelete
+    }
+
+    fn get_related() -> Vec<Related> {
+        vec![]
+    }
+    fn get_foreign() -> Vec<Foreign> {
+        vec![]
+    }
+
+    fn get_data_type_name() -> String;
+
+    fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, parent: HashMap<String, Uuid>);
     fn update_fields(fields: RwSignal<IndexMap<String, Field>>, data: Self::DataType);
     fn update_data(
         data: &mut Self::DataType,
         fields: RwSignal<IndexMap<String, Field>>,
-        parent_id: Option<uuid::Uuid>,
+        parent_id: HashMap<String, Uuid>,
     );
 
     async fn list(
-        parent_id: Option<Uuid>,
+        parents: HashMap<String, Uuid>,
         query_params: QueryParams,
     ) -> Result<Vec<Self::DataType>, ServerFnError<String>>;
 
     async fn get(id: Uuid) -> Result<Self::DataType, ServerFnError<String>>;
-    async fn list_names(parent_id: Option<Uuid>) -> Result<HashSet<String>, ServerFnError<String>>;
+    async fn list_names(
+        parents: HashMap<String, Uuid>,
+    ) -> Result<HashSet<String>, ServerFnError<String>>;
     async fn add(data: Self::DataType) -> Result<(), ServerFnError<String>>;
     async fn update(data: Self::DataType) -> Result<(), ServerFnError<String>>;
     async fn remove(id: Uuid) -> Result<(), ServerFnError<String>>;
-    async fn count(parent_id: Option<Uuid>) -> Result<usize, ServerFnError<String>>;
+    async fn count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>>;
 }
 
 #[allow(non_snake_case)]
 #[component]
 pub fn DataFormPage<T: DataFormTrait>(#[prop(optional)] _ty: PhantomData<T>) -> impl IntoView {
-    let params = use_params::<T::RequestParams>();
+    let query_map = use_query_map();
 
-    let product_id = params
-        .get_untracked()
-        .map(|p| uuid::Uuid::parse_str(&p.get_id()).ok())
-        .ok()
-        .flatten();
+    let mut query = HashMap::new();
+    for foreign in T::get_foreign() {
+        let q = query_map.get_untracked();
+        let q = q.get(foreign.query.as_str());
+        if let Some(q) = q {
+            info!("{}: {}", foreign.query, q);
+            let uuid = uuid::Uuid::parse_str(q);
+            if let Ok(uuid) = uuid {
+                info!("{}: {}", foreign.id_name, uuid);
+                query.insert(foreign.id_name, uuid);
+            }
+        }
+    }
 
     let fields: RwSignal<IndexMap<String, Field>> = create_rw_signal(IndexMap::new());
 
     let title = create_rw_signal("".to_string());
-    let related_title = create_rw_signal(T::get_related_name());
+    let related = create_rw_signal(T::get_related());
+    let capabilities = create_rw_signal(T::capabilities());
 
     let scroll_container = create_node_ref::<Div>();
-    let rows = <T as DataFormTrait>::new_provider(product_id);
+    let rows = <T as DataFormTrait>::new_provider(query.clone());
     let rows_clone = rows.clone();
 
     let selected_index: RwSignal<Option<usize>> = create_rw_signal(None);
@@ -97,7 +134,7 @@ pub fn DataFormPage<T: DataFormTrait>(#[prop(optional)] _ty: PhantomData<T>) -> 
     let current_row: RwSignal<Option<T::DataType>> = create_rw_signal(None);
     let is_row_selected = create_memo(move |_| selected_row.get().is_some());
 
-    T::initial_fields(fields, product_id);
+    T::initial_fields(fields, query.clone());
 
     create_effect(move |_| {
         if let State::Idle = state.get() {
@@ -122,16 +159,22 @@ pub fn DataFormPage<T: DataFormTrait>(#[prop(optional)] _ty: PhantomData<T>) -> 
         }
     });
 
-    let on_related_click = Callback::new(move |_evt: web_sys::MouseEvent| {
+    let on_related_click = Callback::new(move |index: usize| {
         let row = selected_row.get();
         if row.is_some() {
             let row: T::RowType = row.unwrap();
+            let id = row.get_id();
             spawn_local(async move {
                 let navigate = use_navigate();
-                navigate(
-                    T::get_related_url(row.get_id()).as_str(),
-                    Default::default(),
-                );
+                let foreign = T::get_related();
+                let foreign = foreign.get(index);
+
+                if let Some(foreign) = foreign {
+                    navigate(
+                        format!("{}{}", foreign.url, id).as_str(),
+                        Default::default(),
+                    );
+                }
             });
         }
     });
@@ -183,17 +226,15 @@ pub fn DataFormPage<T: DataFormTrait>(#[prop(optional)] _ty: PhantomData<T>) -> 
         match state.get() {
             State::Add => {
                 let mut data = T::DataType::default();
-                T::update_data(&mut data, fields, product_id);
-                info!("Adding data: {:?}", product_id);
+                T::update_data(&mut data, fields, query.clone());
                 spawn_local(async move {
-                    info!("Adding data: {:?}", data);
                     T::add(data).await.unwrap();
                     state.set(State::Idle);
                 });
             }
             State::Edit => {
                 let mut data = current_row.get().unwrap();
-                T::update_data(&mut data, fields, product_id);
+                T::update_data(&mut data, fields, query.clone());
                 spawn_local(async move {
                     T::update(data).await.unwrap();
                     state.set(State::Idle);
@@ -217,8 +258,9 @@ pub fn DataFormPage<T: DataFormTrait>(#[prop(optional)] _ty: PhantomData<T>) -> 
     view! {
         <Header
             filter=filter
+            capabilities=capabilities
             enabled=is_row_selected
-            related=related_title
+            related=related
             on_edit_click=on_edit_click
             on_add_click=on_add_click.into()
             on_delete_click=on_delete_click
