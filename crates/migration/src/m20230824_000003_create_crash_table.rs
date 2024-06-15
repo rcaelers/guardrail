@@ -27,6 +27,7 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default(Expr::current_timestamp()),
                     )
+                    .col(ColumnDef::new(Crash::Summary).string().not_null())
                     .col(ColumnDef::new(Crash::Report).json_binary().not_null())
                     .col(ColumnDef::new(Crash::VersionId).uuid().not_null())
                     .col(ColumnDef::new(Crash::ProductId).uuid().not_null())
@@ -65,6 +66,7 @@ pub enum Crash {
     CreatedAt,
     UpdatedAt,
     Report,
+    Summary,
     ProductId,
     VersionId,
 }

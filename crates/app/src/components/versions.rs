@@ -50,10 +50,16 @@ impl DataFormTrait for VersionTable {
     }
 
     fn get_related() -> Vec<super::dataform::Related> {
-        vec![super::dataform::Related {
-            name: "Symbols".to_string(),
-            url: "/admin/symbols?version=".to_string(),
-        }]
+        vec![
+            super::dataform::Related {
+                name: "Symbols".to_string(),
+                url: "/admin/symbols?version=".to_string(),
+            },
+            super::dataform::Related {
+                name: "Crashes".to_string(),
+                url: "/admin/crashes?version=".to_string(),
+            },
+        ]
     }
     fn get_foreign() -> Vec<super::dataform::Foreign> {
         vec![super::dataform::Foreign {

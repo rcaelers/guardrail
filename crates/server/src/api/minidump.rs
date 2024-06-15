@@ -97,6 +97,7 @@ impl MinidumpApi {
     ) -> Result<uuid::Uuid, ApiError> {
         let dto = entity::crash::CreateModel {
             report, //: report, // TODO: .to_string(),
+            summary: "".to_string(),
             product_id: product.id,
             version_id: version.id,
         };
@@ -114,15 +115,12 @@ impl MinidumpApi {
         mime_type: String,
         state: &AppState,
     ) -> Result<uuid::Uuid, ApiError> {
-        let dto = entity::attachment::Model {
+        let dto = entity::attachment::CreateModel {
             name: "minidump".to_string(),
             mime_type,
             size: filesize,
             filename,
             crash_id,
-            id: Default::default(),
-            created_at: Default::default(),
-            updated_at: Default::default(),
         };
         let id = Repo::create(&state.db, dto).await.map_err(|e| {
             error!("error: {:?}", e);

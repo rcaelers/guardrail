@@ -28,6 +28,7 @@ pub struct Crash {
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub report: serde_json::Value,
+    pub summary: String,
     pub version_id: Uuid,
     pub product_id: Uuid,
     pub annotations: Vec<Annotation>,
@@ -41,6 +42,7 @@ impl From<crate::entity::crash::Model> for Crash {
             created_at: crash.created_at,
             updated_at: crash.updated_at,
             report: crash.report,
+            summary: crash.summary,
             version_id: crash.version_id,
             product_id: crash.product_id,
             annotations: vec![],
@@ -103,6 +105,7 @@ mod tests {
 
         let crash = crate::entity::crash::CreateModel {
             report: serde_json::json!("test_report1"),
+            summary: "test_summary1".to_owned(),
             version_id: idv,
             product_id: idp,
         };

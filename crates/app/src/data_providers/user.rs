@@ -3,12 +3,12 @@ use cfg_if::cfg_if;
 use leptos::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use uuid::Uuid;
 
 cfg_if! { if #[cfg(feature="ssr")] {
     use sea_orm::*;
     use std::collections::HashMap;
-    use std::collections::HashSet;
     use crate::entity;
 
     use crate::data::{

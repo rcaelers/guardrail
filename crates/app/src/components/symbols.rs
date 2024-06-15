@@ -134,10 +134,10 @@ impl DataFormTrait for SymbolsTable {
         let version_id = parents.get("version_id").cloned();
 
         symbols.os = fields.get().get("Name").unwrap().value.get();
-        symbols.arch = fields.get().get("Tag").unwrap().value.get();
-        symbols.build_id = fields.get().get("Hash").unwrap().value.get();
-        symbols.module_id = fields.get().get("Hash").unwrap().value.get();
-        symbols.file_location = fields.get().get("Hash").unwrap().value.get();
+        symbols.arch = fields.get().get("Arch").unwrap().value.get();
+        symbols.build_id = fields.get().get("BuildId").unwrap().value.get();
+        symbols.module_id = fields.get().get("ModuleId").unwrap().value.get();
+        symbols.file_location = fields.get().get("FileLocation").unwrap().value.get();
         match product_id {
             None => error!("Product ID is missing"),
             Some(product_id) => {

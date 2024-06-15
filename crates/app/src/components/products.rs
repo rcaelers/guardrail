@@ -58,6 +58,10 @@ impl DataFormTrait for ProductTable {
                 name: "Symbols".to_string(),
                 url: "/admin/symbols?product=".to_string(),
             },
+            super::dataform::Related {
+                name: "Crashes".to_string(),
+                url: "/admin/crashes?product=".to_string(),
+            },
         ]
     }
 

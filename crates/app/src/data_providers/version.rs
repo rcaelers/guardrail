@@ -86,6 +86,7 @@ impl EntityInfo for entity::version::Entity {
             .join(JoinType::LeftJoin, entity::version::Relation::Product.def())
             .column_as(entity::product::Column::Name, "product")
     }
+
     fn id_to_column(id_name: String) -> Option<Self::Column> {
         match id_name.as_str() {
             "product_id" => Some(entity::version::Column::ProductId),
@@ -104,7 +105,7 @@ impl From<Version> for VersionRow {
             product_id: Some(version.product_id),
             created_at: version.created_at,
             updated_at: version.updated_at,
-            product: "".to_string(),
+            product: version.product,
         }
     }
 }

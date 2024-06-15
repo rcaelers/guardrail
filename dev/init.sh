@@ -31,5 +31,14 @@ for i in {1..20}; do
   done
 done
 
+# for i in {1..20}; do
+#   for v in {1..20}; do
+#     for r in {1..5}; do
+#       curl -vv -X POST "${URI}api/symbols/upload?product=GuardrailTest${i}&version=1.${v}" --insecure -H "Authorization: Bearer $TOKEN" -Fupload_file_symbols=@dev/crash.sym
+#       curl -vv -X POST "${URI}api/minidump/upload?product=GuardrailTest${i}&version=1.${v}" --insecure -H "Authorization: Bearer $TOKEN" -Fupload_file_minidump=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp -Fattach=@dev/init.sh
+#     done
+#   done
+# done
+
 curl -vv -X POST "${URI}api/symbols/upload?product=Workrave&version=1.11" --insecure -H "Authorization: Bearer $TOKEN" -Fupload_file_symbols=@dev/crash.sym
 curl -vv -X POST "${URI}api/minidump/upload?product=Workrave&version=1.11" --insecure -H "Authorization: Bearer $TOKEN" -Fupload_file_minidump=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp -Fattach=@dev/init.sh

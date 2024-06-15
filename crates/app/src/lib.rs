@@ -18,6 +18,7 @@ use leptos_router::*;
 
 use auth::AuthenticatedUser;
 use components::{
+    crash::CrashPage,
     error_template::{AppError, ErrorTemplate},
     login::LoginPage,
     navbar::Navbar,
@@ -83,6 +84,7 @@ pub fn App() -> impl IntoView {
                         <Route path="/admin/products" view=ProductsPage/>
                         <Route path="/admin/versions" view=VersionsPage/>
                         <Route path="/admin/symbols" view=SymbolsPage/>
+                        <Route path="/admin/crashes" view=CrashPage/>
                     </Routes>
                 </main>
             </div>
