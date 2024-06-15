@@ -1,28 +1,47 @@
-use std::collections::{HashMap, HashSet};
-
 use indexmap::IndexMap;
 use leptos::*;
+use leptos_struct_table::*;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::ops::Range;
 use uuid::Uuid;
 
+use super::dataform::DataFormTrait;
 use crate::components::dataform::DataFormPage;
 use crate::components::form::Field;
 use crate::data::QueryParams;
 use crate::data_providers::product::{
     product_add, product_count, product_get, product_list, product_list_names, product_remove,
-    product_update, Product, ProductRow, ProductTableDataProvider,
+    product_update, Product, ProductRow,
 };
+use crate::data_providers::ExtraTableDataProvider;
+use crate::table_data_provider_impl;
 
-use super::dataform::DataFormTrait;
+#[derive(Debug, Clone)]
+pub struct ProductTable {
+    sort: VecDeque<(usize, ColumnSort)>,
+    filter: RwSignal<String>,
+    update: RwSignal<u64>,
+    parents: HashMap<String, Uuid>,
+}
 
-pub struct ProductTable;
+impl ProductTable {
+    pub fn new(parents: HashMap<String, Uuid>) -> Self {
+        Self {
+            sort: VecDeque::new(),
+            filter: RwSignal::new("".to_string()),
+            update: RwSignal::new(0),
+            parents,
+        }
+    }
+}
 
 impl DataFormTrait for ProductTable {
-    type TableDataProvider = ProductTableDataProvider;
+    type TableDataProvider = ProductTable;
     type RowType = ProductRow;
     type DataType = Product;
 
-    fn new_provider(_parents: HashMap<String, Uuid>) -> ProductTableDataProvider {
-        ProductTableDataProvider::new()
+    fn new_provider(parents: HashMap<String, Uuid>) -> ProductTable {
+        ProductTable::new(parents)
     }
 
     fn get_data_type_name() -> String {
@@ -109,6 +128,8 @@ impl DataFormTrait for ProductTable {
         product_count().await
     }
 }
+
+table_data_provider_impl!(ProductTable);
 
 #[allow(non_snake_case)]
 #[component]

@@ -1,30 +1,48 @@
-use std::collections::{HashMap, HashSet};
-
 use enumflags2::BitFlags;
 use indexmap::IndexMap;
 use leptos::*;
+use leptos_struct_table::*;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::ops::Range;
 use tracing::error;
 use uuid::Uuid;
 
+use super::dataform::{Capabilities, DataFormTrait};
 use crate::components::dataform::DataFormPage;
 use crate::components::form::Field;
 use crate::data::QueryParams;
 use crate::data_providers::symbols::{
     symbols_add, symbols_count, symbols_get, symbols_list, symbols_list_names, symbols_remove,
-    symbols_update, Symbols, SymbolsRow, SymbolsTableDataProvider,
+    symbols_update, Symbols, SymbolsRow,
 };
+use crate::data_providers::ExtraTableDataProvider;
+use crate::table_data_provider_impl;
 
-use super::dataform::{Capabilities, DataFormTrait};
+#[derive(Debug, Clone)]
+pub struct SymbolsTable {
+    sort: VecDeque<(usize, ColumnSort)>,
+    filter: RwSignal<String>,
+    update: RwSignal<u64>,
+    parents: HashMap<String, Uuid>,
+}
 
-pub struct SymbolsTable;
-
+impl SymbolsTable {
+    pub fn new(parents: HashMap<String, Uuid>) -> Self {
+        Self {
+            sort: VecDeque::new(),
+            filter: RwSignal::new("".to_string()),
+            update: RwSignal::new(0),
+            parents,
+        }
+    }
+}
 impl DataFormTrait for SymbolsTable {
-    type TableDataProvider = SymbolsTableDataProvider;
+    type TableDataProvider = SymbolsTable;
     type RowType = SymbolsRow;
     type DataType = Symbols;
 
-    fn new_provider(parents: HashMap<String, Uuid>) -> SymbolsTableDataProvider {
-        SymbolsTableDataProvider::new(parents)
+    fn new_provider(parents: HashMap<String, Uuid>) -> SymbolsTable {
+        SymbolsTable::new(parents)
     }
 
     fn capabilities() -> BitFlags<Capabilities, u8> {
@@ -164,6 +182,8 @@ impl DataFormTrait for SymbolsTable {
         symbols_count(parents).await
     }
 }
+
+table_data_provider_impl!(SymbolsTable);
 
 #[allow(non_snake_case)]
 #[component]

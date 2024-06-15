@@ -1,23 +1,22 @@
-use crate::classes::ClassesPreset;
-use crate::data::QueryParams;
-#[cfg(feature = "ssr")]
-use crate::data::{
-    add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
-};
-#[cfg(feature = "ssr")]
-use crate::entity;
 use ::chrono::NaiveDateTime;
+use cfg_if::cfg_if;
 use leptos::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::ops::Range;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
-#[cfg(feature = "ssr")]
-use sea_orm::*;
+cfg_if! { if #[cfg(feature="ssr")] {
+    use sea_orm::*;
+    use crate::entity;
+    use crate::data::{
+        add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
+    };
+}}
 
-use super::{ExtraRowTrait, ExtraTableDataProvider};
+use super::ExtraRowTrait;
+use crate::classes::ClassesPreset;
+use crate::data::QueryParams;
 
 #[derive(TableRow, Debug, Clone)]
 #[table(sortable, classes_provider = ClassesPreset)]
@@ -95,6 +94,21 @@ impl EntityInfo for entity::version::Entity {
     }
 }
 
+impl From<Version> for VersionRow {
+    fn from(version: Version) -> Self {
+        Self {
+            id: version.id,
+            name: version.name,
+            hash: version.hash,
+            tag: version.tag,
+            product_id: Some(version.product_id),
+            created_at: version.created_at,
+            updated_at: version.updated_at,
+            product: "".to_string(),
+        }
+    }
+}
+
 #[cfg(feature = "ssr")]
 impl From<entity::version::Model> for Version {
     fn from(model: entity::version::Model) -> Self {
@@ -133,81 +147,6 @@ impl ExtraRowTrait for VersionRow {
 
     fn get_name(&self) -> String {
         self.name.clone()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct VersionTableDataProvider {
-    sort: VecDeque<(usize, ColumnSort)>,
-    name: RwSignal<String>,
-    update: RwSignal<u64>,
-    parents: HashMap<String, Uuid>,
-}
-
-impl VersionTableDataProvider {
-    pub fn new(parents: HashMap<String, Uuid>) -> Self {
-        Self {
-            sort: VecDeque::new(),
-            name: RwSignal::new("".to_string()),
-            update: RwSignal::new(0),
-            parents,
-        }
-    }
-}
-
-impl ExtraTableDataProvider<VersionRow> for VersionTableDataProvider {
-    fn get_filter_signal(&self) -> RwSignal<String> {
-        self.name
-    }
-
-    fn update(&self) {
-        self.update.set(self.update.get() + 1);
-    }
-}
-
-impl TableDataProvider<VersionRow> for VersionTableDataProvider {
-    async fn get_rows(
-        &self,
-        range: Range<usize>,
-    ) -> Result<(Vec<VersionRow>, Range<usize>), String> {
-        let versions = version_list(
-            self.parents.clone(),
-            QueryParams {
-                filter: self.name.get_untracked().trim().to_string(),
-                sorting: self.sort.clone(),
-                range: range.clone(),
-            },
-        )
-        .await
-        .map_err(|e| format!("{e:?}"))?
-        .into_iter()
-        .map(|version| VersionRow {
-            id: version.id,
-            product_id: Some(version.product_id),
-            product: version.product.clone(),
-            hash: version.hash.clone(),
-            tag: version.tag.clone(),
-            created_at: version.created_at,
-            updated_at: version.updated_at,
-            name: version.name.clone(),
-        })
-        .collect::<Vec<VersionRow>>();
-
-        let len = versions.len();
-        Ok((versions, range.start..range.start + len))
-    }
-
-    async fn row_count(&self) -> Option<usize> {
-        version_count(self.parents.clone()).await.ok()
-    }
-
-    fn set_sorting(&mut self, sorting: &VecDeque<(usize, ColumnSort)>) {
-        self.sort = sorting.clone();
-    }
-
-    fn track(&self) {
-        self.name.track();
-        self.update.track();
     }
 }
 

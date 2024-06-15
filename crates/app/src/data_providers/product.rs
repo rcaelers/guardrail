@@ -1,25 +1,23 @@
-use crate::classes::ClassesPreset;
-use crate::data::QueryParams;
-#[cfg(feature = "ssr")]
-use crate::data::{
-    add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
-};
-#[cfg(feature = "ssr")]
-use crate::entity;
 use ::chrono::NaiveDateTime;
+use cfg_if::cfg_if;
 use leptos::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "ssr")]
-use std::collections::HashMap;
-use std::collections::{HashSet, VecDeque};
-use std::ops::Range;
+use std::collections::HashSet;
 use uuid::Uuid;
 
-#[cfg(feature = "ssr")]
-use sea_orm::*;
+cfg_if! { if #[cfg(feature="ssr")] {
+    use sea_orm::*;
+    use std::collections::HashMap;
+    use crate::entity;
+    use crate::data::{
+        add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
+    };
+}}
 
-use super::{ExtraRowTrait, ExtraTableDataProvider};
+use super::ExtraRowTrait;
+use crate::classes::ClassesPreset;
+use crate::data::QueryParams;
 
 #[derive(TableRow, Debug, Clone)]
 #[table(sortable, classes_provider = ClassesPreset)]
@@ -69,6 +67,16 @@ impl EntityInfo for entity::product::Entity {
     }
 }
 
+impl From<Product> for ProductRow {
+    fn from(product: Product) -> Self {
+        Self {
+            id: product.id,
+            name: product.name,
+            created_at: product.created_at,
+            updated_at: product.updated_at,
+        }
+    }
+}
 #[cfg(feature = "ssr")]
 impl From<entity::product::Model> for Product {
     fn from(model: entity::product::Model) -> Self {
@@ -100,78 +108,6 @@ impl ExtraRowTrait for ProductRow {
 
     fn get_name(&self) -> String {
         self.name.clone()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ProductTableDataProvider {
-    sort: VecDeque<(usize, ColumnSort)>,
-    filter: RwSignal<String>,
-    update: RwSignal<u64>,
-}
-
-impl ProductTableDataProvider {
-    pub fn new() -> Self {
-        Self {
-            sort: VecDeque::new(),
-            filter: RwSignal::new("".to_string()),
-            update: RwSignal::new(0),
-        }
-    }
-}
-
-impl ExtraTableDataProvider<ProductRow> for ProductTableDataProvider {
-    fn get_filter_signal(&self) -> RwSignal<String> {
-        self.filter
-    }
-
-    fn update(&self) {
-        self.update.set(self.update.get() + 1);
-    }
-}
-
-impl Default for ProductTableDataProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TableDataProvider<ProductRow> for ProductTableDataProvider {
-    async fn get_rows(
-        &self,
-        range: Range<usize>,
-    ) -> Result<(Vec<ProductRow>, Range<usize>), String> {
-        let products = product_list(QueryParams {
-            filter: self.filter.get_untracked().trim().to_string(),
-            sorting: self.sort.clone(),
-            range: range.clone(),
-        })
-        .await
-        .map_err(|e| format!("{e:?}"))?
-        .into_iter()
-        .map(|product| ProductRow {
-            id: product.id,
-            created_at: product.created_at,
-            updated_at: product.updated_at,
-            name: product.name.clone(),
-        })
-        .collect::<Vec<ProductRow>>();
-
-        let len = products.len();
-        Ok((products, range.start..range.start + len))
-    }
-
-    async fn row_count(&self) -> Option<usize> {
-        product_count().await.ok()
-    }
-
-    fn set_sorting(&mut self, sorting: &VecDeque<(usize, ColumnSort)>) {
-        self.sort = sorting.clone();
-    }
-
-    fn track(&self) {
-        self.filter.track();
-        self.update.track();
     }
 }
 

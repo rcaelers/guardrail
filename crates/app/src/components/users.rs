@@ -1,28 +1,46 @@
-use std::collections::{HashMap, HashSet};
-
 use indexmap::IndexMap;
 use leptos::*;
+use leptos_struct_table::*;
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::ops::Range;
 use uuid::Uuid;
 
+use super::dataform::DataFormTrait;
 use crate::components::dataform::DataFormPage;
 use crate::components::form::Field;
 use crate::data::QueryParams;
 use crate::data_providers::user::{
     user_add, user_count, user_get, user_list, user_list_names, user_remove, user_update, User,
-    UserRow, UserTableDataProvider,
+    UserRow,
 };
+use crate::data_providers::ExtraTableDataProvider;
+use crate::table_data_provider_impl;
 
-use super::dataform::DataFormTrait;
+#[derive(Debug, Clone)]
+pub struct UserTable {
+    sort: VecDeque<(usize, ColumnSort)>,
+    filter: RwSignal<String>,
+    update: RwSignal<u64>,
+    parents: HashMap<String, Uuid>,
+}
 
-pub struct UserTable;
-
+impl UserTable {
+    pub fn new(parents: HashMap<String, Uuid>) -> Self {
+        Self {
+            sort: VecDeque::new(),
+            filter: RwSignal::new("".to_string()),
+            update: RwSignal::new(0),
+            parents,
+        }
+    }
+}
 impl DataFormTrait for UserTable {
-    type TableDataProvider = UserTableDataProvider;
+    type TableDataProvider = UserTable;
     type RowType = UserRow;
     type DataType = User;
 
-    fn new_provider(_parents: HashMap<String, Uuid>) -> UserTableDataProvider {
-        UserTableDataProvider::new()
+    fn new_provider(parents: HashMap<String, Uuid>) -> UserTable {
+        UserTable::new(parents)
     }
 
     fn get_data_type_name() -> String {
@@ -96,6 +114,8 @@ impl DataFormTrait for UserTable {
         user_count().await
     }
 }
+
+table_data_provider_impl!(UserTable);
 
 #[allow(non_snake_case)]
 #[component]

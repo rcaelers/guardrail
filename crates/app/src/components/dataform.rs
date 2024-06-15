@@ -56,6 +56,7 @@ pub trait LocalDataFormTrait {
     fn get_related() -> Vec<Related> {
         vec![]
     }
+
     fn get_foreign() -> Vec<Foreign> {
         vec![]
     }

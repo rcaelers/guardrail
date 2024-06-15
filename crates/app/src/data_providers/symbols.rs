@@ -1,24 +1,24 @@
-use crate::classes::ClassesPreset;
-#[cfg(feature = "ssr")]
-use crate::data::EntityInfo;
-use crate::data::QueryParams;
-#[cfg(feature = "ssr")]
-use crate::data::{add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update};
-#[cfg(feature = "ssr")]
-use crate::entity;
 use ::chrono::NaiveDateTime;
+use cfg_if::cfg_if;
 use leptos::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::ops::Range;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
 use std::vec;
 use uuid::Uuid;
 
-#[cfg(feature = "ssr")]
-use sea_orm::*;
+cfg_if! { if #[cfg(feature="ssr")] {
+    use sea_orm::*;
+    use crate::entity;
+    use crate::data::{
+        add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
+    };
+}}
 
-use super::{ExtraRowTrait, ExtraTableDataProvider};
+use super::ExtraRowTrait;
+use crate::classes::ClassesPreset;
+use crate::data::QueryParams;
 
 #[derive(TableRow, Debug, Clone)]
 #[table(sortable, classes_provider = ClassesPreset)]
@@ -177,72 +177,6 @@ impl ExtraRowTrait for SymbolsRow {
 
     fn get_name(&self) -> String {
         self.build_id.clone()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct SymbolsTableDataProvider {
-    sort: VecDeque<(usize, ColumnSort)>,
-    filter: RwSignal<String>,
-    update: RwSignal<u64>,
-    parents: HashMap<String, Uuid>,
-}
-
-impl SymbolsTableDataProvider {
-    pub fn new(parents: HashMap<String, Uuid>) -> Self {
-        Self {
-            sort: VecDeque::new(),
-            filter: RwSignal::new("".to_string()),
-            update: RwSignal::new(0),
-            parents,
-        }
-    }
-}
-
-impl ExtraTableDataProvider<SymbolsRow> for SymbolsTableDataProvider {
-    fn get_filter_signal(&self) -> RwSignal<String> {
-        self.filter
-    }
-
-    fn update(&self) {
-        self.update.set(self.update.get() + 1);
-    }
-}
-
-impl TableDataProvider<SymbolsRow> for SymbolsTableDataProvider {
-    async fn get_rows(
-        &self,
-        range: Range<usize>,
-    ) -> Result<(Vec<SymbolsRow>, Range<usize>), String> {
-        let symbols = symbols_list(
-            self.parents.clone(),
-            QueryParams {
-                filter: self.filter.get_untracked().trim().to_string(),
-                sorting: self.sort.clone(),
-                range: range.clone(),
-            },
-        )
-        .await
-        .map_err(|e| format!("{e:?}"))?
-        .into_iter()
-        .map(|symbols| symbols.into())
-        .collect::<Vec<SymbolsRow>>();
-
-        let len = symbols.len();
-        Ok((symbols, range.start..range.start + len))
-    }
-
-    async fn row_count(&self) -> Option<usize> {
-        symbols_count(self.parents.clone()).await.ok()
-    }
-
-    fn set_sorting(&mut self, sorting: &VecDeque<(usize, ColumnSort)>) {
-        self.sort = sorting.clone();
-    }
-
-    fn track(&self) {
-        self.filter.track();
-        self.update.track();
     }
 }
 

@@ -1,25 +1,24 @@
-use crate::classes::ClassesPreset;
-use crate::data::QueryParams;
-#[cfg(feature = "ssr")]
-use crate::data::{
-    add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
-};
-#[cfg(feature = "ssr")]
-use crate::entity;
 use ::chrono::NaiveDateTime;
+use cfg_if::cfg_if;
 use leptos::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
-#[cfg(feature = "ssr")]
-use std::collections::HashMap;
-use std::collections::{HashSet, VecDeque};
-use std::ops::Range;
 use uuid::Uuid;
 
-#[cfg(feature = "ssr")]
-use sea_orm::*;
+cfg_if! { if #[cfg(feature="ssr")] {
+    use sea_orm::*;
+    use std::collections::HashMap;
+    use std::collections::HashSet;
+    use crate::entity;
 
-use super::{ExtraRowTrait, ExtraTableDataProvider};
+    use crate::data::{
+        add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
+    };
+}}
+
+use super::ExtraRowTrait;
+use crate::classes::ClassesPreset;
+use crate::data::QueryParams;
 
 #[derive(TableRow, Debug, Clone)]
 #[table(sortable, classes_provider = ClassesPreset)]
@@ -72,6 +71,16 @@ impl EntityInfo for entity::user::Entity {
     }
 }
 
+impl From<User> for UserRow {
+    fn from(user: User) -> Self {
+        Self {
+            id: user.id,
+            username: user.username,
+            created_at: user.created_at,
+            updated_at: user.updated_at,
+        }
+    }
+}
 #[cfg(feature = "ssr")]
 impl From<entity::user::Model> for User {
     fn from(model: entity::user::Model) -> Self {
@@ -106,75 +115,6 @@ impl ExtraRowTrait for UserRow {
 
     fn get_name(&self) -> String {
         self.username.clone()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct UserTableDataProvider {
-    sort: VecDeque<(usize, ColumnSort)>,
-    name: RwSignal<String>,
-    update: RwSignal<u64>,
-}
-
-impl UserTableDataProvider {
-    pub fn new() -> Self {
-        Self {
-            sort: VecDeque::new(),
-            name: RwSignal::new("".to_string()),
-            update: RwSignal::new(0),
-        }
-    }
-}
-
-impl ExtraTableDataProvider<UserRow> for UserTableDataProvider {
-    fn get_filter_signal(&self) -> RwSignal<String> {
-        self.name
-    }
-
-    fn update(&self) {
-        self.update.set(self.update.get() + 1);
-    }
-}
-
-impl Default for UserTableDataProvider {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TableDataProvider<UserRow> for UserTableDataProvider {
-    async fn get_rows(&self, range: Range<usize>) -> Result<(Vec<UserRow>, Range<usize>), String> {
-        let users = user_list(QueryParams {
-            filter: self.name.get_untracked().trim().to_string(),
-            sorting: self.sort.clone(),
-            range: range.clone(),
-        })
-        .await
-        .map_err(|e| format!("{e:?}"))?
-        .into_iter()
-        .map(|user| UserRow {
-            id: user.id,
-            username: user.username.clone(),
-            created_at: user.created_at,
-            updated_at: user.updated_at,
-        })
-        .collect::<Vec<UserRow>>();
-
-        let len = users.len();
-        Ok((users, range.start..range.start + len))
-    }
-
-    async fn row_count(&self) -> Option<usize> {
-        user_count().await.ok()
-    }
-
-    fn set_sorting(&mut self, sorting: &VecDeque<(usize, ColumnSort)>) {
-        self.sort = sorting.clone();
-    }
-
-    fn track(&self) {
-        self.name.track();
-        self.update.track();
     }
 }
 
