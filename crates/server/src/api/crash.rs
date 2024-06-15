@@ -157,7 +157,7 @@ mod tests {
             .post("/api/crash")
             .content_type("application/json")
             .json(&serde_json::json!({
-               "report":"Report1", "version": "1.11", "product": "Workrave"
+               "report":"Report1", "version": "1.11", "product": "Workrave", "summary": "Summary1"
             }))
             .await;
         response.assert_status_ok();
@@ -169,7 +169,7 @@ mod tests {
             .post("/api/crash")
             .content_type("application/json")
             .json(&serde_json::json!({
-              "report":"Report2", "version": "1.12", "product_id": format!("{}", context.product1.id)
+              "report":"Report2", "version": "1.12", "product_id": format!("{}", context.product1.id), "summary": "Summary1"
             }))
             .await;
         response.assert_status_ok();
