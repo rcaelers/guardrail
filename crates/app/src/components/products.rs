@@ -1,3 +1,4 @@
+use enumflags2::BitFlags;
 use indexmap::IndexMap;
 use leptos::*;
 use leptos_struct_table::*;
@@ -5,16 +6,16 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
 use uuid::Uuid;
 
-use super::dataform::DataFormTrait;
-use crate::components::dataform::DataFormPage;
-use crate::components::form::Field;
+use super::datatable::{Capabilities, DataTableTrait};
+use crate::components::datatable::DataTable;
+use crate::components::datatable_form::Field;
 use crate::data::QueryParams;
 use crate::data_providers::product::{
     product_add, product_count, product_get, product_list, product_list_names, product_remove,
     product_update, Product, ProductRow,
 };
 use crate::data_providers::ExtraTableDataProvider;
-use crate::table_data_provider_impl;
+use crate::{authenticated_user_is_admin, table_data_provider_impl};
 
 #[derive(Debug, Clone)]
 pub struct ProductTable {
@@ -35,7 +36,7 @@ impl ProductTable {
     }
 }
 
-impl DataFormTrait for ProductTable {
+impl DataTableTrait for ProductTable {
     type TableDataProvider = ProductTable;
     type RowType = ProductRow;
     type DataType = Product;
@@ -48,17 +49,25 @@ impl DataFormTrait for ProductTable {
         "product".to_string()
     }
 
-    fn get_related() -> Vec<super::dataform::Related> {
+    async fn capabilities(&self) -> BitFlags<Capabilities, u8> {
+        let mut cap = Capabilities::CanEdit | Capabilities::CanDelete;
+        if authenticated_user_is_admin().await.unwrap_or(false) {
+            cap |= Capabilities::CanAdd;
+        }
+        cap
+    }
+
+    fn get_related() -> Vec<super::datatable::Related> {
         vec![
-            super::dataform::Related {
+            super::datatable::Related {
                 name: "Versions".to_string(),
                 url: "/admin/versions?product=".to_string(),
             },
-            super::dataform::Related {
+            super::datatable::Related {
                 name: "Symbols".to_string(),
                 url: "/admin/symbols?product=".to_string(),
             },
-            super::dataform::Related {
+            super::datatable::Related {
                 name: "Crashes".to_string(),
                 url: "/admin/crashes?product=".to_string(),
             },
@@ -78,7 +87,9 @@ impl DataFormTrait for ProductTable {
                                 .set(fetched_names);
                         });
                     }
-                    Err(e) => tracing::error!("Failed to fetch product names: {:?}", e),
+                    Err(e) => {
+                        tracing::error!("Failed to fetch product names: {:?}", e);
+                    }
                 }
             });
         });
@@ -105,30 +116,28 @@ impl DataFormTrait for ProductTable {
         }
     }
 
-    async fn get(id: Uuid) -> Result<Product, ServerFnError<String>> {
+    async fn get(id: Uuid) -> Result<Product, ServerFnError> {
         product_get(id).await
     }
     async fn list(
         _parents: HashMap<String, Uuid>,
         query_params: QueryParams,
-    ) -> Result<Vec<Product>, ServerFnError<String>> {
+    ) -> Result<Vec<Product>, ServerFnError> {
         product_list(query_params).await
     }
-    async fn list_names(
-        _parents: HashMap<String, Uuid>,
-    ) -> Result<HashSet<String>, ServerFnError<String>> {
+    async fn list_names(_parents: HashMap<String, Uuid>) -> Result<HashSet<String>, ServerFnError> {
         product_list_names().await
     }
-    async fn add(data: Product) -> Result<(), ServerFnError<String>> {
+    async fn add(data: Product) -> Result<(), ServerFnError> {
         product_add(data).await
     }
-    async fn update(data: Product) -> Result<(), ServerFnError<String>> {
+    async fn update(data: Product) -> Result<(), ServerFnError> {
         product_update(data).await
     }
-    async fn remove(id: Uuid) -> Result<(), ServerFnError<String>> {
+    async fn remove(id: Uuid) -> Result<(), ServerFnError> {
         product_remove(id).await
     }
-    async fn count(_parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>> {
+    async fn count(_parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError> {
         product_count().await
     }
 }
@@ -139,6 +148,6 @@ table_data_provider_impl!(ProductTable);
 #[component]
 pub fn ProductsPage() -> impl IntoView {
     view! {
-        <DataFormPage<ProductTable>/>
+        <DataTable<ProductTable>/>
     }
 }

@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
 
-use enumflags2::{bitflags, BitFlags};
+use enumflags2::{bitflags, BitFlag, BitFlags};
 use indexmap::IndexMap;
 use leptos::html::Div;
 use leptos::*;
@@ -12,8 +12,8 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::components::confirmation::ConfirmationModal;
-use crate::components::form::{Field, FormModal};
-use crate::components::header::Header;
+use crate::components::datatable_form::{DataTableModalForm, Field};
+use crate::components::datatable_header::DataTableHeader;
 use crate::data::QueryParams;
 use crate::data_providers::{ExtraRowTrait, ExtraTableDataProvider};
 
@@ -38,20 +38,19 @@ pub enum Capabilities {
     CanDelete = 0b0100,
 }
 
-#[trait_variant::make(DataFormTrait: Send)]
-pub trait LocalDataFormTrait {
+#[trait_variant::make(DataTableTrait: Send)]
+pub trait LocalDataTableTrait {
     type RowType: leptos_struct_table::TableRow + ExtraRowTrait + Clone + 'static;
     type TableDataProvider: leptos_struct_table::TableDataProvider<Self::RowType>
         + ExtraTableDataProvider<Self::RowType>
+        + DataTableTrait
         + Clone
         + 'static;
     type DataType: Default + Clone + Debug + 'static;
 
     fn new_provider(parents: HashMap<String, Uuid>) -> Self::TableDataProvider;
 
-    fn capabilities() -> BitFlags<Capabilities, u8> {
-        Capabilities::CanEdit | Capabilities::CanAdd | Capabilities::CanDelete
-    }
+    async fn capabilities(&self) -> BitFlags<Capabilities, u8>;
 
     fn get_related() -> Vec<Related> {
         vec![]
@@ -74,21 +73,22 @@ pub trait LocalDataFormTrait {
     async fn list(
         parents: HashMap<String, Uuid>,
         query_params: QueryParams,
-    ) -> Result<Vec<Self::DataType>, ServerFnError<String>>;
+    ) -> Result<Vec<Self::DataType>, ServerFnError>;
 
-    async fn get(id: Uuid) -> Result<Self::DataType, ServerFnError<String>>;
-    async fn list_names(
-        parents: HashMap<String, Uuid>,
-    ) -> Result<HashSet<String>, ServerFnError<String>>;
-    async fn add(data: Self::DataType) -> Result<(), ServerFnError<String>>;
-    async fn update(data: Self::DataType) -> Result<(), ServerFnError<String>>;
-    async fn remove(id: Uuid) -> Result<(), ServerFnError<String>>;
-    async fn count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>>;
+    async fn get(id: Uuid) -> Result<Self::DataType, ServerFnError>;
+    async fn list_names(parents: HashMap<String, Uuid>) -> Result<HashSet<String>, ServerFnError>;
+    async fn add(data: Self::DataType) -> Result<(), ServerFnError>;
+    async fn update(data: Self::DataType) -> Result<(), ServerFnError>;
+    async fn remove(id: Uuid) -> Result<(), ServerFnError>;
+    async fn count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError>;
 }
 
 #[allow(non_snake_case)]
 #[component]
-pub fn DataFormPage<T: DataFormTrait>(#[prop(optional)] _ty: PhantomData<T>) -> impl IntoView {
+pub fn DataTable<T>(#[prop(optional)] _ty: PhantomData<T>) -> impl IntoView
+where
+    T: DataTableTrait,
+{
     let query_map = use_query_map();
 
     let mut query = HashMap::new();
@@ -109,11 +109,20 @@ pub fn DataFormPage<T: DataFormTrait>(#[prop(optional)] _ty: PhantomData<T>) -> 
 
     let title = create_rw_signal("".to_string());
     let related = create_rw_signal(T::get_related());
-    let capabilities = create_rw_signal(T::capabilities());
 
     let scroll_container = create_node_ref::<Div>();
-    let rows = <T as DataFormTrait>::new_provider(query.clone());
+    let rows = T::new_provider(query.clone());
     let rows_clone = rows.clone();
+    let capabilities = create_rw_signal::<BitFlags<Capabilities, u8>>(Capabilities::empty());
+    //DataTableTrait::capabilities(&rows);
+
+    let rows_clone2 = rows.clone();
+    spawn_local(async move {
+        let c = DataTableTrait::capabilities(&rows_clone2).await;
+        capabilities.update(|caps| {
+            *caps = c;
+        })
+    });
 
     let selected_index: RwSignal<Option<usize>> = create_rw_signal(None);
     let (selected_row, set_selected_row) = create_signal(None);
@@ -140,7 +149,7 @@ pub fn DataFormPage<T: DataFormTrait>(#[prop(optional)] _ty: PhantomData<T>) -> 
     create_effect(move |_| {
         if let State::Idle = state.get() {
             let rows = rows.clone();
-            rows.update();
+            rows.refresh_table();
         }
     });
 
@@ -257,7 +266,7 @@ pub fn DataFormPage<T: DataFormTrait>(#[prop(optional)] _ty: PhantomData<T>) -> 
     };
 
     view! {
-        <Header
+        <DataTableHeader
             filter=filter
             capabilities=capabilities
             enabled=is_row_selected
@@ -287,7 +296,7 @@ pub fn DataFormPage<T: DataFormTrait>(#[prop(optional)] _ty: PhantomData<T>) -> 
             on_no_click=on_no_click.into()
         />
 
-        <FormModal
+        <DataTableModalForm
             title=title
             show=show_form_popup
             fields=fields

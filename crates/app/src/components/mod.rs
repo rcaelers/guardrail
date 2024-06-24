@@ -1,9 +1,10 @@
 pub mod confirmation;
 pub mod crash;
-pub mod dataform;
+pub mod crashes;
+pub mod datatable;
 pub mod error_template;
-pub mod form;
-pub mod header;
+pub mod datatable_form;
+pub mod datatable_header;
 pub mod login;
 pub mod logout;
 pub mod navbar;

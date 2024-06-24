@@ -8,10 +8,12 @@ use uuid::Uuid;
 
 cfg_if! { if #[cfg(feature="ssr")] {
     use sea_orm::*;
+    use sea_query::Expr;
     use crate::entity;
     use crate::data::{
-        add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
+        add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
     };
+    use crate::auth::AuthenticatedUser;
 }}
 
 use super::ExtraRowTrait;
@@ -81,10 +83,20 @@ impl EntityInfo for entity::version::Entity {
         }
     }
 
-    fn extend_query(query: Select<Self>) -> Select<Self> {
+    fn extend_query_for_view(query: Select<Self>) -> Select<Self> {
         query
             .join(JoinType::LeftJoin, entity::version::Relation::Product.def())
             .column_as(entity::product::Column::Name, "product")
+    }
+
+    fn get_product_query(
+        _user: &AuthenticatedUser,
+        data: &Self::View,
+    ) -> Option<Select<entity::product::Entity>> {
+        let query = entity::product::Entity::find().filter(
+            Expr::col((entity::product::Entity, entity::product::Column::Id)).eq(data.product_id),
+        );
+        Some(query)
     }
 
     fn id_to_column(id_name: String) -> Option<Self::Column> {
@@ -152,41 +164,43 @@ impl ExtraRowTrait for VersionRow {
 }
 
 #[server]
-pub async fn version_get(id: Uuid) -> Result<Version, ServerFnError<String>> {
-    get_by_id::<Version, entity::version::Entity>(id).await
+pub async fn version_get(id: Uuid) -> Result<Version, ServerFnError> {
+    get_by_id::<entity::version::Entity>(id).await
 }
 
 #[server]
 pub async fn version_list(
-    parents: HashMap<String, Uuid>,
+    #[server(default)] parents: HashMap<String, Uuid>,
     query_params: QueryParams,
-) -> Result<Vec<Version>, ServerFnError<String>> {
-    get_all2::<Version, entity::version::Entity>(query_params, parents).await
+) -> Result<Vec<Version>, ServerFnError> {
+    get_all::<entity::version::Entity>(query_params, parents).await
 }
 
 #[server]
 pub async fn version_list_names(
-    parents: HashMap<String, Uuid>,
-) -> Result<HashSet<String>, ServerFnError<String>> {
-    get_all_names2::<entity::version::Entity>(parents).await
+    #[server(default)] parents: HashMap<String, Uuid>,
+) -> Result<HashSet<String>, ServerFnError> {
+    get_all_names::<entity::version::Entity>(parents).await
 }
 
 #[server]
-pub async fn version_add(version: Version) -> Result<(), ServerFnError<String>> {
-    add::<Version, entity::version::Entity>(version).await
+pub async fn version_add(version: Version) -> Result<(), ServerFnError> {
+    add::<entity::version::Entity>(version).await
 }
 
 #[server]
-pub async fn version_update(version: Version) -> Result<(), ServerFnError<String>> {
-    update::<Version, entity::version::Entity>(version).await
+pub async fn version_update(version: Version) -> Result<(), ServerFnError> {
+    update::<entity::version::Entity>(version).await
 }
 
 #[server]
-pub async fn version_remove(id: Uuid) -> Result<(), ServerFnError<String>> {
+pub async fn version_remove(id: Uuid) -> Result<(), ServerFnError> {
     delete_by_id::<entity::version::Entity>(id).await
 }
 
 #[server]
-pub async fn version_count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>> {
-    count2::<entity::version::Entity>(parents).await
+pub async fn version_count(
+    #[server(default)] parents: HashMap<String, Uuid>,
+) -> Result<usize, ServerFnError> {
+    count::<entity::version::Entity>(parents).await
 }

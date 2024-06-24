@@ -10,8 +10,9 @@ cfg_if! { if #[cfg(feature="ssr")] {
     use sea_orm::*;
     use std::collections::HashMap;
     use crate::entity;
+    use crate::auth::AuthenticatedUser;
     use crate::data::{
-        add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
+        add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
     };
 }}
 
@@ -65,6 +66,14 @@ impl EntityInfo for entity::product::Entity {
             _ => None,
         }
     }
+
+    fn get_product_query(
+        _user: &AuthenticatedUser,
+        data: &Self::View,
+    ) -> Option<Select<entity::product::Entity>> {
+        let query = entity::product::Entity::find_by_id(data.id);
+        Some(query)
+    }
 }
 
 impl From<Product> for ProductRow {
@@ -112,36 +121,36 @@ impl ExtraRowTrait for ProductRow {
 }
 
 #[server]
-pub async fn product_get(id: Uuid) -> Result<Product, ServerFnError<String>> {
-    get_by_id::<Product, entity::product::Entity>(id).await
+pub async fn product_get(id: Uuid) -> Result<Product, ServerFnError> {
+    get_by_id::<entity::product::Entity>(id).await
 }
 
 #[server]
-pub async fn product_list(query: QueryParams) -> Result<Vec<Product>, ServerFnError<String>> {
-    get_all2::<Product, entity::product::Entity>(query, HashMap::new()).await
+pub async fn product_list(query: QueryParams) -> Result<Vec<Product>, ServerFnError> {
+    get_all::<entity::product::Entity>(query, HashMap::new()).await
 }
 
 #[server]
-pub async fn product_list_names() -> Result<HashSet<String>, ServerFnError<String>> {
-    get_all_names2::<entity::product::Entity>(HashMap::new()).await
+pub async fn product_list_names() -> Result<HashSet<String>, ServerFnError> {
+    get_all_names::<entity::product::Entity>(HashMap::new()).await
 }
 
 #[server]
-pub async fn product_add(product: Product) -> Result<(), ServerFnError<String>> {
-    add::<Product, entity::product::Entity>(product).await
+pub async fn product_add(product: Product) -> Result<(), ServerFnError> {
+    add::<entity::product::Entity>(product).await
 }
 
 #[server]
-pub async fn product_update(product: Product) -> Result<(), ServerFnError<String>> {
-    update::<Product, entity::product::Entity>(product).await
+pub async fn product_update(product: Product) -> Result<(), ServerFnError> {
+    update::<entity::product::Entity>(product).await
 }
 
 #[server]
-pub async fn product_remove(id: Uuid) -> Result<(), ServerFnError<String>> {
+pub async fn product_remove(id: Uuid) -> Result<(), ServerFnError> {
     delete_by_id::<entity::product::Entity>(id).await
 }
 
 #[server]
-pub async fn product_count() -> Result<usize, ServerFnError<String>> {
-    count2::<entity::product::Entity>(HashMap::new()).await
+pub async fn product_count() -> Result<usize, ServerFnError> {
+    count::<entity::product::Entity>(HashMap::new()).await
 }

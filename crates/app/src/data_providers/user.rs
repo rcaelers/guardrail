@@ -8,11 +8,12 @@ use uuid::Uuid;
 
 cfg_if! { if #[cfg(feature="ssr")] {
     use sea_orm::*;
+    use sea_query::Expr;
     use std::collections::HashMap;
     use crate::entity;
-
+    use crate::auth::AuthenticatedUser;
     use crate::data::{
-        add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
+        add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
     };
 }}
 
@@ -25,6 +26,7 @@ use crate::data::QueryParams;
 pub struct UserRow {
     pub id: Uuid,
     pub username: String,
+    pub is_admin: bool,
     #[table(format(string = "%d/%m/%Y - %H:%M"))]
     pub created_at: NaiveDateTime,
     #[table(format(string = "%d/%m/%Y - %H:%M"))]
@@ -36,6 +38,7 @@ pub struct UserRow {
 pub struct User {
     pub id: Uuid,
     pub username: String,
+    pub is_admin: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub last_login_at: Option<NaiveDateTime>,
@@ -47,11 +50,13 @@ pub struct User {
 pub struct User {
     pub id: Uuid,
     pub username: String,
+    pub is_admin: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub last_login_at: Option<NaiveDateTime>,
     //pub roles: Vec<String>,
 }
+
 #[cfg(feature = "ssr")]
 impl EntityInfo for entity::user::Entity {
     type View = User;
@@ -64,10 +69,24 @@ impl EntityInfo for entity::user::Entity {
         match index {
             0 => Some(entity::user::Column::Id),
             1 => Some(entity::user::Column::Username),
-            2 => Some(entity::user::Column::CreatedAt),
-            3 => Some(entity::user::Column::UpdatedAt),
+            2 => Some(entity::user::Column::IsAdmin),
+            3 => Some(entity::user::Column::CreatedAt),
+            4 => Some(entity::user::Column::UpdatedAt),
             _ => None,
         }
+    }
+
+    fn extend_query_for_access(
+        query: Select<Self>,
+        user: AuthenticatedUser,
+        _roles: Vec<String>,
+    ) -> Select<Self> {
+        if user.is_admin {
+            return query;
+        }
+        query.filter(
+            Expr::col((entity::user::Entity, entity::user::Column::Id)).eq(uuid::Uuid::nil()),
+        )
     }
 }
 
@@ -75,6 +94,7 @@ impl From<User> for UserRow {
     fn from(user: User) -> Self {
         Self {
             id: user.id,
+            is_admin: user.is_admin,
             username: user.username,
             created_at: user.created_at,
             updated_at: user.updated_at,
@@ -86,6 +106,7 @@ impl From<entity::user::Model> for User {
     fn from(model: entity::user::Model) -> Self {
         Self {
             id: model.id,
+            is_admin: model.is_admin,
             username: model.username,
             created_at: model.created_at,
             updated_at: model.updated_at,
@@ -101,6 +122,7 @@ impl From<User> for entity::user::ActiveModel {
         Self {
             id: Set(user.id),
             username: Set(user.username),
+            is_admin: Set(user.is_admin),
             created_at: sea_orm::NotSet,
             updated_at: sea_orm::NotSet,
             last_authenticated: sea_orm::NotSet,
@@ -119,13 +141,13 @@ impl ExtraRowTrait for UserRow {
 }
 
 #[server]
-pub async fn user_get(id: Uuid) -> Result<User, ServerFnError<String>> {
-    get_by_id::<User, entity::user::Entity>(id).await
+pub async fn user_get(id: Uuid) -> Result<User, ServerFnError> {
+    get_by_id::<entity::user::Entity>(id).await
 }
 
 #[server]
-pub async fn user_list(query: QueryParams) -> Result<Vec<User>, ServerFnError<String>> {
-    get_all2::<User, entity::user::Entity>(query, HashMap::new()).await
+pub async fn user_list(query: QueryParams) -> Result<Vec<User>, ServerFnError> {
+    get_all::<entity::user::Entity>(query, HashMap::new()).await
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -135,17 +157,16 @@ pub struct UserWithRoles {
 }
 
 #[server]
-async fn list_users_with_roles() -> Result<Vec<UserWithRoles>, ServerFnError<String>> {
-    let db = use_context::<DatabaseConnection>().ok_or(ServerFnError::WrappedServerError(
-        "No database connection".to_string(),
-    ))?;
+async fn list_users_with_roles() -> Result<Vec<UserWithRoles>, ServerFnError> {
+    let db = use_context::<DatabaseConnection>()
+        .ok_or(ServerFnError::new("No database connection".to_string()))?;
 
     let rows = entity::user::Entity::find()
         .left_join(entity::role::Entity)
         .select_also(entity::role::Entity)
         .all(&db)
         .await
-        .map_err(|e| ServerFnError::WrappedServerError(format!("{e:?}")))?;
+        .map_err(|e| ServerFnError::new(format!("{e:?}")))?;
 
     let mut user_map: HashMap<Uuid, UserWithRoles> = HashMap::new();
 
@@ -164,26 +185,26 @@ async fn list_users_with_roles() -> Result<Vec<UserWithRoles>, ServerFnError<Str
 }
 
 #[server]
-pub async fn user_list_names() -> Result<HashSet<String>, ServerFnError<String>> {
-    get_all_names2::<entity::user::Entity>(HashMap::new()).await
+pub async fn user_list_names() -> Result<HashSet<String>, ServerFnError> {
+    get_all_names::<entity::user::Entity>(HashMap::new()).await
 }
 
 #[server]
-pub async fn user_add(user: User) -> Result<(), ServerFnError<String>> {
-    add::<User, entity::user::Entity>(user).await
+pub async fn user_add(user: User) -> Result<(), ServerFnError> {
+    add::<entity::user::Entity>(user).await
 }
 
 #[server]
-pub async fn user_update(user: User) -> Result<(), ServerFnError<String>> {
-    update::<User, entity::user::Entity>(user).await
+pub async fn user_update(user: User) -> Result<(), ServerFnError> {
+    update::<entity::user::Entity>(user).await
 }
 
 #[server]
-pub async fn user_remove(id: Uuid) -> Result<(), ServerFnError<String>> {
+pub async fn user_remove(id: Uuid) -> Result<(), ServerFnError> {
     delete_by_id::<entity::user::Entity>(id).await
 }
 
 #[server]
-pub async fn user_count() -> Result<usize, ServerFnError<String>> {
-    count2::<entity::user::Entity>(HashMap::new()).await
+pub async fn user_count() -> Result<usize, ServerFnError> {
+    count::<entity::user::Entity>(HashMap::new()).await
 }

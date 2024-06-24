@@ -8,7 +8,7 @@ use leptos::*;
 use uuid::Uuid;
 
 pub trait ExtraTableDataProvider<T> {
-    fn update(&self);
+    fn refresh_table(&self);
     fn get_filter_signal(&self) -> RwSignal<String>;
 }
 
@@ -20,12 +20,12 @@ pub trait ExtraRowTrait {
 #[macro_export]
 macro_rules! table_data_provider_impl {
     ($provider:ty) => {
-        impl TableDataProvider<<Self as DataFormTrait>::RowType> for $provider {
+        impl TableDataProvider<<Self as DataTableTrait>::RowType> for $provider {
             async fn get_rows(
                 &self,
                 range: Range<usize>,
-            ) -> Result<(Vec<<Self as DataFormTrait>::RowType>, Range<usize>), String> {
-                let data = <Self as DataFormTrait>::list(
+            ) -> Result<(Vec<<Self as DataTableTrait>::RowType>, Range<usize>), String> {
+                let data = <Self as DataTableTrait>::list(
                     self.parents.clone(),
                     QueryParams {
                         filter: self.filter.get_untracked().trim().to_string(),
@@ -37,14 +37,14 @@ macro_rules! table_data_provider_impl {
                 .map_err(|e| format!("{e:?}"))?
                 .into_iter()
                 .map(|data| data.into())
-                .collect::<Vec<<Self as DataFormTrait>::RowType>>();
+                .collect::<Vec<<Self as DataTableTrait>::RowType>>();
 
                 let len = data.len();
                 Ok((data, range.start..range.start + len))
             }
 
             async fn row_count(&self) -> Option<usize> {
-                <Self as DataFormTrait>::count(self.parents.clone())
+                <Self as DataTableTrait>::count(self.parents.clone())
                     .await
                     .ok()
             }
@@ -59,12 +59,12 @@ macro_rules! table_data_provider_impl {
             }
         }
 
-        impl ExtraTableDataProvider<<Self as DataFormTrait>::RowType> for $provider {
+        impl ExtraTableDataProvider<<Self as DataTableTrait>::RowType> for $provider {
             fn get_filter_signal(&self) -> RwSignal<String> {
                 self.filter
             }
 
-            fn update(&self) {
+            fn refresh_table(&self) {
                 self.update.set(self.update.get() + 1);
             }
         }

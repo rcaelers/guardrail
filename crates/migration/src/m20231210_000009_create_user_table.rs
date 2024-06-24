@@ -18,6 +18,7 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .unique_key(),
                     )
+                    .col(ColumnDef::new(User::IsAdmin).boolean().not_null())
                     .col(
                         ColumnDef::new(User::CreatedAt)
                             .date_time()
@@ -48,6 +49,7 @@ pub enum User {
     Table,
     Id,
     Username,
+    IsAdmin,
     CreatedAt,
     UpdatedAt,
     LastAuthenticated,

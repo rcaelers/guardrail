@@ -41,7 +41,7 @@ impl From<Field> for FieldInternal {
 
 #[allow(non_snake_case)]
 #[component]
-pub fn FormModal(
+pub fn DataTableModalForm(
     title: RwSignal<String>,
     show: ReadSignal<bool>,
     fields: RwSignal<IndexMap<String, Field>>,
@@ -75,7 +75,7 @@ pub fn FormModal(
     view! {
         {move || {
             if show.get() {
-                view! {ß
+                view! {
                     <div class="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-50">
                         <div class="modal modal-open">
                             <div class="modal-box">

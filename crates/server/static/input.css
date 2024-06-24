@@ -2,22 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
-/* https://github.com/saadeghi/daisyui/pull/2956#issuecomment-2043840868 */
-
-@layer base {
-  :root:has(
-      :is(
-          .modal-open,
-          .modal:target,
-          .modal-toggle:checked + .modal,
-          .modal[open]
-        )
-    ) {
-    scrollbar-gutter: revert !important;
-  }
-}
 @layer components {
   @layer base {
+    /* https://github.com/saadeghi/daisyui/pull/2956#issuecomment-2043840868 */
+    :root:has(
+        :is(
+            .modal-open,
+            .modal:target,
+            .modal-toggle:checked + .modal,
+            .modal[open]
+          )
+      ) {
+      scrollbar-gutter: revert !important;
+    }
+
     html {
       font-family: "Montserrat", system-ui, sans-serif;
       font-size: 100%;

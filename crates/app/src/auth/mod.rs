@@ -18,6 +18,7 @@ cfg_if! { if #[cfg(feature="ssr")] {
 pub struct AuthenticatedUser {
     pub id: Uuid,
     pub username: String,
+    pub is_admin: bool,
 }
 
 impl AuthenticatedUser {
@@ -26,6 +27,7 @@ impl AuthenticatedUser {
         Self {
             id: user.id,
             username: user.username,
+            is_admin: user.is_admin,
         }
     }
 }

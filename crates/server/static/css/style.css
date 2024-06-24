@@ -1,5 +1,5 @@
 /*
-! tailwindcss v3.4.3 | MIT License | https://tailwindcss.com
+! tailwindcss v3.4.4 | MIT License | https://tailwindcss.com
 */
 
 /*
@@ -508,6 +508,10 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
+* {
+  scrollbar-color: currentColor transparent;
+}
+
 :root {
   color-scheme: dark;
   --su: 64.8% 0.150 160;
@@ -540,6 +544,19 @@ html {
   --wac: 100% 0 0;
   --er: 67.9289% 0.212472 36.254108;
   --erc: 100% 0 0;
+}
+
+/* https://github.com/saadeghi/daisyui/pull/2956#issuecomment-2043840868 */
+
+:root:has(
+        :is(
+            .modal-open,
+            .modal:target,
+            .modal-toggle:checked + .modal,
+            .modal[open]
+          )
+      ) {
+  scrollbar-gutter: revert !important;
 }
 
 html {
@@ -1394,8 +1411,7 @@ html {
   transform-origin: 100% 100%;
   scale: 4;
   translate: 1.5rem -1.5rem;
-  -webkit-clip-path: inset(calc(100% - 0.75rem) 0 0 calc(100% - 0.75rem));
-          clip-path: inset(calc(100% - 0.75rem) 0 0 calc(100% - 0.75rem));
+  clip-path: inset(calc(100% - 0.75rem) 0 0 calc(100% - 0.75rem));
 }
 
 .diff-resizer,
@@ -11257,21 +11273,6 @@ html:has(.drawer-open.drawer-open) {
 
 .forced-color-adjust-none {
   forced-color-adjust: none;
-}
-
-https://github.com/saadeghi/daisyui/pull/2956#issuecomment-2043840868
-
-@layer base {
-  :root:has(
-      :is(
-          .modal-open,
-          .modal:target,
-          .modal-toggle:checked + .modal,
-          .modal[open]
-        )
-    ) {
-    scrollbar-gutter: revert !important;
-  }
 }
 
 @media (hover:hover) {

@@ -10,9 +10,11 @@ use uuid::Uuid;
 
 cfg_if! { if #[cfg(feature="ssr")] {
     use sea_orm::*;
+    use sea_query::Expr;
     use crate::entity;
+    use crate::auth::AuthenticatedUser;
     use crate::data::{
-        add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
+        add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
     };
 }}
 
@@ -82,12 +84,22 @@ impl EntityInfo for entity::crash::Entity {
         }
     }
 
-    fn extend_query(query: Select<Self>) -> Select<Self> {
+    fn extend_query_for_view(query: Select<Self>) -> Select<Self> {
         query
             .join(JoinType::LeftJoin, entity::crash::Relation::Product.def())
             .join(JoinType::LeftJoin, entity::crash::Relation::Version.def())
             .column_as(entity::product::Column::Name, "product")
             .column_as(entity::version::Column::Name, "version")
+    }
+
+    fn get_product_query(
+        _user: &AuthenticatedUser,
+        data: &Self::View,
+    ) -> Option<Select<entity::product::Entity>> {
+        let query = entity::product::Entity::find().filter(
+            Expr::col((entity::product::Entity, entity::product::Column::Id)).eq(data.product_id),
+        );
+        Some(query)
     }
 
     fn id_to_column(id_name: String) -> Option<Self::Column> {
@@ -155,41 +167,43 @@ impl ExtraRowTrait for CrashRow {
 }
 
 #[server]
-pub async fn crash_get(id: Uuid) -> Result<Crash, ServerFnError<String>> {
-    get_by_id::<Crash, entity::crash::Entity>(id).await
+pub async fn crash_get(id: Uuid) -> Result<Crash, ServerFnError> {
+    get_by_id::<entity::crash::Entity>(id).await
 }
 
 #[server]
 pub async fn crash_list(
-    parents: HashMap<String, Uuid>,
+    #[server(default)] parents: HashMap<String, Uuid>,
     query_params: QueryParams,
-) -> Result<Vec<Crash>, ServerFnError<String>> {
-    get_all2::<Crash, entity::crash::Entity>(query_params, parents).await
+) -> Result<Vec<Crash>, ServerFnError> {
+    get_all::<entity::crash::Entity>(query_params, parents).await
 }
 
 #[server]
 pub async fn crash_list_names(
-    parents: HashMap<String, Uuid>,
-) -> Result<HashSet<String>, ServerFnError<String>> {
-    get_all_names2::<entity::crash::Entity>(parents).await
+    #[server(default)] parents: HashMap<String, Uuid>,
+) -> Result<HashSet<String>, ServerFnError> {
+    get_all_names::<entity::crash::Entity>(parents).await
 }
 
 #[server]
-pub async fn crash_add(crash: Crash) -> Result<(), ServerFnError<String>> {
-    add::<Crash, entity::crash::Entity>(crash).await
+pub async fn crash_add(crash: Crash) -> Result<(), ServerFnError> {
+    add::<entity::crash::Entity>(crash).await
 }
 
 #[server]
-pub async fn crash_update(crash: Crash) -> Result<(), ServerFnError<String>> {
-    update::<Crash, entity::crash::Entity>(crash).await
+pub async fn crash_update(crash: Crash) -> Result<(), ServerFnError> {
+    update::<entity::crash::Entity>(crash).await
 }
 
 #[server]
-pub async fn crash_remove(id: Uuid) -> Result<(), ServerFnError<String>> {
+pub async fn crash_remove(id: Uuid) -> Result<(), ServerFnError> {
     delete_by_id::<entity::crash::Entity>(id).await
 }
 
 #[server]
-pub async fn crash_count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>> {
-    count2::<entity::crash::Entity>(parents).await
+pub async fn crash_count(
+    #[server(default)] parents: HashMap<String, Uuid>,
+) -> Result<usize, ServerFnError> {
+    count::<entity::crash::Entity>(parents).await
 }

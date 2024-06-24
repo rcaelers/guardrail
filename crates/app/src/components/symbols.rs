@@ -7,9 +7,9 @@ use std::ops::Range;
 use tracing::error;
 use uuid::Uuid;
 
-use super::dataform::{Capabilities, DataFormTrait};
-use crate::components::dataform::DataFormPage;
-use crate::components::form::Field;
+use super::datatable::{Capabilities, DataTableTrait};
+use crate::components::datatable::DataTable;
+use crate::components::datatable_form::Field;
 use crate::data::QueryParams;
 use crate::data_providers::symbols::{
     symbols_add, symbols_count, symbols_get, symbols_list, symbols_list_names, symbols_remove,
@@ -36,7 +36,7 @@ impl SymbolsTable {
         }
     }
 }
-impl DataFormTrait for SymbolsTable {
+impl DataTableTrait for SymbolsTable {
     type TableDataProvider = SymbolsTable;
     type RowType = SymbolsRow;
     type DataType = Symbols;
@@ -45,7 +45,7 @@ impl DataFormTrait for SymbolsTable {
         SymbolsTable::new(parents)
     }
 
-    fn capabilities() -> BitFlags<Capabilities, u8> {
+    async fn capabilities(&self) -> BitFlags<Capabilities, u8> {
         Capabilities::CanDelete.into()
     }
 
@@ -53,13 +53,13 @@ impl DataFormTrait for SymbolsTable {
         "symbols".to_string()
     }
 
-    fn get_foreign() -> Vec<super::dataform::Foreign> {
+    fn get_foreign() -> Vec<super::datatable::Foreign> {
         vec![
-            super::dataform::Foreign {
+            super::datatable::Foreign {
                 id_name: "product_id".to_string(),
                 query: "product".to_string(),
             },
-            super::dataform::Foreign {
+            super::datatable::Foreign {
                 id_name: "version_id".to_string(),
                 query: "version".to_string(),
             },
@@ -155,30 +155,30 @@ impl DataFormTrait for SymbolsTable {
         }
     }
 
-    async fn get(id: Uuid) -> Result<Symbols, ServerFnError<String>> {
+    async fn get(id: Uuid) -> Result<Symbols, ServerFnError> {
         symbols_get(id).await
     }
     async fn list(
         parents: HashMap<String, Uuid>,
         query_params: QueryParams,
-    ) -> Result<Vec<Symbols>, ServerFnError<String>> {
+    ) -> Result<Vec<Symbols>, ServerFnError> {
         symbols_list(parents, query_params).await
     }
     async fn list_names(
         parents: HashMap<String, Uuid>,
-    ) -> Result<HashSet<String>, ServerFnError<String>> {
+    ) -> Result<HashSet<String>, ServerFnError> {
         symbols_list_names(parents).await
     }
-    async fn add(data: Symbols) -> Result<(), ServerFnError<String>> {
+    async fn add(data: Symbols) -> Result<(), ServerFnError> {
         symbols_add(data).await
     }
-    async fn update(data: Symbols) -> Result<(), ServerFnError<String>> {
+    async fn update(data: Symbols) -> Result<(), ServerFnError> {
         symbols_update(data).await
     }
-    async fn remove(id: Uuid) -> Result<(), ServerFnError<String>> {
+    async fn remove(id: Uuid) -> Result<(), ServerFnError> {
         symbols_remove(id).await
     }
-    async fn count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>> {
+    async fn count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError> {
         symbols_count(parents).await
     }
 }
@@ -189,6 +189,6 @@ table_data_provider_impl!(SymbolsTable);
 #[component]
 pub fn SymbolsPage() -> impl IntoView {
     view! {
-        <DataFormPage<SymbolsTable>/>
+        <DataTable<SymbolsTable>/>
     }
 }

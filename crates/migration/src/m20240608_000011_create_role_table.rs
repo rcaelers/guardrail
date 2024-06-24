@@ -1,6 +1,7 @@
 use sea_orm_migration::prelude::*;
 
-use super::m20231210_000009_create_user_table::User;
+use crate::m20230824_000001_create_product_table::Product;
+use crate::m20231210_000009_create_user_table::User;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -28,11 +29,20 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Role::Name).string().not_null())
                     .col(ColumnDef::new(Role::UserId).uuid().not_null())
+                    .col(ColumnDef::new(Role::ProductId).uuid().null())
                     .foreign_key(
                         ForeignKey::create()
                             .name("fk-role-user")
                             .from(Role::Table, Role::UserId)
                             .to(User::Table, User::Id)
+                            .on_delete(ForeignKeyAction::Cascade)
+                            .on_update(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk-role-product")
+                            .from(Role::Table, Role::ProductId)
+                            .to(Product::Table, Product::Id)
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
                     )
@@ -56,4 +66,5 @@ pub enum Role {
     UpdatedAt,
     Name,
     UserId,
+    ProductId,
 }

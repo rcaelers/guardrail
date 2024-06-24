@@ -10,10 +10,12 @@ use uuid::Uuid;
 
 cfg_if! { if #[cfg(feature="ssr")] {
     use sea_orm::*;
+    use sea_query::Expr;
     use crate::entity;
     use crate::data::{
-        add, count2, delete_by_id, get_all2, get_all_names2, get_by_id, update, EntityInfo,
+        add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
     };
+    use crate::auth::AuthenticatedUser;
 }}
 
 use super::ExtraRowTrait;
@@ -97,12 +99,22 @@ impl EntityInfo for entity::symbols::Entity {
         }
     }
 
-    fn extend_query(query: Select<Self>) -> Select<Self> {
+    fn extend_query_for_view(query: Select<Self>) -> Select<Self> {
         query
             .join(JoinType::LeftJoin, entity::symbols::Relation::Product.def())
             .join(JoinType::LeftJoin, entity::symbols::Relation::Version.def())
             .column_as(entity::product::Column::Name, "product")
             .column_as(entity::version::Column::Name, "version")
+    }
+
+    fn get_product_query(
+        _user: &AuthenticatedUser,
+        data: &Self::View,
+    ) -> Option<Select<entity::product::Entity>> {
+        let query = entity::product::Entity::find().filter(
+            Expr::col((entity::product::Entity, entity::product::Column::Id)).eq(data.product_id),
+        );
+        Some(query)
     }
 
     fn id_to_column(id_name: String) -> Option<Self::Column> {
@@ -181,41 +193,43 @@ impl ExtraRowTrait for SymbolsRow {
 }
 
 #[server]
-pub async fn symbols_get(id: Uuid) -> Result<Symbols, ServerFnError<String>> {
-    get_by_id::<Symbols, entity::symbols::Entity>(id).await
+pub async fn symbols_get(id: Uuid) -> Result<Symbols, ServerFnError> {
+    get_by_id::<entity::symbols::Entity>(id).await
 }
 
 #[server]
 pub async fn symbols_list(
-    parents: HashMap<String, Uuid>,
+    #[server(default)] parents: HashMap<String, Uuid>,
     query_params: QueryParams,
-) -> Result<Vec<Symbols>, ServerFnError<String>> {
-    get_all2::<Symbols, entity::symbols::Entity>(query_params, parents).await
+) -> Result<Vec<Symbols>, ServerFnError> {
+    get_all::<entity::symbols::Entity>(query_params, parents).await
 }
 
 #[server]
 pub async fn symbols_list_names(
-    parents: HashMap<String, Uuid>,
-) -> Result<HashSet<String>, ServerFnError<String>> {
-    get_all_names2::<entity::symbols::Entity>(parents).await
+    #[server(default)] parents: HashMap<String, Uuid>,
+) -> Result<HashSet<String>, ServerFnError> {
+    get_all_names::<entity::symbols::Entity>(parents).await
 }
 
 #[server]
-pub async fn symbols_add(symbols: Symbols) -> Result<(), ServerFnError<String>> {
-    add::<Symbols, entity::symbols::Entity>(symbols).await
+pub async fn symbols_add(symbols: Symbols) -> Result<(), ServerFnError> {
+    add::<entity::symbols::Entity>(symbols).await
 }
 
 #[server]
-pub async fn symbols_update(symbols: Symbols) -> Result<(), ServerFnError<String>> {
-    update::<Symbols, entity::symbols::Entity>(symbols).await
+pub async fn symbols_update(symbols: Symbols) -> Result<(), ServerFnError> {
+    update::<entity::symbols::Entity>(symbols).await
 }
 
 #[server]
-pub async fn symbols_remove(id: Uuid) -> Result<(), ServerFnError<String>> {
+pub async fn symbols_remove(id: Uuid) -> Result<(), ServerFnError> {
     delete_by_id::<entity::symbols::Entity>(id).await
 }
 
 #[server]
-pub async fn symbols_count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>> {
-    count2::<entity::symbols::Entity>(parents).await
+pub async fn symbols_count(
+    #[server(default)] parents: HashMap<String, Uuid>,
+) -> Result<usize, ServerFnError> {
+    count::<entity::symbols::Entity>(parents).await
 }

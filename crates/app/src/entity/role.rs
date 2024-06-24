@@ -14,10 +14,19 @@ pub struct Model {
     pub updated_at: DateTime,
     pub name: String,
     pub user_id: Uuid,
+    pub product_id: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::product::Entity",
+        from = "Column::ProductId",
+        to = "super::product::Column::Id",
+        on_update = "Cascade",
+        on_delete = "Cascade"
+    )]
+    Product,
     #[sea_orm(
         belongs_to = "super::user::Entity",
         from = "Column::UserId",
@@ -26,6 +35,12 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     User,
+}
+
+impl Related<super::product::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Product.def()
+    }
 }
 
 impl Related<super::user::Entity> for Entity {

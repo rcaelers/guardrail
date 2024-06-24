@@ -2,11 +2,11 @@ use enumflags2::BitFlags;
 use ev::MouseEvent;
 use leptos::*;
 
-use super::dataform::{Capabilities, Related};
+use super::datatable::{Capabilities, Related};
 
 #[allow(non_snake_case)]
 #[component]
-pub fn Header(
+pub fn DataTableHeader(
     filter: RwSignal<String>,
     enabled: Memo<bool>,
     capabilities: RwSignal<BitFlags<Capabilities, u8>>,
@@ -44,9 +44,10 @@ pub fn Header(
                 </div>
 
                 <div class="flex space-x-2">
-                    <button class="btn btn-primary"
-                            class:hidden=move || !capabilities.get().contains(Capabilities::CanAdd)
-                            on:click=on_add_click
+                    <button
+                        class="btn btn-primary"
+                        class:hidden=move || !capabilities.get().contains(Capabilities::CanAdd)
+                        on:click=on_add_click
                     >
                         "Add"
                     </button>
@@ -67,20 +68,24 @@ pub fn Header(
                         "Delete"
                     </button>
                     <For
-                        each=move || {related.get().into_iter().enumerate().collect::<Vec<_>>()}
-                        key=|(_index,related)| related.clone()
+                        each=move || { related.get().into_iter().enumerate().collect::<Vec<_>>() }
+                        key=|(_index, related)| related.clone()
                         children=move |(index, related)| {
-                        view! {
-                            <button
-                                class="btn btn-primary"
-                                class:btn-disabled=move || !enabled.get()
-                                on:click=move|_| { on_related_click(index); }
-                            >
-                                "Show " { related.name }
-                            </button>
+                            view! {
+                                <button
+                                    class="btn btn-primary"
+                                    class:btn-disabled=move || !enabled.get()
+                                    on:click=move |_| {
+                                        on_related_click(index);
+                                    }
+                                >
+                                    "Show "
+                                    {related.name}
+                                </button>
+                            }
                         }
-                    }
                     />
+
                 </div>
             </div>
         </header>

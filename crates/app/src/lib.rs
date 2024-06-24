@@ -18,7 +18,7 @@ use leptos_router::*;
 
 use auth::AuthenticatedUser;
 use components::{
-    crash::CrashPage,
+    crashes::CrashPage,
     error_template::{AppError, ErrorTemplate},
     login::LoginPage,
     navbar::Navbar,
@@ -35,6 +35,15 @@ type UserResource = Resource<i64, Option<AuthenticatedUser>>;
 #[server(GetUser)]
 pub async fn authenticated_user() -> Result<Option<AuthenticatedUser>, ServerFnError> {
     Ok(use_context::<Option<AuthenticatedUser>>().and_then(|u| u))
+}
+
+#[server(IsAdmin)]
+pub async fn authenticated_user_is_admin() -> Result<bool, ServerFnError> {
+    let user = authenticated_user()
+        .await?
+        .ok_or(ServerFnError::new("No authenticated user".to_string()))?;
+
+    Ok(user.is_admin)
 }
 
 #[allow(non_snake_case)]

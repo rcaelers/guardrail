@@ -1,3 +1,4 @@
+use enumflags2::BitFlags;
 use indexmap::IndexMap;
 use leptos::*;
 use leptos_struct_table::*;
@@ -5,9 +6,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
 use uuid::Uuid;
 
-use super::dataform::DataFormTrait;
-use crate::components::dataform::DataFormPage;
-use crate::components::form::Field;
+use super::datatable::{Capabilities, DataTableTrait};
+use crate::components::datatable::DataTable;
+use crate::components::datatable_form::Field;
 use crate::data::QueryParams;
 use crate::data_providers::user::{
     user_add, user_count, user_get, user_list, user_list_names, user_remove, user_update, User,
@@ -34,13 +35,17 @@ impl UserTable {
         }
     }
 }
-impl DataFormTrait for UserTable {
+impl DataTableTrait for UserTable {
     type TableDataProvider = UserTable;
     type RowType = UserRow;
     type DataType = User;
 
     fn new_provider(parents: HashMap<String, Uuid>) -> UserTable {
         UserTable::new(parents)
+    }
+
+    async fn capabilities(&self) -> BitFlags<Capabilities, u8> {
+        Capabilities::CanEdit | Capabilities::CanAdd | Capabilities::CanDelete
     }
 
     fn get_data_type_name() -> String {
@@ -87,30 +92,28 @@ impl DataFormTrait for UserTable {
         }
     }
 
-    async fn get(id: Uuid) -> Result<User, ServerFnError<String>> {
+    async fn get(id: Uuid) -> Result<User, ServerFnError> {
         user_get(id).await
     }
     async fn list(
         _parents: HashMap<String, Uuid>,
         query_params: QueryParams,
-    ) -> Result<Vec<User>, ServerFnError<String>> {
+    ) -> Result<Vec<User>, ServerFnError> {
         user_list(query_params).await
     }
-    async fn list_names(
-        _pparents: HashMap<String, Uuid>,
-    ) -> Result<HashSet<String>, ServerFnError<String>> {
+    async fn list_names(_parents: HashMap<String, Uuid>) -> Result<HashSet<String>, ServerFnError> {
         user_list_names().await
     }
-    async fn add(data: User) -> Result<(), ServerFnError<String>> {
+    async fn add(data: User) -> Result<(), ServerFnError> {
         user_add(data).await
     }
-    async fn update(data: User) -> Result<(), ServerFnError<String>> {
+    async fn update(data: User) -> Result<(), ServerFnError> {
         user_update(data).await
     }
-    async fn remove(id: Uuid) -> Result<(), ServerFnError<String>> {
+    async fn remove(id: Uuid) -> Result<(), ServerFnError> {
         user_remove(id).await
     }
-    async fn count(_parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>> {
+    async fn count(_parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError> {
         user_count().await
     }
 }
@@ -121,6 +124,6 @@ table_data_provider_impl!(UserTable);
 #[component]
 pub fn UsersPage() -> impl IntoView {
     view! {
-        <DataFormPage<UserTable>/>
+        <DataTable<UserTable>/>
     }
 }

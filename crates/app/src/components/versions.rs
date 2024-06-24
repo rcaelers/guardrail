@@ -1,14 +1,15 @@
+use enumflags2::BitFlags;
 use indexmap::IndexMap;
 use leptos::*;
 use leptos_struct_table::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
-use tracing::error;
+use tracing::{error, info};
 use uuid::Uuid;
 
-use super::dataform::DataFormTrait;
-use crate::components::dataform::DataFormPage;
-use crate::components::form::Field;
+use super::datatable::{Capabilities, DataTableTrait};
+use crate::components::datatable::DataTable;
+use crate::components::datatable_form::Field;
 use crate::data::QueryParams;
 use crate::data_providers::version::{
     version_add, version_count, version_get, version_list, version_list_names, version_remove,
@@ -36,7 +37,7 @@ impl VersionTable {
     }
 }
 
-impl DataFormTrait for VersionTable {
+impl DataTableTrait for VersionTable {
     type TableDataProvider = VersionTable;
     type RowType = VersionRow;
     type DataType = Version;
@@ -45,24 +46,32 @@ impl DataFormTrait for VersionTable {
         VersionTable::new(parents)
     }
 
+    async fn capabilities(&self) -> BitFlags<Capabilities, u8> {
+        let mut cap = Capabilities::CanEdit | Capabilities::CanDelete;
+        //if self.parents.contains_key("product_id") {
+        cap |= Capabilities::CanAdd;
+        //}
+        cap
+    }
+
     fn get_data_type_name() -> String {
         "version".to_string()
     }
 
-    fn get_related() -> Vec<super::dataform::Related> {
+    fn get_related() -> Vec<super::datatable::Related> {
         vec![
-            super::dataform::Related {
+            super::datatable::Related {
                 name: "Symbols".to_string(),
                 url: "/admin/symbols?version=".to_string(),
             },
-            super::dataform::Related {
+            super::datatable::Related {
                 name: "Crashes".to_string(),
                 url: "/admin/crashes?version=".to_string(),
             },
         ]
     }
-    fn get_foreign() -> Vec<super::dataform::Foreign> {
-        vec![super::dataform::Foreign {
+    fn get_foreign() -> Vec<super::datatable::Foreign> {
+        vec![super::datatable::Foreign {
             id_name: "product_id".to_string(),
             query: "product".to_string(),
         }]
@@ -134,30 +143,28 @@ impl DataFormTrait for VersionTable {
         }
     }
 
-    async fn get(id: Uuid) -> Result<Version, ServerFnError<String>> {
+    async fn get(id: Uuid) -> Result<Version, ServerFnError> {
         version_get(id).await
     }
     async fn list(
         parents: HashMap<String, Uuid>,
         query_params: QueryParams,
-    ) -> Result<Vec<Version>, ServerFnError<String>> {
+    ) -> Result<Vec<Version>, ServerFnError> {
         version_list(parents, query_params).await
     }
-    async fn list_names(
-        parents: HashMap<String, Uuid>,
-    ) -> Result<HashSet<String>, ServerFnError<String>> {
+    async fn list_names(parents: HashMap<String, Uuid>) -> Result<HashSet<String>, ServerFnError> {
         version_list_names(parents).await
     }
-    async fn add(data: Version) -> Result<(), ServerFnError<String>> {
+    async fn add(data: Version) -> Result<(), ServerFnError> {
         version_add(data).await
     }
-    async fn update(data: Version) -> Result<(), ServerFnError<String>> {
+    async fn update(data: Version) -> Result<(), ServerFnError> {
         version_update(data).await
     }
-    async fn remove(id: Uuid) -> Result<(), ServerFnError<String>> {
+    async fn remove(id: Uuid) -> Result<(), ServerFnError> {
         version_remove(id).await
     }
-    async fn count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError<String>> {
+    async fn count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError> {
         version_count(parents).await
     }
 }
@@ -168,6 +175,6 @@ table_data_provider_impl!(VersionTable);
 #[component]
 pub fn VersionsPage() -> impl IntoView {
     view! {
-        <DataFormPage<VersionTable>/>
+        <DataTable<VersionTable>/>
     }
 }
