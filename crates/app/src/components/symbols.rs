@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use enumflags2::BitFlags;
 use indexmap::IndexMap;
 use leptos::*;
@@ -36,8 +37,9 @@ impl SymbolsTable {
         }
     }
 }
+
+#[async_trait]
 impl DataTableTrait for SymbolsTable {
-    type TableDataProvider = SymbolsTable;
     type RowType = SymbolsRow;
     type DataType = Symbols;
 
@@ -66,7 +68,7 @@ impl DataTableTrait for SymbolsTable {
         ]
     }
 
-    fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, parents: HashMap<String, Uuid>) {
+    fn init_fields(fields: RwSignal<IndexMap<String, Field>>, parents: &HashMap<String, Uuid>) {
         let parents = parents.clone();
         create_effect(move |_| {
             let parents = parents.clone();
@@ -87,7 +89,11 @@ impl DataTableTrait for SymbolsTable {
         });
     }
 
-    fn update_fields(fields: RwSignal<IndexMap<String, Field>>, symbols: Symbols) {
+    async fn update_fields(
+        fields: RwSignal<IndexMap<String, Field>>,
+        symbols: Symbols,
+        _parents: &HashMap<String, Uuid>,
+    ) {
         fields.update(|field| {
             field
                 .entry("OS".to_string())
@@ -128,7 +134,7 @@ impl DataTableTrait for SymbolsTable {
     fn update_data(
         symbols: &mut Symbols,
         fields: RwSignal<IndexMap<String, Field>>,
-        parents: HashMap<String, Uuid>,
+        parents: &HashMap<String, Uuid>,
     ) {
         let product_id = parents.get("product_id").cloned();
         let version_id = parents.get("version_id").cloned();
@@ -164,9 +170,7 @@ impl DataTableTrait for SymbolsTable {
     ) -> Result<Vec<Symbols>, ServerFnError> {
         symbols_list(parents, query_params).await
     }
-    async fn list_names(
-        parents: HashMap<String, Uuid>,
-    ) -> Result<HashSet<String>, ServerFnError> {
+    async fn list_names(parents: HashMap<String, Uuid>) -> Result<HashSet<String>, ServerFnError> {
         symbols_list_names(parents).await
     }
     async fn add(data: Symbols) -> Result<(), ServerFnError> {

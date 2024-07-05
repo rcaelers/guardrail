@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use enumflags2::BitFlags;
 use indexmap::IndexMap;
 use leptos::*;
@@ -35,8 +36,9 @@ impl UserTable {
         }
     }
 }
+
+#[async_trait]
 impl DataTableTrait for UserTable {
-    type TableDataProvider = UserTable;
     type RowType = UserRow;
     type DataType = User;
 
@@ -52,7 +54,7 @@ impl DataTableTrait for UserTable {
         "user".to_string()
     }
 
-    fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, _parents: HashMap<String, Uuid>) {
+    fn init_fields(fields: RwSignal<IndexMap<String, Field>>, _parents: &HashMap<String, Uuid>) {
         create_effect(move |_| {
             spawn_local(async move {
                 match user_list_names().await {
@@ -71,7 +73,11 @@ impl DataTableTrait for UserTable {
         });
     }
 
-    fn update_fields(fields: RwSignal<IndexMap<String, Field>>, user: User) {
+    async fn update_fields(
+        fields: RwSignal<IndexMap<String, Field>>,
+        user: User,
+        _parents: &HashMap<String, Uuid>,
+    ) {
         fields.update(|field| {
             field
                 .entry("Name".to_string())
@@ -84,7 +90,7 @@ impl DataTableTrait for UserTable {
     fn update_data(
         user: &mut User,
         fields: RwSignal<IndexMap<String, Field>>,
-        _parents: HashMap<String, Uuid>,
+        _parents: &HashMap<String, Uuid>,
     ) {
         user.username = fields.get().get("Name").unwrap().value.get();
         if user.id.is_nil() {

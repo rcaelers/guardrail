@@ -1,38 +1,31 @@
 use indexmap::IndexMap;
 use leptos::*;
 use std::collections::HashSet;
-use tracing::info;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Field {
+    pub readonly: RwSignal<bool>,
     pub value: RwSignal<String>,
+    pub multiselect: RwSignal<Vec<String>>,
     pub disallowed: RwSignal<HashSet<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldInternal {
-    pub value: RwSignal<String>,
     pub initial_value: RwSignal<String>,
-    pub disallowed: RwSignal<HashSet<String>>,
     pub valid: Memo<bool>,
 }
 
 impl From<Field> for FieldInternal {
     fn from(field: Field) -> Self {
         let mut internal = FieldInternal {
-            value: field.value,
             initial_value: create_rw_signal(field.value.get_untracked()),
-            disallowed: field.disallowed,
             valid: create_memo(move |_| true),
         };
         internal.valid = create_memo(move |_| {
-            info!(
-                "valid check for {} {}",
-                internal.value.get(),
-                internal.disallowed.get().len()
-            );
-            !internal.disallowed.get().contains(&internal.value.get())
-                || internal.initial_value.get() == internal.value.get()
+            !field.disallowed.get().contains(&field.value.get())
+                || (!internal.initial_value.get().is_empty()
+                    && internal.initial_value.get() == field.value.get())
         });
 
         internal
@@ -49,7 +42,7 @@ pub fn DataTableModalForm(
     on_cancel_click: Callback<()>,
 ) -> impl IntoView {
     let fields_internal = create_memo(move |_| {
-        fields.with(|fields| {
+        fields.with_untracked(|fields| {
             fields
                 .iter()
                 .map(|(k, v)| {
@@ -60,17 +53,7 @@ pub fn DataTableModalForm(
         })
     });
 
-    let valid = create_memo(move |_| {
-        fields_internal().values().all(|field| {
-            info!(
-                "valid check for {} {} {}",
-                field.value.get(),
-                field.disallowed.get().len(),
-                field.valid.get()
-            );
-            field.valid.get()
-        })
-    });
+    let valid = create_memo(move |_| fields_internal().values().all(|field| field.valid.get()));
 
     view! {
         {move || {
@@ -82,22 +65,62 @@ pub fn DataTableModalForm(
                                 <h2 class="font-bold text-lg">{title}</h2>
                                 <For
                                     each=fields_internal
-                                    key=|field| field.0.clone()
-                                    children=move |field| {
+                                    key=|internal_field| internal_field.0.clone()
+                                    children=move |internal_field| {
+                                        let field = fields
+                                            .get()
+                                            .get(&internal_field.0)
+                                            .unwrap()
+                                            .clone();
                                         view! {
                                             <div class="mt-4">
                                                 <label class="block text-sm font-medium text-gray-700">
-                                                    {field.0}
+                                                    {internal_field.0}
                                                 </label>
-                                                <input
-                                                    type="text"
-                                                    class:input-error=move || !field.1.valid.get()
-                                                    class="input input-bordered w-full mt-1"
-                                                    value=field.1.value.get()
-                                                    on:input=move |ev| {
-                                                        field.1.value.set(event_target_value(&ev))
+                                                {if !field.multiselect.get().is_empty() {
+                                                    view! {
+                                                        <select
+                                                            class="select select-bordered w-full mt-1"
+                                                            on:change=move |ev| {
+                                                                field
+                                                                    .value
+                                                                    .update(|data| {
+                                                                        *data = event_target_value(&ev);
+                                                                    });
+                                                            }
+                                                        >
+
+                                                            <For
+                                                                each=field.multiselect
+                                                                key=|name| name.clone()
+                                                                children=move |name| {
+                                                                    let name_clone = name.clone();
+                                                                    view! {
+                                                                        <option selected=move || {
+                                                                            field.value.get() == name
+                                                                        }>{name_clone}</option>
+                                                                    }
+                                                                }
+                                                            />
+
+                                                        </select>
                                                     }
-                                                />
+                                                        .into_view()
+                                                } else {
+                                                    view! {
+                                                        <input
+                                                            type="text"
+                                                            class:input-error=move || !internal_field.1.valid.get()
+                                                            class="input input-bordered w-full mt-1"
+                                                            value=field.value.get()
+                                                            disabled=move || field.readonly.get()
+                                                            on:input=move |ev| {
+                                                                field.value.set(event_target_value(&ev))
+                                                            }
+                                                        />
+                                                    }
+                                                        .into_view()
+                                                }}
 
                                             </div>
                                         }

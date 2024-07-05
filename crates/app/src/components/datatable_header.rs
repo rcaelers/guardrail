@@ -79,6 +79,7 @@ pub fn DataTableHeader(
                                         on_related_click(index);
                                     }
                                 >
+
                                     "Show "
                                     {related.name}
                                 </button>

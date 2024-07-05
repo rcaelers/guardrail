@@ -49,7 +49,7 @@ where
     fn extend_query_for_access(
         query: Select<Self>,
         user: AuthenticatedUser,
-        roles: Vec<String>,
+        _roles: Vec<String>,
     ) -> Select<Self> {
         if user.is_admin {
             return query;

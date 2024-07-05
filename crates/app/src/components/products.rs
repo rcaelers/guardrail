@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use enumflags2::BitFlags;
 use indexmap::IndexMap;
 use leptos::*;
@@ -36,8 +37,8 @@ impl ProductTable {
     }
 }
 
+#[async_trait]
 impl DataTableTrait for ProductTable {
-    type TableDataProvider = ProductTable;
     type RowType = ProductRow;
     type DataType = Product;
 
@@ -74,7 +75,7 @@ impl DataTableTrait for ProductTable {
         ]
     }
 
-    fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, _parents: HashMap<String, Uuid>) {
+    fn init_fields(fields: RwSignal<IndexMap<String, Field>>, _parents: &HashMap<String, Uuid>) {
         create_effect(move |_| {
             spawn_local(async move {
                 match product_list_names().await {
@@ -95,7 +96,11 @@ impl DataTableTrait for ProductTable {
         });
     }
 
-    fn update_fields(fields: RwSignal<IndexMap<String, Field>>, product: Product) {
+    async fn update_fields(
+        fields: RwSignal<IndexMap<String, Field>>,
+        product: Product,
+        _parents: &HashMap<String, Uuid>,
+    ) {
         fields.update(|field| {
             field
                 .entry("Name".to_string())
@@ -108,7 +113,7 @@ impl DataTableTrait for ProductTable {
     fn update_data(
         product: &mut Product,
         fields: RwSignal<IndexMap<String, Field>>,
-        _parents: HashMap<String, Uuid>,
+        _parents: &HashMap<String, Uuid>,
     ) {
         product.name = fields.get().get("Name").unwrap().value.get();
         if product.id.is_nil() {

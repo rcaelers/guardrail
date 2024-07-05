@@ -8,7 +8,9 @@ use uuid::Uuid;
 
 cfg_if! { if #[cfg(feature="ssr")] {
     use sea_orm::*;
+    use sea_query::Expr;
     use std::collections::HashMap;
+    use crate::authenticated_user;
     use crate::entity;
     use crate::auth::AuthenticatedUser;
     use crate::data::{
@@ -153,4 +155,29 @@ pub async fn product_remove(id: Uuid) -> Result<(), ServerFnError> {
 #[server]
 pub async fn product_count() -> Result<usize, ServerFnError> {
     count::<entity::product::Entity>(HashMap::new()).await
+}
+
+#[server]
+pub async fn product_get_by_name(name: String) -> Result<Product, ServerFnError> {
+    let db = use_context::<DatabaseConnection>()
+        .ok_or(ServerFnError::new("No database connection".to_string()))?;
+
+    let user = authenticated_user()
+        .await?
+        .ok_or(ServerFnError::new("No authenticated user".to_string()))?;
+
+    let mut query = entity::product::Entity::find();
+    query = entity::product::Entity::extend_query_for_view(query);
+    query = entity::product::Entity::extend_query_for_access(query, user, vec![]);
+    query =
+        query.filter(Expr::col((entity::product::Entity, entity::product::Column::Name)).eq(name));
+
+    let items = query
+        .into_model::<Product>()
+        .one(&db)
+        .await
+        .map_err(|e| ServerFnError::new(format!("{e:?}")))?
+        .ok_or(ServerFnError::new("not found".to_string()))?;
+
+    Ok(items)
 }

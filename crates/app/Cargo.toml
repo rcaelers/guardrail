@@ -52,6 +52,7 @@ uuid.workspace = true
 webauthn-rs-proto.workspace = true
 indexmap.workspace = true
 trait-variant.workspace = true
+itertools.workspace = true
 
 [dev-dependencies]
 serial_test.workspace = true

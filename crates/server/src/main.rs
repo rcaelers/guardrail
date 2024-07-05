@@ -49,6 +49,7 @@ async fn init_logging() {
         .from_env()
         .unwrap()
         .add_directive("server=debug".parse().unwrap())
+        .add_directive("leptos=debug".parse().unwrap())
         .add_directive("app=debug".parse().unwrap());
 
     let subscriber = FmtSubscriber::builder()
@@ -133,7 +134,7 @@ async fn main() {
     let session_layer = SessionManagerLayer::new(session_store)
         .with_name("guardrail")
         .with_same_site(SameSite::Lax)
-        .with_expiry(Expiry::OnInactivity(Duration::hours(1)))
+        .with_expiry(Expiry::OnInactivity(Duration::hours(4)))
         .with_secure(false);
 
     let auth_layer = AuthLayer::new();

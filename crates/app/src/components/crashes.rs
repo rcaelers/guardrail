@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use enumflags2::BitFlags;
 use indexmap::IndexMap;
 use leptos::*;
@@ -36,8 +37,9 @@ impl CrashTable {
         }
     }
 }
+
+#[async_trait]
 impl DataTableTrait for CrashTable {
-    type TableDataProvider = CrashTable;
     type RowType = CrashRow;
     type DataType = Crash;
 
@@ -73,10 +75,11 @@ impl DataTableTrait for CrashTable {
         }]
     }
 
-    fn initial_fields(_fields: RwSignal<IndexMap<String, Field>>, _parents: HashMap<String, Uuid>) {
-    }
-
-    fn update_fields(fields: RwSignal<IndexMap<String, Field>>, crash: Crash) {
+    async fn update_fields(
+        fields: RwSignal<IndexMap<String, Field>>,
+        crash: Crash,
+        _parents: &HashMap<String, Uuid>,
+    ) {
         fields.update(|field| {
             field
                 .entry("Summary".to_string())
@@ -89,7 +92,7 @@ impl DataTableTrait for CrashTable {
     fn update_data(
         crash: &mut Crash,
         fields: RwSignal<IndexMap<String, Field>>,
-        parents: HashMap<String, Uuid>,
+        parents: &HashMap<String, Uuid>,
     ) {
         let product_id = parents.get("product_id").cloned();
         let version_id = parents.get("version_id").cloned();

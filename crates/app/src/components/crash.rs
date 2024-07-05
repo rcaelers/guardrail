@@ -11,9 +11,9 @@ pub fn Crash() -> impl IntoView {
 
     let q = query_map.get_untracked();
     let q = q.get("crash").unwrap();
-    let uuid = uuid::Uuid::parse_str(q).unwrap();
+    let _uuid = uuid::Uuid::parse_str(q).unwrap();
 
-    let fields: RwSignal<IndexMap<String, Field>> = create_rw_signal(IndexMap::new());
+    let _fields: RwSignal<IndexMap<String, Field>> = create_rw_signal(IndexMap::new());
 
     view! {
         // <Header

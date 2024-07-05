@@ -1,13 +1,13 @@
-use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
-use std::marker::PhantomData;
-
+use async_trait::async_trait;
 use enumflags2::{bitflags, BitFlag, BitFlags};
 use indexmap::IndexMap;
 use leptos::html::Div;
 use leptos::*;
 use leptos_router::*;
 use leptos_struct_table::*;
+use std::collections::{HashMap, HashSet};
+use std::fmt::Debug;
+use std::marker::PhantomData;
 use tracing::info;
 use uuid::Uuid;
 
@@ -38,17 +38,18 @@ pub enum Capabilities {
     CanDelete = 0b0100,
 }
 
-#[trait_variant::make(DataTableTrait: Send)]
-pub trait LocalDataTableTrait {
-    type RowType: leptos_struct_table::TableRow + ExtraRowTrait + Clone + 'static;
-    type TableDataProvider: leptos_struct_table::TableDataProvider<Self::RowType>
+#[async_trait]
+pub trait DataTableTrait
+where
+    Self: leptos_struct_table::TableDataProvider<Self::RowType>
         + ExtraTableDataProvider<Self::RowType>
-        + DataTableTrait
         + Clone
-        + 'static;
+        + 'static,
+{
+    type RowType: leptos_struct_table::TableRow + ExtraRowTrait + Clone + 'static;
     type DataType: Default + Clone + Debug + 'static;
 
-    fn new_provider(parents: HashMap<String, Uuid>) -> Self::TableDataProvider;
+    fn new_provider(parents: HashMap<String, Uuid>) -> Self;
 
     async fn capabilities(&self) -> BitFlags<Capabilities, u8>;
 
@@ -62,12 +63,17 @@ pub trait LocalDataTableTrait {
 
     fn get_data_type_name() -> String;
 
-    fn initial_fields(fields: RwSignal<IndexMap<String, Field>>, parent: HashMap<String, Uuid>);
-    fn update_fields(fields: RwSignal<IndexMap<String, Field>>, data: Self::DataType);
+    fn init_fields(_fields: RwSignal<IndexMap<String, Field>>, _parents: &HashMap<String, Uuid>) {}
+
+    async fn update_fields(
+        fields: RwSignal<IndexMap<String, Field>>,
+        data: Self::DataType,
+        parents: &HashMap<String, Uuid>,
+    );
     fn update_data(
         data: &mut Self::DataType,
         fields: RwSignal<IndexMap<String, Field>>,
-        parent_id: HashMap<String, Uuid>,
+        parents: &HashMap<String, Uuid>,
     );
 
     async fn list(
@@ -114,11 +120,10 @@ where
     let rows = T::new_provider(query.clone());
     let rows_clone = rows.clone();
     let capabilities = create_rw_signal::<BitFlags<Capabilities, u8>>(Capabilities::empty());
-    //DataTableTrait::capabilities(&rows);
 
     let rows_clone2 = rows.clone();
     spawn_local(async move {
-        let c = DataTableTrait::capabilities(&rows_clone2).await;
+        let c = rows_clone2.capabilities().await;
         capabilities.update(|caps| {
             *caps = c;
         })
@@ -144,7 +149,7 @@ where
     let current_row: RwSignal<Option<T::DataType>> = create_rw_signal(None);
     let is_row_selected = create_memo(move |_| selected_row.get().is_some());
 
-    T::initial_fields(fields, query.clone());
+    T::init_fields(fields, &query);
 
     create_effect(move |_| {
         if let State::Idle = state.get() {
@@ -189,22 +194,29 @@ where
         }
     });
 
-    let on_add_click = move |_: web_sys::MouseEvent| {
-        let data = T::DataType::default();
-        T::update_fields(fields, data);
-        state.set(State::Add);
-        title.set(format!("Add {}", T::get_data_type_name()));
-        set_show_form_popup.set(true);
-    };
+    let q1 = query.clone();
+    let on_add_click = Callback::new(move |_: web_sys::MouseEvent| {
+        let q1 = q1.clone();
+        spawn_local(async move {
+            let data: T::DataType = T::DataType::default();
+            T::update_fields(fields, data, &q1).await;
+            state.set(State::Add);
+            title.set(format!("Add {}", T::get_data_type_name()));
+            set_show_form_popup.set(true);
+        });
+    });
 
+    let q2 = query.clone();
     let on_edit_click = Callback::new(move |_: web_sys::MouseEvent| {
         let row = selected_row.get();
         if row.is_some() {
             let row: T::RowType = row.unwrap();
+            let q2 = q2.clone();
             spawn_local(async move {
                 let data: T::DataType = T::get(row.get_id()).await.unwrap();
                 current_row.set(Some(data.clone()));
-                T::update_fields(fields, data);
+                info!("Updating version {:?}", data);
+                T::update_fields(fields, data, &q2).await;
                 title.set(format!("Edit {}", T::get_data_type_name()));
                 state.set(State::Edit);
                 set_show_form_popup.set(true);
@@ -236,7 +248,7 @@ where
         match state.get() {
             State::Add => {
                 let mut data = T::DataType::default();
-                T::update_data(&mut data, fields, query.clone());
+                T::update_data(&mut data, fields, &query);
                 spawn_local(async move {
                     T::add(data).await.unwrap();
                     state.set(State::Idle);
@@ -244,7 +256,7 @@ where
             }
             State::Edit => {
                 let mut data = current_row.get().unwrap();
-                T::update_data(&mut data, fields, query.clone());
+                T::update_data(&mut data, fields, &query);
                 spawn_local(async move {
                     T::update(data).await.unwrap();
                     state.set(State::Idle);
@@ -272,7 +284,7 @@ where
             enabled=is_row_selected
             related=related
             on_edit_click=on_edit_click
-            on_add_click=on_add_click.into()
+            on_add_click=on_add_click
             on_delete_click=on_delete_click
             on_related_click=on_related_click
         />
