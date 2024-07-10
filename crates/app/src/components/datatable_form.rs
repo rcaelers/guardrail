@@ -2,17 +2,63 @@ use indexmap::IndexMap;
 use leptos::*;
 use std::collections::HashSet;
 
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
+pub enum FieldValue {
+    #[default]
+    Void,
+    String(String),
+    Bool(bool),
+}
+impl From<String> for FieldValue {
+    fn from(s: String) -> Self {
+        FieldValue::String(s)
+    }
+}
+
+impl From<&str> for FieldValue {
+    fn from(s: &str) -> Self {
+        FieldValue::String(s.to_string())
+    }
+}
+
+impl From<bool> for FieldValue {
+    fn from(b: bool) -> Self {
+        FieldValue::Bool(b)
+    }
+}
+
+impl FieldValue {
+    pub fn is_empty(&self) -> bool {
+        match self {
+            FieldValue::String(value) => value.is_empty(),
+            _ => false,
+        }
+    }
+    pub fn as_string(&self) -> String {
+        match self {
+            FieldValue::String(value) => value.clone(),
+            _ => "x".to_string(),
+        }
+    }
+    pub fn as_bool(&self) -> bool {
+        match self {
+            FieldValue::Bool(value) => *value,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Field {
     pub readonly: RwSignal<bool>,
-    pub value: RwSignal<String>,
+    pub value: RwSignal<FieldValue>,
     pub multiselect: RwSignal<Vec<String>>,
     pub disallowed: RwSignal<HashSet<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FieldInternal {
-    pub initial_value: RwSignal<String>,
+    pub initial_value: RwSignal<FieldValue>,
     pub valid: Memo<bool>,
 }
 
@@ -23,9 +69,13 @@ impl From<Field> for FieldInternal {
             valid: create_memo(move |_| true),
         };
         internal.valid = create_memo(move |_| {
-            !field.disallowed.get().contains(&field.value.get())
-                || (!internal.initial_value.get().is_empty()
-                    && internal.initial_value.get() == field.value.get())
+            if let FieldValue::String(value) = field.value.get() {
+                !field.disallowed.get().contains(&value)
+                    || (!internal.initial_value.get().is_empty()
+                        && internal.initial_value.get() == field.value.get())
+            } else {
+                true
+            }
         });
 
         internal
@@ -85,7 +135,7 @@ pub fn DataTableModalForm(
                                                                 field
                                                                     .value
                                                                     .update(|data| {
-                                                                        *data = event_target_value(&ev);
+                                                                        *data = FieldValue::String(event_target_value(&ev));
                                                                     });
                                                             }
                                                         >
@@ -97,7 +147,7 @@ pub fn DataTableModalForm(
                                                                     let name_clone = name.clone();
                                                                     view! {
                                                                         <option selected=move || {
-                                                                            field.value.get() == name
+                                                                            field.value.get() == name.clone().into()
                                                                         }>{name_clone}</option>
                                                                     }
                                                                 }
@@ -112,10 +162,10 @@ pub fn DataTableModalForm(
                                                             type="text"
                                                             class:input-error=move || !internal_field.1.valid.get()
                                                             class="input input-bordered w-full mt-1"
-                                                            value=field.value.get()
+                                                            value=field.value.get().as_string()
                                                             disabled=move || field.readonly.get()
                                                             on:input=move |ev| {
-                                                                field.value.set(event_target_value(&ev))
+                                                                field.value.set(event_target_value(&ev).into())
                                                             }
                                                         />
                                                     }

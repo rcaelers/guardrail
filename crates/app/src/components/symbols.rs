@@ -99,35 +99,35 @@ impl DataTableTrait for SymbolsTable {
                 .entry("OS".to_string())
                 .or_default()
                 .value
-                .set(symbols.os);
+                .set(symbols.os.into());
         });
         fields.update(|field| {
             field
                 .entry("Arch".to_string())
                 .or_default()
                 .value
-                .set(symbols.arch);
+                .set(symbols.arch.into());
         });
         fields.update(|field| {
             field
                 .entry("BuildId".to_string())
                 .or_default()
                 .value
-                .set(symbols.build_id);
+                .set(symbols.build_id.into());
         });
         fields.update(|field| {
             field
                 .entry("ModuleId".to_string())
                 .or_default()
                 .value
-                .set(symbols.module_id);
+                .set(symbols.module_id.into());
         });
         fields.update(|field| {
             field
                 .entry("FileLocation".to_string())
                 .or_default()
                 .value
-                .set(symbols.file_location);
+                .set(symbols.file_location.into());
         });
     }
 
@@ -139,11 +139,23 @@ impl DataTableTrait for SymbolsTable {
         let product_id = parents.get("product_id").cloned();
         let version_id = parents.get("version_id").cloned();
 
-        symbols.os = fields.get().get("Name").unwrap().value.get();
-        symbols.arch = fields.get().get("Arch").unwrap().value.get();
-        symbols.build_id = fields.get().get("BuildId").unwrap().value.get();
-        symbols.module_id = fields.get().get("ModuleId").unwrap().value.get();
-        symbols.file_location = fields.get().get("FileLocation").unwrap().value.get();
+        symbols.os = fields.get().get("Name").unwrap().value.get().as_string();
+        symbols.arch = fields.get().get("Arch").unwrap().value.get().as_string();
+        symbols.build_id = fields.get().get("BuildId").unwrap().value.get().as_string();
+        symbols.module_id = fields
+            .get()
+            .get("ModuleId")
+            .unwrap()
+            .value
+            .get()
+            .as_string();
+        symbols.file_location = fields
+            .get()
+            .get("FileLocation")
+            .unwrap()
+            .value
+            .get()
+            .as_string();
         match product_id {
             None => error!("Product ID is missing"),
             Some(product_id) => {

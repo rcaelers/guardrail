@@ -85,7 +85,7 @@ impl DataTableTrait for CrashTable {
                 .entry("Summary".to_string())
                 .or_default()
                 .value
-                .set(crash.summary);
+                .set(crash.summary.into());
         });
     }
 
@@ -97,7 +97,7 @@ impl DataTableTrait for CrashTable {
         let product_id = parents.get("product_id").cloned();
         let version_id = parents.get("version_id").cloned();
 
-        crash.summary = fields.get().get("Summary").unwrap().value.get();
+        crash.summary = fields.get().get("Summary").unwrap().value.get().as_string();
         match product_id {
             None => error!("Product ID is missing"),
             Some(product_id) => {

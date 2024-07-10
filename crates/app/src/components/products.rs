@@ -106,7 +106,7 @@ impl DataTableTrait for ProductTable {
                 .entry("Name".to_string())
                 .or_default()
                 .value
-                .set(product.name);
+                .set(product.name.into());
         });
     }
 
@@ -115,7 +115,7 @@ impl DataTableTrait for ProductTable {
         fields: RwSignal<IndexMap<String, Field>>,
         _parents: &HashMap<String, Uuid>,
     ) {
-        product.name = fields.get().get("Name").unwrap().value.get();
+        product.name = fields.get().get("Name").unwrap().value.get().as_string();
         if product.id.is_nil() {
             product.id = Uuid::new_v4();
         }

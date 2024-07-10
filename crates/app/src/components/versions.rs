@@ -7,6 +7,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
 use tracing::{error, info};
 use uuid::Uuid;
+use web_sys::console::info;
 
 use super::datatable::{Capabilities, DataTableTrait};
 use crate::components::datatable::DataTable;
@@ -81,7 +82,7 @@ impl DataTableTrait for VersionTable {
                 .entry("Product".to_string())
                 .or_default()
                 .value
-                .set("".to_string());
+                .set("".to_string().into());
         });
         let parents = parents.clone();
         let product_signal = fields.get_untracked().get("Product").unwrap().clone();
@@ -89,7 +90,7 @@ impl DataTableTrait for VersionTable {
             let parents = parents.clone();
             let product_name = product_signal.value.get();
             spawn_local(async move {
-                let product = product_get_by_name(product_name).await;
+                let product = product_get_by_name(product_name.as_string()).await;
 
                 if let Ok(product) = product {
                     let mut parents = parents.clone();
@@ -124,48 +125,49 @@ impl DataTableTrait for VersionTable {
                 .entry("Product".to_string())
                 .or_default()
                 .value
-                .set(version.product);
+                .set(version.product.into());
         });
         fields.update(|field| {
             field
                 .entry("Name".to_string())
                 .or_default()
                 .value
-                .set(version.name);
+                .set(version.name.into());
         });
         fields.update(|field| {
             field
                 .entry("Tag".to_string())
                 .or_default()
                 .value
-                .set(version.tag);
+                .set(version.tag.into());
         });
         fields.update(|field| {
             field
                 .entry("Hash".to_string())
                 .or_default()
                 .value
-                .set(version.hash);
+                .set(version.hash.into());
         });
 
-        if let Some(product_id) = parents.get("product_id") {
-            match product_get(*product_id).await {
-                Ok(product) => fields.update(|field| {
-                    field
-                        .entry("Product".to_string())
-                        .or_default()
-                        .value
-                        .set(product.name);
-                }),
-                Err(e) => {
-                    error!("Failed to fetch product: {:?}", e);
+        if version.product_id.is_nil() {
+            if let Some(product_id) = parents.get("product_id") {
+                match product_get(*product_id).await {
+                    Ok(product) => fields.update(|field| {
+                        field
+                            .entry("Product".to_string())
+                            .or_default()
+                            .value
+                            .set(product.name.into());
+                    }),
+                    Err(e) => {
+                        error!("Failed to fetch product: {:?}", e);
+                    }
                 }
             }
-        } else {
-            info!("Product ID is missing");
         }
 
-        let have_product = parents.contains_key("product_id");
+        let have_product = !version.product_id.is_nil() || parents.contains_key("product_id");
+        info!("Have product: {}", have_product);
         fields.update(|field| {
             field
                 .entry("Product".to_string())
@@ -193,7 +195,8 @@ impl DataTableTrait for VersionTable {
                                 .collect::<Vec<_>>()
                                 .first()
                                 .unwrap()
-                                .clone(),
+                                .clone()
+                                .into(),
                         );
                     });
                 }
@@ -209,9 +212,9 @@ impl DataTableTrait for VersionTable {
     ) {
         let product_id = parents.get("product_id").cloned();
 
-        version.name = fields.get().get("Name").unwrap().value.get();
-        version.tag = fields.get().get("Tag").unwrap().value.get();
-        version.hash = fields.get().get("Hash").unwrap().value.get();
+        version.name = fields.get().get("Name").unwrap().value.get().as_string();
+        version.tag = fields.get().get("Tag").unwrap().value.get().as_string();
+        version.hash = fields.get().get("Hash").unwrap().value.get().as_string();
         match product_id {
             None => error!("Product ID is missing"),
             Some(product_id) => {

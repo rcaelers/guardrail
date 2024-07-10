@@ -83,7 +83,7 @@ impl DataTableTrait for UserTable {
                 .entry("Name".to_string())
                 .or_default()
                 .value
-                .set(user.username);
+                .set(user.username.into());
         });
     }
 
@@ -92,7 +92,7 @@ impl DataTableTrait for UserTable {
         fields: RwSignal<IndexMap<String, Field>>,
         _parents: &HashMap<String, Uuid>,
     ) {
-        user.username = fields.get().get("Name").unwrap().value.get();
+        user.username = fields.get().get("Name").unwrap().value.get().as_string();
         if user.id.is_nil() {
             user.id = Uuid::new_v4();
         }
