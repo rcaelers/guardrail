@@ -1,8 +1,7 @@
-use indexmap::IndexMap;
 use leptos::*;
 use leptos_router::*;
 
-use crate::components::datatable_form::Field;
+use crate::components::datatable_form::Fields;
 
 #[allow(non_snake_case)]
 #[component]
@@ -13,7 +12,7 @@ pub fn Crash() -> impl IntoView {
     let q = q.get("crash").unwrap();
     let _uuid = uuid::Uuid::parse_str(q).unwrap();
 
-    let _fields: RwSignal<IndexMap<String, Field>> = create_rw_signal(IndexMap::new());
+    let _fields: RwSignal<Fields> = create_rw_signal(Fields::new());
 
     view! {
         // <Header

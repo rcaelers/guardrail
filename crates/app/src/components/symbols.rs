@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use enumflags2::BitFlags;
-use indexmap::IndexMap;
 use leptos::*;
 use leptos_struct_table::*;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -9,6 +8,7 @@ use tracing::error;
 use uuid::Uuid;
 
 use super::datatable::{Capabilities, DataTableTrait};
+use super::datatable_form::{FieldString, Fields};
 use crate::components::datatable::DataTable;
 use crate::components::datatable_form::Field;
 use crate::data::QueryParams;
@@ -68,94 +68,64 @@ impl DataTableTrait for SymbolsTable {
         ]
     }
 
-    fn init_fields(fields: RwSignal<IndexMap<String, Field>>, parents: &HashMap<String, Uuid>) {
-        let parents = parents.clone();
-        create_effect(move |_| {
-            let parents = parents.clone();
-            spawn_local(async move {
-                match symbols_list_names(parents).await {
-                    Ok(fetched_names) => {
-                        fields.update(|field| {
-                            field
-                                .entry("Name".to_string())
-                                .or_default()
-                                .disallowed
-                                .set(fetched_names);
-                        });
-                    }
-                    Err(e) => tracing::error!("Failed to fetch symbols names: {:?}", e),
-                }
-            });
-        });
-    }
+    fn init_fields(_fields: RwSignal<Fields>, _parents: &HashMap<String, Uuid>) {}
 
     async fn update_fields(
-        fields: RwSignal<IndexMap<String, Field>>,
+        fields: RwSignal<Fields>,
         symbols: Symbols,
         _parents: &HashMap<String, Uuid>,
     ) {
         fields.update(|field| {
-            field
-                .entry("OS".to_string())
-                .or_default()
-                .value
-                .set(symbols.os.into());
+            field.insert(
+                "OS".to_string(),
+                Field::new(FieldString::new(symbols.os, HashSet::new())),
+            );
         });
         fields.update(|field| {
-            field
-                .entry("Arch".to_string())
-                .or_default()
-                .value
-                .set(symbols.arch.into());
+            field.insert(
+                "Arch".to_string(),
+                Field::new(FieldString::new(symbols.arch, HashSet::new())),
+            );
         });
         fields.update(|field| {
-            field
-                .entry("BuildId".to_string())
-                .or_default()
-                .value
-                .set(symbols.build_id.into());
+            field.insert(
+                "BuildId".to_string(),
+                Field::new(FieldString::new(symbols.build_id, HashSet::new())),
+            );
         });
         fields.update(|field| {
-            field
-                .entry("ModuleId".to_string())
-                .or_default()
-                .value
-                .set(symbols.module_id.into());
+            field.insert(
+                "ModuleId".to_string(),
+                Field::new(FieldString::new(symbols.module_id, HashSet::new())),
+            );
         });
         fields.update(|field| {
-            field
-                .entry("FileLocation".to_string())
-                .or_default()
-                .value
-                .set(symbols.file_location.into());
+            field.insert(
+                "FileLocation".to_string(),
+                Field::new(FieldString::new(symbols.file_location, HashSet::new())),
+            );
         });
     }
 
     fn update_data(
         symbols: &mut Symbols,
-        fields: RwSignal<IndexMap<String, Field>>,
+        fields: RwSignal<Fields>,
         parents: &HashMap<String, Uuid>,
     ) {
         let product_id = parents.get("product_id").cloned();
         let version_id = parents.get("version_id").cloned();
 
-        symbols.os = fields.get().get("Name").unwrap().value.get().as_string();
-        symbols.arch = fields.get().get("Arch").unwrap().value.get().as_string();
-        symbols.build_id = fields.get().get("BuildId").unwrap().value.get().as_string();
-        symbols.module_id = fields
-            .get()
-            .get("ModuleId")
-            .unwrap()
-            .value
-            .get()
-            .as_string();
-        symbols.file_location = fields
-            .get()
-            .get("FileLocation")
-            .unwrap()
-            .value
-            .get()
-            .as_string();
+        let os = fields.get().get::<FieldString>("OS");
+        let arch = fields.get().get::<FieldString>("Arch");
+        let build_id = fields.get().get::<FieldString>("BuildId");
+        let module_id = fields.get().get::<FieldString>("ModuleId");
+        let file_location = fields.get().get::<FieldString>("FileLocation");
+
+        symbols.os = os.value.get();
+        symbols.arch = arch.value.get();
+        symbols.build_id = build_id.value.get();
+        symbols.module_id = module_id.value.get();
+        symbols.file_location = file_location.value.get();
         match product_id {
             None => error!("Product ID is missing"),
             Some(product_id) => {

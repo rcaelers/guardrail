@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use enumflags2::BitFlags;
-use indexmap::IndexMap;
 use leptos::*;
 use leptos_struct_table::*;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -8,6 +7,7 @@ use std::ops::Range;
 use uuid::Uuid;
 
 use super::datatable::{Capabilities, DataTableTrait};
+use super::datatable_form::{FieldString, Fields};
 use crate::components::datatable::DataTable;
 use crate::components::datatable_form::Field;
 use crate::data::QueryParams;
@@ -54,45 +54,33 @@ impl DataTableTrait for UserTable {
         "user".to_string()
     }
 
-    fn init_fields(fields: RwSignal<IndexMap<String, Field>>, _parents: &HashMap<String, Uuid>) {
+    fn init_fields(_fields: RwSignal<Fields>, _parents: &HashMap<String, Uuid>) {}
+
+    async fn update_fields(fields: RwSignal<Fields>, user: User, _parents: &HashMap<String, Uuid>) {
         create_effect(move |_| {
+            let user_name = user.username.clone();
             spawn_local(async move {
                 match user_list_names().await {
                     Ok(fetched_names) => {
                         fields.update(|field| {
-                            field
-                                .entry("Name".to_string())
-                                .or_default()
-                                .disallowed
-                                .set(fetched_names);
+                            field.insert(
+                                "Name".to_string(),
+                                Field::new(FieldString::new(user_name, fetched_names)),
+                            );
                         });
                     }
-                    Err(e) => tracing::error!("Failed to fetch user names: {:?}", e),
+                    Err(e) => {
+                        tracing::error!("Failed to fetch product names: {:?}", e);
+                    }
                 }
             });
         });
     }
 
-    async fn update_fields(
-        fields: RwSignal<IndexMap<String, Field>>,
-        user: User,
-        _parents: &HashMap<String, Uuid>,
-    ) {
-        fields.update(|field| {
-            field
-                .entry("Name".to_string())
-                .or_default()
-                .value
-                .set(user.username.into());
-        });
-    }
+    fn update_data(user: &mut User, fields: RwSignal<Fields>, _parents: &HashMap<String, Uuid>) {
+        let username = fields.get().get::<FieldString>("Name");
 
-    fn update_data(
-        user: &mut User,
-        fields: RwSignal<IndexMap<String, Field>>,
-        _parents: &HashMap<String, Uuid>,
-    ) {
-        user.username = fields.get().get("Name").unwrap().value.get().as_string();
+        user.username = username.value.get();
         if user.id.is_nil() {
             user.id = Uuid::new_v4();
         }

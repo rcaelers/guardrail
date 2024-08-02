@@ -1,17 +1,16 @@
 use async_trait::async_trait;
 use enumflags2::BitFlags;
-use indexmap::IndexMap;
 use leptos::*;
 use leptos_struct_table::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
 use tracing::{error, info};
 use uuid::Uuid;
-use web_sys::console::info;
 
 use super::datatable::{Capabilities, DataTableTrait};
+use super::datatable_form::Fields;
 use crate::components::datatable::DataTable;
-use crate::components::datatable_form::Field;
+use crate::components::datatable_form::{Field, FieldCombo, FieldString};
 use crate::data::QueryParams;
 use crate::data_providers::product::{product_get, product_get_by_name, product_list_names};
 use crate::data_providers::version::{
@@ -76,21 +75,22 @@ impl DataTableTrait for VersionTable {
         }]
     }
 
-    fn init_fields(fields: RwSignal<IndexMap<String, Field>>, parents: &HashMap<String, Uuid>) {
+    fn init_fields(fields: RwSignal<Fields>, parents: &HashMap<String, Uuid>) {
         fields.update(|field| {
-            field
-                .entry("Product".to_string())
-                .or_default()
-                .value
-                .set("".to_string().into());
+            field.insert("Product".to_string(), Field::new(FieldCombo::default()));
+        });
+        fields.update(|field| {
+            field.insert("Name".to_string(), Field::new(FieldString::default()));
         });
         let parents = parents.clone();
-        let product_signal = fields.get_untracked().get("Product").unwrap().clone();
+        let product_field = fields.get_untracked().get::<FieldString>("Product");
+        let name_field = fields.get_untracked().get::<FieldString>("Name");
+
         create_effect(move |_| {
             let parents = parents.clone();
-            let product_name = product_signal.value.get();
+            let product_name = product_field.value.get();
             spawn_local(async move {
-                let product = product_get_by_name(product_name.as_string()).await;
+                let product = product_get_by_name(product_name).await;
 
                 if let Ok(product) = product {
                     let mut parents = parents.clone();
@@ -98,13 +98,7 @@ impl DataTableTrait for VersionTable {
 
                     match version_list_names(parents).await {
                         Ok(fetched_names) => {
-                            fields.update(|field| {
-                                field
-                                    .entry("Name".to_string())
-                                    .or_default()
-                                    .disallowed
-                                    .set(fetched_names);
-                            });
+                            name_field.disallowed.set(fetched_names);
                         }
                         Err(e) => tracing::error!("Failed to fetch version names: {:?}", e),
                     }
@@ -114,51 +108,36 @@ impl DataTableTrait for VersionTable {
     }
 
     async fn update_fields(
-        fields: RwSignal<IndexMap<String, Field>>,
+        fields: RwSignal<Fields>,
         version: Version,
         parents: &HashMap<String, Uuid>,
     ) {
         info!("Updating fields for version {:?}", version);
 
+        let product_field = fields.get_untracked().get::<FieldCombo>("Product");
+        let name_field = fields.get_untracked().get::<FieldString>("Name");
+        let product_options = fields.get_untracked().get_options("Product");
+
+        product_field.value.set(version.product);
+        name_field.value.set(version.name);
+
         fields.update(|field| {
-            field
-                .entry("Product".to_string())
-                .or_default()
-                .value
-                .set(version.product.into());
+            field.insert(
+                "Tag".to_string(),
+                Field::new(FieldString::new(version.tag, HashSet::new())),
+            );
         });
         fields.update(|field| {
-            field
-                .entry("Name".to_string())
-                .or_default()
-                .value
-                .set(version.name.into());
-        });
-        fields.update(|field| {
-            field
-                .entry("Tag".to_string())
-                .or_default()
-                .value
-                .set(version.tag.into());
-        });
-        fields.update(|field| {
-            field
-                .entry("Hash".to_string())
-                .or_default()
-                .value
-                .set(version.hash.into());
+            field.insert(
+                "Hash".to_string(),
+                Field::new(FieldString::new(version.hash, HashSet::new())),
+            );
         });
 
         if version.product_id.is_nil() {
             if let Some(product_id) = parents.get("product_id") {
                 match product_get(*product_id).await {
-                    Ok(product) => fields.update(|field| {
-                        field
-                            .entry("Product".to_string())
-                            .or_default()
-                            .value
-                            .set(product.name.into());
-                    }),
+                    Ok(product) => product_field.value.set(product.name),
                     Err(e) => {
                         error!("Failed to fetch product: {:?}", e);
                     }
@@ -168,37 +147,23 @@ impl DataTableTrait for VersionTable {
 
         let have_product = !version.product_id.is_nil() || parents.contains_key("product_id");
         info!("Have product: {}", have_product);
-        fields.update(|field| {
-            field
-                .entry("Product".to_string())
-                .or_default()
-                .readonly
-                .set(have_product);
-        });
+
+        product_options.readonly.set(have_product);
 
         if !have_product {
             match product_list_names().await {
                 Ok(fetched_names) => {
-                    fields.update(|field| {
-                        field
-                            .entry("Product".to_string())
-                            .or_default()
-                            .multiselect
-                            .set(
-                                itertools::sorted(fetched_names.iter().cloned())
-                                    .collect::<Vec<_>>(),
-                            );
-                    });
-                    fields.update(|field| {
-                        field.entry("Product".to_string()).or_default().value.set(
-                            itertools::sorted(fetched_names.iter().cloned())
-                                .collect::<Vec<_>>()
-                                .first()
-                                .unwrap()
-                                .clone()
-                                .into(),
-                        );
-                    });
+                    product_field.multiselect.set(
+                        itertools::sorted(fetched_names.iter().cloned()).collect::<HashSet<_>>(),
+                    );
+
+                    product_field.value.set(
+                        itertools::sorted(fetched_names.iter().cloned())
+                            .collect::<Vec<_>>()
+                            .first()
+                            .unwrap()
+                            .clone(),
+                    );
                 }
                 Err(e) => tracing::error!("Failed to fetch product names: {:?}", e),
             }
@@ -207,14 +172,14 @@ impl DataTableTrait for VersionTable {
 
     fn update_data(
         version: &mut Version,
-        fields: RwSignal<IndexMap<String, Field>>,
+        fields: RwSignal<Fields>,
         parents: &HashMap<String, Uuid>,
     ) {
         let product_id = parents.get("product_id").cloned();
 
-        version.name = fields.get().get("Name").unwrap().value.get().as_string();
-        version.tag = fields.get().get("Tag").unwrap().value.get().as_string();
-        version.hash = fields.get().get("Hash").unwrap().value.get().as_string();
+        version.name = fields.get().get::<FieldString>("Name").value.get();
+        version.tag = fields.get().get::<FieldString>("Tag").value.get();
+        version.hash = fields.get().get::<FieldString>("Hash").value.get();
         match product_id {
             None => error!("Product ID is missing"),
             Some(product_id) => {

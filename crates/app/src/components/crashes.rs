@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use enumflags2::BitFlags;
-use indexmap::IndexMap;
 use leptos::*;
 use leptos_struct_table::*;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -9,6 +8,7 @@ use tracing::error;
 use uuid::Uuid;
 
 use super::datatable::{Capabilities, DataTableTrait};
+use super::datatable_form::{FieldString, Fields};
 use crate::components::datatable::DataTable;
 use crate::components::datatable_form::Field;
 use crate::data::QueryParams;
@@ -75,29 +75,28 @@ impl DataTableTrait for CrashTable {
         }]
     }
 
+    fn init_fields(_fields: RwSignal<Fields>, _parents: &HashMap<String, Uuid>) {}
+
     async fn update_fields(
-        fields: RwSignal<IndexMap<String, Field>>,
+        fields: RwSignal<Fields>,
         crash: Crash,
         _parents: &HashMap<String, Uuid>,
     ) {
         fields.update(|field| {
-            field
-                .entry("Summary".to_string())
-                .or_default()
-                .value
-                .set(crash.summary.into());
+            field.insert(
+                "Summary".to_string(),
+                Field::new(FieldString::new(crash.summary.clone(), HashSet::new())),
+            );
         });
     }
 
-    fn update_data(
-        crash: &mut Crash,
-        fields: RwSignal<IndexMap<String, Field>>,
-        parents: &HashMap<String, Uuid>,
-    ) {
+    fn update_data(crash: &mut Crash, fields: RwSignal<Fields>, parents: &HashMap<String, Uuid>) {
         let product_id = parents.get("product_id").cloned();
         let version_id = parents.get("version_id").cloned();
 
-        crash.summary = fields.get().get("Summary").unwrap().value.get().as_string();
+        let summary = fields.get().get::<FieldString>("Summary");
+
+        crash.summary = summary.value.get();
         match product_id {
             None => error!("Product ID is missing"),
             Some(product_id) => {

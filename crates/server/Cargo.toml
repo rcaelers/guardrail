@@ -12,7 +12,6 @@ migration = { path = "../migration" }
 leptos = { workspace = true, features = ["ssr", "tracing"] }
 leptos_axum.workspace = true
 leptos_router.workspace = true
-leptos-use.workspace = true
 
 # Serde / json
 serde.workspace = true

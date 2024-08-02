@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use enumflags2::{bitflags, BitFlag, BitFlags};
-use indexmap::IndexMap;
 use leptos::html::Div;
 use leptos::*;
 use leptos_router::*;
@@ -12,7 +11,7 @@ use tracing::info;
 use uuid::Uuid;
 
 use crate::components::confirmation::ConfirmationModal;
-use crate::components::datatable_form::{DataTableModalForm, Field};
+use crate::components::datatable_form::{DataTableModalForm, Fields};
 use crate::components::datatable_header::DataTableHeader;
 use crate::data::QueryParams;
 use crate::data_providers::{ExtraRowTrait, ExtraTableDataProvider};
@@ -63,16 +62,16 @@ where
 
     fn get_data_type_name() -> String;
 
-    fn init_fields(_fields: RwSignal<IndexMap<String, Field>>, _parents: &HashMap<String, Uuid>) {}
+    fn init_fields(fields: RwSignal<Fields>, parents: &HashMap<String, Uuid>);
 
     async fn update_fields(
-        fields: RwSignal<IndexMap<String, Field>>,
+        fields: RwSignal<Fields>,
         data: Self::DataType,
         parents: &HashMap<String, Uuid>,
     );
     fn update_data(
         data: &mut Self::DataType,
-        fields: RwSignal<IndexMap<String, Field>>,
+        fields: RwSignal<Fields>,
         parents: &HashMap<String, Uuid>,
     );
 
@@ -111,17 +110,17 @@ where
         }
     }
 
-    let fields: RwSignal<IndexMap<String, Field>> = create_rw_signal(IndexMap::new());
+    let fields: RwSignal<Fields> = create_rw_signal(Fields::default());
 
     let title = create_rw_signal("".to_string());
     let related = create_rw_signal(T::get_related());
 
     let scroll_container = create_node_ref::<Div>();
-    let rows = T::new_provider(query.clone());
-    let rows_clone = rows.clone();
+    let form = T::new_provider(query.clone());
+    let form_clone = form.clone();
     let capabilities = create_rw_signal::<BitFlags<Capabilities, u8>>(Capabilities::empty());
 
-    let rows_clone2 = rows.clone();
+    let rows_clone2 = form.clone();
     spawn_local(async move {
         let c = rows_clone2.capabilities().await;
         capabilities.update(|caps| {
@@ -132,7 +131,7 @@ where
     let selected_index: RwSignal<Option<usize>> = create_rw_signal(None);
     let (selected_row, set_selected_row) = create_signal(None);
 
-    let filter = rows.get_filter_signal();
+    let filter = form.get_filter_signal();
     let (custom_text, set_custom_text) = create_signal("".to_string());
     let (show_confirm_popup, set_show_confirm_popup) = create_signal(false);
     let (show_form_popup, set_show_form_popup) = create_signal(false);
@@ -153,7 +152,7 @@ where
 
     create_effect(move |_| {
         if let State::Idle = state.get() {
-            let rows = rows.clone();
+            let rows = form.clone();
             rows.refresh_table();
         }
     });
@@ -292,7 +291,7 @@ where
         <div node_ref=scroll_container class="overflow-auto grow min-h-0">
             <table class="table-fixed text-sm text-left text-gray-500 dark:text-gray-400 w-full">
                 <TableContent
-                    rows=rows_clone
+                    rows=form_clone
                     scroll_container
                     display_strategy=DisplayStrategy::Virtualization
                     selection=Selection::Single(selected_index)

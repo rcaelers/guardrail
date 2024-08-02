@@ -12,7 +12,6 @@ leptos = { workspace = true, features = ["tracing"] }
 leptos_meta.workspace = true
 leptos_router.workspace = true
 leptos_axum = { workspace = true, optional = true }
-leptos-use = { workspace = true }
 leptos-struct-table = { workspace = true }
 wasm-bindgen-futures.workspace = true
 
@@ -53,6 +52,7 @@ webauthn-rs-proto.workspace = true
 indexmap.workspace = true
 trait-variant.workspace = true
 itertools.workspace = true
+dyn-clone.workspace = true
 
 [dev-dependencies]
 serial_test.workspace = true
@@ -64,7 +64,6 @@ ssr = [
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",
-  "leptos-use/ssr",
   "dep:leptos_axum",
   "dep:sea-orm",
   "dep:sea-query",

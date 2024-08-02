@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use enumflags2::BitFlags;
-use indexmap::IndexMap;
 use leptos::*;
 use leptos_struct_table::*;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -8,6 +7,7 @@ use std::ops::Range;
 use uuid::Uuid;
 
 use super::datatable::{Capabilities, DataTableTrait};
+use super::datatable_form::{FieldString, Fields};
 use crate::components::datatable::DataTable;
 use crate::components::datatable_form::Field;
 use crate::data::QueryParams;
@@ -75,17 +75,23 @@ impl DataTableTrait for ProductTable {
         ]
     }
 
-    fn init_fields(fields: RwSignal<IndexMap<String, Field>>, _parents: &HashMap<String, Uuid>) {
+    fn init_fields(_fields: RwSignal<Fields>, _parents: &HashMap<String, Uuid>) {}
+
+    async fn update_fields(
+        fields: RwSignal<Fields>,
+        product: Product,
+        _parents: &HashMap<String, Uuid>,
+    ) {
         create_effect(move |_| {
+            let product_name = product.name.clone();
             spawn_local(async move {
                 match product_list_names().await {
                     Ok(fetched_names) => {
                         fields.update(|field| {
-                            field
-                                .entry("Name".to_string())
-                                .or_default()
-                                .disallowed
-                                .set(fetched_names);
+                            field.insert(
+                                "Name".to_string(),
+                                Field::new(FieldString::new(product_name, fetched_names)),
+                            );
                         });
                     }
                     Err(e) => {
@@ -96,26 +102,14 @@ impl DataTableTrait for ProductTable {
         });
     }
 
-    async fn update_fields(
-        fields: RwSignal<IndexMap<String, Field>>,
-        product: Product,
-        _parents: &HashMap<String, Uuid>,
-    ) {
-        fields.update(|field| {
-            field
-                .entry("Name".to_string())
-                .or_default()
-                .value
-                .set(product.name.into());
-        });
-    }
-
     fn update_data(
         product: &mut Product,
-        fields: RwSignal<IndexMap<String, Field>>,
+        fields: RwSignal<Fields>,
         _parents: &HashMap<String, Uuid>,
     ) {
-        product.name = fields.get().get("Name").unwrap().value.get().as_string();
+        let name = fields.get().get::<FieldString>("Name");
+
+        product.name = name.value.get();
         if product.id.is_nil() {
             product.id = Uuid::new_v4();
         }
