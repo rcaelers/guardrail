@@ -11,10 +11,10 @@ env:
 
 jobs:
   build:
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        runner: [ubuntu-24.04, macos-latest]
+        os: [ubuntu-24.04, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -25,6 +25,9 @@ jobs:
           rustup target add wasm32-unknown-unknown
           rustup upgrade
           cargo install --locked cargo-leptos
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.os }}
       - name: Build
         run: cargo leptos build -vv
       - name: Run tests
