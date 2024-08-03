@@ -137,6 +137,14 @@ pub struct FieldCheckbox {
     pub value: RwSignal<bool>,
 }
 
+impl FieldCheckbox {
+    pub fn new(value: bool) -> Self {
+        FieldCheckbox {
+            value: RwSignal::new(value),
+        }
+    }
+}
+
 impl FieldValueTrait for FieldCheckbox {
     fn render(&self, options: FieldOptions) -> View {
         let value = self.value;
@@ -175,13 +183,6 @@ impl<T: FieldValueTrait> Field<T> {
             value,
         }
     }
-    // pub fn set_readonly(&self, readonly: bool) {
-    //     self.options.readonly.set(readonly);
-    // }
-
-    // pub fn get<X: FieldValueTrait + 'static>(&self) -> &X {
-    //     self.value.as_any().downcast_ref::<X>().unwrap()
-    // }
 }
 
 impl<T: Debug + Clone + FieldValueTrait + 'static> FieldTrait for Field<T> {
@@ -211,8 +212,6 @@ impl<T: Debug + FieldValueTrait + Default> Default for Field<T> {
     }
 }
 
-//pub type Fields = IndexMap<String, Box<dyn FieldTrait>>;
-
 #[derive(Debug, Default, Clone)]
 pub struct Fields(IndexMap<String, Box<dyn FieldTrait>>);
 
@@ -224,10 +223,6 @@ impl Fields {
     pub fn insert<T: FieldValueTrait + Clone + 'static>(&mut self, name: String, field: Field<T>) {
         self.0.insert(name, Box::new(field));
     }
-
-    // pub fn get(&self) -> &IndexMap<String, Box<dyn FieldTrait>> {
-    //     &self.0
-    // }
 
     pub fn values(&self) -> indexmap::map::Values<String, Box<dyn FieldTrait>> {
         self.0.values()

@@ -7,7 +7,7 @@ use std::ops::Range;
 use uuid::Uuid;
 
 use super::datatable::{Capabilities, DataTableTrait};
-use super::datatable_form::{FieldString, Fields};
+use super::datatable_form::{FieldCheckbox, FieldString, Fields};
 use crate::components::datatable::DataTable;
 use crate::components::datatable_form::Field;
 use crate::data::QueryParams;
@@ -67,6 +67,10 @@ impl DataTableTrait for UserTable {
                                 "Name".to_string(),
                                 Field::new(FieldString::new(user_name, fetched_names)),
                             );
+                            field.insert(
+                                "Admin".to_string(),
+                                Field::new(FieldCheckbox::new(user.is_admin)),
+                            );
                         });
                     }
                     Err(e) => {
@@ -79,8 +83,10 @@ impl DataTableTrait for UserTable {
 
     fn update_data(user: &mut User, fields: RwSignal<Fields>, _parents: &HashMap<String, Uuid>) {
         let username = fields.get().get::<FieldString>("Name");
+        let admin = fields.get().get::<FieldCheckbox>("Admin");
 
         user.username = username.value.get();
+        user.is_admin = admin.value.get();
         if user.id.is_nil() {
             user.id = Uuid::new_v4();
         }
