@@ -83,7 +83,7 @@ impl DataTableTrait for VersionTable {
             field.insert("Name".to_string(), Field::new(FieldString::default()));
         });
         let parents = parents.clone();
-        let product_field = fields.get_untracked().get::<FieldString>("Product");
+        let product_field = fields.get_untracked().get::<FieldCombo>("Product");
         let name_field = fields.get_untracked().get::<FieldString>("Name");
 
         create_effect(move |_| {
