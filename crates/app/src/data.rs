@@ -373,8 +373,6 @@ where
     E::Model: Sync,
     <E::Column as FromStr>::Err: std::fmt::Debug,
 {
-    use tracing::info;
-
     let db = use_context::<DatabaseConnection>()
         .ok_or(ServerFnError::new("No database connection".to_string()))?;
 
@@ -400,6 +398,5 @@ where
         .await
         .map_err(|e| ServerFnError::new(format!("{e:?}")))?;
 
-    info!("Count: {}", count);
     Ok(count as usize)
 }

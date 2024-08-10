@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
 use tokio::task;
-use tracing::{debug, error, info};
+use tracing::{debug, error};
 
 use super::error::ApiError;
 use crate::app_state::AppState;
@@ -49,7 +49,6 @@ impl MinidumpApi {
             }
         }
         .ok_or(ApiError::Failure)?;
-        info!("product: {:?}", product.id);
         Ok(product)
     }
 
@@ -69,7 +68,6 @@ impl MinidumpApi {
             }
         }
         .ok_or(ApiError::Failure)?;
-        info!("version: {:?}", version.id);
         Ok(version)
     }
 
@@ -225,8 +223,7 @@ impl MinidumpApi {
                     crash_id = Some(Self::handle_minidump_upload(&state, &params, field).await?)
                 }
                 Some("options") => {
-                    let content = field.bytes().await?;
-                    info!("options: {:?}", content);
+                    let _content = field.bytes().await?;
                 }
                 Some(_) => {
                     Self::handle_attachment_upload(

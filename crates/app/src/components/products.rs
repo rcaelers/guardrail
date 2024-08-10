@@ -75,30 +75,30 @@ impl DataTableTrait for ProductTable {
         ]
     }
 
-    fn init_fields(_fields: RwSignal<Fields>, _parents: &HashMap<String, Uuid>) {}
+    fn init_fields(fields: RwSignal<Fields>, _parents: &HashMap<String, Uuid>) {
+        fields.update(|field| {
+            field.insert("Name".to_string(), Field::new(FieldString::default()));
+        });
+    }
 
     async fn update_fields(
         fields: RwSignal<Fields>,
         product: Product,
         _parents: &HashMap<String, Uuid>,
     ) {
-        create_effect(move |_| {
-            let product_name = product.name.clone();
-            spawn_local(async move {
-                match product_list_names().await {
-                    Ok(fetched_names) => {
-                        fields.update(|field| {
-                            field.insert(
-                                "Name".to_string(),
-                                Field::new(FieldString::new(product_name, fetched_names)),
-                            );
-                        });
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to fetch product names: {:?}", e);
-                    }
+        let name_field = fields.get_untracked().get::<FieldString>("Name");
+
+        name_field.value.set(product.name);
+
+        spawn_local(async move {
+            match product_list_names().await {
+                Ok(fetched_names) => {
+                    name_field.disallowed.set(fetched_names);
                 }
-            });
+                Err(e) => {
+                    tracing::error!("Failed to fetch product names: {:?}", e);
+                }
+            }
         });
     }
 

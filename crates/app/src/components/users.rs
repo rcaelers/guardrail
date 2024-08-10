@@ -54,30 +54,30 @@ impl DataTableTrait for UserTable {
         "user".to_string()
     }
 
-    fn init_fields(_fields: RwSignal<Fields>, _parents: &HashMap<String, Uuid>) {}
+    fn init_fields(fields: RwSignal<Fields>, _parents: &HashMap<String, Uuid>) {
+        fields.update(|field| {
+            field.insert("Name".to_string(), Field::new(FieldString::default()));
+            field.insert("Admin".to_string(), Field::new(FieldCheckbox::default()));
+        });
+    }
 
     async fn update_fields(fields: RwSignal<Fields>, user: User, _parents: &HashMap<String, Uuid>) {
-        create_effect(move |_| {
-            let user_name = user.username.clone();
-            spawn_local(async move {
-                match user_list_names().await {
-                    Ok(fetched_names) => {
-                        fields.update(|field| {
-                            field.insert(
-                                "Name".to_string(),
-                                Field::new(FieldString::new(user_name, fetched_names)),
-                            );
-                            field.insert(
-                                "Admin".to_string(),
-                                Field::new(FieldCheckbox::new(user.is_admin)),
-                            );
-                        });
-                    }
-                    Err(e) => {
-                        tracing::error!("Failed to fetch product names: {:?}", e);
-                    }
+        let name_field = fields.get_untracked().get::<FieldString>("Name");
+        let admin_field = fields.get_untracked().get::<FieldCheckbox>("Admin");
+
+        let user_name = user.username.clone();
+        name_field.value.update(|field| *field = user_name.clone());
+        admin_field.value.set(user.is_admin);
+
+        spawn_local(async move {
+            match user_list_names().await {
+                Ok(fetched_names) => {
+                    name_field.disallowed.set(fetched_names);
                 }
-            });
+                Err(e) => {
+                    tracing::error!("Failed to fetch product names: {:?}", e);
+                }
+            }
         });
     }
 

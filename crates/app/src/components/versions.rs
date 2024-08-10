@@ -4,7 +4,7 @@ use leptos::*;
 use leptos_struct_table::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
-use tracing::{error, info};
+use tracing::error;
 use uuid::Uuid;
 
 use super::datatable::{Capabilities, DataTableTrait};
@@ -112,8 +112,6 @@ impl DataTableTrait for VersionTable {
         version: Version,
         parents: &HashMap<String, Uuid>,
     ) {
-        info!("Updating fields for version {:?}", version);
-
         let product_field = fields.get_untracked().get::<FieldCombo>("Product");
         let name_field = fields.get_untracked().get::<FieldString>("Name");
         let product_options = fields.get_untracked().get_options("Product");
@@ -146,17 +144,15 @@ impl DataTableTrait for VersionTable {
         }
 
         let have_product = !version.product_id.is_nil() || parents.contains_key("product_id");
-        info!("Have product: {}", have_product);
-
         product_options.readonly.set(have_product);
 
-        if !have_product {
-            match product_list_names().await {
-                Ok(fetched_names) => {
-                    product_field.multiselect.set(
-                        itertools::sorted(fetched_names.iter().cloned()).collect::<HashSet<_>>(),
-                    );
+        match product_list_names().await {
+            Ok(fetched_names) => {
+                product_field
+                    .multiselect
+                    .set(itertools::sorted(fetched_names.iter().cloned()).collect::<Vec<_>>());
 
+                if !have_product {
                     product_field.value.set(
                         itertools::sorted(fetched_names.iter().cloned())
                             .collect::<Vec<_>>()
@@ -165,8 +161,8 @@ impl DataTableTrait for VersionTable {
                             .clone(),
                     );
                 }
-                Err(e) => tracing::error!("Failed to fetch product names: {:?}", e),
             }
+            Err(e) => tracing::error!("Failed to fetch product names: {:?}", e),
         }
     }
 

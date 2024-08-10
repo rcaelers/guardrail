@@ -7,7 +7,6 @@ use leptos_struct_table::*;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use tracing::info;
 use uuid::Uuid;
 
 use crate::components::confirmation::ConfirmationModal;
@@ -45,7 +44,7 @@ where
         + Clone
         + 'static,
 {
-    type RowType: leptos_struct_table::TableRow + ExtraRowTrait + Clone + 'static;
+    type RowType: leptos_struct_table::TableRow + ExtraRowTrait + Clone + Debug + 'static;
     type DataType: Default + Clone + Debug + 'static;
 
     fn new_provider(parents: HashMap<String, Uuid>) -> Self;
@@ -101,10 +100,8 @@ where
         let q = query_map.get_untracked();
         let q = q.get(foreign.query.as_str());
         if let Some(q) = q {
-            info!("{}: {}", foreign.query, q);
             let uuid = uuid::Uuid::parse_str(q);
             if let Ok(uuid) = uuid {
-                info!("{}: {}", foreign.id_name, uuid);
                 query.insert(foreign.id_name, uuid);
             }
         }
@@ -214,7 +211,6 @@ where
             spawn_local(async move {
                 let data: T::DataType = T::get(row.get_id()).await.unwrap();
                 current_row.set(Some(data.clone()));
-                info!("Updating version {:?}", data);
                 T::update_fields(fields, data, &q2).await;
                 title.set(format!("Edit {}", T::get_data_type_name()));
                 state.set(State::Edit);

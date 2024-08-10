@@ -15,7 +15,8 @@ leptos = { version = "0.6", features = ["nightly"] }
 leptos_meta = { version = "0.6", features = ["nightly"] }
 leptos_router = { version = "0.6", features = ["nightly"] }
 leptos_axum = { version = "0.6" }
-leptos-struct-table = { version = "0.10.2", features = ["chrono", "uuid"] }
+leptos-use = { version = "0.11.3" }
+leptos-struct-table = { version = "0.11.0", features = ["chrono", "uuid"] }
 
 # Wasm
 wasm-bindgen = { version = "=0.2.92", features = ["serde-serialize"] }
@@ -48,7 +49,7 @@ axum = { version = "0.7.5", features = [
   "multipart",
   "tracing",
 ] }
-axum-server = { version = "0.6.0", features = ["tls-rustls"] }
+axum-server = { version = "0.7.1", features = ["tls-rustls"] }
 
 # Tracing
 tracing = "0.1.40"
@@ -110,7 +111,7 @@ dyn-clone = "1.0.17"
 # ] }
 
 # Dev dependencies
-axum-test = "14.10.0"
+axum-test = "15.3.0"
 serial_test = "3"
 
 [[workspace.metadata.leptos]]
