@@ -11,16 +11,16 @@ opt-level = 'z'
 
 [workspace.dependencies]
 # Leptos
-leptos = { version = "0.6", features = ["nightly"] }
-leptos_meta = { version = "0.6", features = ["nightly"] }
-leptos_router = { version = "0.6", features = ["nightly"] }
-leptos_axum = { version = "0.6" }
-leptos-use = { version = "0.11.3" }
-leptos-struct-table = { version = "0.11.0", features = ["chrono", "uuid"] }
+leptos = { version = "0.6.15", features = ["nightly"] }
+leptos_meta = { version = "0.6.15", features = ["nightly"] }
+leptos_router = { version = "0.6.15", features = ["nightly"] }
+leptos_axum = { version = "0.6.15" }
+leptos-use = { version = "0.13.4" }
+leptos-struct-table = { version = "0.13.0", features = ["chrono", "uuid"] }
 
 # Wasm
-wasm-bindgen = { version = "=0.2.92", features = ["serde-serialize"] }
-wasm-bindgen-futures = { version = "0.4" }
+wasm-bindgen = { version = "0.2.93", features = ["serde-serialize"] }
+wasm-bindgen-futures = { version = "0.4.43" }
 
 # WebAuthn
 webauthn-rs-proto = { version = "0.5.0", features = ["wasm"] }
@@ -29,19 +29,19 @@ webauthn-rs = { version = "0.5.0", features = [
 ] }
 
 # Serde / json
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
 serde-wasm-bindgen = "0.6.5"
 rmp-serde = "1.3.0"
 
 # Tokio
 tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0.7.11", features = ["tracing", "io"] }
+tokio-util = { version = "0.7.12", features = ["tracing", "io"] }
 
 # Tower / Axum
-tower = { version = "0.4", features = ["full"] }
+tower = { version = "0.5.1", features = ["full"] }
 tower-http = { version = "0.5", features = ["full"] }
-tower-sessions = "0.12.2"
+tower-sessions = "0.13.0"
 axum = { version = "0.7.5", features = [
   "form",
   "query",
@@ -63,8 +63,8 @@ tracing-appender = "0.2"
 tracing-subscriber-wasm = "0.1.0"
 
 # SeaORM
-sea-schema = "0.15.0"
-sea-orm = { version = "1.0.0", features = [
+sea-schema = "0.16.0-rc.1"
+sea-orm = { version = "1.1.0-rc.1", features = [
   "sqlx-postgres",
   "sqlx-sqlite",
   "runtime-tokio-rustls",
@@ -72,15 +72,15 @@ sea-orm = { version = "1.0.0", features = [
   "with-uuid",
   "with-json",
 ] }
-sea-query = "0.31.0"
+sea-query = "0.32.0-rc.1"
 
 
-minidump = { version = "0.22.0" }
-minidump-processor = { version = "0.22.0" }
-minidump-unwind = { version = "0.22.0", features = ["debuginfo", "http"] }
+minidump = { version = "0.22.1" }
+minidump-processor = { version = "0.22.1" }
+minidump-unwind = { version = "0.22.1", features = ["debuginfo", "http"] }
 
 # Misc
-async-trait = "0.1.81"
+async-trait = "0.1.82"
 cfg-if = "1"
 chrono = { version = "0.4.38", features = ["serde"] }
 config = "0.14.0"
@@ -95,10 +95,10 @@ rand = { version = "0.8.5", features = ["small_rng", "serde1"] }
 thiserror = "1.0.63"
 time = "0.3.36"
 url = { version = "2.5.2", features = ["serde"] }
-uuid = { version = "1", features = ["v4", "fast-rng", "serde", "std"] }
-jwt-authorizer = "0.14.0"
+uuid = { version = "1.10.0", features = ["v4", "fast-rng", "serde", "std"] }
+jwt-authorizer = "0.15.0"
 jsonwebtoken = "9.3.0"
-indexmap = "2.3.0"
+indexmap = "2.5.0"
 trait-variant = "0.1.2"
 itertools = "0.13.0"
 dyn-clone = "1.0.17"
@@ -111,7 +111,7 @@ dyn-clone = "1.0.17"
 # ] }
 
 # Dev dependencies
-axum-test = "15.3.0"
+axum-test = "15.7.1"
 serial_test = "3"
 
 [[workspace.metadata.leptos]]
