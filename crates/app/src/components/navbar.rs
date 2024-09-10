@@ -69,7 +69,7 @@ pub fn Navbar(trigger: RwSignal<i64>, user: UserResource) -> impl IntoView {
                             <a href="/crashes">Crashes</a>
                         </li>
                         <li>
-                            <a href="/symbols">Symbols</a>
+                            <a href="/admin/symbols">Symbols</a>
                         </li>
                         <li>
                             <details>
@@ -97,7 +97,7 @@ pub fn Navbar(trigger: RwSignal<i64>, user: UserResource) -> impl IntoView {
                         <a href="/crashes">Crashes</a>
                     </li>
                     <li>
-                        <a href="/symbols">Symbols</a>
+                        <a href="/admin/symbols">Symbols</a>
                     </li>
                     <li>
                         <details class="dropdown">
