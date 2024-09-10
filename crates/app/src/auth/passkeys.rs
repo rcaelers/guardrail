@@ -19,9 +19,9 @@ pub async fn login_passkey(username: String) -> Result<(), AuthError> {
 }
 
 async fn login_begin(username: String) -> Result<RequestChallengeResponse, AuthError> {
-    let mut opts = RequestInit::new();
-    opts.method("POST");
-    opts.mode(RequestMode::SameOrigin);
+    let opts = RequestInit::new();
+    opts.set_method("POST");
+    opts.set_mode(RequestMode::SameOrigin);
 
     let dest = format!("/auth/authenticate_start/{username}");
     let request = Request::new_with_str_and_init(&dest, &opts)?;
@@ -66,10 +66,10 @@ async fn login_complete(pub_key_cred: PublicKeyCredential) -> Result<(), AuthErr
         .map(|s| JsValue::from(&s))
         .map_err(|e| AuthError::PasskeyError(e.to_string()))?;
 
-    let mut opts = RequestInit::new();
-    opts.method("POST");
-    opts.mode(RequestMode::SameOrigin);
-    opts.body(Some(&req_jsvalue));
+    let opts = RequestInit::new();
+    opts.set_method("POST");
+    opts.set_mode(RequestMode::SameOrigin);
+    opts.set_body(&req_jsvalue);
 
     let request = Request::new_with_str_and_init("/auth/authenticate_finish", &opts)?;
     request.headers().set("content-type", "application/json")?;
@@ -96,9 +96,9 @@ pub async fn register_passkey(username: String) -> Result<(), AuthError> {
 }
 
 async fn register_begin(username: String) -> Result<CreationChallengeResponse, AuthError> {
-    let mut opts = RequestInit::new();
-    opts.method("POST");
-    opts.mode(RequestMode::SameOrigin);
+    let opts = RequestInit::new();
+    opts.set_method("POST");
+    opts.set_mode(RequestMode::SameOrigin);
 
     let dest = format!("/auth/register_start/{username}");
     let request = Request::new_with_str_and_init(&dest, &opts)?;
@@ -144,10 +144,10 @@ async fn register_complete(reg_pub_key_cred: RegisterPublicKeyCredential) -> Res
         .map(|s| JsValue::from(&s))
         .map_err(|e| AuthError::PasskeyError(e.to_string()))?;
 
-    let mut opts = RequestInit::new();
-    opts.method("POST");
-    opts.mode(RequestMode::SameOrigin);
-    opts.body(Some(&req_jsvalue));
+    let opts = RequestInit::new();
+    opts.set_method("POST");
+    opts.set_mode(RequestMode::SameOrigin);
+    opts.set_body(&req_jsvalue);
 
     let request = Request::new_with_str_and_init("/auth/register_finish", &opts)?;
     request.headers().set("content-type", "application/json")?;
