@@ -20,14 +20,14 @@ use crate::data_providers::ExtraTableDataProvider;
 use crate::table_data_provider_impl;
 
 #[derive(Debug, Clone)]
-pub struct CrashTable {
+pub struct CrashesTable {
     sort: VecDeque<(usize, ColumnSort)>,
     filter: RwSignal<String>,
     update: RwSignal<u64>,
     parents: HashMap<String, Uuid>,
 }
 
-impl CrashTable {
+impl CrashesTable {
     pub fn new(parents: HashMap<String, Uuid>) -> Self {
         Self {
             sort: VecDeque::new(),
@@ -39,12 +39,12 @@ impl CrashTable {
 }
 
 #[async_trait]
-impl DataTableTrait for CrashTable {
+impl DataTableTrait for CrashesTable {
     type RowType = CrashRow;
     type DataType = Crash;
 
-    fn new_provider(parents: HashMap<String, Uuid>) -> CrashTable {
-        CrashTable::new(parents)
+    fn new_provider(parents: HashMap<String, Uuid>) -> CrashesTable {
+        CrashesTable::new(parents)
     }
 
     async fn capabilities(&self) -> BitFlags<Capabilities, u8> {
@@ -140,12 +140,12 @@ impl DataTableTrait for CrashTable {
     }
 }
 
-table_data_provider_impl!(CrashTable);
+table_data_provider_impl!(CrashesTable);
 
 #[allow(non_snake_case)]
 #[component]
-pub fn CrashPage() -> impl IntoView {
+pub fn CrashesPage() -> impl IntoView {
     view! {
-        <DataTable<CrashTable>/>
+        <DataTable<CrashesTable>/>
     }
 }

@@ -5,7 +5,7 @@ use crate::components::datatable_form::Fields;
 
 #[allow(non_snake_case)]
 #[component]
-pub fn Crash() -> impl IntoView {
+pub fn CrashPage() -> impl IntoView {
     let query_map = use_query_map();
 
     let q = query_map.get_untracked();

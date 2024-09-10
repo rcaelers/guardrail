@@ -18,7 +18,7 @@ use leptos_router::*;
 
 use auth::AuthenticatedUser;
 use components::{
-    crashes::CrashPage,
+    crashes::CrashesPage,
     error_template::{AppError, ErrorTemplate},
     login::LoginPage,
     navbar::Navbar,
