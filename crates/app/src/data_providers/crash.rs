@@ -1,6 +1,6 @@
 use ::chrono::NaiveDateTime;
 use cfg_if::cfg_if;
-use leptos::*;
+use leptos::prelude::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -11,7 +11,7 @@ use uuid::Uuid;
 cfg_if! { if #[cfg(feature="ssr")] {
     use sea_orm::*;
     use sea_query::Expr;
-    use crate::entity;
+    use entities::entity;
     use crate::auth::AuthenticatedUser;
     use crate::data::{
         add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
@@ -22,7 +22,7 @@ use super::ExtraRowTrait;
 use crate::classes::ClassesPreset;
 use crate::data::QueryParams;
 
-#[derive(TableRow, Debug, Clone)]
+#[derive(TableRow, Clone, Debug)]
 #[table(sortable, classes_provider = ClassesPreset)]
 pub struct CrashRow {
     pub id: Uuid,
@@ -141,21 +141,35 @@ impl From<entity::crash::Model> for Crash {
     }
 }
 
+// #[cfg(feature = "ssr")]
+// impl From<Crash> for entity::crash::ActiveModel {
+//     fn from(crash: Crash) -> Self {
+//         Self {
+//             id: Set(crash.id),
+//             report: sea_orm::NotSet,
+//             summary: Set(crash.summary),
+//             created_at: sea_orm::NotSet,
+//             updated_at: sea_orm::NotSet,
+//             product_id: Set(crash.product_id),
+//             version_id: Set(crash.version_id),
+//         }
+//     }
+// }
+
 #[cfg(feature = "ssr")]
-impl From<Crash> for entity::crash::ActiveModel {
-    fn from(crash: Crash) -> Self {
-        Self {
-            id: Set(crash.id),
+impl crate::data::MyIntoActiveModel<entities::entity::crash::ActiveModel> for Crash {
+    fn into_active_model(self) -> entities::entity::crash::ActiveModel {
+        entities::entity::crash::ActiveModel {
+            id: Set(self.id),
             report: sea_orm::NotSet,
-            summary: Set(crash.summary),
+            summary: Set(self.summary),
             created_at: sea_orm::NotSet,
             updated_at: sea_orm::NotSet,
-            product_id: Set(crash.product_id),
-            version_id: Set(crash.version_id),
+            product_id: Set(self.product_id),
+            version_id: Set(self.version_id),
         }
     }
 }
-
 impl ExtraRowTrait for CrashRow {
     fn get_id(&self) -> Uuid {
         self.id

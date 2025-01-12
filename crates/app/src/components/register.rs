@@ -1,14 +1,16 @@
-use leptos::*;
+use leptos::{html, prelude::*};
 use web_sys::SubmitEvent;
 
 use crate::{auth::passkeys::register_passkey, components::passkey_logo::PasskeyLogo};
 
+
+
 #[allow(non_snake_case)]
 #[component]
 pub fn RegisterPage() -> impl IntoView {
-    let input_element: NodeRef<html::Input> = create_node_ref();
+    let input_element: NodeRef<html::Input> = NodeRef::new();
 
-    let register_passkey_action = create_action(|user_name: &String| {
+    let register_passkey_action = Action::new_local(|user_name: &String| {
         let user_name = user_name.to_owned();
         async move { register_passkey(user_name).await }
     });
@@ -37,14 +39,14 @@ pub fn RegisterPage() -> impl IntoView {
                     <span class="font-semibold">Registation successful</span>
                 </div>
             }
-            .into_view(),
+            .into_any(),
             Err(e) => view! {
                 <div id="info-label" class="alert alert-failure rounded-btn mt-4 p-3">
                     <span class="font-semibold">Registation failed</span>
                     {e.to_string()}
                 </div>
             }
-            .into_view(),
+            .into_any(),
         })
     };
 
@@ -64,7 +66,7 @@ pub fn RegisterPage() -> impl IntoView {
                     <input
                         class="mt-1 input input-bordered"
                         type="text"
-                        d="username"
+                        //TODO: d="username"
                         name="username"
                         autocapitalize="none"
                         placeholder="user name"

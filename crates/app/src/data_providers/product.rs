@@ -1,6 +1,6 @@
 use ::chrono::NaiveDateTime;
 use cfg_if::cfg_if;
-use leptos::*;
+use leptos::prelude::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -11,7 +11,7 @@ cfg_if! { if #[cfg(feature="ssr")] {
     use sea_query::Expr;
     use std::collections::HashMap;
     use crate::authenticated_user;
-    use crate::entity;
+    use entities::entity;
     use crate::auth::AuthenticatedUser;
     use crate::data::{
         add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
@@ -22,7 +22,7 @@ use super::ExtraRowTrait;
 use crate::classes::ClassesPreset;
 use crate::data::QueryParams;
 
-#[derive(TableRow, Debug, Clone)]
+#[derive(TableRow, Clone, Debug)]
 #[table(sortable, classes_provider = ClassesPreset)]
 pub struct ProductRow {
     pub id: Uuid,
@@ -101,11 +101,11 @@ impl From<entity::product::Model> for Product {
 }
 
 #[cfg(feature = "ssr")]
-impl From<Product> for entity::product::ActiveModel {
-    fn from(product: Product) -> Self {
-        Self {
-            id: Set(product.id),
-            name: Set(product.name),
+impl crate::data::MyIntoActiveModel<entities::entity::product::ActiveModel> for Product {
+    fn into_active_model(self) -> entities::entity::product::ActiveModel {
+        entities::entity::product::ActiveModel {
+            id: Set(self.id),
+            name: Set(self.name),
             created_at: sea_orm::NotSet,
             updated_at: sea_orm::NotSet,
         }

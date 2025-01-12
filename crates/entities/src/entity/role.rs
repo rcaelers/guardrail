@@ -6,22 +6,19 @@ use serde::{Deserialize, Serialize};
 #[derive(
     Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize, macros :: DeriveDtoModel,
 )]
-#[sea_orm(table_name = "version")]
+#[sea_orm(table_name = "role")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub created_at: DateTime,
     pub updated_at: DateTime,
     pub name: String,
-    pub hash: String,
-    pub tag: String,
-    pub product_id: Uuid,
+    pub user_id: Uuid,
+    pub product_id: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::crash::Entity")]
-    Crash,
     #[sea_orm(
         belongs_to = "super::product::Entity",
         from = "Column::ProductId",
@@ -30,14 +27,14 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Product,
-    #[sea_orm(has_many = "super::symbols::Entity")]
-    Symbols,
-}
-
-impl Related<super::crash::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Crash.def()
-    }
+    #[sea_orm(
+        belongs_to = "super::user::Entity",
+        from = "Column::UserId",
+        to = "super::user::Column::Id",
+        on_update = "Cascade",
+        on_delete = "Cascade"
+    )]
+    User,
 }
 
 impl Related<super::product::Entity> for Entity {
@@ -46,9 +43,9 @@ impl Related<super::product::Entity> for Entity {
     }
 }
 
-impl Related<super::symbols::Entity> for Entity {
+impl Related<super::user::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Symbols.def()
+        Relation::User.def()
     }
 }
 

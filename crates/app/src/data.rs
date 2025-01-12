@@ -11,10 +11,10 @@ cfg_if! { if #[cfg(feature="ssr")] {
     use sea_orm::*;
     use sea_orm::{DatabaseConnection, EntityTrait, PaginatorTrait};
     use sea_query::Expr;
-    use leptos::*;
+    use leptos::prelude::*;
     use std::collections::{HashMap, HashSet};
     use uuid::Uuid;
-    use crate::entity;
+    use entities::entity;
 }}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -23,6 +23,10 @@ pub struct QueryParams {
     pub sorting: VecDeque<(usize, ColumnSort)>,
     pub range: Range<usize>,
     pub filter: String,
+}
+
+pub trait MyIntoActiveModel<T> {
+    fn into_active_model(self) -> T;
 }
 
 #[cfg(feature = "ssr")]
@@ -42,7 +46,7 @@ where
     fn get_product_query(
         _user: &AuthenticatedUser,
         _data: &Self::View,
-    ) -> Option<Select<entity::product::Entity>> {
+    ) -> Option<Select<entities::entity::product::Entity>> {
         None
     }
 
@@ -132,7 +136,7 @@ where
     let query = <E as EntityInfo>::get_product_query(&user, data);
 
     if let Some(query) = query {
-        let query = entity::product::Entity::extend_query_for_access(query, user, roles);
+        let query = entities::entity::product::Entity::extend_query_for_access(query, user, roles);
 
         query
             .one(&db)
@@ -303,7 +307,7 @@ pub async fn add<E>(item: E::View) -> Result<(), ServerFnError>
 where
     E: EntityTrait + EntityInfo,
     E::ActiveModel: ActiveModelTrait<Entity = E> + ActiveModelBehavior + Send,
-    E::View: Into<E::ActiveModel>,
+    E::View: MyIntoActiveModel<E::ActiveModel>,
     <E as EntityTrait>::Model: IntoActiveModel<<E as EntityTrait>::ActiveModel>,
     <E::Column as FromStr>::Err: std::fmt::Debug,
 {
@@ -314,7 +318,7 @@ where
         .await
         .map_err(|e| ServerFnError::new(format!("{e:?}")))?;
 
-    let am: E::ActiveModel = item.into();
+    let am: E::ActiveModel = item.into_active_model();
     am.insert(&db)
         .await
         .map_err(|e| ServerFnError::new(format!("{e:?}")))?;
@@ -326,7 +330,7 @@ pub async fn update<E>(item: E::View) -> Result<(), ServerFnError>
 where
     E: EntityTrait + EntityInfo,
     E::ActiveModel: ActiveModelTrait<Entity = E> + ActiveModelBehavior + Send,
-    E::View: Into<E::ActiveModel>,
+    E::View: MyIntoActiveModel<E::ActiveModel>,
     <E as EntityTrait>::Model: IntoActiveModel<<E as EntityTrait>::ActiveModel>,
     <E::Column as FromStr>::Err: std::fmt::Debug,
 {
@@ -337,7 +341,7 @@ where
         .await
         .map_err(|e| ServerFnError::new(format!("{e:?}")))?;
 
-    let am: E::ActiveModel = item.into();
+    let am: E::ActiveModel = item.into_active_model();
     am.update(&db)
         .await
         .map_err(|e| ServerFnError::new(format!("{e:?}")))?;

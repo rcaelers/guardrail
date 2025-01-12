@@ -1,4 +1,4 @@
-use leptos::*;
+use leptos::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
     wasm_bindgen::{JsCast, JsValue},

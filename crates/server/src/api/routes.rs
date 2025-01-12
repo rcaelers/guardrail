@@ -4,8 +4,8 @@ use axum::Router;
 use jwt_authorizer::{Authorizer, IntoLayer, JwtAuthorizer, RegisteredClaims, Validation};
 
 use super::{minidump::MinidumpApi, symbols::SymbolsApi};
-use crate::entity::prelude;
 use crate::{api::base::Api, app_state::AppState};
+use entities::entity::prelude;
 
 pub async fn routes() -> Router<AppState> {
     let validation = Validation::new().aud(&["Guardrail"]).leeway(20);

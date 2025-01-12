@@ -1,4 +1,4 @@
-mod api;
+//mod api;
 mod app_state;
 mod auth;
 mod fileserv;
@@ -14,7 +14,7 @@ use axum::response::{IntoResponse, Response};
 use axum::Router;
 use axum_server::tls_rustls::RustlsConfig;
 use fileserv::file_and_error_handler;
-use leptos::*;
+use leptos::prelude::*;
 use leptos_axum::{generate_route_list, handle_server_fns_with_context, LeptosRoutes};
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use std::io::IsTerminal;
@@ -31,10 +31,10 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::{fmt, EnvFilter, FmtSubscriber};
 use webauthn_rs::prelude::*;
 
-use crate::entity;
-use app::settings::settings;
 use app::*;
 use app_state::AppState;
+use common::settings::settings;
+use entities::entity;
 use session_store::SeaOrmSessionStore;
 
 async fn init_logging() {
@@ -146,13 +146,15 @@ async fn main() {
         )
         .leptos_routes_with_handler(routes, axum::routing::get(leptos_routes_handler))
         .fallback(file_and_error_handler)
-        .nest("/api", api::routes().await)
+        //.nest("/api", api::routes().await)
         .nest("/auth", auth::routes().await)
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
         .layer(TraceLayer::new_for_http())
         .layer(auth_layer)
         .layer(session_layer)
         .with_state(state);
+
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     //TODO: Make configurable
     let config = RustlsConfig::from_pem_file(

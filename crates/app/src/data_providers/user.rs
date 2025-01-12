@@ -1,6 +1,6 @@
 use ::chrono::NaiveDateTime;
 use cfg_if::cfg_if;
-use leptos::*;
+use leptos::prelude::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -10,7 +10,7 @@ cfg_if! { if #[cfg(feature="ssr")] {
     use sea_orm::*;
     use sea_query::Expr;
     use std::collections::HashMap;
-    use crate::entity;
+    use entities::entity;
     use crate::auth::AuthenticatedUser;
     use crate::data::{
         add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
@@ -21,7 +21,7 @@ use super::ExtraRowTrait;
 use crate::classes::ClassesPreset;
 use crate::data::QueryParams;
 
-#[derive(TableRow, Debug, Clone)]
+#[derive(TableRow, Clone, Debug)]
 #[table(sortable, classes_provider = ClassesPreset)]
 pub struct UserRow {
     pub id: Uuid,
@@ -117,12 +117,12 @@ impl From<entity::user::Model> for User {
 }
 
 #[cfg(feature = "ssr")]
-impl From<User> for entity::user::ActiveModel {
-    fn from(user: User) -> Self {
-        Self {
-            id: Set(user.id),
-            username: Set(user.username),
-            is_admin: Set(user.is_admin),
+impl crate::data::MyIntoActiveModel<entities::entity::user::ActiveModel> for User {
+    fn into_active_model(self) -> entities::entity::user::ActiveModel {
+        entities::entity::user::ActiveModel {
+            id: Set(self.id),
+            username: Set(self.username),
+            is_admin: Set(self.is_admin),
             created_at: sea_orm::NotSet,
             updated_at: sea_orm::NotSet,
             last_authenticated: sea_orm::NotSet,

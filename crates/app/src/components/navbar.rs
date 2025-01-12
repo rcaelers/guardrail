@@ -1,12 +1,13 @@
-use leptos::*;
+use leptos::{either::Either, prelude::*};
 
 use crate::{components::logout::LogoutButton, UserResource};
 
 #[allow(non_snake_case)]
 #[component]
 pub fn Navbar(trigger: RwSignal<i64>, user: UserResource) -> impl IntoView {
+    let _x =user.get();
     let user_area = move || match user.get().and_then(|u| u) {
-        Some(user) => view! {
+        Some(user) => Either::Left(view! {
             <li>
                 <a class="px-2" href="/auth/profile">
                     {{ user.username }}
@@ -15,8 +16,8 @@ pub fn Navbar(trigger: RwSignal<i64>, user: UserResource) -> impl IntoView {
             <li>
                 <LogoutButton trigger=trigger/>
             </li>
-        },
-        None => view! {
+        }),
+        None => Either::Right(view! {
             <li>
                 <a class="px-2" href="/auth/login">
                     login
@@ -27,7 +28,7 @@ pub fn Navbar(trigger: RwSignal<i64>, user: UserResource) -> impl IntoView {
                     register
                 </a>
             </li>
-        },
+        }),
     };
 
     view! {

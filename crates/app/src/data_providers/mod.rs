@@ -4,7 +4,7 @@ pub mod symbols;
 pub mod user;
 pub mod version;
 
-use leptos::*;
+use leptos::prelude::*;
 use uuid::Uuid;
 
 pub trait ExtraTableDataProvider<T> {

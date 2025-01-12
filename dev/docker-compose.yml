@@ -7,7 +7,7 @@ volumes:
 services:
   postgresql:
     container_name: postgresql
-    image: postgres:17rc1
+    image: postgres:latest
     environment:
       - POSTGRES_PASSWORD=postgres
     volumes:

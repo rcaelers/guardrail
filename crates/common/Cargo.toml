@@ -1,0 +1,22 @@
+[package]
+name = "common"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+
+# Serde / json
+serde.workspace = true
+serde_json.workspace = true
+serde-wasm-bindgen.workspace = true
+rmp-serde.workspace = true
+
+# Tracing
+tracing.workspace = true
+tracing-subscriber-wasm.workspace = true
+
+# Misc
+config.workspace = true
+
+[features]
+default = []

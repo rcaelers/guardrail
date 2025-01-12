@@ -16,9 +16,9 @@ impl Resource for Annotation {
 
 #[cfg(test)]
 mod tests {
-    use crate::entity::annotation;
     use crate::{api::base::tests::*, entity::sea_orm_active_enums::AnnotationKind};
     use axum_test::TestServer;
+    use entities::entity::annotation;
     use serial_test::serial;
 
     #[derive(serde::Deserialize, Debug)]

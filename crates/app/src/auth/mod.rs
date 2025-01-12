@@ -9,7 +9,7 @@ cfg_if! { if #[cfg(feature="ssr")] {
     pub mod layer;
     pub mod extract;
 
-    use crate::entity;
+    use entities::entity;
     use tower_sessions::Session;
     use tracing::warn;
 }}

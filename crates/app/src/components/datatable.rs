@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use enumflags2::{bitflags, BitFlag, BitFlags};
-use leptos::html::Div;
-use leptos::*;
-use leptos_router::*;
+use leptos::prelude::*;
+use leptos::task::spawn_local;
+use leptos_router::hooks::{use_navigate, use_query_map};
 use leptos_struct_table::*;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -42,10 +42,19 @@ where
     Self: leptos_struct_table::TableDataProvider<Self::RowType>
         + ExtraTableDataProvider<Self::RowType>
         + Clone
+        + Sync
+        + Send
         + 'static,
+    <Self::RowType as leptos_struct_table::TableRow>::ClassesProvider: Send + Sync,
 {
-    type RowType: leptos_struct_table::TableRow + ExtraRowTrait + Clone + Debug + 'static;
-    type DataType: Default + Clone + Debug + 'static;
+    type RowType: leptos_struct_table::TableRow
+        + ExtraRowTrait
+        + Sync
+        + Send
+        + Clone
+        + Debug
+        + 'static;
+    type DataType: Default + Sync + Send + Clone + Debug + 'static;
 
     fn new_provider(parents: HashMap<String, Uuid>) -> Self;
 
@@ -100,22 +109,22 @@ where
         let q = query_map.get_untracked();
         let q = q.get(foreign.query.as_str());
         if let Some(q) = q {
-            let uuid = uuid::Uuid::parse_str(q);
+            let uuid = uuid::Uuid::parse_str(q.as_str());
             if let Ok(uuid) = uuid {
                 query.insert(foreign.id_name, uuid);
             }
         }
     }
 
-    let fields: RwSignal<Fields> = create_rw_signal(Fields::default());
+    let fields: RwSignal<Fields> = RwSignal::new(Fields::default());
 
-    let title = create_rw_signal("".to_string());
-    let related = create_rw_signal(T::get_related());
+    let title = RwSignal::new("".to_string());
+    let related = RwSignal::new(T::get_related());
 
-    let scroll_container = create_node_ref::<Div>();
+    let container = NodeRef::new();
     let form = T::new_provider(query.clone());
     let form_clone = form.clone();
-    let capabilities = create_rw_signal::<BitFlags<Capabilities, u8>>(Capabilities::empty());
+    let capabilities = RwSignal::<BitFlags<Capabilities, u8>>::new(Capabilities::empty());
 
     let rows_clone2 = form.clone();
     spawn_local(async move {
@@ -125,13 +134,13 @@ where
         })
     });
 
-    let selected_index: RwSignal<Option<usize>> = create_rw_signal(None);
-    let (selected_row, set_selected_row) = create_signal(None);
+    let selected_index: RwSignal<Option<usize>> = RwSignal::new(None);
+    let (selected_row, set_selected_row) = signal(None);
 
     let filter = form.get_filter_signal();
-    let (custom_text, set_custom_text) = create_signal("".to_string());
-    let (show_confirm_popup, set_show_confirm_popup) = create_signal(false);
-    let (show_form_popup, set_show_form_popup) = create_signal(false);
+    let (custom_text, set_custom_text) = signal("".to_string());
+    let (show_confirm_popup, set_show_confirm_popup) = signal(false);
+    let (show_form_popup, set_show_form_popup) = signal(false);
 
     #[derive(Debug, Clone)]
     enum State {
@@ -140,21 +149,21 @@ where
         Edit,
         Delete,
     }
-    let state = create_rw_signal(State::Idle);
+    let state = RwSignal::new(State::Idle);
 
-    let current_row: RwSignal<Option<T::DataType>> = create_rw_signal(None);
-    let is_row_selected = create_memo(move |_| selected_row.get().is_some());
+    let current_row: RwSignal<Option<T::DataType>> = RwSignal::new(None);
+    let is_row_selected = Memo::new(move |_| selected_row.get().is_some());
 
     T::init_fields(fields, &query);
 
-    create_effect(move |_| {
+    Effect::new(move |_| {
         if let State::Idle = state.get() {
             let rows = form.clone();
             rows.refresh_table();
         }
     });
 
-    let on_delete_click = Callback::new(move |_evt: web_sys::MouseEvent| {
+    let on_delete_click = Callback::new(move |_| {
         let row = selected_row.get();
         if row.is_some() {
             let row: T::RowType = row.unwrap();
@@ -170,7 +179,7 @@ where
         }
     });
 
-    let on_related_click = Callback::new(move |index: usize| {
+    let on_related_click = Callback::new(move |(index,): (usize,)| {
         let row = selected_row.get();
         if row.is_some() {
             let row: T::RowType = row.unwrap();
@@ -191,7 +200,7 @@ where
     });
 
     let q1 = query.clone();
-    let on_add_click = Callback::new(move |_: web_sys::MouseEvent| {
+    let on_add_click = Callback::new(move |_| {
         let q1 = q1.clone();
         spawn_local(async move {
             let data: T::DataType = T::DataType::default();
@@ -203,7 +212,7 @@ where
     });
 
     let q2 = query.clone();
-    let on_edit_click = Callback::new(move |_: web_sys::MouseEvent| {
+    let on_edit_click = Callback::new(move |_| {
         let row = selected_row.get();
         if row.is_some() {
             let row: T::RowType = row.unwrap();
@@ -233,9 +242,9 @@ where
         }
     });
 
-    let on_no_click = move |_| {
+    let on_no_click = Callback::new(move |_| {
         set_show_confirm_popup(false);
-    };
+    });
 
     let on_save_click = Callback::new(move |_| {
         set_show_form_popup(false);
@@ -261,15 +270,15 @@ where
         }
     });
 
-    let on_cancel_click = move |_| {
+    let on_cancel_click = Callback::new(move |_| {
         set_show_form_popup(false);
         state.set(State::Idle);
-    };
+    });
 
     let on_selection_changed = move |evt: SelectionChangeEvent<T::RowType>| {
-        set_selected_row.update(|selected_row| {
-            *selected_row = Some(evt.row);
-        })
+        let x = evt.row;
+        let y = set_selected_row.write();
+        //y.replace(x);
     };
 
     view! {
@@ -284,11 +293,11 @@ where
             on_related_click=on_related_click
         />
 
-        <div node_ref=scroll_container class="overflow-auto grow min-h-0">
+        <div node_ref=container class="overflow-auto grow min-h-0">
             <table class="table-fixed text-sm text-left text-gray-500 dark:text-gray-400 w-full">
                 <TableContent
                     rows=form_clone
-                    scroll_container
+                    scroll_container=container
                     display_strategy=DisplayStrategy::Virtualization
                     selection=Selection::Single(selected_index)
                     on_selection_change=on_selection_changed
@@ -300,7 +309,7 @@ where
             show=show_confirm_popup
             custom_text=custom_text
             on_yes_click=on_yes_click
-            on_no_click=on_no_click.into()
+            on_no_click=on_no_click
         />
 
         <DataTableModalForm
@@ -308,7 +317,7 @@ where
             show=show_form_popup
             fields=fields
             on_save_click=on_save_click
-            on_cancel_click=on_cancel_click.into()
+            on_cancel_click=on_cancel_click
         />
     }
 }

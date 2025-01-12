@@ -2,11 +2,17 @@
   "folders": [
     {
       "path": "../../workrave/guardrail"
+    },
+    {
+      "path": "../leptos"
     }
   ],
   "settings": {
     "cSpell.words": ["guardrail"],
-    "rust-analyzer.linkedProjects": ["./crates/migration/Cargo.toml", "./Cargo.toml"],
+    "rust-analyzer.linkedProjects": [
+      "./crates/migration/Cargo.toml",
+      "./Cargo.toml"
+    ],
     "rust-analyzer.showUnlinkedFileNotification": false
   }
 }

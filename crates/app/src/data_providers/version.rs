@@ -1,6 +1,6 @@
 use ::chrono::NaiveDateTime;
 use cfg_if::cfg_if;
-use leptos::*;
+use leptos::prelude::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -9,7 +9,7 @@ use uuid::Uuid;
 cfg_if! { if #[cfg(feature="ssr")] {
     use sea_orm::*;
     use sea_query::Expr;
-    use crate::entity;
+    use entities::entity;
     use crate::data::{
         add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
     };
@@ -20,7 +20,7 @@ use super::ExtraRowTrait;
 use crate::classes::ClassesPreset;
 use crate::data::QueryParams;
 
-#[derive(TableRow, Debug, Clone)]
+#[derive(TableRow, Clone, Debug)]
 #[table(sortable, classes_provider = ClassesPreset)]
 pub struct VersionRow {
     pub id: Uuid,
@@ -139,19 +139,33 @@ impl From<entity::version::Model> for Version {
 }
 
 #[cfg(feature = "ssr")]
-impl From<Version> for entity::version::ActiveModel {
-    fn from(version: Version) -> Self {
-        Self {
-            id: Set(version.id),
-            name: Set(version.name),
-            hash: Set(version.hash),
-            tag: Set(version.tag),
-            product_id: Set(version.product_id),
+impl crate::data::MyIntoActiveModel<entities::entity::version::ActiveModel> for Version {
+    fn into_active_model(self) -> entities::entity::version::ActiveModel {
+        entities::entity::version::ActiveModel {
+            id: Set(self.id),
+            name: Set(self.name),
+            hash: Set(self.hash),
+            tag: Set(self.tag),
+            product_id: Set(self.product_id),
             created_at: sea_orm::NotSet,
             updated_at: sea_orm::NotSet,
         }
     }
 }
+
+// pub struct Version2 {}
+// impl std::convert::From<Version2> for common::FromTestEntity {
+//     fn from(m: Version2) -> Self {
+//         Self {}
+//     }
+// }
+// struct WrappedVersion2(Version2);
+
+// impl std::convert::From<WrappedVersion2> for common::FromTestEntity {
+//     fn from(_m: WrappedVersion2) -> Self {
+//         Self {}
+//     }
+// }
 
 impl ExtraRowTrait for VersionRow {
     fn get_id(&self) -> Uuid {

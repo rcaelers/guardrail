@@ -81,9 +81,9 @@ impl SymbolsApi {
         state: &AppState,
         params: &SymbolsRequestParams,
     ) -> Result<crate::model::product::Product, ApiError> {
-        let product = Repo::get_by_column::<crate::entity::product::Entity, _, _>(
+        let product = Repo::get_by_column::<entities::entity::product::Entity, _, _>(
             &state.db,
-            crate::entity::product::Column::Name,
+            entities::entity::product::Column::Name,
             params.product.clone(),
         )
         .await;

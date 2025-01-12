@@ -1,25 +1,20 @@
-use cfg_if::cfg_if;
-
 pub mod auth;
 pub mod classes;
 pub mod components;
 pub mod data;
 pub mod data_providers;
-pub mod settings;
 
-cfg_if! { if #[cfg(feature="ssr")] {
-    pub mod entity;
-    pub mod model;
-}}
-
-use leptos::*;
+use leptos::prelude::*;
 use leptos_meta::*;
-use leptos_router::*;
+use leptos_router::{
+    components::{FlatRoutes, Route, Router},
+    StaticSegment,
+};
 
 use auth::AuthenticatedUser;
 use components::{
+    // crash::CrashPage,
     crashes::CrashesPage,
-    error_template::{AppError, ErrorTemplate},
     login::LoginPage,
     navbar::Navbar,
     products::ProductsPage,
@@ -30,7 +25,7 @@ use components::{
     versions::VersionsPage,
 };
 
-type UserResource = Resource<i64, Option<AuthenticatedUser>>;
+type UserResource = Resource<Option<AuthenticatedUser>>;
 
 #[server(GetUser)]
 pub async fn authenticated_user() -> Result<Option<AuthenticatedUser>, ServerFnError> {
@@ -51,9 +46,9 @@ pub async fn authenticated_user_is_admin() -> Result<bool, ServerFnError> {
 pub fn App() -> impl IntoView {
     provide_meta_context();
 
-    let user_info_trigger = create_rw_signal(0);
+    let user_info_trigger = RwSignal::new(0);
 
-    let user = create_local_resource(user_info_trigger, move |_| async move {
+    let user = Resource::new(user_info_trigger, move |_| async move {
         authenticated_user().await.unwrap_or(None)
     });
 
@@ -61,7 +56,7 @@ pub fn App() -> impl IntoView {
         <Stylesheet id="leptos" href="/pkg/site.css"/>
         <Stylesheet href="https://fonts.googleapis.com/css?family=Montserrat:300,400,500&display=swap"/>
 
-        <Html class="dark" lang="en"/>
+        <html class="dark" lang="en"/>
 
         <Title text="GuardRail"/>
         <Meta charset="utf-8"/>
@@ -71,30 +66,26 @@ pub fn App() -> impl IntoView {
 
         <Title text="Welcome to Leptos"/>
 
-        <Router fallback=|| {
-            let mut outside_errors = Errors::default();
-            outside_errors.insert_with_default_key(AppError::NotFound);
-            view! { <ErrorTemplate outside_errors/> }.into_view()
-        }>
+        <Router>
             <div class="container h-screen max-w-full flex flex-col">
                 <header class="sticky top-0 z-50 p-1">
                     <Navbar trigger=user_info_trigger user=user/>
                 </header>
                 <main class="flex-1 overflow-hidden p-1 flex flex-col">
-                    <Routes>
-                        <Route path="" view=HomePage/>
+                    <FlatRoutes fallback=|| "Not found.">
+                        <Route path=StaticSegment("") view=HomePage/>
                         <Route
-                            path="/auth/login"
+                            path=StaticSegment("/auth/login")
                             view=move || view! { <LoginPage trigger=user_info_trigger/> }
                         />
-                        <Route path="/auth/register" view=RegisterPage/>
-                        <Route path="/auth/profile" view=ProfilePage/>
-                        <Route path="/admin/users" view=UsersPage/>
-                        <Route path="/admin/products" view=ProductsPage/>
-                        <Route path="/admin/versions" view=VersionsPage/>
-                        <Route path="/admin/symbols" view=SymbolsPage/>
-                        <Route path="/admin/crashes" view=CrashPage/>
-                    </Routes>
+                        <Route path=StaticSegment("/auth/register") view=RegisterPage/>
+                        <Route path=StaticSegment("/auth/profile") view=ProfilePage/>
+                        <Route path=StaticSegment("/admin/users") view=UsersPage/>
+                        <Route path=StaticSegment("/admin/products") view=ProductsPage/>
+                        <Route path=StaticSegment("/admin/versions") view=VersionsPage/>
+                        <Route path=StaticSegment("/admin/symbols") view=SymbolsPage/>
+                        <Route path=StaticSegment("/crashes") view=CrashesPage/>
+                    </FlatRoutes>
                 </main>
             </div>
         </Router>

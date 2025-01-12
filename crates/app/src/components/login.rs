@@ -1,16 +1,18 @@
-use leptos::*;
+use hooks::use_navigate;
+use leptos::{html, prelude::*};
 use leptos_router::*;
 use std::time::Duration;
 use web_sys::SubmitEvent;
+use tracing::error;
 
 use crate::{auth::passkeys::login_passkey, components::passkey_logo::PasskeyLogo};
 
-#[allow(non_snake_case)]
+//#[allow(non_snake_case)]
 #[component]
 pub fn LoginPage(trigger: RwSignal<i64>) -> impl IntoView {
-    let input_element: NodeRef<html::Input> = create_node_ref();
+    let input_element: NodeRef<html::Input> = NodeRef::new();
 
-    let login_passkey_action = create_action(|user_name: &String| {
+    let login_passkey_action = Action::new_local(|user_name: &String| {
         let user_name = user_name.to_owned();
         async move { login_passkey(user_name).await }
     });
@@ -39,14 +41,14 @@ pub fn LoginPage(trigger: RwSignal<i64>) -> impl IntoView {
                     <span class="font-semibold">Login successful</span>
                 </div>
             }
-            .into_view(),
+            .into_any(),
             Err(e) => view! {
                 <div id="info-label" class="alert alert-failure rounded-btn mt-4 p-3">
                     <span class="font-semibold">Login failed</span>
                     {e.to_string()}
                 </div>
             }
-            .into_view(),
+            .into_any(),
         })
     };
 
@@ -60,18 +62,18 @@ pub fn LoginPage(trigger: RwSignal<i64>) -> impl IntoView {
             .location()
             .set_href("/crashes");
         if let Err(e) = result {
-            logging::error!("failed to reload: {:?}", e);
+            error!("failed to reload: {:?}", e);
         }
         let result = web_sys::window()
             .expect("Failed to get window")
             .location()
             .reload();
         if let Err(e) = result {
-            logging::error!("failed to reload: {:?}", e);
+            error!("failed to reload: {:?}", e);
         }
     };
 
-    create_effect(move |_| {
+    Effect::new(move |_| {
         if value.get().is_some() {
             set_timeout(perform_redirect, Duration::from_secs(3));
         }
@@ -93,7 +95,7 @@ pub fn LoginPage(trigger: RwSignal<i64>) -> impl IntoView {
                     <input
                         class="mt-1 input input-bordered"
                         type="text"
-                        d="username"
+                        // TODO: d="username"
                         name="username"
                         autocapitalize="none"
                         placeholder="user name"

@@ -128,7 +128,7 @@ impl Api {
         let p: R::CreateData = Self::process_payload::<R, _>(&state.db, payload, headers).await?;
         Repo::create(&state.db, p)
             .await
-            .map(|id| (serde_json::json!({ "result": "ok", "id": id }).to_string()))
+            .map(|p|  (serde_json::json!({ "result": "ok", "id": p }).to_string()))
             .map_err(ApiError::DatabaseError)
     }
 

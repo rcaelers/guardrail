@@ -33,9 +33,9 @@ impl ResourceFilter for crash::Model {
         let mut json = json.clone();
         let product = json["product"].as_str();
         if let Some(product) = product {
-            let product_id = Repo::get_by_column::<crate::entity::product::Entity, _, _>(
+            let product_id = Repo::get_by_column::<entities::entity::product::Entity, _, _>(
                 db,
-                crate::entity::product::Column::Name,
+                entities::entity::product::Column::Name,
                 product.to_owned(),
             )
             .await?

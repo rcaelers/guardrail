@@ -4,6 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+entities = { path = "../entities", optional = true }
+common = { path = "../common" }
 macros = { path = "../macros" }
 migration = { path = "../migration", optional = true }
 
@@ -60,7 +62,7 @@ serial_test.workspace = true
 
 [features]
 default = []
-hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
+hydrate = ["leptos/hydrate"]
 ssr = [
   "leptos/ssr",
   "leptos_meta/ssr",
@@ -74,6 +76,7 @@ ssr = [
   "dep:tower",
   "dep:tower-sessions",
   "dep:migration",
+  "dep:entities",
 ]
 
 [dependencies.web-sys]

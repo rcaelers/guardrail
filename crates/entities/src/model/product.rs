@@ -11,7 +11,6 @@ impl HasId for entity::product::Model {
     }
 }
 
-#[cfg(feature = "ssr")]
 #[cfg(test)]
 mod tests {
     use crate::{

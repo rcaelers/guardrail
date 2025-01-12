@@ -17,7 +17,7 @@ impl Resource for Product {
 #[cfg(test)]
 mod tests {
     use crate::api::base::tests::*;
-    use crate::entity::product;
+    use entities::entity::product;
     use serial_test::serial;
 
     #[derive(serde::Deserialize, Debug)]

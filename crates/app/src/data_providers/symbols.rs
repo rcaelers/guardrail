@@ -1,6 +1,6 @@
 use ::chrono::NaiveDateTime;
 use cfg_if::cfg_if;
-use leptos::*;
+use leptos::prelude::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -11,7 +11,7 @@ use uuid::Uuid;
 cfg_if! { if #[cfg(feature="ssr")] {
     use sea_orm::*;
     use sea_query::Expr;
-    use crate::entity;
+    use entities::entity;
     use crate::data::{
         add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
     };
@@ -22,7 +22,7 @@ use super::ExtraRowTrait;
 use crate::classes::ClassesPreset;
 use crate::data::QueryParams;
 
-#[derive(TableRow, Debug, Clone)]
+#[derive(TableRow, Clone, Debug)]
 #[table(sortable, classes_provider = ClassesPreset)]
 pub struct SymbolsRow {
     pub id: Uuid,
@@ -165,19 +165,19 @@ impl From<entity::symbols::Model> for Symbols {
 }
 
 #[cfg(feature = "ssr")]
-impl From<Symbols> for entity::symbols::ActiveModel {
-    fn from(symbols: Symbols) -> Self {
-        Self {
-            id: Set(symbols.id),
-            os: Set(symbols.os),
-            arch: Set(symbols.arch),
-            build_id: Set(symbols.build_id),
-            module_id: Set(symbols.module_id),
-            file_location: Set(symbols.file_location),
+impl crate::data::MyIntoActiveModel<entities::entity::symbols::ActiveModel> for Symbols {
+    fn into_active_model(self) -> entities::entity::symbols::ActiveModel {
+        entities::entity::symbols::ActiveModel {
+            id: Set(self.id),
+            os: Set(self.os),
+            arch: Set(self.arch),
+            build_id: Set(self.build_id),
+            module_id: Set(self.module_id),
+            file_location: Set(self.file_location),
             created_at: sea_orm::NotSet,
             updated_at: sea_orm::NotSet,
-            product_id: Set(symbols.product_id),
-            version_id: Set(symbols.version_id),
+            product_id: Set(self.product_id),
+            version_id: Set(self.version_id),
         }
     }
 }

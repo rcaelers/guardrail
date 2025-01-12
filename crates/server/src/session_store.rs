@@ -23,8 +23,8 @@ impl SeaOrmSessionStore {
 impl ExpiredDeletion for SeaOrmSessionStore {
     async fn delete_expired(&self) -> session_store::Result<()> {
         let now = Utc::now().naive_utc();
-        app::entity::prelude::Session::delete_many()
-            .filter(app::entity::session::Column::ExpiresAt.lt(now))
+        entities::entity::prelude::Session::delete_many()
+            .filter(entities::entity::session::Column::ExpiresAt.lt(now))
             .exec(&self.db)
             .await
             .map_err(SeaStoreError::SeaError)?;
@@ -43,14 +43,14 @@ impl SessionStore for SeaOrmSessionStore {
             0,
         );
 
-        let data = app::entity::session::ActiveModel {
+        let data = entities::entity::session::ActiveModel {
             id: Set(record.id.to_string()),
             expires_at: Set(expiry_date),
             created_at: Set(Utc::now().naive_utc()),
             updated_at: Set(Utc::now().naive_utc()),
             data: Set(rmp_serde::to_vec(&record).map_err(SeaStoreError::Encode)?),
         };
-        app::entity::prelude::Session::insert(data)
+        entities::entity::prelude::Session::insert(data)
             .on_conflict(
                 OnConflict::column(migration::SessionColumns::Id)
                     .update_columns([migration::SessionColumns::Data])
@@ -64,7 +64,7 @@ impl SessionStore for SeaOrmSessionStore {
     }
 
     async fn load(&self, session_id: &Id) -> session_store::Result<Option<Record>> {
-        let record = app::entity::prelude::Session::find_by_id(session_id.to_string())
+        let record = entities::entity::prelude::Session::find_by_id(session_id.to_string())
             .one(&self.db)
             .await
             .map_err(SeaStoreError::SeaError)?;
@@ -88,7 +88,7 @@ impl SessionStore for SeaOrmSessionStore {
     }
 
     async fn delete(&self, session_id: &Id) -> session_store::Result<()> {
-        crate::entity::prelude::Session::delete_by_id(session_id.to_string())
+        entities::entity::prelude::Session::delete_by_id(session_id.to_string())
             .exec(&self.db)
             .await
             .map_err(SeaStoreError::SeaError)?;

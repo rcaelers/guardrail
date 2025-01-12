@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use enumflags2::BitFlags;
-use leptos::*;
+use leptos::prelude::*;
 use leptos_struct_table::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;

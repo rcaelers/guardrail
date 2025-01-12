@@ -31,9 +31,9 @@ impl ResourceFilter for Version {
     ) -> Result<serde_json::Value, ApiError> {
         let product = json["product"].as_str();
         if let Some(product) = product {
-            let product_id = Repo::get_by_column::<crate::entity::product::Entity, _, _>(
+            let product_id = Repo::get_by_column::<entities::entity::product::Entity, _, _>(
                 db,
-                crate::entity::product::Column::Name,
+                entities::entity::product::Column::Name,
                 product.to_owned(),
             )
             .await?
@@ -50,7 +50,7 @@ impl ResourceFilter for Version {
 #[cfg(test)]
 mod tests {
     use crate::api::base::tests::*;
-    use crate::entity::version;
+    use entities::entity::version;
     use serial_test::serial;
 
     #[derive(serde::Deserialize, Debug)]

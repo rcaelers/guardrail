@@ -5,6 +5,8 @@ edition = "2021"
 
 [dependencies]
 app = { path = "../app", default-features = false, features = ["ssr"] }
+entities = { path = "../entities" }
+common = { path = "../common" }
 macros = { path = "../macros" }
 migration = { path = "../migration" }
 
@@ -27,6 +29,7 @@ tokio.workspace = true
 tokio-util.workspace = true
 axum.workspace = true
 axum-server.workspace = true
+rustls.workspace = true
 
 # Tower
 tower.workspace = true
