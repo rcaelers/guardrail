@@ -94,11 +94,11 @@ async fn server_fn_handler(
 
 async fn leptos_routes_handler(
     auth_session: AuthSession,
-    State(app_state): State<AppState>,
+    state: State<AppState>,
     req: Request<Body>,
 ) -> Response {
+    let State(app_state) = state.clone();
     let handler = leptos_axum::render_route_with_context(
-        app_state.leptos_options.clone(),
         app_state.routes.clone(),
         move || {
             provide_context(app_state.db.clone());
@@ -107,7 +107,7 @@ async fn leptos_routes_handler(
         },
         app::App,
     );
-    handler(req).await.into_response()
+    handler(state, req).await.into_response()
 }
 
 #[tokio::main]
@@ -116,7 +116,7 @@ async fn main() {
 
     info!("Starting server on port {}", settings().server.port);
 
-    let conf = get_configuration(None).await.unwrap();
+    let conf = get_configuration(None).unwrap();
     let leptos_options = conf.leptos_options;
     let _addr = leptos_options.site_addr;
     let routes = generate_route_list(App);

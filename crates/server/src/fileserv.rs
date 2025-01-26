@@ -1,10 +1,9 @@
 use app::App;
-use axum::response::Response as AxumResponse;
 use axum::{
     body::Body,
     extract::State,
     http::{Request, Response, StatusCode, Uri},
-    response::IntoResponse,
+    response::{IntoResponse, Response as AxumResponse},
 };
 use leptos::prelude::*;
 use tower::ServiceExt;
@@ -22,7 +21,7 @@ pub async fn file_and_error_handler(
         res.into_response()
     } else {
         let handler =
-            leptos_axum::render_app_to_stream(options.to_owned(), move || view! { <App/> });
+            leptos_axum::render_app_to_stream(move || view! { <App/> });
         handler(req).await.into_response()
     }
 }

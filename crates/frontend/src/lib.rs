@@ -25,5 +25,5 @@ pub fn hydrate() {
     .expect("Unable to configure tracing");
     console_error_panic_hook::set_once();
 
-    leptos::mount_to_body(App);
+    leptos::mount::hydrate_body(App);
 }

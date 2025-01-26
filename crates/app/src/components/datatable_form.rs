@@ -275,33 +275,33 @@ pub fn DataTableModalForm(
                     <div class="modal modal-open">
                         <div class="modal-box">
                             <h2 class="font-bold text-lg">{title}</h2>
-                            // <For
-                            //     each=fields
-                            //     key=|field| field.0.clone()
-                            //     children=move |field| {
-                            //         view! {
-                            //             <div class="mt-4">
-                            //                 <label class="block text-sm font-medium text-gray-700">
-                            //                     {field.0}
-                            //                 </label>
-                            //                 {field.1.value().render(field.1.options().clone())}
-                            //             </div>
-                            //         }
-                            //     }
-                            // />
+                            <For
+                                each=fields
+                                key=|field| field.0.clone()
+                                children=move |field| {
+                                    view! {
+                                        <div class="mt-4">
+                                            <label class="block text-sm font-medium text-gray-700">
+                                                {field.0}
+                                            </label>
+                                            {field.1.value().render(field.1.options().clone())}
+                                        </div>
+                                    }
+                                }
+                            />
 
                             <div class="modal-action">
-                                // <button class="btn" on:click=move |_| on_cancel_click(())>
-                                //     "Cancel"
-                                // </button>
-                                // <button
-                                //     class="btn btn-primary"
-                                //     class:btn-disabled=move || !valid.get()
-                                //     on:click=on_save_click.run(())
-                                // >
+                                <button class="btn" on:click=move |_| on_cancel_click.run(())>
+                                    "Cancel"
+                                </button>
+                                <button
+                                    class="btn btn-primary"
+                                    class:btn-disabled=move || !valid.get()
+                                    on:click=move |_| { on_save_click.run(()); }
+                                >
 
-                                //     "Save"
-                                // </button>
+                                    "Save"
+                                </button>
                             </div>
                         </div>
                     </div>
