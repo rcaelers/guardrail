@@ -2,9 +2,6 @@
   "folders": [
     {
       "path": "../../workrave/guardrail"
-    },
-    {
-      "path": "../leptos"
     }
   ],
   "settings": {

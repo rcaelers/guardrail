@@ -53,10 +53,14 @@ pub fn App() -> impl IntoView {
     });
 
     view! {
+        <head></head>
+
         <Stylesheet id="leptos" href="/pkg/site.css"/>
         <Stylesheet href="https://fonts.googleapis.com/css?family=Montserrat:300,400,500&display=swap"/>
 
-        <html class="dark" lang="en"/>
+        <Html {..}
+              class="dark"
+              lang="en"/>
 
         <Title text="GuardRail"/>
         <Meta charset="utf-8"/>

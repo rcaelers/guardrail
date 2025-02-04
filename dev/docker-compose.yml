@@ -1,5 +1,3 @@
-version: "3.8"
-
 volumes:
   postgresql17-storage:
   pgadmin4-storage:

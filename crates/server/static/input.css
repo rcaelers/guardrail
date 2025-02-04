@@ -9,7 +9,7 @@
   If we ever want to remove these styles, we need to add an explicit border
   color utility to any element that depends on these defaults.
 */
-@layer base {
+/* @layer base {
   *,
   ::after,
   ::before,
@@ -17,40 +17,9 @@
   ::file-selector-button {
     border-color: var(--color-gray-200, currentColor);
   }
-}
+} */
 
-@utility modal-open {
-  @layer base {
-    /* https://github.com/saadeghi/daisyui/pull/2956#issuecomment-2043840868 */
-    :root:has(
-        :is(&, .modal:target, .modal-toggle:checked + .modal, .modal[open])
-      ) {
-      scrollbar-gutter: revert !important;
-    }
-  }
-}
-
-@utility modal {
-  @layer base {
-    /* https://github.com/saadeghi/daisyui/pull/2956#issuecomment-2043840868 */
-    :root:has(:is(.modal-open, &:target, .modal-toggle:checked + &, &[open])) {
-      scrollbar-gutter: revert !important;
-    }
-  }
-}
-
-@utility modal-toggle {
-  @layer base {
-    /* https://github.com/saadeghi/daisyui/pull/2956#issuecomment-2043840868 */
-    :root:has(
-        :is(.modal-open, .modal:target, &:checked + .modal, .modal[open])
-      ) {
-      scrollbar-gutter: revert !important;
-    }
-  }
-}
-
-@utility menu-horizontal {
+/* @utility menu-horizontal {
   @layer base {
     & > li:not(.menu-title) > details > ul.mt-0 {
       margin-top: 0rem;
@@ -75,4 +44,4 @@
       line-height: 1.5;
     }
   }
-}
+} */
