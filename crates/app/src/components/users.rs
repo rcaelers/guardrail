@@ -124,7 +124,5 @@ table_data_provider_impl!(UserTable);
 #[allow(non_snake_case)]
 #[component]
 pub fn UsersPage() -> impl IntoView {
-    view! {
-        <DataTable<UserTable>/>
-    }
+    view! { <DataTable<UserTable> /> }
 }

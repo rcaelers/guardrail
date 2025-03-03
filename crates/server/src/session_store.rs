@@ -1,12 +1,13 @@
 use async_trait::async_trait;
 use chrono::{NaiveDateTime, Utc};
 use sea_orm::{
-    sea_query::OnConflict, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
+    ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set, sea_query::OnConflict,
 };
 use time::OffsetDateTime;
 use tower_sessions::{
+    ExpiredDeletion, SessionStore,
     session::{Id, Record},
-    session_store, ExpiredDeletion, Session, SessionStore,
+    session_store,
 };
 
 #[derive(Clone, Debug)]
@@ -116,9 +117,4 @@ impl From<SeaStoreError> for session_store::Error {
             SeaStoreError::Encode(inner) => session_store::Error::Encode(inner.to_string()),
         }
     }
-}
-
-fn is_active(session: &Session) -> bool {
-    let expiry_date = session.expiry_date();
-    expiry_date > OffsetDateTime::now_utc()
 }

@@ -145,7 +145,5 @@ table_data_provider_impl!(CrashesTable);
 #[allow(non_snake_case)]
 #[component]
 pub fn CrashesPage() -> impl IntoView {
-    view! {
-        <DataTable<CrashesTable>/>
-    }
+    view! { <DataTable<CrashesTable> /> }
 }

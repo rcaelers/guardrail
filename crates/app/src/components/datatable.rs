@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use enumflags2::{bitflags, BitFlag, BitFlags};
+use enumflags2::{BitFlag, BitFlags, bitflags};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::{use_navigate, use_query_map};
@@ -276,11 +276,10 @@ where
     });
 
     let on_selection_changed = move |evt: SelectionChangeEvent<T::RowType>| {
-        let x = evt.row;
-        let y = set_selected_row.write();
-        //y.replace(x);
+        set_selected_row.write().replace(evt.row.get_untracked());
     };
 
+    
     view! {
         <DataTableHeader
             filter=filter

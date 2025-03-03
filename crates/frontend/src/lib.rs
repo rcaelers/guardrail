@@ -1,5 +1,4 @@
 use app::*;
-use leptos::prelude::*;
 use tracing::Level;
 use tracing_subscriber::fmt;
 use tracing_subscriber::prelude::*;

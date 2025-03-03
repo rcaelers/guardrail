@@ -66,7 +66,7 @@ pub fn RegisterPage() -> impl IntoView {
                     <input
                         class="mt-1 input input-bordered"
                         type="text"
-                        //TODO: d="username"
+                        // TODO: d="username"
                         name="username"
                         autocapitalize="none"
                         placeholder="user name"
@@ -75,7 +75,7 @@ pub fn RegisterPage() -> impl IntoView {
                     {result_message}
                     <Show when=move || value().is_none()>
                         <button id="register-button" class="btn btn-primary mt-4" type="submit">
-                            <PasskeyLogo/>
+                            <PasskeyLogo />
                             <span id="register-button-text" class="ml-2 text-base">
                                 Register with Passkey
                             </span>

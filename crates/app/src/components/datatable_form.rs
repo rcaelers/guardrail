@@ -297,7 +297,9 @@ pub fn DataTableModalForm(
                                 <button
                                     class="btn btn-primary"
                                     class:btn-disabled=move || !valid.get()
-                                    on:click=move |_| { on_save_click.run(()); }
+                                    on:click=move |_| {
+                                        on_save_click.run(());
+                                    }
                                 >
 
                                     "Save"
@@ -309,7 +311,8 @@ pub fn DataTableModalForm(
             }
                     .into_any()
         } else {
-            view! {}.into_any()
+            view! {};
+            ().into_any()
         }
     }
 }

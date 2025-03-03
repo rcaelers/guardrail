@@ -104,7 +104,7 @@ pub fn LoginPage(trigger: RwSignal<i64>) -> impl IntoView {
                     {result_message}
                     <Show when=move || value().is_none()>
                         <button id="login-button" class="btn btn-primary mt-4" type="submit">
-                            <PasskeyLogo/>
+                            <PasskeyLogo />
                             <span id="login-button-text" class="ml-2 text-base">
                                 login with Passkey
                             </span>

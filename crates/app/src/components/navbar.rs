@@ -1,36 +1,10 @@
 use leptos::{either::Either, prelude::*};
 
-use crate::{components::logout::LogoutButton, UserResource};
+use crate::{UserResource, components::logout::LogoutButton};
 
 #[allow(non_snake_case)]
 #[component]
 pub fn Navbar(trigger: RwSignal<i64>, user: UserResource) -> impl IntoView {
-    let _x =user.get();
-    let user_area = move || match user.get().and_then(|u| u) {
-        Some(user) => Either::Left(view! {
-            <li>
-                <a class="px-2" href="/auth/profile">
-                    {{ user.username }}
-                </a>
-            </li>
-            <li>
-                <LogoutButton trigger=trigger/>
-            </li>
-        }),
-        None => Either::Right(view! {
-            <li>
-                <a class="px-2" href="/auth/login">
-                    login
-                </a>
-            </li>
-            <li>
-                <a class="px-2" href="/auth/register">
-                    register
-                </a>
-            </li>
-        }),
-    };
-
     view! {
         <script>
             window.addEventListener("click", function (e) {
@@ -40,7 +14,6 @@ pub fn Navbar(trigger: RwSignal<i64>, user: UserResource) -> impl IntoView {
                 }
               });
             });
-
         </script>
 
         <div class="navbar bg-base-200 rounded-lg relative z-10 p-0">
@@ -119,7 +92,45 @@ pub fn Navbar(trigger: RwSignal<i64>, user: UserResource) -> impl IntoView {
                 </ul>
             </div>
             <div class="navbar-end">
-                <ul class="menu menu-horizontal px-1">{user_area}</ul>
+                <Suspense fallback=|| {
+                    view! { "Loading..." }
+                }>
+                    {move || Suspend::new(async move {
+                        match user.await.clone() {
+                            None => {
+                                Either::Left(
+                                    view! {
+                                        <li>
+                                            <a class="px-2" href="/auth/login">
+                                                login
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="px-2" href="/auth/register">
+                                                register
+                                            </a>
+                                        </li>
+                                    },
+                                )
+                            }
+                            Some(user) => {
+                                Either::Right(
+                                    view! {
+                                        <li>
+                                            <a class="px-2" href="/auth/profile">
+                                            {{ user.username }}
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <LogoutButton trigger=trigger />
+                                        </li>
+                                    },
+                                )
+                            }
+                        }
+                    })}
+
+                </Suspense>
             </div>
         </div>
     }

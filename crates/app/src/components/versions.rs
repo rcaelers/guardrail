@@ -219,7 +219,5 @@ table_data_provider_impl!(VersionTable);
 #[allow(non_snake_case)]
 #[component]
 pub fn VersionsPage() -> impl IntoView {
-    view! {
-        <DataTable<VersionTable>/>
-    }
+    view! { <DataTable<VersionTable> /> }
 }

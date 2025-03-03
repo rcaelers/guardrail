@@ -174,7 +174,5 @@ table_data_provider_impl!(SymbolsTable);
 #[allow(non_snake_case)]
 #[component]
 pub fn SymbolsPage() -> impl IntoView {
-    view! {
-        <DataTable<SymbolsTable>/>
-    }
+    view! { <DataTable<SymbolsTable> /> }
 }

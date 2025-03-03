@@ -147,7 +147,5 @@ table_data_provider_impl!(ProductTable);
 #[allow(non_snake_case)]
 #[component]
 pub fn ProductsPage() -> impl IntoView {
-    view! {
-        <DataTable<ProductTable>/>
-    }
+    view! { <DataTable<ProductTable> /> }
 }
