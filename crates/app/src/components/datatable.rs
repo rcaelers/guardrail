@@ -4,6 +4,7 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::{use_navigate, use_query_map};
 use leptos_struct_table::*;
+use repos::QueryParams;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -12,8 +13,7 @@ use uuid::Uuid;
 use crate::components::confirmation::ConfirmationModal;
 use crate::components::datatable_form::{DataTableModalForm, Fields};
 use crate::components::datatable_header::DataTableHeader;
-use crate::data::QueryParams;
-use crate::data_providers::{ExtraRowTrait, ExtraTableDataProvider};
+use crate::data_providers::ExtraTableDataProvider;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Related {
@@ -34,6 +34,11 @@ pub enum Capabilities {
     CanEdit = 0b0001,
     CanAdd = 0b0010,
     CanDelete = 0b0100,
+}
+
+pub trait ExtraRowTrait {
+    fn get_id(&self) -> Uuid;
+    fn get_name(&self) -> String;
 }
 
 #[async_trait]
@@ -68,6 +73,10 @@ where
         vec![]
     }
 
+    fn get_columns() -> Vec<String> {
+        vec![]
+    }
+
     fn get_data_type_name() -> String;
 
     fn init_fields(fields: RwSignal<Fields>, parents: &HashMap<String, Uuid>);
@@ -93,7 +102,7 @@ where
     async fn add(data: Self::DataType) -> Result<(), ServerFnError>;
     async fn update(data: Self::DataType) -> Result<(), ServerFnError>;
     async fn remove(id: Uuid) -> Result<(), ServerFnError>;
-    async fn count(parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError>;
+    async fn count(parents: HashMap<String, Uuid>) -> Result<i64, ServerFnError>;
 }
 
 #[allow(non_snake_case)]
@@ -279,7 +288,6 @@ where
         set_selected_row.write().replace(evt.row.get_untracked());
     };
 
-    
     view! {
         <DataTableHeader
             filter=filter

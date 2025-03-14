@@ -1,5 +1,8 @@
 use leptos::prelude::*;
+
+#[cfg(feature = "ssr")]
 use tracing::error;
+
 use web_sys::MouseEvent;
 
 #[cfg(feature = "ssr")]

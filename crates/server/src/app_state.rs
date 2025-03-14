@@ -1,7 +1,7 @@
 use axum::extract::FromRef;
 use leptos::config::LeptosOptions;
 use leptos_axum::AxumRouteListing;
-use sea_orm::DatabaseConnection;
+use repos::Repo;
 use std::sync::Arc;
 use webauthn_rs::prelude::*;
 
@@ -9,6 +9,6 @@ use webauthn_rs::prelude::*;
 pub struct AppState {
     pub leptos_options: LeptosOptions,
     pub routes: Vec<AxumRouteListing>,
-    pub db: DatabaseConnection,
+    pub repo: Repo,
     pub webauthn: Arc<Webauthn>,
 }

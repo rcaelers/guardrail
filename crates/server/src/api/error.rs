@@ -5,7 +5,6 @@ use axum::{
     Json,
 };
 use minidump_processor::ProcessError;
-use sea_orm::DbErr;
 use thiserror::Error;
 
 use crate::utils::error::UtilsError;

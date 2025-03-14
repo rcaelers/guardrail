@@ -1,20 +1,14 @@
 pub mod crash;
 pub mod product;
-pub mod symbols;
+// pub mod symbols;
 pub mod user;
 pub mod version;
 
 use leptos::prelude::*;
-use uuid::Uuid;
 
 pub trait ExtraTableDataProvider<T> {
     fn refresh_table(&self);
     fn get_filter_signal(&self) -> RwSignal<String>;
-}
-
-pub trait ExtraRowTrait {
-    fn get_id(&self) -> Uuid;
-    fn get_name(&self) -> String;
 }
 
 #[macro_export]
@@ -28,9 +22,9 @@ macro_rules! table_data_provider_impl {
                 let data = <Self as DataTableTrait>::list(
                     self.parents.clone(),
                     QueryParams {
-                        filter: self.filter.get_untracked().trim().to_string(),
+                        filter: Some(self.filter.get_untracked().trim().to_string()),
                         sorting: self.sort.clone(),
-                        range: range.clone(),
+                        range: Some(range.clone()),
                     },
                 )
                 .await
@@ -47,10 +41,27 @@ macro_rules! table_data_provider_impl {
                 <Self as DataTableTrait>::count(self.parents.clone())
                     .await
                     .ok()
+                    .map(|c| c as usize)
             }
 
             fn set_sorting(&mut self, sorting: &VecDeque<(usize, ColumnSort)>) {
-                self.sort = sorting.clone();
+                self.sort = sorting
+                    .iter()
+                    .map(|(col, sort)| {
+                        let columns = <Self as DataTableTrait>::get_columns();
+                        let field = if *col < columns.len() {
+                            columns[*col].clone()
+                        } else {
+                            "id".to_string()
+                        };
+                        let order = match sort {
+                            ColumnSort::Ascending => repos::SortOrder::Ascending,
+                            ColumnSort::Descending => repos::SortOrder::Descending,
+                            _ => repos::SortOrder::Ascending,
+                        };
+                        (field, order)
+                    })
+                    .collect();
             }
 
             fn track(&self) {
@@ -70,3 +81,25 @@ macro_rules! table_data_provider_impl {
         }
     };
 }
+
+#[cfg(feature = "ssr")]
+mod ssr {
+    use crate::authenticated_user;
+    use leptos::prelude::*;
+    use repos::Repo;
+
+    pub async fn get_authenticated_transaction()
+    -> Result<sqlx::Transaction<'static, sqlx::Postgres>, ServerFnError> {
+        let repo = use_context::<Repo>()
+            .ok_or(ServerFnError::new("No database connection".to_string()))?;
+
+        let user = authenticated_user()
+            .await?
+            .ok_or(ServerFnError::new("No authenticated user".to_string()))?;
+        let tx = repo.begin(&user.username).await?;
+        Ok(tx)
+    }
+}
+
+#[cfg(feature = "ssr")]
+pub use ssr::*;

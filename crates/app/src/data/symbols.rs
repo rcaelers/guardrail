@@ -99,3 +99,38 @@ impl ExtraRowTrait for SymbolsRow {
         self.build_id.clone()
     }
 }
+
+#[server]
+pub async fn symbols_get(id: Uuid) -> Result<Symbols, ServerFnError> {
+}
+
+#[server]
+pub async fn symbols_list(
+    #[server(default)] parents: HashMap<String, Uuid>,
+    query_params: QueryParams,
+) -> Result<Vec<Symbols>, ServerFnError> {
+}
+
+#[server]
+pub async fn symbols_list_names(
+    #[server(default)] parents: HashMap<String, Uuid>,
+) -> Result<HashSet<String>, ServerFnError> {
+}
+
+#[server]
+pub async fn symbols_add(symbols: Symbols) -> Result<(), ServerFnError> {
+}
+
+#[server]
+pub async fn symbols_update(symbols: Symbols) -> Result<(), ServerFnError> {
+}
+
+#[server]
+pub async fn symbols_remove(id: Uuid) -> Result<(), ServerFnError> {
+}
+
+#[server]
+pub async fn symbols_count(
+    #[server(default)] parents: HashMap<String, Uuid>,
+) -> Result<usize, ServerFnError> {
+}

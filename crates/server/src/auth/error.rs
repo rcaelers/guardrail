@@ -2,7 +2,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use sea_orm::DbErr;
 use thiserror::Error;
 use tracing::{error, warn};
 use webauthn_rs::prelude::WebauthnError;
@@ -22,7 +21,9 @@ pub enum AuthError {
     #[error("Error during serialisation/deserialisation: {0}")]
     SerializationError(#[from] serde_json::Error),
     #[error("Database error: `{0}`")]
-    DatabaseError(#[from] DbErr),
+    DatabaseError(#[from] sqlx::Error),
+    #[error("Repo error: `{0}`")]
+    RepoError(#[from] repos::error::RepoError),
     #[error("Webauthn error: `{0}`")]
     WebauthnError(#[from] WebauthnError),
 }
@@ -56,6 +57,10 @@ impl IntoResponse for AuthError {
             AuthError::WebauthnError(err) => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 format!("Webauthn Error: {}", err),
+            ),
+            AuthError::RepoError(err) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Repo Error: {}", err),
             ),
         };
 

@@ -1,24 +1,9 @@
 use ::chrono::NaiveDateTime;
-use cfg_if::cfg_if;
-use leptos::prelude::*;
 use leptos_struct_table::*;
-use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use repos::version::Version;
 use uuid::Uuid;
 
-cfg_if! { if #[cfg(feature="ssr")] {
-    use sea_orm::*;
-    use sea_query::Expr;
-    use entities::entity;
-    use crate::data::{
-        add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
-    };
-    use crate::auth::AuthenticatedUser;
-}}
-
-use super::ExtraRowTrait;
-use crate::classes::ClassesPreset;
-use crate::data::QueryParams;
+use crate::{classes::ClassesPreset, components::datatable::ExtraRowTrait};
 
 #[derive(TableRow, Clone, Debug)]
 #[table(sortable, classes_provider = ClassesPreset)]
@@ -36,77 +21,6 @@ pub struct VersionRow {
     pub product_id: Option<Uuid>,
 }
 
-#[cfg(feature = "ssr")]
-#[derive(FromQueryResult, Debug, Default, Clone, Serialize, Deserialize)]
-pub struct Version {
-    pub id: Uuid,
-    pub product: String,
-    pub name: String,
-    pub hash: String,
-    pub tag: String,
-    pub product_id: Uuid,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
-}
-
-#[cfg(not(feature = "ssr"))]
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct Version {
-    pub id: Uuid,
-    pub product: String,
-    pub name: String,
-    pub hash: String,
-    pub tag: String,
-    pub product_id: Uuid,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
-}
-
-#[cfg(feature = "ssr")]
-impl EntityInfo for entity::version::Entity {
-    type View = Version;
-
-    fn filter_column() -> Self::Column {
-        entity::version::Column::Name
-    }
-
-    fn index_to_column(index: usize) -> Option<Self::Column> {
-        match index {
-            0 => Some(entity::version::Column::Id),
-            1 => Some(entity::version::Column::Name),
-            2 => Some(entity::version::Column::Hash),
-            3 => Some(entity::version::Column::Tag),
-            4 => Some(entity::version::Column::ProductId),
-            5 => Some(entity::version::Column::CreatedAt),
-            6 => Some(entity::version::Column::UpdatedAt),
-            _ => None,
-        }
-    }
-
-    fn extend_query_for_view(query: Select<Self>) -> Select<Self> {
-        query
-            .join(JoinType::LeftJoin, entity::version::Relation::Product.def())
-            .column_as(entity::product::Column::Name, "product")
-    }
-
-    fn get_product_query(
-        _user: &AuthenticatedUser,
-        data: &Self::View,
-    ) -> Option<Select<entity::product::Entity>> {
-        let query = entity::product::Entity::find().filter(
-            Expr::col((entity::product::Entity, entity::product::Column::Id)).eq(data.product_id),
-        );
-        Some(query)
-    }
-
-    fn id_to_column(id_name: String) -> Option<Self::Column> {
-        match id_name.as_str() {
-            "product_id" => Some(entity::version::Column::ProductId),
-            _ => None,
-        }
-    }
-}
-
 impl From<Version> for VersionRow {
     fn from(version: Version) -> Self {
         Self {
@@ -117,55 +31,10 @@ impl From<Version> for VersionRow {
             product_id: Some(version.product_id),
             created_at: version.created_at,
             updated_at: version.updated_at,
-            product: version.product,
+            product: "TODO:".to_string(), // version.product,
         }
     }
 }
-
-#[cfg(feature = "ssr")]
-impl From<entity::version::Model> for Version {
-    fn from(model: entity::version::Model) -> Self {
-        Self {
-            id: model.id,
-            name: model.name,
-            hash: model.hash,
-            tag: model.tag,
-            product_id: model.product_id,
-            created_at: model.created_at,
-            updated_at: model.updated_at,
-            product: "".to_string(),
-        }
-    }
-}
-
-#[cfg(feature = "ssr")]
-impl crate::data::MyIntoActiveModel<entities::entity::version::ActiveModel> for Version {
-    fn into_active_model(self) -> entities::entity::version::ActiveModel {
-        entities::entity::version::ActiveModel {
-            id: Set(self.id),
-            name: Set(self.name),
-            hash: Set(self.hash),
-            tag: Set(self.tag),
-            product_id: Set(self.product_id),
-            created_at: sea_orm::NotSet,
-            updated_at: sea_orm::NotSet,
-        }
-    }
-}
-
-// pub struct Version2 {}
-// impl std::convert::From<Version2> for common::FromTestEntity {
-//     fn from(m: Version2) -> Self {
-//         Self {}
-//     }
-// }
-// struct WrappedVersion2(Version2);
-
-// impl std::convert::From<WrappedVersion2> for common::FromTestEntity {
-//     fn from(_m: WrappedVersion2) -> Self {
-//         Self {}
-//     }
-// }
 
 impl ExtraRowTrait for VersionRow {
     fn get_id(&self) -> Uuid {
@@ -175,46 +44,4 @@ impl ExtraRowTrait for VersionRow {
     fn get_name(&self) -> String {
         self.name.clone()
     }
-}
-
-#[server]
-pub async fn version_get(id: Uuid) -> Result<Version, ServerFnError> {
-    get_by_id::<entity::version::Entity>(id).await
-}
-
-#[server]
-pub async fn version_list(
-    #[server(default)] parents: HashMap<String, Uuid>,
-    query_params: QueryParams,
-) -> Result<Vec<Version>, ServerFnError> {
-    get_all::<entity::version::Entity>(query_params, parents).await
-}
-
-#[server]
-pub async fn version_list_names(
-    #[server(default)] parents: HashMap<String, Uuid>,
-) -> Result<HashSet<String>, ServerFnError> {
-    get_all_names::<entity::version::Entity>(parents).await
-}
-
-#[server]
-pub async fn version_add(version: Version) -> Result<(), ServerFnError> {
-    add::<entity::version::Entity>(version).await
-}
-
-#[server]
-pub async fn version_update(version: Version) -> Result<(), ServerFnError> {
-    update::<entity::version::Entity>(version).await
-}
-
-#[server]
-pub async fn version_remove(id: Uuid) -> Result<(), ServerFnError> {
-    delete_by_id::<entity::version::Entity>(id).await
-}
-
-#[server]
-pub async fn version_count(
-    #[server(default)] parents: HashMap<String, Uuid>,
-) -> Result<usize, ServerFnError> {
-    count::<entity::version::Entity>(parents).await
 }

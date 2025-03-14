@@ -4,10 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-entities = { path = "../entities", optional = true }
 common = { path = "../common" }
-macros = { path = "../macros" }
-migration = { path = "../migration", optional = true }
+repos = { path = "../repos", default-features = false, features = [] }
 
 # Leptos
 leptos = { workspace = true, features = ["tracing"] }
@@ -37,9 +35,8 @@ axum = { workspace = true, optional = true }
 tracing.workspace = true
 tracing-subscriber-wasm.workspace = true
 
-# SeaORM
-sea-orm = { workspace = true, optional = true }
-sea-query = { workspace = true, optional = true }
+# SQLx
+sqlx = { workspace = true, optional = true }
 
 # Misc
 async-trait.workspace = true
@@ -56,6 +53,7 @@ indexmap.workspace = true
 trait-variant.workspace = true
 itertools.workspace = true
 dyn-clone.workspace = true
+paste.workspace = true
 
 [dev-dependencies]
 serial_test.workspace = true
@@ -69,14 +67,11 @@ ssr = [
   "leptos_router/ssr",
   "leptos-use/ssr",
   "dep:leptos_axum",
-  "dep:sea-orm",
-  "dep:sea-query",
+  "dep:sqlx",
   "dep:tokio",
   "dep:axum",
   "dep:tower",
   "dep:tower-sessions",
-  "dep:migration",
-  "dep:entities",
 ]
 
 [dependencies.web-sys]

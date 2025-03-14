@@ -6,10 +6,7 @@
   ],
   "settings": {
     "cSpell.words": ["guardrail"],
-    "rust-analyzer.linkedProjects": [
-      "./crates/migration/Cargo.toml",
-      "./Cargo.toml"
-    ],
+    "rust-analyzer.linkedProjects": ["./Cargo.toml"],
     "rust-analyzer.showUnlinkedFileNotification": false
   }
 }

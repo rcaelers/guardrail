@@ -2,21 +2,24 @@
 mod app_state;
 mod auth;
 mod fileserv;
-mod session_store;
+mod pg_session_store;
 mod utils;
 
-use app::auth::layer::AuthLayer;
 use app::auth::AuthSession;
+use app::auth::layer::AuthLayer;
+use axum::Router;
 use axum::body::Body;
 use axum::extract::{DefaultBodyLimit, State};
 use axum::http::Request;
 use axum::response::{IntoResponse, Response};
-use axum::Router;
 use axum_server::tls_rustls::RustlsConfig;
 use fileserv::file_and_error_handler;
 use leptos::prelude::*;
-use leptos_axum::{generate_route_list, handle_server_fns_with_context, LeptosRoutes};
-use sea_orm::{ConnectOptions, Database, DatabaseConnection};
+use leptos_axum::{LeptosRoutes, generate_route_list, handle_server_fns_with_context};
+use repos::Repo;
+use sqlx::ConnectOptions;
+use sqlx::PgPool;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::io::IsTerminal;
 use std::net::SocketAddr;
 use std::path::PathBuf;
@@ -26,16 +29,15 @@ use tower_http::trace::TraceLayer;
 use tower_sessions::cookie::SameSite;
 use tower_sessions::{Expiry, SessionManagerLayer};
 use tracing::level_filters::LevelFilter;
-use tracing::{info, Level};
+use tracing::{Level, info};
 use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::{fmt, EnvFilter, FmtSubscriber};
+use tracing_subscriber::{EnvFilter, FmtSubscriber, fmt};
 use webauthn_rs::prelude::*;
 
 use app::*;
 use app_state::AppState;
 use common::settings::settings;
-use entities::entity;
-use session_store::SeaOrmSessionStore;
+use pg_session_store::PostgresStore;
 
 async fn init_logging() {
     let directory = &settings().logger.directory;
@@ -62,11 +64,6 @@ async fn init_logging() {
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 }
 
-async fn init_db() -> Result<DatabaseConnection, sea_orm::DbErr> {
-    let connect_options = ConnectOptions::new(&settings().database.uri).to_owned();
-    Database::connect(connect_options).await
-}
-
 fn create_webauthn() -> Arc<Webauthn> {
     let rp_id = settings().auth.id.as_str();
     let rp_origin = Url::parse(settings().auth.origin.as_str()).expect("Invalid URL");
@@ -83,7 +80,7 @@ async fn server_fn_handler(
 ) -> impl IntoResponse {
     handle_server_fns_with_context(
         move || {
-            provide_context(app_state.db.clone());
+            provide_context(app_state.repo.clone());
             provide_context(auth_session.clone());
             provide_context(auth_session.user.clone());
         },
@@ -101,13 +98,27 @@ async fn leptos_routes_handler(
     let handler = leptos_axum::render_route_with_context(
         app_state.routes.clone(),
         move || {
-            provide_context(app_state.db.clone());
+            provide_context(app_state.repo.clone());
             provide_context(auth_session.clone());
             provide_context(auth_session.user.clone());
         },
         app::App,
     );
     handler(state, req).await.into_response()
+}
+
+async fn init_db() -> Result<PgPool, sqlx::Error> {
+    let database_url = &settings().database.uri;
+    let mut opts: PgConnectOptions = database_url.parse()?;
+    opts = opts.log_statements(log::LevelFilter::Debug);
+
+    let pool = PgPoolOptions::new()
+        .max_connections(5)
+        .connect_with(opts)
+        .await
+        .unwrap();
+
+    Ok(pool)
 }
 
 #[tokio::main]
@@ -126,13 +137,12 @@ async fn main() {
     let state = AppState {
         leptos_options: leptos_options.clone(),
         routes: routes.clone(),
-        db: db.clone(),
+        repo: Repo::new(db.clone()),
         webauthn,
     };
-
-    let session_store = SeaOrmSessionStore::new(db);
+    let session_store = PostgresStore::new(db);
     let session_layer = SessionManagerLayer::new(session_store)
-        .with_name("guardrail")
+        //.with_name("guardrail")
         .with_same_site(SameSite::Lax)
         .with_expiry(Expiry::OnInactivity(Duration::hours(4)))
         .with_secure(false);

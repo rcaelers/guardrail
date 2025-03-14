@@ -2,8 +2,8 @@ use hooks::use_navigate;
 use leptos::{html, prelude::*};
 use leptos_router::*;
 use std::time::Duration;
-use web_sys::SubmitEvent;
 use tracing::error;
+use web_sys::SubmitEvent;
 
 use crate::{auth::passkeys::login_passkey, components::passkey_logo::PasskeyLogo};
 

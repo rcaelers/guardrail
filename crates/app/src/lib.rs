@@ -7,22 +7,22 @@ pub mod data_providers;
 use leptos::prelude::*;
 use leptos_meta::*;
 use leptos_router::{
-    components::{FlatRoutes, Route, Router},
     StaticSegment,
+    components::{FlatRoutes, Route, Router},
 };
 
 use auth::AuthenticatedUser;
 use components::{
     // crash::CrashPage,
-    crashes::CrashesPage,
+    // crashes::CrashesPage,
     login::LoginPage,
     navbar::Navbar,
     products::ProductsPage,
     profile::ProfilePage,
     register::RegisterPage,
-    symbols::SymbolsPage,
-    users::UsersPage,
-    versions::VersionsPage,
+    // symbols::SymbolsPage,
+    // users::UsersPage,
+    // versions::VersionsPage,
 };
 
 type UserResource = Resource<Option<AuthenticatedUser>>;
@@ -84,11 +84,11 @@ pub fn App() -> impl IntoView {
                         />
                         <Route path=StaticSegment("/auth/register") view=RegisterPage/>
                         <Route path=StaticSegment("/auth/profile") view=ProfilePage/>
-                        <Route path=StaticSegment("/admin/users") view=UsersPage/>
+                        //<Route path=StaticSegment("/admin/users") view=UsersPage/>
                         <Route path=StaticSegment("/admin/products") view=ProductsPage/>
-                        <Route path=StaticSegment("/admin/versions") view=VersionsPage/>
-                        <Route path=StaticSegment("/admin/symbols") view=SymbolsPage/>
-                        <Route path=StaticSegment("/crashes") view=CrashesPage/>
+                        //<Route path=StaticSegment("/admin/versions") view=VersionsPage/>
+                        //<Route path=StaticSegment("/admin/symbols") view=SymbolsPage/>
+                        //<Route path=StaticSegment("/crashes") view=CrashesPage/>
                     </FlatRoutes>
                 </main>
             </div>

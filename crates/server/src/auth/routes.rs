@@ -1,7 +1,7 @@
 use super::webauthn::{
     finish_authentication, finish_register, start_authentication, start_register,
 };
-use axum::{routing, Router};
+use axum::{Router, routing};
 
 use crate::app_state::AppState;
 
