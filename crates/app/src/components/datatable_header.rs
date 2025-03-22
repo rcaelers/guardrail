@@ -8,7 +8,7 @@ use super::datatable::{Capabilities, Related};
 pub fn DataTableHeader(
     filter: RwSignal<String>,
     enabled: Memo<bool>,
-    capabilities: RwSignal<BitFlags<Capabilities, u8>>,
+    capabilities: Resource<BitFlags<Capabilities, u8>>,
     related: RwSignal<Vec<Related>>,
     on_add_click: Callback<()>,
     on_edit_click: Callback<()>,
@@ -43,10 +43,11 @@ pub fn DataTableHeader(
                     />
                 </div>
 
+                <Transition>
                 <div class="flex space-x-2">
                     <button
                         class="btn btn-primary"
-                        class:hidden=move || !capabilities.get().contains(Capabilities::CanAdd)
+                        //class:hidden=move || !capabilities.get().unwrap_or(BitFlags::empty()).contains(Capabilities::CanAdd)
                         on:click=move |_| {
                             on_add_click.run(());
                         }
@@ -56,7 +57,7 @@ pub fn DataTableHeader(
                     <button
                         class="btn btn-primary"
                         class:btn-disabled=move || !enabled.get()
-                        class:hidden=move || !capabilities.get().contains(Capabilities::CanEdit)
+                        //class:hidden=move || !capabilities.get().unwrap_or(BitFlags::empty()).contains(Capabilities::CanEdit)
                         on:click=move |_| {
                             on_edit_click.run(());
                         }
@@ -66,7 +67,7 @@ pub fn DataTableHeader(
                     <button
                         class="btn btn-primary"
                         class:btn-disabled=move || !enabled.get()
-                        class:hidden=move || !capabilities.get().contains(Capabilities::CanDelete)
+                        //class:hidden=move || !capabilities.get().unwrap_or(BitFlags::empty()).contains(Capabilities::CanDelete)
                         on:click=move |_| {
                             on_delete_click.run(());
                         }
@@ -92,8 +93,8 @@ pub fn DataTableHeader(
                             }
                         }
                     />
-
                 </div>
+                </Transition>
             </div>
         </header>
     }

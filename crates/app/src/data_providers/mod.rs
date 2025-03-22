@@ -1,5 +1,4 @@
 pub mod crash;
-pub mod product;
 // pub mod symbols;
 pub mod user;
 pub mod version;

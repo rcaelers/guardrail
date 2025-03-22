@@ -6,7 +6,6 @@ use axum::{
 
 use super::AuthSession;
 
-#[async_trait]
 impl<S> FromRequestParts<S> for AuthSession
 where
     S: Send + Sync,

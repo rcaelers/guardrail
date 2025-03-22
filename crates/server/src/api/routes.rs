@@ -1,10 +1,9 @@
-use app::settings::settings;
-use axum::routing::{delete, get, post, put};
 use axum::Router;
+use common::settings::settings;
 use jwt_authorizer::{Authorizer, IntoLayer, JwtAuthorizer, RegisteredClaims, Validation};
 
-use super::{minidump::MinidumpApi, symbols::SymbolsApi};
-use crate::{api::base::Api, app_state::AppState};
+//use super::{minidump::MinidumpApi, symbols::SymbolsApi};
+use crate::app_state::AppState;
 
 pub async fn routes() -> Router<AppState> {
     let validation = Validation::new().aud(&["Guardrail"]).leeway(20);
@@ -17,14 +16,12 @@ pub async fn routes() -> Router<AppState> {
             .unwrap();
 
     Router::new()
-        .await
-        .route("/minidump/upload", post(MinidumpApi::upload))
-        .layer(auth.into_layer())
+        //.route("/minidump/upload", post(MinidumpApi::upload))
+        //.layer(auth.into_layer())
 }
 
 #[cfg(test)]
 pub async fn routes_test() -> Router<AppState> {
     Router::new()
-        .await
-        .route("/minidump/upload", post(MinidumpApi::upload))
+    //    .route("/minidump/upload", post(MinidumpApi::upload))
 }

@@ -1,13 +1,15 @@
 use async_trait::async_trait;
-use enumflags2::{BitFlag, BitFlags, bitflags};
+use enumflags2::{BitFlags, bitflags};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::{use_navigate, use_query_map};
 use leptos_struct_table::*;
 use repos::QueryParams;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use tracing::info;
 use uuid::Uuid;
 
 use crate::components::confirmation::ConfirmationModal;
@@ -29,7 +31,7 @@ pub struct Foreign {
 
 #[bitflags]
 #[repr(u8)]
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum Capabilities {
     CanEdit = 0b0001,
     CanAdd = 0b0010,
@@ -133,7 +135,6 @@ where
     let container = NodeRef::new();
     let form = T::new_provider(query.clone());
     let form_clone = form.clone();
-    let capabilities = RwSignal::<BitFlags<Capabilities, u8>>::new(Capabilities::empty());
 
     let rows_clone2 = form.clone();
     spawn_local(async move {
@@ -285,7 +286,7 @@ where
     });
 
     let on_selection_changed = move |evt: SelectionChangeEvent<T::RowType>| {
-        set_selected_row.write().replace(evt.row.get_untracked());
+        set_selected_row.write().replace(evt.row);
     };
 
     view! {

@@ -1,4 +1,4 @@
-//mod api;
+mod api;
 mod app_state;
 mod auth;
 mod fileserv;
@@ -151,12 +151,12 @@ async fn main() {
 
     let routes_all = Router::new()
         .route(
-            "/api/*fn_name",
+            "/api/{*fn_name}",
             axum::routing::get(server_fn_handler).post(server_fn_handler),
         )
         .leptos_routes_with_handler(routes, axum::routing::get(leptos_routes_handler))
         .fallback(file_and_error_handler)
-        //.nest("/api", api::routes().await)
+        .nest("/api", api::routes().await)
         .nest("/auth", auth::routes().await)
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
         .layer(TraceLayer::new_for_http())

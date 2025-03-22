@@ -1,9 +1,10 @@
+use axum::Json;
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Query, State};
-use axum::Json;
 use minidump::Minidump;
 use minidump_processor::ProcessorOptions;
-use minidump_unwind::{simple_symbol_supplier, Symbolizer};
+use minidump_unwind::{Symbolizer, simple_symbol_supplier};
+use repos::product::ProductRepo;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -12,10 +13,8 @@ use tracing::{debug, error};
 
 use super::error::ApiError;
 use crate::app_state::AppState;
-use crate::model::base::Repo;
-use crate::model::version::VersionRepo;
+use crate::settings;
 use crate::utils::stream_to_file::stream_to_file;
-use crate::{entity, settings};
 
 pub struct MinidumpApi;
 
@@ -34,21 +33,15 @@ impl MinidumpApi {
     async fn get_product(
         state: &AppState,
         params: &MinidumpRequestParams,
-    ) -> Result<crate::model::product::Product, ApiError> {
-        let product = Repo::get_by_column::<entity::product::Entity, _, _>(
-            &state.db,
-            entity::product::Column::Name,
-            params.product.clone(),
-        )
-        .await;
-        let product = match product {
-            Ok(product) => product,
-            Err(e) => {
-                error!("error: {:?}", e);
-                return Err(ApiError::Failure);
-            }
-        }
-        .ok_or(ApiError::Failure)?;
+    ) -> Result<repos::product::Product, ApiError> {
+        // TODO: handle API user
+        let mut tx = state.repo.begin_admin().await.map_err(|e| {
+            error!("error: {:?}", e);
+            ApiError::Failure
+        })?;
+        let product = ProductRepo::get_by_name(&mut *tx, &params.product)
+            .await?
+            .ok_or(ApiError::Failure)?;
         Ok(product)
     }
 
@@ -57,6 +50,11 @@ impl MinidumpApi {
         product_id: uuid::Uuid,
         params: &MinidumpRequestParams,
     ) -> Result<crate::model::version::Version, ApiError> {
+        let version = ProductRepo::get_by_name(&mut *tx, &params.product)
+            .await?
+            .ok_or(ApiError::Failure)?;
+
+
         let version =
             VersionRepo::get_by_product_and_name(&state.db, product_id, params.version.clone())
                 .await;

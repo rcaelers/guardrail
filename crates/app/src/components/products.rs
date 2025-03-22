@@ -8,6 +8,7 @@ use repos::product::Product;
 use repos::{QueryParams, SortOrder};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
+use tracing::info;
 use uuid::Uuid;
 
 use super::datatable::{Capabilities, DataTableTrait, ExtraRowTrait};
@@ -15,7 +16,10 @@ use super::datatable_form::{FieldString, Fields};
 use crate::classes::ClassesPreset;
 use crate::components::datatable::DataTable;
 use crate::components::datatable_form::Field;
-use crate::data::product::{products_add, products_count, products_get, products_list, products_list_names, products_remove, products_update};
+use crate::data::product::{
+    products_add, products_count, products_get, products_list, products_list_names,
+    products_remove, products_update,
+};
 use crate::data_providers::ExtraTableDataProvider;
 use crate::{authenticated_user_is_admin, table_data_provider_impl};
 
@@ -84,10 +88,14 @@ impl DataTableTrait for ProductTable {
     }
 
     async fn capabilities(&self) -> BitFlags<Capabilities, u8> {
+        info!("capabilities");
         let mut cap = Capabilities::CanEdit | Capabilities::CanDelete;
-        if authenticated_user_is_admin().await.unwrap_or(false) {
+        let is_admin = authenticated_user_is_admin().await;
+        info!("capabilities2");
+        if is_admin.unwrap_or(false) {
             cap |= Capabilities::CanAdd;
         }
+        info!("capabilities3");
         cap
     }
 

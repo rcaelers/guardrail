@@ -1,8 +1,8 @@
 use axum::{
+    Json,
     extract::multipart::MultipartError,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use minidump_processor::ProcessError;
 use thiserror::Error;
@@ -24,7 +24,10 @@ pub enum ApiError {
     ForeignKeyError(String, String),
 
     #[error("database error: `{0}`")]
-    DatabaseError(#[from] DbErr),
+    DatabaseError(#[from] sqlx::Error),
+
+    #[error("database error: `{0}`")]
+    RepoError(#[from] repos::error::RepoError), // TODO: extend
 
     #[error("failed to process minidump: `{0}`")]
     MinidumpError(#[from] minidump::Error),
@@ -55,6 +58,7 @@ impl IntoResponse for ApiError {
                 "general failure".to_owned(),
             ),
             ApiError::DatabaseError(err) => handle_database_error(err),
+            ApiError::RepoError(err) => (StatusCode::BAD_REQUEST, err.to_string()),
             ApiError::MinidumpError(err) => (StatusCode::BAD_REQUEST, err.to_string()),
             ApiError::IOError(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
             ApiError::MultiPartError(err) => (StatusCode::BAD_REQUEST, err.to_string()),
@@ -75,9 +79,9 @@ impl IntoResponse for ApiError {
     }
 }
 
-fn handle_database_error(err: DbErr) -> (StatusCode, String) {
+fn handle_database_error(err: sqlx::Error) -> (StatusCode, String) {
     match err {
-        DbErr::RecordNotFound(e) => (StatusCode::NOT_FOUND, e.to_string()),
+        sqlx::Error::RowNotFound => (StatusCode::NOT_FOUND, err.to_string()),
         _ => (StatusCode::BAD_REQUEST, err.to_string()),
     }
 }

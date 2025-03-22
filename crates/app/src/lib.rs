@@ -7,8 +7,8 @@ pub mod data_providers;
 use leptos::prelude::*;
 use leptos_meta::*;
 use leptos_router::{
-    StaticSegment,
     components::{FlatRoutes, Route, Router},
+    path,
 };
 
 use auth::AuthenticatedUser;
@@ -24,6 +24,7 @@ use components::{
     // users::UsersPage,
     // versions::VersionsPage,
 };
+use tracing::info;
 
 type UserResource = Resource<Option<AuthenticatedUser>>;
 
@@ -34,6 +35,7 @@ pub async fn authenticated_user() -> Result<Option<AuthenticatedUser>, ServerFnE
 
 #[server(IsAdmin)]
 pub async fn authenticated_user_is_admin() -> Result<bool, ServerFnError> {
+    info!("Checking if user is admin");
     let user = authenticated_user()
         .await?
         .ok_or(ServerFnError::new("No authenticated user".to_string()))?;
@@ -73,22 +75,22 @@ pub fn App() -> impl IntoView {
         <Router>
             <div class="container h-screen max-w-full flex flex-col">
                 <header class="sticky top-0 z-50 p-1">
-                    <Navbar trigger=user_info_trigger user=user/>
+                    <Navbar trigger=user_info_trigger/>
                 </header>
                 <main class="flex-1 overflow-hidden p-1 flex flex-col">
                     <FlatRoutes fallback=|| "Not found.">
-                        <Route path=StaticSegment("") view=HomePage/>
+                        <Route path=path!("") view=HomePage/>
                         <Route
-                            path=StaticSegment("/auth/login")
+                            path=path!("auth/login")
                             view=move || view! { <LoginPage trigger=user_info_trigger/> }
                         />
-                        <Route path=StaticSegment("/auth/register") view=RegisterPage/>
-                        <Route path=StaticSegment("/auth/profile") view=ProfilePage/>
-                        //<Route path=StaticSegment("/admin/users") view=UsersPage/>
-                        <Route path=StaticSegment("/admin/products") view=ProductsPage/>
-                        //<Route path=StaticSegment("/admin/versions") view=VersionsPage/>
-                        //<Route path=StaticSegment("/admin/symbols") view=SymbolsPage/>
-                        //<Route path=StaticSegment("/crashes") view=CrashesPage/>
+                        <Route path=path!("auth/register") view=RegisterPage/>
+                        <Route path=path!("auth/profile") view=ProfilePage/>
+                        //<Route path=path!("admin/users") view=UsersPage/>
+                        <Route path=path!("admin/products") view=ProductsPage/>
+                        //<Route path=path!("admin/versions") view=VersionsPage/>
+                        //<Route path=path!("admin/symbols") view=SymbolsPage/>
+                        //<Route path=path!("crashes") view=CrashesPage/>
                     </FlatRoutes>
                 </main>
             </div>
