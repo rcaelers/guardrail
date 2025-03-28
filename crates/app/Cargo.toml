@@ -20,20 +20,14 @@ wasm-bindgen-futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde-wasm-bindgen.workspace = true
-rmp-serde.workspace = true
-
-# Tokio
-tokio = { workspace = true, optional = true }
 
 # Tower / Axum
 tower = { workspace = true, optional = true }
-tower-http = { workspace = true, optional = true }
 tower-sessions = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 
 # Tracing
 tracing.workspace = true
-tracing-subscriber-wasm.workspace = true
 
 # SQLx
 sqlx = { workspace = true, optional = true }
@@ -42,7 +36,6 @@ sqlx = { workspace = true, optional = true }
 async-trait.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
-config.workspace = true
 enumflags2.workspace = true
 futures.workspace = true
 http.workspace = true
@@ -50,8 +43,7 @@ thiserror.workspace = true
 uuid.workspace = true
 webauthn-rs-proto.workspace = true
 indexmap.workspace = true
-trait-variant.workspace = true
-itertools.workspace = true
+# itertools.workspace = true
 dyn-clone.workspace = true
 paste.workspace = true
 
@@ -68,7 +60,6 @@ ssr = [
   "leptos-use/ssr",
   "dep:leptos_axum",
   "dep:sqlx",
-  "dep:tokio",
   "dep:axum",
   "dep:tower",
   "dep:tower-sessions",

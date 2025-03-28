@@ -8,33 +8,18 @@ edition = "2024"
 # Serde / json
 serde.workspace = true
 serde_json.workspace = true
-rmp-serde.workspace = true
 
 # SQLx
 sqlx = { workspace = true, optional = true }
 
 # Tracing
-tracing.workspace = true
+# tracing.workspace = true
 
 # Misc
-async-trait.workspace = true
-cfg-if.workspace = true
-log.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 
 [features]
 default = []
-ssr = [
-  # "leptos/ssr",
-  # "leptos_meta/ssr",
-  # "leptos_router/ssr",
-  # "leptos-use/ssr",
-  # "dep:leptos_axum",
-  "dep:sqlx",
-  # "dep:tokio",
-  # "dep:axum",
-  # "dep:tower",
-  # "dep:tower-sessions",
-]
+ssr = ["dep:sqlx"]

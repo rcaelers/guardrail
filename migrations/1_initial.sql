@@ -243,8 +243,8 @@ ALTER TABLE guardrail.credentials OWNER TO guardrail;
 -- Sessions
 --
 CREATE TABLE guardrail.sessions (
-    id text NOT NULL,
-    expires_at TIMESTAMP without TIME ZONE,
+    id text PRIMARY KEY NOT NULL,
+    expires_at TIMESTAMP with TIME ZONE,
     data bytea NOT NULL
 );
 ALTER TABLE guardrail.sessions OWNER TO guardrail;

@@ -21,7 +21,7 @@ leptos-struct-table = { path = "../leptos-struct-table" }
 leptos = { version = "0.8.0-beta", features = ["nightly"] }
 leptos_meta = { version = "0.8.0-beta" }
 leptos_router = { version = "0.8.0-beta", features = ["nightly"] }
-leptos_axum = { version = "0.8.0-beta", features = ["wasm"] }
+leptos_axum = { version = "0.8.0-beta" }
 leptos-use = { version = "0.16.0-beta" }
 leptos-struct-table = { version = "0.14.0-beta2", features = [
   "chrono",
@@ -99,12 +99,12 @@ console_log = "1"
 enumflags2 = { version = "0.7.11", features = ["serde"] }
 futures = "0.3.31"
 http = "1.3.1"
-log = "0.4.26"
+log = "0.4.27"
 mime = "0.3.17"
 paste = "1.0.15"
 rand = { version = "0.9.0", features = ["small_rng", "serde"] }
 thiserror = "2.0.12"
-time = "0.3.40"
+time = "0.3.41"
 url = { version = "2.5.4", features = ["serde"] }
 uuid = { version = "1.16.0", features = [
   "js",
@@ -116,7 +116,6 @@ uuid = { version = "1.16.0", features = [
 jwt-authorizer = "0.15.0"
 jsonwebtoken = "9.3.1"
 indexmap = "2.8.0"
-trait-variant = "0.1.2"
 itertools = "0.14.0"
 dyn-clone = "1.0.19"
 

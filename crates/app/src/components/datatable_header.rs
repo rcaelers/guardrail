@@ -47,7 +47,7 @@ pub fn DataTableHeader(
                 <div class="flex space-x-2">
                     <button
                         class="btn btn-primary"
-                        //class:hidden=move || !capabilities.get().unwrap_or(BitFlags::empty()).contains(Capabilities::CanAdd)
+                        class:hidden=move || !capabilities.get().unwrap_or(BitFlags::empty()).contains(Capabilities::CanAdd)
                         on:click=move |_| {
                             on_add_click.run(());
                         }
@@ -57,7 +57,7 @@ pub fn DataTableHeader(
                     <button
                         class="btn btn-primary"
                         class:btn-disabled=move || !enabled.get()
-                        //class:hidden=move || !capabilities.get().unwrap_or(BitFlags::empty()).contains(Capabilities::CanEdit)
+                        class:hidden=move || !capabilities.get().unwrap_or(BitFlags::empty()).contains(Capabilities::CanEdit)
                         on:click=move |_| {
                             on_edit_click.run(());
                         }
@@ -67,7 +67,7 @@ pub fn DataTableHeader(
                     <button
                         class="btn btn-primary"
                         class:btn-disabled=move || !enabled.get()
-                        //class:hidden=move || !capabilities.get().unwrap_or(BitFlags::empty()).contains(Capabilities::CanDelete)
+                        class:hidden=move || !capabilities.get().unwrap_or(BitFlags::empty()).contains(Capabilities::CanDelete)
                         on:click=move |_| {
                             on_delete_click.run(());
                         }

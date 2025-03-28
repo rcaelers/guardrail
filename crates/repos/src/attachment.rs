@@ -3,121 +3,77 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
-pub struct Version {
+pub struct Attachment {
     pub id: uuid::Uuid,
     pub name: String,
-    pub hash: String,
-    pub tag: String,
-    pub product_id: uuid::Uuid,
+    pub mime_type: String,
+    pub size: i64,
+    pub filename: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub crash_id: uuid::Uuid,
+    pub product_id: uuid::Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
-pub struct NewVersion {
+pub struct NewAttachment {
     pub name: String,
-    pub hash: String,
-    pub tag: String,
+    pub mime_type: String,
+    pub size: i64,
+    pub filename: String,
+    pub crash_id: uuid::Uuid,
     pub product_id: uuid::Uuid,
 }
 
 #[cfg(feature = "ssr")]
 pub mod ssr {
-    use super::{NewVersion, Version};
+    use super::{Attachment, NewAttachment};
     use crate::{QueryParams, Repo, error::RepoError};
     use sqlx::{Postgres, QueryBuilder};
-    use std::collections::HashSet;
 
-    pub struct VersionRepo {}
+    pub struct AttachmentRepo {}
 
-    impl VersionRepo {
+    impl AttachmentRepo {
         pub async fn get_by_id(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             id: uuid::Uuid,
-        ) -> Result<Option<Version>, RepoError> {
+        ) -> Result<Option<Attachment>, RepoError> {
             let row = sqlx::query_as!(
-                Version,
+                Attachment,
                 r#"
                 SELECT *
-                FROM guardrail.versions
-                WHERE guardrail.versions.id = $1
+                FROM guardrail.attachments
+                WHERE guardrail.attachments.id = $1
             "#,
                 id
             )
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve version {id}: {err}");
+                let message = format!("Failed to retrieve attachment {id}: {err}");
                 RepoError::DatabaseError(message)
             })?;
 
             Ok(row)
-        }
-
-        pub async fn get_by_product_and_name(
-            executor: impl sqlx::Executor<'_, Database = Postgres>,
-            product_id: uuid::Uuid,
-            name: &str,
-        ) -> Result<Option<Version>, RepoError> {
-            let row = sqlx::query_as!(
-                Version,
-                r#"
-                SELECT *
-                FROM guardrail.versions
-                WHERE guardrail.versions.name = $1 AND guardrail.versions.product_id = $2
-            "#,
-                name.to_string(),
-                product_id
-            )
-            .fetch_optional(executor)
-            .await
-            .map_err(|err| {
-                let message = format!("Failed to retrieve version by email: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(row)
-        }
-
-        pub async fn get_all_names(
-            executor: impl sqlx::Executor<'_, Database = Postgres>,
-        ) -> Result<HashSet<String>, RepoError> {
-            let rows = sqlx::query!(
-                r#"
-                SELECT name
-                FROM guardrail.versions
-            "#
-            )
-            .fetch_all(executor)
-            .await
-            .map_err(|err| {
-                let message = format!("Failed to retrieve all version names: {err}");
-                RepoError::DatabaseError(message)
-            })?
-            .into_iter()
-            .map(|row| row.name)
-            .collect::<HashSet<String>>();
-
-            Ok(rows)
         }
 
         pub async fn get_all(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             params: QueryParams,
-        ) -> Result<Vec<Version>, RepoError> {
-            let mut builder = QueryBuilder::new("SELECT * from guardrail.versions");
+        ) -> Result<Vec<Attachment>, RepoError> {
+            let mut builder = QueryBuilder::new("SELECT * from guardrail.attachments");
             Repo::build_query(
                 &mut builder,
                 &params,
-                &["id", "name", "hash", "tag", "created_at", "updated_at"],
-                &["name"],
+                &["id", "name", "mime_type", "size", "filename"],
+                &["name", "filename"],
             )?;
 
             let query = builder.build_query_as();
 
             let rows = query.fetch_all(executor).await.map_err(|err| {
-                let message = format!("Failed to retrieve all versions: {err}");
+                let message = format!("Failed to retrieve all attachments: {err}");
                 RepoError::DatabaseError(message)
             })?;
 
@@ -126,57 +82,61 @@ pub mod ssr {
 
         pub async fn create(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
-            version: NewVersion,
+            attachment: NewAttachment,
         ) -> Result<uuid::Uuid, RepoError> {
-            let version_id = sqlx::query_scalar!(
+            let crash_id = sqlx::query_scalar!(
                 r#"
-                INSERT INTO guardrail.versions
+                INSERT INTO guardrail.attachments
                   (
                     name,
-                    hash,
-                    tag,
+                    mime_type,
+                    size,
+                    filename,
+                    crash_id,
                     product_id
                   )
-                VALUES ($1, $2, $3, $4)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING
                   id
             "#,
-                version.name,
-                version.hash,
-                version.tag,
-                version.product_id
+                attachment.name,
+                attachment.mime_type,
+                attachment.size,
+                attachment.filename,
+                attachment.crash_id,
+                attachment.product_id
             )
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to create version: {err}");
+                let message = format!("Failed to create attachment: {err}");
                 RepoError::DatabaseError(message)
             })?;
 
-            Ok(version_id)
+            Ok(crash_id)
         }
 
         pub async fn update(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
-            version: Version,
+            attachment: Attachment,
         ) -> Result<Option<uuid::Uuid>, RepoError> {
             let id = sqlx::query_scalar!(
                 r#"
-                UPDATE guardrail.versions
-                SET name = $1, tag = $2, hash = $3, product_id = $4
+                UPDATE guardrail.attachments
+                SET name = $1, mime_type = $2, size = $3, filename = $4
                 WHERE id = $5
                 RETURNING id
             "#,
-                version.name,
-                version.tag,
-                version.hash,
-                version.product_id,
-                version.id,
+                attachment.name,
+                attachment.mime_type,
+                attachment.size,
+                attachment.filename,
+                attachment.id,
             )
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to update version: {err}");
+                let message = format!("Failed to update attachment: {err}");
                 RepoError::DatabaseError(message)
             })?;
 
@@ -189,7 +149,7 @@ pub mod ssr {
         ) -> Result<(), RepoError> {
             sqlx::query!(
                 r#"
-                DELETE FROM guardrail.versions
+                DELETE FROM guardrail.attachments
                 WHERE id = $1
             "#,
                 id
@@ -197,7 +157,7 @@ pub mod ssr {
             .execute(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to remove version: {err}");
+                let message = format!("Failed to remove attachment: {err}");
                 RepoError::DatabaseError(message)
             })?;
 
@@ -210,13 +170,13 @@ pub mod ssr {
             let count = sqlx::query_scalar!(
                 r#"
                 SELECT COUNT(*)
-                FROM guardrail.versions
+                FROM guardrail.attachments
             "#
             )
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to count versions: {err}");
+                let message = format!("Failed to count attachments: {err}");
                 RepoError::DatabaseError(message)
             })?;
 

@@ -24,9 +24,6 @@ use components::{
     // users::UsersPage,
     // versions::VersionsPage,
 };
-use tracing::info;
-
-type UserResource = Resource<Option<AuthenticatedUser>>;
 
 #[server(GetUser)]
 pub async fn authenticated_user() -> Result<Option<AuthenticatedUser>, ServerFnError> {
@@ -35,7 +32,6 @@ pub async fn authenticated_user() -> Result<Option<AuthenticatedUser>, ServerFnE
 
 #[server(IsAdmin)]
 pub async fn authenticated_user_is_admin() -> Result<bool, ServerFnError> {
-    info!("Checking if user is admin");
     let user = authenticated_user()
         .await?
         .ok_or(ServerFnError::new("No authenticated user".to_string()))?;
@@ -43,34 +39,38 @@ pub async fn authenticated_user_is_admin() -> Result<bool, ServerFnError> {
     Ok(user.is_admin)
 }
 
-#[allow(non_snake_case)]
+pub fn shell(options: LeptosOptions) -> impl IntoView {
+    view! {
+        <!DOCTYPE html>
+        <html lang="en">
+            <head>
+                <meta charset="utf-8"/>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+                <meta name="description" content="Crashpad server"/>
+                <meta name="keywords" content="crashes, minidump"/>
+                <AutoReload options=options.clone() />
+                <HydrationScripts options/>
+                <link rel="stylesheet" id="leptos" href="/pkg/site.css"/>
+                <link rel="shortcut icon" type="image/ico" href="/favicon.ico"/>
+                <MetaTags/>
+            </head>
+            <body>
+                <App/>
+            </body>
+        </html>
+    }
+}
+
 #[component]
 pub fn App() -> impl IntoView {
     provide_meta_context();
 
     let user_info_trigger = RwSignal::new(0);
 
-    let user = Resource::new(user_info_trigger, move |_| async move {
-        authenticated_user().await.unwrap_or(None)
-    });
-
     view! {
-        <head></head>
-
         <Stylesheet id="leptos" href="/pkg/site.css"/>
         <Stylesheet href="https://fonts.googleapis.com/css?family=Montserrat:300,400,500&display=swap"/>
-
-        <Html {..}
-              class="dark"
-              lang="en"/>
-
         <Title text="GuardRail"/>
-        <Meta charset="utf-8"/>
-        <Meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
-        <Meta name="description" content="Crashpad server"/>
-        <Meta name="keywords" content="crashes, minidump"/>
-
-        <Title text="Welcome to Leptos"/>
 
         <Router>
             <div class="container h-screen max-w-full flex flex-col">

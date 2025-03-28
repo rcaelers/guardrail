@@ -1,10 +1,8 @@
-use crate::{data_server_functions, data_server_name_functions};
-use paste::paste;
-
 use leptos::prelude::*;
-use std::collections::HashSet;
+use paste::paste;
 use uuid::Uuid;
 
+use crate::data_server_functions;
 use repos::{
     QueryParams,
     version::{NewVersion, Version},
@@ -14,4 +12,3 @@ use repos::{
 use repos::version::VersionRepo;
 
 data_server_functions! {Version, "versions",}
-data_server_name_functions! {Version, "versions",}

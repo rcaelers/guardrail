@@ -7,21 +7,10 @@ use axum::{
 use minidump_processor::ProcessError;
 use thiserror::Error;
 
-use crate::utils::error::UtilsError;
-
 #[derive(Error, Debug)]
 pub enum ApiError {
     #[error("general failure")]
     Failure,
-
-    #[error("API failure")]
-    APIFailure(String),
-
-    #[error("API failure")]
-    UtilsError(#[from] UtilsError),
-
-    #[error("{0} not found with ID '{1}'")]
-    ForeignKeyError(String, String),
 
     #[error("database error: `{0}`")]
     DatabaseError(#[from] sqlx::Error),
@@ -65,9 +54,6 @@ impl IntoResponse for ApiError {
             ApiError::JoinError(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
             ApiError::JsonError(err) => (StatusCode::BAD_REQUEST, format!("invalid JSON: {}", err)),
             ApiError::MinidumpProcessError(err) => (StatusCode::BAD_REQUEST, err.to_string()),
-            ApiError::APIFailure(err) => (StatusCode::BAD_REQUEST, err.to_string()),
-            ApiError::ForeignKeyError(_r, _k) => (StatusCode::NOT_FOUND, s),
-            ApiError::UtilsError(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
         };
 
         let body = Json(serde_json::json!({

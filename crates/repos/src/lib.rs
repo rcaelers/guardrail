@@ -1,9 +1,11 @@
 #![feature(cfg_match)]
 
+pub mod attachment;
 pub mod crash;
 pub mod credentials;
 pub mod error;
 pub mod product;
+pub mod symbols;
 pub mod user;
 pub mod version;
 
@@ -39,8 +41,10 @@ pub mod ssr {
     use sqlx::{Executor, pool::PoolConnection};
     use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
 
-    use crate::error::RepoError;
     use crate::QueryParams;
+    use crate::error::RepoError;
+
+    const ADMIN: &str = "admin";
 
     #[derive(Debug, Clone)]
     pub struct Repo {
@@ -67,8 +71,14 @@ pub mod ssr {
 
         pub async fn begin_admin(&self) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
             let mut transaction = self.pool.begin().await?;
-            self.set_config(&mut *transaction, "admin").await?;
+            self.set_config(&mut *transaction, ADMIN).await?;
             Ok(transaction)
+        }
+
+        pub async fn acquire_admin(&self) -> Result<PoolConnection<Postgres>, sqlx::Error> {
+            let mut con = self.pool.acquire().await?;
+            self.set_config(&mut *con, ADMIN).await?;
+            Ok(con)
         }
 
         pub async fn acquire(&self, auth: &str) -> Result<PoolConnection<Postgres>, sqlx::Error> {

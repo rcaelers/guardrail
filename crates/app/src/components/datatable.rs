@@ -9,7 +9,6 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
-use tracing::info;
 use uuid::Uuid;
 
 use crate::components::confirmation::ConfirmationModal;
@@ -137,12 +136,15 @@ where
     let form_clone = form.clone();
 
     let rows_clone2 = form.clone();
-    spawn_local(async move {
-        let c = rows_clone2.capabilities().await;
-        capabilities.update(|caps| {
-            *caps = c;
-        })
-    });
+    let capabilities = Resource::new(
+        move || (),
+        move |_| {
+            let value = rows_clone2.clone();
+            async move {
+                value.capabilities().await
+            }
+        },
+    );
 
     let selected_index: RwSignal<Option<usize>> = RwSignal::new(None);
     let (selected_row, set_selected_row) = signal(None);

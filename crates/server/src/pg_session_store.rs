@@ -1,3 +1,6 @@
+// Based on https://github.com/maxcountryman/tower-sessions-stores/blob/main/sqlx-store/src/postgres_store.rs
+// Copyright (c) 2024 Max Countryman
+
 use async_trait::async_trait;
 use sqlx::{PgConnection, PgPool};
 use tower_sessions::{
@@ -53,12 +56,12 @@ impl PostgresStore {
     ) -> session_store::Result<()> {
         sqlx::query(
             r#"
-            insert into guardrail.sessions (id, data, expiry_date)
+            insert into guardrail.sessions (id, data, expires_at)
             values ($1, $2, $3)
             on conflict (id) do update
             set
               data = excluded.data,
-              expiry_date = excluded.expiry_date
+              expires_at = excluded.expires_at
             "#,
         )
         .bind(record.id.to_string())

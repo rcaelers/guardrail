@@ -8,7 +8,6 @@ use repos::product::Product;
 use repos::{QueryParams, SortOrder};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
-use tracing::info;
 use uuid::Uuid;
 
 use super::datatable::{Capabilities, DataTableTrait, ExtraRowTrait};
@@ -88,14 +87,11 @@ impl DataTableTrait for ProductTable {
     }
 
     async fn capabilities(&self) -> BitFlags<Capabilities, u8> {
-        info!("capabilities");
         let mut cap = Capabilities::CanEdit | Capabilities::CanDelete;
         let is_admin = authenticated_user_is_admin().await;
-        info!("capabilities2");
         if is_admin.unwrap_or(false) {
             cap |= Capabilities::CanAdd;
         }
-        info!("capabilities3");
         cap
     }
 

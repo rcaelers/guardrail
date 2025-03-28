@@ -1,9 +1,7 @@
 mod api;
 mod app_state;
 mod auth;
-mod fileserv;
 mod pg_session_store;
-mod utils;
 
 use app::auth::AuthSession;
 use app::auth::layer::AuthLayer;
@@ -13,7 +11,6 @@ use axum::extract::{DefaultBodyLimit, State};
 use axum::http::Request;
 use axum::response::{IntoResponse, Response};
 use axum_server::tls_rustls::RustlsConfig;
-use fileserv::file_and_error_handler;
 use leptos::prelude::*;
 use leptos_axum::{LeptosRoutes, generate_route_list, handle_server_fns_with_context};
 use repos::Repo;
@@ -102,7 +99,7 @@ async fn leptos_routes_handler(
             provide_context(auth_session.clone());
             provide_context(auth_session.user.clone());
         },
-        app::App,
+        move || shell(app_state.leptos_options.clone()),
     );
     handler(state, req).await.into_response()
 }
@@ -142,7 +139,7 @@ async fn main() {
     };
     let session_store = PostgresStore::new(db);
     let session_layer = SessionManagerLayer::new(session_store)
-        //.with_name("guardrail")
+        .with_name("guardrail")
         .with_same_site(SameSite::Lax)
         .with_expiry(Expiry::OnInactivity(Duration::hours(4)))
         .with_secure(false);
@@ -155,7 +152,7 @@ async fn main() {
             axum::routing::get(server_fn_handler).post(server_fn_handler),
         )
         .leptos_routes_with_handler(routes, axum::routing::get(leptos_routes_handler))
-        .fallback(file_and_error_handler)
+        .fallback(leptos_axum::file_and_error_handler::<AppState, _>(shell))
         .nest("/api", api::routes().await)
         .nest("/auth", auth::routes().await)
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))

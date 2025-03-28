@@ -4,17 +4,21 @@ use axum::extract::{Multipart, Query, State};
 use minidump::Minidump;
 use minidump_processor::ProcessorOptions;
 use minidump_unwind::{Symbolizer, simple_symbol_supplier};
+use repos::attachment::AttachmentRepo;
+use repos::crash::CrashRepo;
 use repos::product::ProductRepo;
+use repos::version::VersionRepo;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sqlx::Postgres;
 use std::path::PathBuf;
 use tokio::task;
 use tracing::{debug, error};
 
 use super::error::ApiError;
+use super::stream_to_file;
 use crate::app_state::AppState;
 use crate::settings;
-use crate::utils::stream_to_file::stream_to_file;
 
 pub struct MinidumpApi;
 
@@ -30,45 +34,6 @@ pub struct MinidumpResponse {
 }
 
 impl MinidumpApi {
-    async fn get_product(
-        state: &AppState,
-        params: &MinidumpRequestParams,
-    ) -> Result<repos::product::Product, ApiError> {
-        // TODO: handle API user
-        let mut tx = state.repo.begin_admin().await.map_err(|e| {
-            error!("error: {:?}", e);
-            ApiError::Failure
-        })?;
-        let product = ProductRepo::get_by_name(&mut *tx, &params.product)
-            .await?
-            .ok_or(ApiError::Failure)?;
-        Ok(product)
-    }
-
-    async fn get_version(
-        state: &AppState,
-        product_id: uuid::Uuid,
-        params: &MinidumpRequestParams,
-    ) -> Result<crate::model::version::Version, ApiError> {
-        let version = ProductRepo::get_by_name(&mut *tx, &params.product)
-            .await?
-            .ok_or(ApiError::Failure)?;
-
-
-        let version =
-            VersionRepo::get_by_product_and_name(&state.db, product_id, params.version.clone())
-                .await;
-        let version = match version {
-            Ok(product) => product,
-            Err(e) => {
-                error!("error: {:?}", e);
-                return Err(ApiError::Failure);
-            }
-        }
-        .ok_or(ApiError::Failure)?;
-        Ok(version)
-    }
-
     async fn get_minidump_file(name: String) -> Result<PathBuf, ApiError> {
         let upload_path = std::path::Path::new(&settings().server.base_path).join("minidumps");
         let minidump_file = std::path::Path::new(&upload_path).join(name);
@@ -86,18 +51,18 @@ impl MinidumpApi {
     }
 
     async fn store_crash(
+        tx: impl sqlx::Executor<'_, Database = Postgres>,
         report: serde_json::Value,
-        product: crate::model::product::Product,
-        version: crate::model::version::Version,
-        state: &AppState,
+        product: repos::product::Product,
+        version: repos::version::Version,
     ) -> Result<uuid::Uuid, ApiError> {
-        let dto = entity::crash::CreateModel {
+        let dto = repos::crash::NewCrash {
             report, //: report, // TODO: .to_string(),
             summary: "".to_string(),
             product_id: product.id,
             version_id: version.id,
         };
-        let id = Repo::create(&state.db, dto).await.map_err(|e| {
+        let id = CrashRepo::create(tx, dto).await.map_err(|e| {
             error!("error: {:?}", e);
             ApiError::Failure
         })?;
@@ -105,20 +70,22 @@ impl MinidumpApi {
     }
 
     async fn store_attachment(
+        tx: impl sqlx::Executor<'_, Database = Postgres>,
+        product_id: uuid::Uuid,
         crash_id: uuid::Uuid,
         filename: String,
         filesize: i64,
         mime_type: String,
-        state: &AppState,
     ) -> Result<uuid::Uuid, ApiError> {
-        let dto = entity::attachment::CreateModel {
+        let dto = repos::attachment::NewAttachment {
             name: "minidump".to_string(),
             mime_type,
             size: filesize,
             filename,
             crash_id,
+            product_id,
         };
-        let id = Repo::create(&state.db, dto).await.map_err(|e| {
+        let id = AttachmentRepo::create(tx, dto).await.map_err(|e| {
             error!("error: {:?}", e);
             ApiError::Failure
         })?;
@@ -154,14 +121,24 @@ impl MinidumpApi {
         params: &MinidumpRequestParams,
         field: Field<'_>,
     ) -> Result<uuid::Uuid, ApiError> {
+        let mut tx = state.repo.begin_admin().await.map_err(|e| {
+            error!("error: {:?}", e);
+            ApiError::Failure
+        })?;
+
         let filename = field
             .file_name()
             .map(|name| name.to_string())
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         let minidump_file = Self::get_minidump_file(filename).await?;
 
-        let product = Self::get_product(state, params).await?;
-        let version = Self::get_version(state, product.id, params).await?;
+        let product = ProductRepo::get_by_name(&mut *tx, &params.product)
+            .await?
+            .ok_or(ApiError::Failure)?;
+
+        let version = VersionRepo::get_by_product_and_name(&mut *tx, product.id, &params.version)
+            .await?
+            .ok_or(ApiError::Failure)?;
 
         stream_to_file(&minidump_file, field).await?;
 
@@ -169,8 +146,12 @@ impl MinidumpApi {
             .await?
             .await?;
 
-        let crash_id = Self::store_crash(data, product, version, state).await?;
+        let crash_id = Self::store_crash(&mut *tx, data, product, version).await?;
 
+        tx.commit().await.map_err(|e| {
+            error!("error: {:?}", e);
+            ApiError::Failure
+        })?;
         Ok(crash_id)
     }
 
@@ -180,6 +161,11 @@ impl MinidumpApi {
         _params: &MinidumpRequestParams,
         field: Field<'_>,
     ) -> Result<(), ApiError> {
+        let mut tx = state.repo.acquire_admin().await.map_err(|e| {
+            error!("error: {:?}", e);
+            ApiError::Failure
+        })?;
+
         let filename = field
             .file_name()
             .map(|name| name.to_string())
@@ -193,7 +179,13 @@ impl MinidumpApi {
 
         stream_to_file(&attachment_file, field).await?;
 
+        let crash = CrashRepo::get_by_id(&mut *tx, crash_id)
+            .await?
+            .ok_or(ApiError::Failure)?;
+
         Self::store_attachment(
+            &mut *tx,
+            crash.id,
             crash_id,
             attachment_file
                 .to_str()
@@ -201,7 +193,6 @@ impl MinidumpApi {
                 .to_string(),
             0, // TODO: compute filesize
             mimetype,
-            state,
         )
         .await?;
 

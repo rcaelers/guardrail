@@ -1,28 +1,24 @@
 use hooks::use_navigate;
-use leptos::{html, prelude::*};
+use leptos::{html, prelude::*, task::spawn_local};
 use leptos_router::*;
 use std::time::Duration;
 use tracing::error;
 use web_sys::SubmitEvent;
 
-use crate::{auth::passkeys::login_passkey, components::passkey_logo::PasskeyLogo};
+use crate::{
+    auth::{error::AuthError, passkeys::login_passkey},
+    components::passkey_logo::PasskeyLogo,
+};
 
-//#[allow(non_snake_case)]
 #[component]
 pub fn LoginPage(trigger: RwSignal<i64>) -> impl IntoView {
     let input_element: NodeRef<html::Input> = NodeRef::new();
 
-    let login_passkey_action = Action::new_local(|user_name: &String| {
-        let user_name = user_name.to_owned();
-        async move { login_passkey(user_name).await }
-    });
-
-    let _submitted = login_passkey_action.input();
-    let pending = login_passkey_action.pending();
-    let value = login_passkey_action.value();
+    let pending = RwSignal::new(false);
+    let value = RwSignal::new(None);
 
     let result_message = move || {
-        value.get().map(|v| match v {
+        value.get().map(|v: Result<_, AuthError>| match v {
             Ok(()) => view! {
                 <div id="info-label" class="alert alert-success rounded-btn mt-4 p-3">
                     <svg
@@ -79,14 +75,17 @@ pub fn LoginPage(trigger: RwSignal<i64>) -> impl IntoView {
         }
     });
 
-    let on_submit = move |ev: SubmitEvent| {
-        ev.prevent_default();
-        let user_name = input_element.get().expect("<input> to exist").value();
-        login_passkey_action.dispatch(user_name);
-    };
-
     view! {
-        <form on:submit=on_submit>
+        <form on:submit=move |ev: SubmitEvent| {
+            ev.prevent_default();
+            pending.set(true);
+            spawn_local(async move {
+                let user_name = input_element.get().expect("<input> to exist").value();
+                value.set(Some(login_passkey(user_name).await));
+                pending.set(false);
+            });
+
+        }>
             <div class="absolute flex items-center inset-0 max-w-full">
                 <div class="card flex flex-col max-w-lg w-full mx-auto">
                     <label class="font-semibold" for="username">
@@ -102,7 +101,7 @@ pub fn LoginPage(trigger: RwSignal<i64>) -> impl IntoView {
                         node_ref=input_element
                     />
                     {result_message}
-                    <Show when=move || value().is_none()>
+                    <Show when=move || value.read().is_none()>
                         <button id="login-button" class="btn btn-primary mt-4" type="submit">
                             <PasskeyLogo />
                             <span id="login-button-text" class="ml-2 text-base">

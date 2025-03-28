@@ -1,10 +1,15 @@
 use leptos::{either::Either, prelude::*};
 
-use crate::{UserResource, authenticated_user, components::logout::LogoutButton};
+use crate::{authenticated_user, components::logout::LogoutButton};
 
 #[allow(non_snake_case)]
 #[component]
-pub fn Navbar(trigger: RwSignal<i64> /* , user: UserResource*/) -> impl IntoView {
+pub fn Navbar(trigger: RwSignal<i64>) -> impl IntoView {
+    let user = Resource::new(
+        || {},
+        move |_| async move { authenticated_user().await.unwrap_or(None) },
+    );
+
     view! {
         <script>
             window.addEventListener("click", function (e) {
@@ -92,45 +97,46 @@ pub fn Navbar(trigger: RwSignal<i64> /* , user: UserResource*/) -> impl IntoView
                 </ul>
             </div>
             <div class="navbar-end">
-                // <Suspense fallback=|| {
-                //     view! { "Loading..." }
-                // }>
-                //     {move || Suspend::new(async move {
-                //         match authenticated_user().await.unwrap_or(None).clone() {
-                //             None => {
-                //                 Either::Left(
-                //                     view! {
-                //                         <li>
-                //                             <a class="px-2" href="/auth/login">
-                //                                 login
-                //                             </a>
-                //                         </li>
-                //                         <li>
-                //                             <a class="px-2" href="/auth/register">
-                //                                 register
-                //                             </a>
-                //                         </li>
-                //                     },
-                //                 )
-                //             }
-                //             Some(user) => {
-                //                 Either::Right(
-                //                     view! {
-                //                         <li>
-                //                             <a class="px-2" href="/auth/profile">
-                //                             {{ user.username }}
-                //                             </a>
-                //                         </li>
-                //                         <li>
-                //                             <LogoutButton trigger=trigger />
-                //                         </li>
-                //                     },
-                //                 )
-                //             }
-                //         }
-                //     })}
+                <Suspense fallback=|| {
+                    view! { "Loading..." }
+                }>
+                <ul class="menu menu-horizontal px-1">
+                    {move || Suspend::new(async move {
+                        match user.await.clone() {
+                            None =>
+                                Either::Left(
+                                    view! {
+                                        <li>
+                                            <a class="px-2" href="/auth/login">
+                                                login
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="px-2" href="/auth/register">
+                                                register
+                                            </a>
+                                        </li>
+                                     },
+                                ),
 
-                // </Suspense>
+                            Some(user) => {
+                                Either::Right(
+                                    view! {
+                                        <li>
+                                            <a class="px-2" href="/auth/profile">
+                                            {{ user.username }}
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <LogoutButton trigger=trigger />
+                                        </li>
+                                    },
+                                )
+                            }
+                        }
+                    })}
+                </ul>
+                </Suspense>
             </div>
         </div>
     }
