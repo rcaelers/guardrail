@@ -75,17 +75,21 @@ pub fn LoginPage(trigger: RwSignal<i64>) -> impl IntoView {
         }
     });
 
-    view! {
-        <form on:submit=move |ev: SubmitEvent| {
-            ev.prevent_default();
-            pending.set(true);
-            spawn_local(async move {
-                let user_name = input_element.get().expect("<input> to exist").value();
-                value.set(Some(login_passkey(user_name).await));
-                pending.set(false);
-            });
+    let on_submit = move |ev: SubmitEvent| {
+        ev.prevent_default();
+        pending.set(true);
+        spawn_local(async move {
+            let user_name = input_element
+                .get_untracked()
+                .expect("no <input> element")
+                .value();
+            value.set(Some(login_passkey(user_name).await));
+            pending.set(false);
+        });
+    };
 
-        }>
+    view! {
+        <form on:submit=on_submit>
             <div class="absolute flex items-center inset-0 max-w-full">
                 <div class="card flex flex-col max-w-lg w-full mx-auto">
                     <label class="font-semibold" for="username">

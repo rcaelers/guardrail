@@ -2,6 +2,9 @@
   "folders": [
     {
       "path": "../../workrave/guardrail"
+    },
+    {
+      "path": "../leptos-struct-table"
     }
   ],
   "settings": {

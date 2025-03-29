@@ -24,8 +24,11 @@ pub struct Auth {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct Jwk {
-    pub key: String,
+    pub token_validity_in_minutes: i64,
+    pub public_key: String,
+    pub private_key: String,
 }
+
 
 #[derive(Debug, Deserialize, Default)]
 pub struct Logger {

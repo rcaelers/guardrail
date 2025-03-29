@@ -1,5 +1,6 @@
 #![feature(cfg_match)]
 
+pub mod api_token;
 pub mod attachment;
 pub mod crash;
 pub mod credentials;
@@ -61,7 +62,7 @@ pub mod ssr {
             conn: impl Executor<'_, Database = Postgres>,
             auth: &str,
         ) -> Result<(), sqlx::Error> {
-            sqlx::query("SELECT set_config('request.jwt.claims.email',$1::text,false)")
+            sqlx::query("SELECT set_config('request.jwt.claims', json_build_object('username', $1::text)::text, false)")
                 .bind(auth)
                 .execute(conn)
                 .await?;

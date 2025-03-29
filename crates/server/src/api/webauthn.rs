@@ -142,10 +142,7 @@ pub async fn start_authentication(
         .start_passkey_authentication(allow_credentials.as_slice())?;
 
     session
-        .insert(
-            "authentication_state",
-            (user_unique_id, passkey_authentication),
-        )
+        .insert("authentication_state", (user_unique_id, passkey_authentication))
         .await?;
 
     tx.commit().await?;

@@ -1,8 +1,8 @@
 mod api;
 mod app_state;
-mod auth;
 mod pg_session_store;
 
+use api::{generate_token, hash_token};
 use app::auth::AuthSession;
 use app::auth::layer::AuthLayer;
 use axum::Router;
@@ -112,10 +112,39 @@ async fn init_db() -> Result<PgPool, sqlx::Error> {
     let pool = PgPoolOptions::new()
         .max_connections(5)
         .connect_with(opts)
-        .await
-        .unwrap();
+        .await?;
 
     Ok(pool)
+}
+
+async fn ensure_default_api_token(repo: &Repo) -> Result<(), Box<dyn std::error::Error>> {
+    use repos::api_token::{ApiTokenRepo, NewApiToken};
+    use tracing::info;
+
+    let mut conn = repo.acquire_admin().await?;
+
+    let tokens = ApiTokenRepo::get_all(&mut *conn).await?;
+    if !tokens.is_empty() {
+        info!("API tokens already exist, skipping default token creation");
+        return Ok(());
+    }
+
+    let token = generate_token();
+    let token_hash = hash_token(&token).map_err(|_| "Failed to hash token")?;
+
+    let new_token = NewApiToken {
+        description: "Default API token".to_string(),
+        token_hash,
+        product_id: None,
+        user_id: None,
+        entitlements: vec!["token".to_string()],
+        expires_at: None,
+    };
+
+    let _token_id = ApiTokenRepo::create(&mut *conn, new_token).await?;
+    info!("Created default API token: {}", token);
+
+    Ok(())
 }
 
 #[tokio::main]
@@ -131,10 +160,16 @@ async fn main() {
 
     let db = init_db().await.unwrap();
     let webauthn = create_webauthn();
+    let repo = Repo::new(db.clone());
+
+    if let Err(err) = ensure_default_api_token(&repo).await {
+        tracing::error!("Failed to create default API token: {}", err);
+    }
+
     let state = AppState {
         leptos_options: leptos_options.clone(),
         routes: routes.clone(),
-        repo: Repo::new(db.clone()),
+        repo,
         webauthn,
     };
     let session_store = PostgresStore::new(db);
@@ -146,15 +181,12 @@ async fn main() {
 
     let auth_layer = AuthLayer::new();
 
+    // Build our router with all routes and middleware
     let routes_all = Router::new()
-        .route(
-            "/api/{*fn_name}",
-            axum::routing::get(server_fn_handler).post(server_fn_handler),
-        )
+        .route("/api/{*fn_name}", axum::routing::get(server_fn_handler).post(server_fn_handler))
         .leptos_routes_with_handler(routes, axum::routing::get(leptos_routes_handler))
         .fallback(leptos_axum::file_and_error_handler::<AppState, _>(shell))
-        .nest("/api", api::routes().await)
-        .nest("/auth", auth::routes().await)
+        .nest("/api", api::routes(state.clone()).await)
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
         .layer(TraceLayer::new_for_http())
         .layer(auth_layer)

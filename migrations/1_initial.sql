@@ -1,9 +1,13 @@
+-- ALTER SYSTEM SET client_min_messages = ...;
+-- ALTER SYSTEM SET log_min_messages = ...;
+-- SELECT pg_reload_conf();
+
 CREATE SCHEMA guardrail;
 
-CREATE ROLE authenticator LOGIN PASSWORD 'wezei4Joozooz8To' NOINHERIT NOCREATEDB NOCREATEROLE NOSUPERUSER;
-CREATE ROLE guardrail_webuser LOGIN PASSWORD 'wezei4Joozooz8To' NOINHERIT NOCREATEDB NOCREATEROLE NOSUPERUSER;
-CREATE ROLE guardrail_anonymous NOLOGIN;
-CREATE ROLE guardrail_apiuser NOLOGIN;
+-- CREATE ROLE authenticator LOGIN PASSWORD '<password>' NOINHERIT NOCREATEDB NOCREATEROLE NOSUPERUSER;
+-- CREATE ROLE guardrail_webuser LOGIN PASSWORD '<password>' NOINHERIT NOCREATEDB NOCREATEROLE NOSUPERUSER;
+-- CREATE ROLE guardrail_anonymous NOLOGIN;
+-- CREATE ROLE guardrail_apiuser NOLOGIN;
 
 GRANT guardrail_anonymous TO authenticator;
 GRANT guardrail_apiuser TO authenticator;
@@ -22,7 +26,7 @@ CREATE TABLE guardrail.products (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
-    name TEXT NOT NULL,
+    name TEXT NOT NULL UNIQUE,
     description TEXT NOT NULL
 );
 ALTER TABLE guardrail.products OWNER TO guardrail;
@@ -45,7 +49,7 @@ CREATE TABLE guardrail.users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
-    username TEXT NOT NULL,
+    username TEXT NOT NULL UNIQUE,
     is_admin BOOLEAN NOT NULL DEFAULT FALSE,
     last_login_at TIMESTAMP
 );
@@ -72,7 +76,7 @@ ALTER TABLE guardrail.user_access OWNER TO guardrail;
 CREATE OR REPLACE FUNCTION guardrail.get_current_username() RETURNS TEXT AS $$
 BEGIN
     RETURN (
-        current_setting('request.jwt.claims.username', TRUE)
+        current_setting('request.jwt.claims', TRUE)::json->>'username'::text
     );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -147,6 +151,10 @@ CREATE TABLE guardrail.versions (
     hash TEXT NOT NULL,
     tag TEXT NOT NULL,
     product_id UUID NOT NULL REFERENCES guardrail.products (id)
+
+    UNIQUE (name, product_id),
+    UNIQUE (hash, product_id),
+    UNIQUE (tag, product_id),
 );
 ALTER TABLE guardrail.versions OWNER TO guardrail;
 
@@ -201,11 +209,12 @@ CREATE TABLE guardrail.annotations (
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     key TEXT NOT NULL,
     kind TEXT CHECK (
-        kind IN ('read', 'write', 'admin')
+        kind IN ('system', 'user')
     ),
     value TEXT NOT NULL,
     crash_id UUID NOT NULL REFERENCES guardrail.crashes (id),
     product_id UUID NOT NULL REFERENCES guardrail.products (id)
+    UNIQUE (key, crash_id),
 );
 ALTER TABLE guardrail.annotations OWNER TO guardrail;
 
@@ -222,8 +231,34 @@ CREATE TABLE guardrail.attachments (
     filename TEXT NOT NULL,
     crash_id UUID NOT NULL REFERENCES guardrail.crashes (id),
     product_id UUID NOT NULL REFERENCES guardrail.products (id)
+    UNIQUE (name, crash_id),
 );
 ALTER TABLE guardrail.attachments OWNER TO guardrail;
+
+--
+-- API Tokens
+--
+CREATE TABLE guardrail.api_tokens (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    description TEXT NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    product_id UUID REFERENCES guardrail.products (id),
+    user_id UUID REFERENCES guardrail.users (id),
+    entitlements TEXT[] NOT NULL CHECK (
+        array_length(entitlements, 1) > 0 AND
+        entitlements <@ ARRAY['symbol-upload', 'minidump-upload', 'token']::TEXT[]
+    ),
+    last_used_at TIMESTAMP,
+    expires_at TIMESTAMP,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE
+);
+ALTER TABLE guardrail.api_tokens OWNER TO guardrail;
+CREATE INDEX idx_api_tokens_token ON guardrail.api_tokens (token_hash);
+CREATE INDEX idx_api_tokens_product ON guardrail.api_tokens (product_id);
+CREATE INDEX idx_api_tokens_user ON guardrail.api_tokens (user_id) WHERE user_id IS NOT NULL;
+
 
 --
 -- Credentials
@@ -273,7 +308,7 @@ END $$;
 DO $$
 DECLARE tbl TEXT;
 schema_name TEXT := 'guardrail';
-tables_to_apply TEXT [ ] := ARRAY [ 'users', 'user_access', 'products', 'versions', 'symbols', 'crashes', 'annotations', 'attachments' ];
+tables_to_apply TEXT [ ] := ARRAY [ 'users', 'user_access', 'products', 'versions', 'symbols', 'crashes', 'annotations', 'attachments', 'api_tokens' ];
 BEGIN FOREACH tbl IN ARRAY tables_to_apply
 LOOP EXECUTE format(
         'GRANT SELECT, INSERT, UPDATE, DELETE ON guardrail.%I TO guardrail_apiuser;
@@ -440,3 +475,45 @@ CREATE POLICY user_can_delete ON guardrail.user_access FOR DELETE
 USING (
         guardrail.has_access(product_id, 'admin')
     );
+
+
+-- API Tokens
+
+ALTER TABLE guardrail.api_tokens ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY policy_token_can_read ON guardrail.api_tokens
+FOR SELECT USING (
+    guardrail.is_admin() OR
+    (user_id = guardrail.get_current_user_id()) AND
+    (product_id IS NOT NULL AND guardrail.is_admin_of_product(product_id))
+);
+
+CREATE POLICY policy_token_can_insert ON guardrail.api_tokens
+FOR INSERT WITH CHECK (
+    guardrail.is_admin() OR
+    (
+        product_id IS NOT NULL AND
+        user_id IS NOT NULL AND
+        guardrail.is_admin_of_product(product_id)
+    )
+);
+
+CREATE POLICY policy_token_can_update ON guardrail.api_tokens
+FOR UPDATE USING (
+    guardrail.is_admin() OR
+    (
+        product_id IS NOT NULL AND
+        user_id IS NOT NULL AND
+        guardrail.is_admin_of_product(product_id)
+    )
+);
+
+CREATE POLICY policy_token_can_delete ON guardrail.api_tokens
+FOR DELETE USING (
+    guardrail.is_admin() OR
+    (
+        product_id IS NOT NULL AND
+        user_id IS NOT NULL AND
+        guardrail.is_admin_of_product(product_id)
+    )
+);

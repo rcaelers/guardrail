@@ -34,6 +34,9 @@ tower.workspace = true
 tower-http.workspace = true
 tower-sessions.workspace = true
 
+# Security
+argon2.workspace = true
+
 # Tracing
 tracing.workspace = true
 tracing-subscriber.workspace = true
@@ -48,18 +51,19 @@ minidump-unwind.workspace = true
 async-trait.workspace = true
 # cfg-if.workspace = true
 chrono.workspace = true
+data-encoding.workspace = true
 # console_error_panic_hook.workspace = true
 # console_log.workspace = true
 futures.workspace = true
 # mime.workspace = true
-# rand.workspace = true
+rand.workspace = true
 thiserror.workspace = true
 time.workspace = true
 uuid.workspace = true
 # url.workspace = true
 webauthn-rs.workspace = true
 # jwt-authorizer.workspace = true
-# jsonwebtoken.workspace = true
+jsonwebtoken.workspace = true
 log.workspace = true
 
 [dev-dependencies]

@@ -84,7 +84,7 @@ impl ExpiredDeletion for PostgresStore {
         sqlx::query(
             r#"
             delete from guardrail.sessions
-            where expiry_date < (now() at time zone 'utc')
+            where expires_at < (now() at time zone 'utc')
             "#,
         )
         .execute(&self.pool)
