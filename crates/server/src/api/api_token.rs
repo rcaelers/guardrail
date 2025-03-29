@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Request, State},
+    extract::Request,
     http::{StatusCode, header},
     response::Response,
 };
@@ -11,7 +11,7 @@ use tracing::{error, info};
 
 use crate::app_state::AppState;
 
-use super::{hash_token, verify_token};
+use super::verify_token;
 
 #[derive(Clone)]
 pub enum RequiredEntitlement {

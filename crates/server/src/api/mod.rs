@@ -1,12 +1,12 @@
 pub mod error;
 pub use routes::routes;
 
-mod api_token; // Auth module for API token functionality
+mod api_token;
 mod minidump;
 mod routes;
 mod symbols;
 mod token;
-mod webauthn; // Auth module for WebAuthn functionality // Auth module for JWT token functionality
+mod webauthn;
 
 use argon2::{
     Argon2,
@@ -23,7 +23,6 @@ use tokio_util::io::StreamReader;
 
 use error::ApiError;
 
-// Generates a new hash with a random salt - use this only when creating a new token
 pub fn hash_token(token: &str) -> Result<String, argon2::password_hash::Error> {
     let salt = SaltString::generate(&mut OsRng);
     let argon2 = Argon2::default();
@@ -33,7 +32,6 @@ pub fn hash_token(token: &str) -> Result<String, argon2::password_hash::Error> {
         .map(|hash| hash.to_string())
 }
 
-// Verifies a token against a hash - use this when validating tokens
 pub fn verify_token(token: &str, hash: &str) -> Result<bool, argon2::password_hash::Error> {
     let parsed_hash = PasswordHash::new(hash)?;
     let argon2 = Argon2::default();

@@ -2,7 +2,7 @@ mod api;
 mod app_state;
 mod pg_session_store;
 
-use api::{generate_token, hash_token};
+use api::hash_token;
 use app::auth::AuthSession;
 use app::auth::layer::AuthLayer;
 use axum::Router;
@@ -129,7 +129,7 @@ async fn ensure_default_api_token(repo: &Repo) -> Result<(), Box<dyn std::error:
         return Ok(());
     }
 
-    let token = generate_token();
+    let token = &settings().auth.initial_admin_token;
     let token_hash = hash_token(&token).map_err(|_| "Failed to hash token")?;
 
     let new_token = NewApiToken {
