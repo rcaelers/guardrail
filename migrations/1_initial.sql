@@ -8,9 +8,8 @@ CREATE SCHEMA guardrail;
 -- CREATE ROLE guardrail_webuser LOGIN PASSWORD '<password>' NOINHERIT NOCREATEDB NOCREATEROLE NOSUPERUSER;
 -- CREATE ROLE guardrail_anonymous NOLOGIN;
 -- CREATE ROLE guardrail_apiuser NOLOGIN;
-
-GRANT guardrail_anonymous TO authenticator;
-GRANT guardrail_apiuser TO authenticator;
+-- GRANT guardrail_anonymous TO authenticator;
+-- GRANT guardrail_apiuser TO authenticator;
 
 GRANT USAGE ON SCHEMA guardrail TO guardrail_anonymous;
 GRANT USAGE ON SCHEMA guardrail TO guardrail_apiuser;
@@ -150,11 +149,11 @@ CREATE TABLE guardrail.versions (
     name TEXT NOT NULL,
     hash TEXT NOT NULL,
     tag TEXT NOT NULL,
-    product_id UUID NOT NULL REFERENCES guardrail.products (id)
+    product_id UUID NOT NULL REFERENCES guardrail.products (id),
 
     UNIQUE (name, product_id),
     UNIQUE (hash, product_id),
-    UNIQUE (tag, product_id),
+    UNIQUE (tag, product_id)
 );
 ALTER TABLE guardrail.versions OWNER TO guardrail;
 
@@ -213,8 +212,8 @@ CREATE TABLE guardrail.annotations (
     ),
     value TEXT NOT NULL,
     crash_id UUID NOT NULL REFERENCES guardrail.crashes (id),
-    product_id UUID NOT NULL REFERENCES guardrail.products (id)
-    UNIQUE (key, crash_id),
+    product_id UUID NOT NULL REFERENCES guardrail.products (id),
+    UNIQUE (key, crash_id)
 );
 ALTER TABLE guardrail.annotations OWNER TO guardrail;
 
@@ -230,8 +229,8 @@ CREATE TABLE guardrail.attachments (
     size bigint NOT NULL,
     filename TEXT NOT NULL,
     crash_id UUID NOT NULL REFERENCES guardrail.crashes (id),
-    product_id UUID NOT NULL REFERENCES guardrail.products (id)
-    UNIQUE (name, crash_id),
+    product_id UUID NOT NULL REFERENCES guardrail.products (id),
+    UNIQUE (name, crash_id)
 );
 ALTER TABLE guardrail.attachments OWNER TO guardrail;
 
