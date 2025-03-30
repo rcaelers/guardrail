@@ -6,6 +6,7 @@ use leptos_router::hooks::{use_navigate, use_query_map};
 use leptos_struct_table::*;
 use repos::QueryParams;
 use serde::{Deserialize, Serialize};
+use tracing::info;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
@@ -126,6 +127,7 @@ where
         }
     }
 
+    info!("DataTable: {:?}", query);
     let fields: RwSignal<Fields> = RwSignal::new(Fields::default());
 
     let title = RwSignal::new("".to_string());
@@ -168,12 +170,12 @@ where
 
     T::init_fields(fields, &query);
 
-    Effect::new(move |_| {
-        if let State::Idle = state.get() {
-            let rows = form.clone();
-            rows.refresh_table();
-        }
-    });
+    // Effect::new(move |_| {
+    //     if let State::Idle = state.get() {
+    //         let rows = form.clone();
+    //         rows.refresh_table();
+    //     }
+    // });
 
     let on_delete_click = Callback::new(move |_| {
         let row = selected_row.get();

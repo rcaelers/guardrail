@@ -40,13 +40,11 @@ impl PostgresStore {
     }
 
     async fn id_exists(&self, conn: &mut PgConnection, id: &Id) -> session_store::Result<bool> {
-        Ok(
-            sqlx::query_scalar(r#"select exists(select 1 from guardrail.sessions where id = $1)"#)
-                .bind(id.to_string())
-                .fetch_one(conn)
-                .await
-                .map_err(SqlxStoreError::Sqlx)?,
-        )
+        Ok(sqlx::query_scalar(r#"select exists(select 1 from guardrail.sessions where id = $1)"#)
+            .bind(id.to_string())
+            .fetch_one(conn)
+            .await
+            .map_err(SqlxStoreError::Sqlx)?)
     }
 
     async fn save_with_conn(
@@ -115,7 +113,7 @@ impl SessionStore for PostgresStore {
     async fn load(&self, session_id: &Id) -> session_store::Result<Option<Record>> {
         let record_value: Option<(Vec<u8>,)> = sqlx::query_as(
             r#"select data from guardrail.sessions
-               where id = $1 and expiry_date > $2
+               where id = $1 and expires_at > $2
                "#,
         )
         .bind(session_id.to_string())
@@ -125,9 +123,7 @@ impl SessionStore for PostgresStore {
         .map_err(SqlxStoreError::Sqlx)?;
 
         if let Some((data,)) = record_value {
-            Ok(Some(
-                rmp_serde::from_slice(&data).map_err(SqlxStoreError::Decode)?,
-            ))
+            Ok(Some(rmp_serde::from_slice(&data).map_err(SqlxStoreError::Decode)?))
         } else {
             Ok(None)
         }

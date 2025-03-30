@@ -102,14 +102,16 @@ pub mod ssr {
                   (
                     user_id,
                     name,
-                    data
+                    data,
+                    last_used
                   )
-                VALUES ($1, 'fixme', $2)
+                VALUES ($1, 'fixme', $2, $3)
                 RETURNING
                   id
             "#,
                 user_id,
-                data
+                data,
+                chrono::Utc::now().naive_utc(),
             )
             .fetch_one(executor)
             .await
@@ -129,11 +131,12 @@ pub mod ssr {
             let id = sqlx::query_scalar!(
                 r#"
                 UPDATE guardrail.credentials
-                SET data = $1
-                WHERE id = $2
+                SET data = $1, last_used = $2
+                WHERE id = $3
                 RETURNING id
             "#,
                 data,
+                chrono::Utc::now().naive_utc(),
                 id,
             )
             .fetch_optional(executor)

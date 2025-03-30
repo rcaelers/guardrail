@@ -264,7 +264,7 @@ CREATE INDEX idx_api_tokens_user ON guardrail.api_tokens (user_id) WHERE user_id
 --
 CREATE TABLE guardrail.credentials (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
-    user_id UUID NOT NULL,
+    user_id UUID NOT NULL REFERENCES guardrail.users (id),
     name TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),

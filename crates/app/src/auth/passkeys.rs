@@ -23,7 +23,7 @@ async fn login_begin(username: String) -> Result<RequestChallengeResponse, AuthE
     opts.set_method("POST");
     opts.set_mode(RequestMode::SameOrigin);
 
-    let dest = format!("/auth/authenticate_start/{username}");
+    let dest = format!("/api/auth/authenticate_start/{username}");
     let request = Request::new_with_str_and_init(&dest, &opts)?;
 
     request.headers().set("content-type", "application/json")?;
@@ -71,7 +71,7 @@ async fn login_complete(pub_key_cred: PublicKeyCredential) -> Result<(), AuthErr
     opts.set_mode(RequestMode::SameOrigin);
     opts.set_body(&req_jsvalue);
 
-    let request = Request::new_with_str_and_init("/auth/authenticate_finish", &opts)?;
+    let request = Request::new_with_str_and_init("/api/auth/authenticate_finish", &opts)?;
     request.headers().set("content-type", "application/json")?;
 
     let resp_value = JsFuture::from(window().fetch_with_request(&request)).await?;
@@ -100,7 +100,7 @@ async fn register_begin(username: String) -> Result<CreationChallengeResponse, A
     opts.set_method("POST");
     opts.set_mode(RequestMode::SameOrigin);
 
-    let dest = format!("/auth/register_start/{username}");
+    let dest = format!("/api/auth/register_start/{username}");
     let request = Request::new_with_str_and_init(&dest, &opts)?;
 
     request.headers().set("content-type", "application/json")?;
@@ -149,7 +149,7 @@ async fn register_complete(reg_pub_key_cred: RegisterPublicKeyCredential) -> Res
     opts.set_mode(RequestMode::SameOrigin);
     opts.set_body(&req_jsvalue);
 
-    let request = Request::new_with_str_and_init("/auth/register_finish", &opts)?;
+    let request = Request::new_with_str_and_init("/api/auth/register_finish", &opts)?;
     request.headers().set("content-type", "application/json")?;
 
     let resp_value = JsFuture::from(window().fetch_with_request(&request)).await?;
