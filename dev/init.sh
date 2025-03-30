@@ -13,11 +13,10 @@ if [ -z "$JWT" ]; then
 fi
 echo JWT=$JWT
 
-# curl -X POST ${DB_URI}products --insecure \
-#   -H 'Content-Type: application/json' \
-#   -H "Authorization: Bearer $JWT" \
-#   -H "Prefer: return=representation" \
-#   -d '{ "name":"Workrave", "description": "Workrave" }'
+hash_token() {
+  SALT=$(openssl rand -hex 16)
+  echo -n "$1" | argon2 "$SALT" -id -v 13 -t 3 -m 16 -p 4 -e
+}
 
 RESP=$(curl -s -X POST ${DB_URI}users --insecure \
   -H 'Content-Type: application/json' \
@@ -25,6 +24,36 @@ RESP=$(curl -s -X POST ${DB_URI}users --insecure \
   -H "Prefer: return=representation" \
   -d '{ "username":"rob", "is_admin":"true" }')
 USER_ID=$(echo $RESP | jq -r ".[0].id")
+
+SYMBOL_TOKEN="symbol-upload-token"
+SYMBOL_TOKEN_HASH=$(hash_token "$SYMBOL_TOKEN")
+RESP=$(curl -s -X POST ${DB_URI}api_tokens --insecure \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $JWT" \
+  -H "Prefer: return=representation" \
+  -d '{
+    "description": "Symbols upload token",
+    "token_hash": "'$SYMBOL_TOKEN_HASH'",
+    "entitlements": ["symbol-upload"],
+    "is_active": true
+  }')
+TOKEN_ID=$(echo $RESP | jq -r ".[0].id")
+echo "Created symbol upload token with ID: $TOKEN_ID"
+
+MINIDUMP_TOKEN="minidump-upload-token"
+MINIDUMP_TOKEN_HASH=$(hash_token "$MINIDUMP_TOKEN")
+RESP=$(curl -s -X POST ${DB_URI}api_tokens --insecure \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $JWT" \
+  -H "Prefer: return=representation" \
+  -d '{
+    "description": "Minidump upload token",
+    "token_hash": "'$MINIDUMP_TOKEN_HASH'",
+    "entitlements": ["minidump-upload"],
+    "is_active": true
+  }')
+TOKEN_ID=$(echo $RESP | jq -r ".[0].id")
+echo "Created minidump upload token with ID: $TOKEN_ID"
 
 for i in {1..20}; do
   RESP=$(curl -s -X POST ${DB_URI}products --insecure \
@@ -70,5 +99,5 @@ curl -X GET ${DB_URI}products --insecure \
 #   done
 # done
 
-#curl -vv -X POST "${URI}api/symbols/upload?product=Workrave&version=1.11" --insecure -H "Authorization: Bearer $TOKEN" -Fupload_file_symbols=@dev/crash.sym
+curl -vv -X POST "${API_URI}api/symbols/upload?product=Workrave&version=1.11" --insecure -H "Authorization: Bearer symbols-upload-token" -Fupload_file_symbols=@dev/crash.sym
 #curl -vv -X POST "${URI}api/minidump/upload?product=Workrave&version=1.11" --insecure -H "Authorization: Bearer $TOKEN" -Fupload_file_minidump=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp -Fattach=@dev/init.sh
