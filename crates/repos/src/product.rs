@@ -33,6 +33,7 @@ pub mod ssr {
     use crate::{QueryParams, Repo, error::RepoError};
     use sqlx::{Postgres, QueryBuilder};
     use std::collections::HashSet;
+    use tracing::error;
 
     pub struct ProductRepo {}
 
@@ -41,7 +42,7 @@ pub mod ssr {
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             id: uuid::Uuid,
         ) -> Result<Option<Product>, RepoError> {
-            let row = sqlx::query_as!(
+            sqlx::query_as!(
                 Product,
                 r#"
                 SELECT *
@@ -53,40 +54,36 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve product {id}: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(row)
+                error!("Failed to retrieve product {id}: {err}");
+                RepoError::DatabaseError("Failed to retrieve product".to_string())
+            })
         }
 
         pub async fn get_by_name(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
-            email: &str,
+            name: &str,
         ) -> Result<Option<Product>, RepoError> {
-            let row = sqlx::query_as!(
+            sqlx::query_as!(
                 Product,
                 r#"
                 SELECT *
                 FROM guardrail.products
                 WHERE guardrail.products.name = $1
             "#,
-                email.to_string()
+                name.to_string()
             )
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve product by email: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(row)
+                error!("Failed to retrieve product by name {name}: {err}");
+                RepoError::DatabaseError("Failed to retrieve product by name".to_string())
+            })
         }
 
         pub async fn get_all_names(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
         ) -> Result<HashSet<String>, RepoError> {
-            let rows = sqlx::query!(
+            sqlx::query!(
                 r#"
                 SELECT name
                 FROM guardrail.products
@@ -95,14 +92,10 @@ pub mod ssr {
             .fetch_all(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve all product names: {err}");
-                RepoError::DatabaseError(message)
-            })?
-            .into_iter()
-            .map(|row| row.name)
-            .collect::<HashSet<String>>();
-
-            Ok(rows)
+                error!("Failed to retrieve all product names: {err}");
+                RepoError::DatabaseError("Failed to retrieve all product names".to_string())
+            })
+            .map(|rows| rows.into_iter().map(|row| row.name).collect::<HashSet<String>>())
         }
 
         pub async fn get_all(
@@ -119,19 +112,19 @@ pub mod ssr {
 
             let query = builder.build_query_as();
 
-            let rows = query.fetch_all(executor).await.map_err(|err| {
-                let message = format!("Failed to retrieve all products: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(rows)
+            query.fetch_all(executor)
+                .await
+                .map_err(|err| {
+                    error!("Failed to retrieve all products: {err}");
+                    RepoError::DatabaseError("Failed to retrieve products".to_string())
+                })
         }
 
         pub async fn create(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             product: NewProduct,
         ) -> Result<uuid::Uuid, RepoError> {
-            let product_id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 INSERT INTO guardrail.products
                   (
@@ -148,18 +141,16 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to create product: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(product_id)
+                error!("Failed to create product: {err}");
+                RepoError::DatabaseError("Failed to create product".to_string())
+            })
         }
 
         pub async fn update(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             product: Product,
         ) -> Result<Option<uuid::Uuid>, RepoError> {
-            let id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 UPDATE guardrail.products
                 SET name = $1, description = $2
@@ -173,11 +164,9 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to update product: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(id)
+                error!("Failed to update product {}: {err}", product.id);
+                RepoError::DatabaseError("Failed to update product".to_string())
+            })
         }
 
         pub async fn remove(
@@ -194,8 +183,8 @@ pub mod ssr {
             .execute(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to remove product: {err}");
-                RepoError::DatabaseError(message)
+                error!("Failed to remove product {id}: {err}");
+                RepoError::DatabaseError("Failed to remove product".to_string())
             })?;
 
             Ok(())
@@ -204,7 +193,7 @@ pub mod ssr {
         pub async fn count(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
         ) -> Result<i64, RepoError> {
-            let count = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 SELECT COUNT(*)
                 FROM guardrail.products
@@ -213,11 +202,10 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to count products: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(count.unwrap_or(0))
+                error!("Failed to count products: {err}");
+                RepoError::DatabaseError("Failed to count products".to_string())
+            })
+            .map(|count| count.unwrap_or(0))
         }
     }
 }

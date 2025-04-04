@@ -34,17 +34,17 @@ pub mod ssr {
     use crate::error::RepoError;
     use chrono::Utc;
     use sqlx::Postgres;
+    use tracing::error;
     use uuid::Uuid;
 
     pub struct ApiTokenRepo {}
 
     impl ApiTokenRepo {
-        /// Get an API token by its ID
         pub async fn get_by_id(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             id: Uuid,
         ) -> Result<Option<ApiToken>, RepoError> {
-            let row = sqlx::query_as!(
+            sqlx::query_as!(
                 ApiToken,
                 r#"
                 SELECT *
@@ -56,19 +56,16 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve API token {id}: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(row)
+                error!("Failed to retrieve API token {id}: {err}");
+                RepoError::DatabaseError("Failed to retrieve API token".to_string())
+            })
         }
 
-        /// Get an API token by its token hash
         pub async fn get_by_token_hash(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             token_hash: &str,
         ) -> Result<Option<ApiToken>, RepoError> {
-            let row = sqlx::query_as!(
+            sqlx::query_as!(
                 ApiToken,
                 r#"
                 SELECT *
@@ -82,14 +79,11 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve API token by token hash: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(row)
+                error!("Failed to retrieve API token by token hash: {err}");
+                RepoError::DatabaseError("Failed to retrieve API token by token hash".to_string())
+            })
         }
 
-        /// Update the last_used_at field for a token
         pub async fn update_last_used(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             token_id: Uuid,
@@ -105,19 +99,18 @@ pub mod ssr {
             .execute(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to update last_used_at for token {token_id}: {err}");
-                RepoError::DatabaseError(message)
+                error!("Failed to update last_used_at for token {token_id}: {err}");
+                RepoError::DatabaseError("Failed to update API token".to_string())
             })?;
 
             Ok(())
         }
 
-        /// Get all API tokens for a product
         pub async fn get_by_product_id(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             product_id: Uuid,
         ) -> Result<Vec<ApiToken>, RepoError> {
-            let rows = sqlx::query_as!(
+            sqlx::query_as!(
                 ApiToken,
                 r#"
                 SELECT *
@@ -130,20 +123,16 @@ pub mod ssr {
             .fetch_all(executor)
             .await
             .map_err(|err| {
-                let message =
-                    format!("Failed to retrieve API tokens for product {product_id}: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(rows)
+                error!("Failed to retrieve API tokens for product {product_id}: {err}");
+                RepoError::DatabaseError("Failed to retrieve API tokens for product".to_string())
+            })
         }
 
-        /// Get all API tokens for a user
         pub async fn get_by_user_id(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             user_id: Uuid,
         ) -> Result<Vec<ApiToken>, RepoError> {
-            let rows = sqlx::query_as!(
+            sqlx::query_as!(
                 ApiToken,
                 r#"
                 SELECT *
@@ -156,19 +145,16 @@ pub mod ssr {
             .fetch_all(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve API tokens for user {user_id}: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(rows)
+                error!("Failed to retrieve API tokens for user {user_id}: {err}");
+                RepoError::DatabaseError("Failed to retrieve API tokens for user".to_string())
+            })
         }
 
-        /// Create a new API token
         pub async fn create(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             new_token: NewApiToken,
         ) -> Result<Uuid, RepoError> {
-            let token_id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 INSERT INTO guardrail.api_tokens
                   (
@@ -194,14 +180,11 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to create API token: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(token_id)
+                error!("Failed to create API token: {err}");
+                RepoError::DatabaseError("Failed to create API token".to_string())
+            })
         }
 
-        /// Update an API token
         pub async fn update(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             token: ApiToken,
@@ -225,14 +208,13 @@ pub mod ssr {
             .execute(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to update API token {}: {err}", token.id);
-                RepoError::DatabaseError(message)
+                error!("Failed to update API token {}: {err}", token.id);
+                RepoError::DatabaseError("Failed to update API token".to_string())
             })?;
 
             Ok(())
         }
 
-        /// Revoke/deactivate an API token
         pub async fn revoke(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             token_id: Uuid,
@@ -248,14 +230,13 @@ pub mod ssr {
             .execute(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to revoke API token {token_id}: {err}");
-                RepoError::DatabaseError(message)
+                error!("Failed to revoke API token {token_id}: {err}");
+                RepoError::DatabaseError("Failed to revoke API token".to_string())
             })?;
 
             Ok(())
         }
 
-        /// Delete an API token
         pub async fn delete(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             token_id: Uuid,
@@ -270,20 +251,18 @@ pub mod ssr {
             .execute(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to delete API token {token_id}: {err}");
-                RepoError::DatabaseError(message)
+                error!("Failed to delete API token {token_id}: {err}");
+                RepoError::DatabaseError("Failed to delete API token".to_string())
             })?;
 
             Ok(())
         }
 
-        /// Check if a token has a specific entitlement
         pub fn has_entitlement(token: &ApiToken, required_entitlement: &str) -> bool {
             if !token.is_active {
                 return false;
             }
 
-            // Check if token is expired
             if let Some(expires_at) = token.expires_at {
                 let now = Utc::now().naive_utc();
                 if expires_at < now {
@@ -291,7 +270,6 @@ pub mod ssr {
                 }
             }
 
-            // Direct entitlement match
             if token
                 .entitlements
                 .contains(&required_entitlement.to_string())
@@ -299,7 +277,6 @@ pub mod ssr {
                 return true;
             }
 
-            // Token entitlement grants access to all functionality
             if token.entitlements.contains(&"token".to_string()) {
                 return true;
             }
@@ -307,11 +284,10 @@ pub mod ssr {
             false
         }
 
-        /// Get all API tokens
         pub async fn get_all(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
         ) -> Result<Vec<ApiToken>, RepoError> {
-            let rows = sqlx::query_as!(
+            sqlx::query_as!(
                 ApiToken,
                 r#"
                 SELECT *
@@ -322,11 +298,9 @@ pub mod ssr {
             .fetch_all(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve all API tokens: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(rows)
+                error!("Failed to retrieve all API tokens: {err}");
+                RepoError::DatabaseError("Failed to retrieve API tokens".to_string())
+            })
         }
     }
 }

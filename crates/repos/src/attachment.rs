@@ -31,6 +31,7 @@ pub mod ssr {
     use super::{Attachment, NewAttachment};
     use crate::{QueryParams, Repo, error::RepoError};
     use sqlx::{Postgres, QueryBuilder};
+    use tracing::error;
 
     pub struct AttachmentRepo {}
 
@@ -39,7 +40,7 @@ pub mod ssr {
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             id: uuid::Uuid,
         ) -> Result<Option<Attachment>, RepoError> {
-            let row = sqlx::query_as!(
+            sqlx::query_as!(
                 Attachment,
                 r#"
                 SELECT *
@@ -51,11 +52,9 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve attachment {id}: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(row)
+                error!("Failed to retrieve attachment {id}: {err}");
+                RepoError::DatabaseError("Failed to retrieve attachment".to_string())
+            })
         }
 
         pub async fn get_all(
@@ -72,19 +71,19 @@ pub mod ssr {
 
             let query = builder.build_query_as();
 
-            let rows = query.fetch_all(executor).await.map_err(|err| {
-                let message = format!("Failed to retrieve all attachments: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(rows)
+            query.fetch_all(executor)
+                .await
+                .map_err(|err| {
+                    error!("Failed to retrieve all attachments: {err}");
+                    RepoError::DatabaseError("Failed to retrieve attachments".to_string())
+                })
         }
 
         pub async fn create(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             attachment: NewAttachment,
         ) -> Result<uuid::Uuid, RepoError> {
-            let crash_id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 INSERT INTO guardrail.attachments
                   (
@@ -109,18 +108,16 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to create attachment: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(crash_id)
+                error!("Failed to create attachment: {err}");
+                RepoError::DatabaseError("Failed to create attachment".to_string())
+            })
         }
 
         pub async fn update(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             attachment: Attachment,
         ) -> Result<Option<uuid::Uuid>, RepoError> {
-            let id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 UPDATE guardrail.attachments
                 SET name = $1, mime_type = $2, size = $3, filename = $4
@@ -136,11 +133,9 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to update attachment: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(id)
+                error!("Failed to update attachment {}: {err}", attachment.id);
+                RepoError::DatabaseError("Failed to update attachment".to_string())
+            })
         }
 
         pub async fn remove(
@@ -157,8 +152,8 @@ pub mod ssr {
             .execute(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to remove attachment: {err}");
-                RepoError::DatabaseError(message)
+                error!("Failed to remove attachment {id}: {err}");
+                RepoError::DatabaseError("Failed to remove attachment".to_string())
             })?;
 
             Ok(())
@@ -167,7 +162,7 @@ pub mod ssr {
         pub async fn count(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
         ) -> Result<i64, RepoError> {
-            let count = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 SELECT COUNT(*)
                 FROM guardrail.attachments
@@ -176,11 +171,10 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to count attachments: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(count.unwrap_or(0))
+                error!("Failed to count attachments: {err}");
+                RepoError::DatabaseError("Failed to count attachments".to_string())
+            })
+            .map(|count| count.unwrap_or(0))
         }
     }
 }

@@ -25,6 +25,7 @@ pub mod ssr {
     use crate::{Repo, error::RepoError};
     use sqlx::{Postgres, QueryBuilder};
     use std::collections::HashSet;
+    use tracing::error;
 
     pub struct UserRepo {}
 
@@ -33,7 +34,7 @@ pub mod ssr {
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             id: uuid::Uuid,
         ) -> Result<Option<User>, RepoError> {
-            let row = sqlx::query_as!(
+            sqlx::query_as!(
                 User,
                 r#"
                 SELECT *
@@ -45,40 +46,36 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve user {id}: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(row)
+                error!("Failed to retrieve user {id}: {err}");
+                RepoError::DatabaseError("Failed to retrieve user".to_string())
+            })
         }
 
         pub async fn get_by_name(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
-            email: &str,
+            username: &str,
         ) -> Result<Option<User>, RepoError> {
-            let row = sqlx::query_as!(
+            sqlx::query_as!(
                 User,
                 r#"
                 SELECT *
                 FROM guardrail.users
                 WHERE guardrail.users.username = $1
             "#,
-                email.to_string()
+                username.to_string()
             )
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve user by email: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(row)
+                error!("Failed to retrieve user by username {username}: {err}");
+                RepoError::DatabaseError("Failed to retrieve user by username".to_string())
+            })
         }
 
         pub async fn get_all_names(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
         ) -> Result<HashSet<String>, RepoError> {
-            let rows = sqlx::query!(
+            sqlx::query!(
                 r#"
                 SELECT username
                 FROM guardrail.users
@@ -87,21 +84,17 @@ pub mod ssr {
             .fetch_all(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve all user names: {err}");
-                RepoError::DatabaseError(message)
-            })?
-            .into_iter()
-            .map(|row| row.username)
-            .collect::<HashSet<String>>();
-
-            Ok(rows)
+                error!("Failed to retrieve all user names: {err}");
+                RepoError::DatabaseError("Failed to retrieve all user names".to_string())
+            })
+            .map(|rows| rows.into_iter().map(|row| row.username).collect::<HashSet<String>>())
         }
 
         pub async fn get_all(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             params: crate::QueryParams,
         ) -> Result<Vec<User>, RepoError> {
-            let mut builder = QueryBuilder::new("SELECT * from guardrail.products");
+            let mut builder = QueryBuilder::new("SELECT * from guardrail.users");
             Repo::build_query(
                 &mut builder,
                 &params,
@@ -111,12 +104,12 @@ pub mod ssr {
 
             let query = builder.build_query_as();
 
-            let rows = query.fetch_all(executor).await.map_err(|err| {
-                let message = format!("Failed to retrieve all products: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(rows)
+            query.fetch_all(executor)
+                .await
+                .map_err(|err| {
+                    error!("Failed to retrieve all users: {err}");
+                    RepoError::DatabaseError("Failed to retrieve users".to_string())
+                })
         }
 
         pub async fn create_with_id(
@@ -124,7 +117,7 @@ pub mod ssr {
             id: uuid::Uuid,
             username: &str,
         ) -> Result<uuid::Uuid, RepoError> {
-            let user_id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 INSERT INTO guardrail.users
                   (
@@ -142,18 +135,16 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to create user: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(user_id)
+                error!("Failed to create user with ID {id} and username {username}: {err}");
+                RepoError::DatabaseError("Failed to create user".to_string())
+            })
         }
 
         pub async fn create(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             user: NewUser,
         ) -> Result<uuid::Uuid, RepoError> {
-            let user_id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 INSERT INTO guardrail.users
                   (
@@ -169,18 +160,16 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to create user: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(user_id)
+                error!("Failed to create user with username {}: {err}", user.username);
+                RepoError::DatabaseError("Failed to create user".to_string())
+            })
         }
 
         pub async fn update(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             user: User,
         ) -> Result<Option<uuid::Uuid>, RepoError> {
-            let id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 UPDATE guardrail.users
                 SET username = $1, is_admin = $2
@@ -194,11 +183,9 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to update user: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(id)
+                error!("Failed to update user {}: {err}", user.id);
+                RepoError::DatabaseError("Failed to update user".to_string())
+            })
         }
 
         pub async fn remove(
@@ -215,8 +202,8 @@ pub mod ssr {
             .execute(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to users version: {err}");
-                RepoError::DatabaseError(message)
+                error!("Failed to remove user {id}: {err}");
+                RepoError::DatabaseError("Failed to remove user".to_string())
             })?;
 
             Ok(())
@@ -225,7 +212,7 @@ pub mod ssr {
         pub async fn count(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
         ) -> Result<i64, RepoError> {
-            let count = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 SELECT COUNT(*)
                 FROM guardrail.users
@@ -234,11 +221,10 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to count users: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(count.unwrap_or(0))
+                error!("Failed to count users: {err}");
+                RepoError::DatabaseError("Failed to count users".to_string())
+            })
+            .map(|count| count.unwrap_or(0))
         }
     }
 }

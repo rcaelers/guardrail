@@ -33,6 +33,7 @@ pub mod ssr {
     use super::{NewSymbols, Symbols};
     use crate::{QueryParams, Repo, error::RepoError};
     use sqlx::{Postgres, QueryBuilder};
+    use tracing::error;
 
     pub struct SymbolsRepo {}
 
@@ -41,7 +42,7 @@ pub mod ssr {
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             id: uuid::Uuid,
         ) -> Result<Option<Symbols>, RepoError> {
-            let row = sqlx::query_as!(
+            sqlx::query_as!(
                 Symbols,
                 r#"
                 SELECT *
@@ -53,11 +54,9 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve attachment {id}: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(row)
+                error!("Failed to retrieve symbols {id}: {err}");
+                RepoError::DatabaseError("Failed to retrieve symbols".to_string())
+            })
         }
 
         pub async fn get_all(
@@ -74,19 +73,19 @@ pub mod ssr {
 
             let query = builder.build_query_as();
 
-            let rows = query.fetch_all(executor).await.map_err(|err| {
-                let message = format!("Failed to retrieve all symbols: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(rows)
+             query.fetch_all(executor)
+                .await
+                .map_err(|err| {
+                    error!("Failed to retrieve all symbols: {err}");
+                    RepoError::DatabaseError("Failed to retrieve symbols".to_string())
+                })
         }
 
         pub async fn create(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
-            attachment: NewSymbols,
+            symbols: NewSymbols,
         ) -> Result<uuid::Uuid, RepoError> {
-            let crash_id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 INSERT INTO guardrail.symbols
                   (
@@ -102,50 +101,46 @@ pub mod ssr {
                 RETURNING
                   id
             "#,
-                attachment.os,
-                attachment.arch,
-                attachment.build_id,
-                attachment.module_id,
-                attachment.file_location,
-                attachment.product_id,
-                attachment.version_id
+                symbols.os,
+                symbols.arch,
+                symbols.build_id,
+                symbols.module_id,
+                symbols.file_location,
+                symbols.product_id,
+                symbols.version_id
             )
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to create attachment: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(crash_id)
+                error!("Failed to create symbols: {err}");
+                RepoError::DatabaseError("Failed to create symbols".to_string())
+            })
         }
 
         pub async fn update(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
-            attachment: Symbols,
+            symbols: Symbols,
         ) -> Result<Option<uuid::Uuid>, RepoError> {
-            let id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 UPDATE guardrail.symbols
                 SET os = $1, arch = $2, build_id = $3, module_id = $4, file_location = $5
                 WHERE id = $6
                 RETURNING id
             "#,
-                attachment.os,
-                attachment.arch,
-                attachment.build_id,
-                attachment.module_id,
-                attachment.file_location,
-                attachment.id
+                symbols.os,
+                symbols.arch,
+                symbols.build_id,
+                symbols.module_id,
+                symbols.file_location,
+                symbols.id
             )
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to update attachment: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(id)
+                error!("Failed to update symbols {}: {err}", symbols.id);
+                RepoError::DatabaseError("Failed to update symbols".to_string())
+            })
         }
 
         pub async fn remove(
@@ -162,8 +157,8 @@ pub mod ssr {
             .execute(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to remove attachment: {err}");
-                RepoError::DatabaseError(message)
+                error!("Failed to remove symbols {id}: {err}");
+                RepoError::DatabaseError("Failed to remove symbols".to_string())
             })?;
 
             Ok(())
@@ -172,7 +167,7 @@ pub mod ssr {
         pub async fn count(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
         ) -> Result<i64, RepoError> {
-            let count = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 SELECT COUNT(*)
                 FROM guardrail.symbols
@@ -181,11 +176,10 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to count symbols: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(count.unwrap_or(0))
+                error!("Failed to count symbols: {err}");
+                RepoError::DatabaseError("Failed to count symbols".to_string())
+            })
+            .map(|count| count.unwrap_or(0))
         }
     }
 }

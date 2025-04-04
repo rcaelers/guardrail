@@ -38,9 +38,9 @@ pub struct QueryParams {
 
 #[cfg(feature = "ssr")]
 pub mod ssr {
-
     use sqlx::{Executor, pool::PoolConnection};
     use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
+    use tracing::error;
 
     use crate::QueryParams;
     use crate::error::RepoError;
@@ -61,40 +61,65 @@ pub mod ssr {
             &self,
             conn: impl Executor<'_, Database = Postgres>,
             auth: &str,
-        ) -> Result<(), sqlx::Error> {
+        ) -> Result<(), RepoError> {
             sqlx::query("SELECT set_config('request.jwt.claims', json_build_object('username', $1::text)::text, false)")
                 .bind(auth)
                 .execute(conn)
-                .await?;
+                .await
+                .map_err(|err| RepoError::DatabaseError(format!("Failed to set config: {}", err)))?;
 
             Ok(())
         }
 
-        pub async fn begin_admin(&self) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
-            let mut transaction = self.pool.begin().await?;
-            self.set_config(&mut *transaction, ADMIN).await?;
-            Ok(transaction)
+        pub async fn begin_admin(&self) -> Result<Transaction<'static, Postgres>, RepoError> {
+            let mut transaction = self.pool.begin().await
+                .map_err(|err| RepoError::DatabaseError(format!("Failed to begin transaction: {}", err)))?;
+            match self.set_config(&mut *transaction, ADMIN).await {
+                Ok(_) => Ok(transaction),
+                Err(err) => {
+                    error!("Failed to set admin configuration: {err}");
+                    Err(err)
+                }
+            }
         }
 
-        pub async fn acquire_admin(&self) -> Result<PoolConnection<Postgres>, sqlx::Error> {
-            let mut con = self.pool.acquire().await?;
-            self.set_config(&mut *con, ADMIN).await?;
-            Ok(con)
+        pub async fn acquire_admin(&self) -> Result<PoolConnection<Postgres>, RepoError> {
+            let mut con = self.pool.acquire().await
+                .map_err(|err| RepoError::DatabaseError(format!("Failed to acquire connection: {}", err)))?;
+            match self.set_config(&mut *con, ADMIN).await {
+                Ok(_) => Ok(con),
+                Err(err) => {
+                    error!("Failed to acquire admin connection: {err}");
+                    Err(err)
+                }
+            }
         }
 
-        pub async fn acquire(&self, auth: &str) -> Result<PoolConnection<Postgres>, sqlx::Error> {
-            let mut con = self.pool.acquire().await?;
-            self.set_config(&mut *con, auth).await?;
-            Ok(con)
+        pub async fn acquire(&self, auth: &str) -> Result<PoolConnection<Postgres>, RepoError> {
+            let mut con = self.pool.acquire().await
+                .map_err(|err| RepoError::DatabaseError(format!("Failed to acquire connection: {}", err)))?;
+            match self.set_config(&mut *con, auth).await {
+                Ok(_) => Ok(con),
+                Err(err) => {
+                    error!("Failed to acquire connection for user {auth}: {err}");
+                    Err(err)
+                }
+            }
         }
 
         pub async fn begin(
             self,
             auth: &str,
-        ) -> Result<Transaction<'static, Postgres>, sqlx::Error> {
-            let mut transaction = self.pool.begin().await?;
-            self.set_config(&mut *transaction, auth).await?;
-            Ok(transaction)
+        ) -> Result<Transaction<'static, Postgres>, RepoError> {
+            let mut transaction = self.pool.begin().await
+                .map_err(|err| RepoError::DatabaseError(format!("Failed to begin transaction: {}", err)))?;
+            match self.set_config(&mut *transaction, auth).await {
+                Ok(_) => Ok(transaction),
+                Err(err) => {
+                    error!("Failed to begin transaction for user {auth}: {err}");
+                    Err(err)
+                }
+            }
         }
 
         pub fn build_query(
@@ -109,6 +134,7 @@ pub mod ssr {
 
                 for (col, col_sort) in &params.sorting {
                     if !allowed_columns.contains(&col.as_str()) {
+                        error!("Invalid column specified for sorting: {col}");
                         return Err(RepoError::InvalidColumn(col.clone()));
                     }
 
@@ -127,6 +153,7 @@ pub mod ssr {
 
             if let Some(filter) = &params.filter {
                 if filter_columns.is_empty() {
+                    error!("No filter columns specified but filter was provided");
                     return Err(RepoError::InvalidColumn(
                         "No filter columns specified".to_string(),
                     ));
@@ -136,6 +163,7 @@ pub mod ssr {
                 let mut separated = builder.separated(" OR ");
                 for &col in filter_columns {
                     if !allowed_columns.contains(&col) {
+                        error!("Invalid column specified for filtering: {col}");
                         return Err(RepoError::InvalidColumn(col.to_string()));
                     }
                     separated.push_unseparated(col);
@@ -151,5 +179,3 @@ pub mod ssr {
 
 #[cfg(feature = "ssr")]
 pub use ssr::*;
-
-//}}

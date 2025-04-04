@@ -28,6 +28,7 @@ pub mod ssr {
     use crate::{QueryParams, Repo, error::RepoError};
     use sqlx::{Postgres, QueryBuilder};
     use std::collections::HashSet;
+    use tracing::error;
 
     pub struct VersionRepo {}
 
@@ -36,7 +37,7 @@ pub mod ssr {
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             id: uuid::Uuid,
         ) -> Result<Option<Version>, RepoError> {
-            let row = sqlx::query_as!(
+            sqlx::query_as!(
                 Version,
                 r#"
                 SELECT *
@@ -48,11 +49,9 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve version {id}: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(row)
+                error!("Failed to retrieve version {id}: {err}");
+                RepoError::DatabaseError("Failed to retrieve version".to_string())
+            })
         }
 
         pub async fn get_by_product_and_name(
@@ -60,7 +59,7 @@ pub mod ssr {
             product_id: uuid::Uuid,
             name: &str,
         ) -> Result<Option<Version>, RepoError> {
-            let row = sqlx::query_as!(
+            sqlx::query_as!(
                 Version,
                 r#"
                 SELECT *
@@ -73,17 +72,15 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve version by email: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(row)
+                error!("Failed to retrieve version by name {name} for product {product_id}: {err}");
+                RepoError::DatabaseError("Failed to retrieve version by name".to_string())
+            })
         }
 
         pub async fn get_all_names(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
         ) -> Result<HashSet<String>, RepoError> {
-            let rows = sqlx::query!(
+            sqlx::query!(
                 r#"
                 SELECT name
                 FROM guardrail.versions
@@ -92,14 +89,10 @@ pub mod ssr {
             .fetch_all(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve all version names: {err}");
-                RepoError::DatabaseError(message)
-            })?
-            .into_iter()
-            .map(|row| row.name)
-            .collect::<HashSet<String>>();
-
-            Ok(rows)
+                error!("Failed to retrieve all version names: {err}");
+                RepoError::DatabaseError("Failed to retrieve all version names".to_string())
+            })
+            .map(|rows| rows.into_iter().map(|row| row.name).collect::<HashSet<String>>())
         }
 
         pub async fn get_all(
@@ -116,19 +109,19 @@ pub mod ssr {
 
             let query = builder.build_query_as();
 
-            let rows = query.fetch_all(executor).await.map_err(|err| {
-                let message = format!("Failed to retrieve all versions: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(rows)
+            query.fetch_all(executor)
+                .await
+                .map_err(|err| {
+                    error!("Failed to retrieve all versions: {err}");
+                    RepoError::DatabaseError("Failed to retrieve versions".to_string())
+                })
         }
 
         pub async fn create(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             version: NewVersion,
         ) -> Result<uuid::Uuid, RepoError> {
-            let version_id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 INSERT INTO guardrail.versions
                   (
@@ -149,18 +142,16 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to create version: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(version_id)
+                error!("Failed to create version: {err}");
+                RepoError::DatabaseError("Failed to create version".to_string())
+            })
         }
 
         pub async fn update(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             version: Version,
         ) -> Result<Option<uuid::Uuid>, RepoError> {
-            let id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 UPDATE guardrail.versions
                 SET name = $1, tag = $2, hash = $3, product_id = $4
@@ -176,11 +167,9 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to update version: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(id)
+                error!("Failed to update version {}: {err}", version.id);
+                RepoError::DatabaseError("Failed to update version".to_string())
+            })
         }
 
         pub async fn remove(
@@ -197,8 +186,8 @@ pub mod ssr {
             .execute(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to remove version: {err}");
-                RepoError::DatabaseError(message)
+                error!("Failed to remove version {id}: {err}");
+                RepoError::DatabaseError("Failed to remove version".to_string())
             })?;
 
             Ok(())
@@ -207,7 +196,7 @@ pub mod ssr {
         pub async fn count(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
         ) -> Result<i64, RepoError> {
-            let count = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 SELECT COUNT(*)
                 FROM guardrail.versions
@@ -216,11 +205,10 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to count versions: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(count.unwrap_or(0))
+                error!("Failed to count versions: {err}");
+                RepoError::DatabaseError("Failed to count versions".to_string())
+            })
+            .map(|count| count.unwrap_or(0))
         }
     }
 }

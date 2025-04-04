@@ -18,6 +18,7 @@ pub mod ssr {
     use super::Credential;
     use crate::error::RepoError;
     use sqlx::Postgres;
+    use tracing::error;
 
     pub struct CredentialRepo {}
 
@@ -26,7 +27,7 @@ pub mod ssr {
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             id: uuid::Uuid,
         ) -> Result<Option<Credential>, RepoError> {
-            let row = sqlx::query_as!(
+            sqlx::query_as!(
                 Credential,
                 r#"
                 SELECT *
@@ -38,18 +39,16 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve credential {id}: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(row)
+                error!("Failed to retrieve credential {id}: {err}");
+                RepoError::DatabaseError("Failed to retrieve credential".to_string())
+            })
         }
 
         pub async fn get_all_by_user_id(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             user_id: uuid::Uuid,
         ) -> Result<Vec<Credential>, RepoError> {
-            let rows = sqlx::query_as!(
+            sqlx::query_as!(
                 Credential,
                 r#"
                 SELECT *
@@ -61,18 +60,16 @@ pub mod ssr {
             .fetch_all(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve credential by user_id: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(rows)
+                error!("Failed to retrieve credentials for user {user_id}: {err}");
+                RepoError::DatabaseError("Failed to retrieve credentials for user".to_string())
+            })
         }
 
         pub async fn get_all_by_name(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             name: &str,
         ) -> Result<Vec<Credential>, RepoError> {
-            let rows = sqlx::query_as!(
+            sqlx::query_as!(
                 Credential,
                 r#"
                 SELECT *
@@ -84,11 +81,9 @@ pub mod ssr {
             .fetch_all(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve credential by name: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(rows)
+                error!("Failed to retrieve credentials by name {name}: {err}");
+                RepoError::DatabaseError("Failed to retrieve credentials by name".to_string())
+            })
         }
 
         pub async fn create(
@@ -96,7 +91,7 @@ pub mod ssr {
             user_id: uuid::Uuid,
             data: serde_json::Value,
         ) -> Result<uuid::Uuid, RepoError> {
-            let credential_id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 INSERT INTO guardrail.credentials
                   (
@@ -116,11 +111,9 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to create credential: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(credential_id)
+                error!("Failed to create credential for user {user_id}: {err}");
+                RepoError::DatabaseError("Failed to create credential".to_string())
+            })
         }
 
         pub async fn update_data(
@@ -128,7 +121,7 @@ pub mod ssr {
             id: uuid::Uuid,
             data: serde_json::Value,
         ) -> Result<Option<uuid::Uuid>, RepoError> {
-            let id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 UPDATE guardrail.credentials
                 SET data = $1, last_used = $2
@@ -142,11 +135,9 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to update credential: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(id)
+                error!("Failed to update credential {id}: {err}");
+                RepoError::DatabaseError("Failed to update credential".to_string())
+            })
         }
     }
 }

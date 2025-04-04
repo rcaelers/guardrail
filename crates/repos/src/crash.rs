@@ -15,7 +15,7 @@ pub struct Crash {
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
-pub struct  NewCrash {
+pub struct NewCrash {
     pub summary: String,
     pub report: serde_json::Value,
     pub version_id: uuid::Uuid,
@@ -27,6 +27,7 @@ pub mod ssr {
     use super::{Crash, NewCrash};
     use crate::{QueryParams, Repo, error::RepoError};
     use sqlx::{Postgres, QueryBuilder};
+    use tracing::error;
 
     pub struct CrashRepo {}
 
@@ -35,7 +36,7 @@ pub mod ssr {
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             id: uuid::Uuid,
         ) -> Result<Option<Crash>, RepoError> {
-            let row = sqlx::query_as!(
+            sqlx::query_as!(
                 Crash,
                 r#"
                 SELECT *
@@ -47,11 +48,9 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to retrieve crash {id}: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(row)
+                error!("Failed to retrieve crash {id}: {err}");
+                RepoError::DatabaseError("Failed to retrieve crash".to_string())
+            })
         }
 
         pub async fn get_all(
@@ -68,19 +67,17 @@ pub mod ssr {
 
             let query = builder.build_query_as();
 
-            let rows = query.fetch_all(executor).await.map_err(|err| {
-                let message = format!("Failed to retrieve all crashes: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(rows)
+            query.fetch_all(executor).await.map_err(|err| {
+                error!("Failed to retrieve all crashes: {err}");
+                RepoError::DatabaseError("Failed to retrieve crashes".to_string())
+            })
         }
 
         pub async fn create(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             crash: NewCrash,
         ) -> Result<uuid::Uuid, RepoError> {
-            let crash_id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 INSERT INTO guardrail.crashes
                   (
@@ -101,18 +98,16 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to create crash: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(crash_id)
+                error!("Failed to create crash: {err}");
+                RepoError::DatabaseError("Failed to create crash".to_string())
+            })
         }
 
         pub async fn update(
             executor: impl sqlx::Executor<'_, Database = Postgres>,
             crash: Crash,
         ) -> Result<Option<uuid::Uuid>, RepoError> {
-            let id = sqlx::query_scalar!(
+            sqlx::query_scalar!(
                 r#"
                 UPDATE guardrail.crashes
                 SET summary = $1, report = $2, version_id = $3, product_id = $4
@@ -128,11 +123,9 @@ pub mod ssr {
             .fetch_optional(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to update crash: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(id)
+                error!("Failed to update crash {}: {err}", crash.id);
+                RepoError::DatabaseError("Failed to update crash".to_string())
+            })
         }
 
         pub async fn remove(
@@ -149,15 +142,17 @@ pub mod ssr {
             .execute(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to remove crash: {err}");
-                RepoError::DatabaseError(message)
+                error!("Failed to remove crash {id}: {err}");
+                RepoError::DatabaseError("Failed to remove crash".to_string())
             })?;
 
             Ok(())
         }
 
-        pub async fn count(executor: impl sqlx::Executor<'_, Database = Postgres>) -> Result<i64, RepoError> {
-            let count = sqlx::query_scalar!(
+        pub async fn count(
+            executor: impl sqlx::Executor<'_, Database = Postgres>,
+        ) -> Result<i64, RepoError> {
+            sqlx::query_scalar!(
                 r#"
                 SELECT COUNT(*)
                 FROM guardrail.crashes
@@ -166,11 +161,10 @@ pub mod ssr {
             .fetch_one(executor)
             .await
             .map_err(|err| {
-                let message = format!("Failed to count crashes: {err}");
-                RepoError::DatabaseError(message)
-            })?;
-
-            Ok(count.unwrap_or(0))
+                error!("Failed to count crashes: {err}");
+                RepoError::DatabaseError("Failed to count crashes".to_string())
+            })
+            .map(|count| count.unwrap_or(0))
         }
     }
 }
