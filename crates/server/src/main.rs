@@ -59,6 +59,8 @@ async fn init_logging() {
         .with(fmt::Layer::new().with_writer(non_blocking));
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+    tracing_log::LogTracer::init().expect("Failed to set logger");
 }
 
 fn create_webauthn() -> Arc<Webauthn> {

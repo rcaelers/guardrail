@@ -41,6 +41,7 @@ argon2.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tracing-appender.workspace = true
+tracing-log.workspace = true
 
 # Minidump processing
 minidump.workspace = true
