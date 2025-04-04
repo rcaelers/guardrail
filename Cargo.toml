@@ -53,7 +53,7 @@ tower = { version = "0.5.2", features = ["full"] }
 tower-http = { version = "0.6.2", features = ["full"] }
 tower-sessions = "0.14.0"
 #tower-sessions-sqlx-store = { version = "0.14.2", features = ["postgres"] }
-axum = { version = "0.8.1", features = [
+axum = { version = "0.8.3", features = [
   "form",
   "query",
   "macros",
@@ -73,6 +73,7 @@ tracing-subscriber = { version = "0.3.19", features = [
 ] }
 tracing-appender = "0.2"
 tracing-subscriber-wasm = "0.1.0"
+tracing-log = "0.2.0"
 
 # SQLX
 sqlx = { version = "0.8.3", features = [
@@ -90,7 +91,7 @@ minidump-processor = { version = "0.25.0" }
 minidump-unwind = { version = "0.25.0", features = ["http"] }
 
 # Misc
-argon2 = "0.5.2"
+argon2 = "0.5.3"
 async-trait = "0.1.88"
 cfg-if = "1"
 chrono = { version = "0.4.40", features = ["serde"] }
@@ -129,7 +130,7 @@ dyn-clone = "1.0.19"
 # ] }
 
 # Dev dependencies
-axum-test = "17.2.0"
+axum-test = "17.3.0"
 serial_test = "3.2.0"
 
 [[workspace.metadata.leptos]]
