@@ -20,6 +20,7 @@ use rand::{Rng, distr::Alphanumeric, rng};
 use tokio::fs::File;
 use tokio::io::{self, BufWriter};
 use tokio_util::io::StreamReader;
+use tracing::error;
 
 use error::ApiError;
 
@@ -59,15 +60,19 @@ where
     E: Into<BoxError>,
 {
     async {
-        let body_with_io_error = stream.map_err(|err| io::Error::new(io::ErrorKind::Other, err));
+        let body_with_io_error = stream.map_err(io::Error::other);
         let body_reader = StreamReader::new(body_with_io_error);
         futures::pin_mut!(body_reader);
 
-        let mut file = BufWriter::new(File::create(path).await?);
+        let file = File::create(path).await.map_err(|e| {
+            error!("failed to create file {:?}: {:?}", path, e);
+            ApiError::InternalFailure()
+        })?;
+        let mut file = BufWriter::new(file);
         let _r = tokio::io::copy(&mut body_reader, &mut file).await;
 
         Ok::<(), ApiError>(())
     }
     .await
-    .map_err(|_err| (ApiError::Failure))
+    .map_err(|_err| (ApiError::InternalFailure()))
 }

@@ -1,5 +1,4 @@
-use super::error::AuthError;
-use crate::app_state::AppState;
+use crate::{api::error::ApiError, app_state::AppState};
 use axum::{
     extract::{Extension, State},
     response::IntoResponse,
@@ -26,7 +25,7 @@ pub struct JwtClaims {
 pub async fn generate_jwt_token(
     State(state): State<AppState>,
     Extension(api_token): Extension<ApiToken>,
-) -> Result<impl IntoResponse, AuthError> {
+) -> Result<impl IntoResponse, ApiError> {
     let expiration = Utc::now() + Duration::minutes(settings().auth.jwk.token_validity_in_minutes);
     let expiration_timestamp = expiration.timestamp();
 
@@ -34,7 +33,7 @@ pub async fn generate_jwt_token(
         Ok(conn) => conn,
         Err(err) => {
             error!("Failed to get database connection: {}", err);
-            return Err(AuthError::Failure);
+            return Err(ApiError::InternalFailure());
         }
     };
 
@@ -43,11 +42,11 @@ pub async fn generate_jwt_token(
             Ok(Some(user)) => user.username,
             Ok(None) => {
                 error!("User not found for API token: {}", api_token.id);
-                return Err(AuthError::UserNotFound);
+                return Err(ApiError::Failure("invalid API token".to_string()));
             }
             Err(err) => {
                 error!("Failed to retrieve user: {}", err);
-                return Err(AuthError::Failure);
+                return Err(ApiError::Failure("invalid API token".to_string()));
             }
         }
     } else {
@@ -70,7 +69,7 @@ pub async fn generate_jwt_token(
         Ok(key) => key,
         Err(err) => {
             error!("Failed to read private key: {}", err);
-            return Err(AuthError::Failure);
+            return Err(ApiError::InternalFailure());
         }
     };
 
@@ -78,7 +77,7 @@ pub async fn generate_jwt_token(
         Ok(key) => key,
         Err(err) => {
             error!("Failed to create encoding key: {}", err);
-            return Err(AuthError::Failure);
+            return Err(ApiError::InternalFailure());
         }
     };
 
@@ -88,7 +87,7 @@ pub async fn generate_jwt_token(
         Ok(t) => t,
         Err(err) => {
             error!("Failed to encode JWT token: {}", err);
-            return Err(AuthError::Failure);
+            return Err(ApiError::InternalFailure());
         }
     };
 

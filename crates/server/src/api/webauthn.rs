@@ -1,5 +1,4 @@
-use super::error::AuthError;
-use crate::app_state::AppState;
+use crate::{api::error::ApiError, app_state::AppState};
 use app::auth::AuthenticatedUser;
 use axum::{
     extract::{Json, Path, State},
@@ -13,6 +12,7 @@ use repos::{
 use serde::{Deserialize, Serialize};
 use sqlx::Postgres;
 use tower_sessions::Session;
+use tracing::error;
 use webauthn_rs::prelude::*;
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -40,7 +40,7 @@ pub async fn start_register(
     State(state): State<AppState>,
     session: Session,
     Path(username): Path<String>,
-) -> Result<impl IntoResponse, AuthError> {
+) -> Result<impl IntoResponse, ApiError> {
     session.remove_value("passkey_registration_state").await?;
 
     let mut tx = state.repo.begin_admin().await?;
@@ -52,7 +52,11 @@ pub async fn start_register(
         .await?
         .iter()
         .map(|record| serde_json::from_value::<Passkey>(record.data.clone()))
-        .collect::<Result<Vec<Passkey>, _>>()?
+        .collect::<Result<Vec<Passkey>, _>>()
+        .map_err(|e| {
+            error!("failed to deserialize passkey: {:?}", e);
+            ApiError::InternalFailure()
+        })?
         .iter()
         .map(|passkey| passkey.cred_id().clone())
         .collect::<Vec<_>>();
@@ -72,7 +76,11 @@ pub async fn start_register(
         )
         .await?;
 
-    tx.commit().await?;
+    tx.commit().await.map_err(|e| {
+        error!("failed to commit transaction: {:?}", e);
+        ApiError::InternalFailure()
+    })?;
+
     Ok(Json(creation_challenge_response))
 }
 
@@ -80,11 +88,11 @@ pub async fn finish_register(
     State(state): State<AppState>,
     session: Session,
     Json(reg): Json<RegisterPublicKeyCredential>,
-) -> Result<impl IntoResponse, AuthError> {
+) -> Result<impl IntoResponse, ApiError> {
     let registration_state = session
         .get::<RegistrationState>("passkey_registration_state")
         .await?
-        .ok_or(AuthError::CorruptSession)?;
+        .ok_or(ApiError::CorruptSession)?;
     session.remove_value("passkey_registration_state").await?;
 
     let mut tx = state.repo.begin_admin().await?;
@@ -107,11 +115,17 @@ pub async fn finish_register(
     CredentialRepo::create(
         &mut *tx,
         registration_state.user_unique_id,
-        serde_json::to_value(&passkey)?,
+        serde_json::to_value(&passkey).map_err(|e| {
+            error!("failed to serialize passkey: {:?}", e);
+            ApiError::InternalFailure()
+        })?,
     )
     .await?;
 
-    tx.commit().await?;
+    tx.commit().await.map_err(|e| {
+        error!("failed to commit transaction: {:?}", e);
+        ApiError::InternalFailure()
+    })?;
     Ok(StatusCode::OK)
 }
 
@@ -119,7 +133,7 @@ pub async fn start_authentication(
     State(state): State<AppState>,
     session: Session,
     Path(username): Path<String>,
-) -> Result<impl IntoResponse, AuthError> {
+) -> Result<impl IntoResponse, ApiError> {
     session.remove_value("auth_state").await?;
 
     let mut tx = state.repo.begin_admin().await?;
@@ -127,15 +141,19 @@ pub async fn start_authentication(
     let user_unique_id = UserRepo::get_by_name(&mut *tx, username.as_str())
         .await?
         .map(|record| record.id)
-        .ok_or(AuthError::UserNotFound)?;
+        .ok_or(ApiError::UserNotFound(username))?;
 
     let allow_credentials = CredentialRepo::get_all_by_user_id(&mut *tx, user_unique_id)
         .await?
         .iter()
         .map(|record| serde_json::from_value::<Passkey>(record.data.clone()))
-        .collect::<Result<Vec<Passkey>, _>>()?;
+        .collect::<Result<Vec<Passkey>, _>>()
+        .map_err(|e| {
+            error!("failed to deserialize passkey: {:?}", e);
+            ApiError::InternalFailure()
+        })?;
 
-    // TODO AuthError::UserHasNoCredentials
+    // TODO ApiError::UserHasNoCredentials
 
     let (request_challenge_response, passkey_authentication) = state
         .webauthn
@@ -145,7 +163,11 @@ pub async fn start_authentication(
         .insert("authentication_state", (user_unique_id, passkey_authentication))
         .await?;
 
-    tx.commit().await?;
+    tx.commit().await.map_err(|e| {
+        error!("failed to commit transaction: {:?}", e);
+        ApiError::InternalFailure()
+    })?;
+
     Ok(Json(request_challenge_response))
 }
 
@@ -153,11 +175,11 @@ pub async fn finish_authentication(
     State(state): State<AppState>,
     session: Session,
     Json(auth): Json<PublicKeyCredential>,
-) -> Result<impl IntoResponse, AuthError> {
+) -> Result<impl IntoResponse, ApiError> {
     let (user_unique_id, auth_state): (Uuid, PasskeyAuthentication) = session
         .get("authentication_state")
         .await?
-        .ok_or(AuthError::CorruptSession)?;
+        .ok_or(ApiError::CorruptSession)?;
     session.remove_value("authentication_state").await?;
 
     let authentication_result = state
@@ -170,21 +192,25 @@ pub async fn finish_authentication(
 
     let user = UserRepo::get_by_id(&mut *tx, user_unique_id)
         .await?
-        .ok_or(AuthError::UserNotFound)?;
+        .ok_or(ApiError::CorruptSession)?;
 
     let authenticated_user = AuthenticatedUser::new(user.id, user.username, user.is_admin);
     session
         .insert("authenticated_user", authenticated_user)
         .await?;
 
-    tx.commit().await?;
+    tx.commit().await.map_err(|e| {
+        error!("failed to commit transaction: {:?}", e);
+        ApiError::InternalFailure()
+    })?;
+
     Ok(StatusCode::OK)
 }
 
 async fn get_user_unique_id(
     user_query: Option<User>,
     session: &Session,
-) -> Result<uuid::Uuid, AuthError> {
+) -> Result<uuid::Uuid, ApiError> {
     if let Some(user) = user_query {
         let authenticated_user = session
             .get::<AuthenticatedUser>("authenticated_user")
@@ -194,7 +220,7 @@ async fn get_user_unique_id(
                 return Ok(user.id);
             }
         }
-        return Err(AuthError::UserAlreadyExists);
+        return Err(ApiError::UserAlreadyExists(user.username));
     }
     Ok(Uuid::new_v4())
 }
@@ -203,18 +229,28 @@ pub async fn update_passkeys<E>(
     tx: &mut E,
     user_unique_id: Uuid,
     auth_result: AuthenticationResult,
-) -> Result<(), AuthError>
+) -> Result<(), ApiError>
 where
     for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
 {
     let credentials = CredentialRepo::get_all_by_user_id(&mut *tx, user_unique_id).await?;
     for cred in credentials {
-        let mut passkey = serde_json::from_value::<Passkey>(cred.data.clone())?;
+        let mut passkey = serde_json::from_value::<Passkey>(cred.data.clone()).map_err(|e| {
+            error!("failed to deserialize passkey: {:?}", e);
+            ApiError::InternalFailure()
+        })?;
         let updated = passkey.update_credential(&auth_result);
         if let Some(updated) = updated {
             if updated {
-                CredentialRepo::update_data(&mut *tx, cred.id, serde_json::to_value(&passkey)?)
-                    .await?;
+                CredentialRepo::update_data(
+                    &mut *tx,
+                    cred.id,
+                    serde_json::to_value(&passkey).map_err(|e| {
+                        error!("failed to serialize passkey: {:?}", e);
+                        ApiError::InternalFailure()
+                    })?,
+                )
+                .await?;
             }
         }
     }

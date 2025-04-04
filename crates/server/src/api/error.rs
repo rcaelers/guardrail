@@ -6,17 +6,16 @@ use axum::{
 };
 use minidump_processor::ProcessError;
 use thiserror::Error;
-use tracing::{error, warn};
+use tracing::error;
 use webauthn_rs::prelude::WebauthnError;
 
 #[derive(Error, Debug)]
 pub enum ApiError {
-    // Original API errors
-    #[error("general failure")]
-    Failure,
+    #[error("internal failure")]
+    InternalFailure(),
 
-    #[error("database error: `{0}`")]
-    DatabaseError(#[from] sqlx::Error),
+    #[error("general failure")]
+    Failure(String),
 
     #[error("database error: `{0}`")]
     RepoError(#[from] repos::error::RepoError),
@@ -27,105 +26,73 @@ pub enum ApiError {
     #[error("failed to process minidump: `{0}`")]
     MinidumpProcessError(#[from] ProcessError),
 
-    #[error("io-error: `{0}`")]
-    IOError(#[from] std::io::Error),
+    #[error("Product {0} not found")]
+    ProductNotFound(String),
 
-    #[error("json error: `{0}`")]
-    JsonError(#[from] serde_json::Error),
+    #[error("Version {1} for product {0} not found")]
+    VersionNotFound(String, String),
 
-    #[error("failed to process multipart request: `{0}`")]
-    MultiPartError(#[from] MultipartError),
+    #[error("Crash not found")]
+    CrashNotFound(),
 
-    #[error("thread: `{0}`")]
-    JoinError(#[from] tokio::task::JoinError),
+    #[error("User {0} not found")]
+    UserNotFound(String),
 
-    // Auth-related errors merged from AuthError
+    #[error("User {0} already exists")]
+    UserAlreadyExists(String),
+
     #[error("Corrupt session")]
     CorruptSession,
-
-    #[error("User not found")]
-    UserNotFound,
-
-    #[error("User already exists")]
-    UserAlreadyExists,
 
     #[error("Deserialising session failed: {0}")]
     InvalidSessionState(#[from] tower_sessions::session::Error),
 
     #[error("Webauthn error: `{0}`")]
     WebauthnError(#[from] WebauthnError),
-
-    // #[error("Invalid login credentials")]
-    // InvalidCredentials,
 }
-
-// Also define AuthError as a type alias to ApiError for backward compatibility
-pub type AuthError = ApiError;
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let (status, error_message) = match &self {
-            // Original API error handling
-            ApiError::Failure => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "general failure".to_owned(),
-            ),
-            ApiError::DatabaseError(err) => handle_database_error(err),
+            ApiError::InternalFailure() => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "internal failure".to_string())
+            }
+            ApiError::Failure(err) => {
+                (StatusCode::BAD_REQUEST, format!("general failure : {}", err))
+            }
             ApiError::RepoError(err) => (StatusCode::BAD_REQUEST, err.to_string()),
             ApiError::MinidumpError(err) => (StatusCode::BAD_REQUEST, err.to_string()),
-            ApiError::IOError(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
-            ApiError::MultiPartError(err) => (StatusCode::BAD_REQUEST, err.to_string()),
-            ApiError::JoinError(err) => (StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
-            ApiError::JsonError(err) => (StatusCode::BAD_REQUEST, format!("invalid JSON: {}", err)),
             ApiError::MinidumpProcessError(err) => (StatusCode::BAD_REQUEST, err.to_string()),
-
-            // Auth error handling
-            ApiError::UserNotFound => (StatusCode::BAD_REQUEST, "User not found".to_string()),
-            ApiError::UserAlreadyExists => (StatusCode::BAD_REQUEST, "User already exists".to_string()),
-            ApiError::CorruptSession => (StatusCode::INTERNAL_SERVER_ERROR, "Corrupt Session".to_string()),
-            ApiError::InvalidSessionState(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Invalid Session State: {}", err),
+            ApiError::UserNotFound(user) => {
+                (StatusCode::BAD_REQUEST, format!("User {} not found", user))
+            }
+            ApiError::UserAlreadyExists(user) => {
+                (StatusCode::BAD_REQUEST, format!("User {} already exists", user))
+            }
+            ApiError::CorruptSession => {
+                (StatusCode::INTERNAL_SERVER_ERROR, "Corrupt Session".to_string())
+            }
+            ApiError::InvalidSessionState(err) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, format!("Invalid Session State: {}", err))
+            }
+            ApiError::WebauthnError(err) => {
+                (StatusCode::INTERNAL_SERVER_ERROR, format!("Webauthn Error: {}", err))
+            }
+            ApiError::ProductNotFound(product) => {
+                (StatusCode::BAD_REQUEST, format!("Product {} not found", product))
+            }
+            ApiError::VersionNotFound(product, version) => (
+                StatusCode::BAD_REQUEST,
+                format!("Version {} of product {} not found", product, version),
             ),
-            ApiError::WebauthnError(err) => (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Webauthn Error: {}", err),
-            ),
-            // ApiError::InvalidCredentials => (StatusCode::UNAUTHORIZED, "Invalid credentials".to_string()),
+            ApiError::CrashNotFound() => (StatusCode::BAD_REQUEST, "Crash not found".to_string()),
         };
 
-        // Different response format for auth errors vs API errors
-        if matches!(self,
-            ApiError::UserNotFound |
-            ApiError::UserAlreadyExists |
-            ApiError::CorruptSession |
-            ApiError::InvalidSessionState(_) |
-            ApiError::WebauthnError(_)
-            // ApiError::InvalidCredentials
-        ) {
-            // Log internal server errors but return generic message to client
-            if status == StatusCode::INTERNAL_SERVER_ERROR {
-                error!("Internal Server Error: {}", error_message);
-                (StatusCode::INTERNAL_SERVER_ERROR, "internal server error").into_response()
-            } else {
-                warn!("Auth Error: {}", error_message);
-                (status, error_message).into_response()
-            }
-        } else {
-            // Original API error response format
-            let body = Json(serde_json::json!({
-                "result": "failed",
-                "error": error_message,
-            }));
+        let body = Json(serde_json::json!({
+            "result": "failed",
+            "error": error_message,
+        }));
 
-            (status, body).into_response()
-        }
-    }
-}
-
-fn handle_database_error(err: &sqlx::Error) -> (StatusCode, String) {
-    match err {
-        sqlx::Error::RowNotFound => (StatusCode::NOT_FOUND, "record not found".to_string()),
-        _ => (StatusCode::BAD_REQUEST, err.to_string()),
+        (status, body).into_response()
     }
 }
