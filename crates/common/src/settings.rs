@@ -12,6 +12,9 @@ pub struct Server {
     pub port: u16,
     pub base_path: String,
     pub site: String,
+    pub max_minidump_size: Option<u64>,
+    pub max_attachment_size: Option<u64>,
+    pub max_symbols_size: Option<u64>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -29,7 +32,6 @@ pub struct Jwk {
     pub public_key: String,
     pub private_key: String,
 }
-
 
 #[derive(Debug, Deserialize, Default)]
 pub struct Logger {

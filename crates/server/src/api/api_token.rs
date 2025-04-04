@@ -121,7 +121,6 @@ where
                 }
             };
 
-            // Get all active tokens
             let tokens = match ApiTokenRepo::get_all(&mut *conn).await {
                 Ok(tokens) => tokens
                     .into_iter()
@@ -137,7 +136,6 @@ where
                 }
             };
 
-            // Find the token that verifies with our provided token string
             let mut valid_token = None;
             for token in tokens {
                 match verify_token(&token_str, &token.token_hash) {
@@ -176,7 +174,6 @@ where
                 error!("Failed to update last_used_at: {}", err);
             }
 
-            // Log appropriate message depending on what fields are available
             if let Some(product_id) = api_token.product_id {
                 if let Some(user_id) = api_token.user_id {
                     info!(

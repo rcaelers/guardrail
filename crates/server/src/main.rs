@@ -132,7 +132,7 @@ async fn ensure_default_api_token(repo: &Repo) -> Result<(), Box<dyn std::error:
     }
 
     let token = &settings().auth.initial_admin_token;
-    let token_hash = hash_token(&token).map_err(|_| "Failed to hash token")?;
+    let token_hash = hash_token(token).map_err(|_| "Failed to hash token")?;
 
     let new_token = NewApiToken {
         description: "Default API token".to_string(),

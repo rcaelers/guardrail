@@ -1,6 +1,5 @@
 use axum::{
     Json,
-    extract::multipart::MultipartError,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
