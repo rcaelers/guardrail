@@ -19,7 +19,8 @@ tracing.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 chrono.workspace = true
+argon2 = { version = "0.5", optional = true }
 
 [features]
 default = []
-ssr = ["dep:sqlx"]
+ssr = ["dep:sqlx", "dep:argon2"]

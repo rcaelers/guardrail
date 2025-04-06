@@ -87,7 +87,11 @@ pub mod ssr {
                 error!("Failed to retrieve all user names: {err}");
                 RepoError::DatabaseError("Failed to retrieve all user names".to_string())
             })
-            .map(|rows| rows.into_iter().map(|row| row.username).collect::<HashSet<String>>())
+            .map(|rows| {
+                rows.into_iter()
+                    .map(|row| row.username)
+                    .collect::<HashSet<String>>()
+            })
         }
 
         pub async fn get_all(
@@ -104,12 +108,10 @@ pub mod ssr {
 
             let query = builder.build_query_as();
 
-            query.fetch_all(executor)
-                .await
-                .map_err(|err| {
-                    error!("Failed to retrieve all users: {err}");
-                    RepoError::DatabaseError("Failed to retrieve users".to_string())
-                })
+            query.fetch_all(executor).await.map_err(|err| {
+                error!("Failed to retrieve all users: {err}");
+                RepoError::DatabaseError("Failed to retrieve users".to_string())
+            })
         }
 
         pub async fn create_with_id(

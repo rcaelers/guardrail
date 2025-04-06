@@ -118,7 +118,7 @@ uuid = { version = "1.16.0", features = [
 ] }
 jwt-authorizer = "0.15.0"
 jsonwebtoken = "9.3.1"
-indexmap = "2.8.0"
+indexmap = "2.9.0"
 itertools = "0.14.0"
 dyn-clone = "1.0.19"
 
@@ -132,6 +132,7 @@ dyn-clone = "1.0.19"
 # Dev dependencies
 axum-test = "17.3.0"
 serial_test = "3.2.0"
+mockall = "0.13.1"
 
 [[workspace.metadata.leptos]]
 # this name is used for the wasm, js and css file names

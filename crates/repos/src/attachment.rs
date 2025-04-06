@@ -71,12 +71,10 @@ pub mod ssr {
 
             let query = builder.build_query_as();
 
-            query.fetch_all(executor)
-                .await
-                .map_err(|err| {
-                    error!("Failed to retrieve all attachments: {err}");
-                    RepoError::DatabaseError("Failed to retrieve attachments".to_string())
-                })
+            query.fetch_all(executor).await.map_err(|err| {
+                error!("Failed to retrieve all attachments: {err}");
+                RepoError::DatabaseError("Failed to retrieve attachments".to_string())
+            })
         }
 
         pub async fn create(

@@ -70,3 +70,5 @@ log.workspace = true
 [dev-dependencies]
 axum-test.workspace = true
 serial_test.workspace = true
+mockall.workspace = true
+

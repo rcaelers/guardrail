@@ -207,7 +207,7 @@ CREATE TABLE guardrail.annotations (
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     key TEXT NOT NULL,
-    kind TEXT CHECK (
+    kind TEXT NOT NULL CHECK (
         kind IN ('system', 'user')
     ),
     value TEXT NOT NULL,
