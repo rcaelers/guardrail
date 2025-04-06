@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE guardrail.api_tokens\n                SET last_used_at = now()\n                WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8b7c3f38c4cfbfb15eeb5250075ce8686a0a6d97db3e14f60ad1e1f9f953a219"
+}
