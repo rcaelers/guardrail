@@ -34,8 +34,10 @@ fn test_query_params_with_sorting() {
 
 #[test]
 fn test_query_params_with_range() {
-    let mut params = QueryParams::default();
-    params.range = Some(5..15);
+    let params = QueryParams {
+        range: Some(5..15),
+        ..QueryParams::default()
+    };
 
     assert!(params.range.is_some());
     let range = params.range.as_ref().unwrap();
@@ -45,8 +47,10 @@ fn test_query_params_with_range() {
 
 #[test]
 fn test_query_params_with_filter() {
-    let mut params = QueryParams::default();
-    params.filter = Some("test filter".to_string());
+    let params = QueryParams {
+        filter: Some("test filter".to_string()),
+        ..QueryParams::default()
+    };
 
     assert!(params.filter.is_some());
     assert_eq!(params.filter.as_ref().unwrap(), "test filter");

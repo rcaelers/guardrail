@@ -150,8 +150,7 @@ fn test_build_query_with_filter_sorting_and_range() {
     let params = QueryParams {
         filter: Some("test".to_string()),
         sorting,
-        range: Some(0..10),
-        ..Default::default()
+        range: Some(0..10)
     };
 
     let allowed_columns = &["name", "description"];

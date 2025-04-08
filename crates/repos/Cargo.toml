@@ -24,3 +24,6 @@ argon2 = { version = "0.5", optional = true }
 [features]
 default = []
 ssr = ["dep:sqlx", "dep:argon2"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage,coverage_nightly)'] }

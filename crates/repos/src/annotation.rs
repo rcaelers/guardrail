@@ -235,7 +235,5 @@ pub mod ssr {
                 RepoError::DatabaseError("Failed to retrieve annotations by crash ID".to_string())
             })
         }
-
-
     }
 }
