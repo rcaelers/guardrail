@@ -14,7 +14,7 @@ opt-level = 'z'
 # leptos_meta = { path = "../leptos/meta" }
 # leptos_router = { path = "../leptos/router" }
 # leptos_axum = { path = "../leptos/integrations/axum" }
-leptos-struct-table = { path = "../leptos-struct-table" }
+# leptos-struct-table = { path = "../leptos-struct-table" }
 
 [workspace.dependencies]
 # Leptos
@@ -23,7 +23,7 @@ leptos_meta = { version = "0.8.0-beta" }
 leptos_router = { version = "0.8.0-beta", features = ["nightly"] }
 leptos_axum = { version = "0.8.0-beta" }
 leptos-use = { version = "0.16.0-beta" }
-leptos-struct-table = { version = "0.14.0-beta2", features = [
+leptos-struct-table = { git = "https://github.com/rcaelers/leptos-struct-table.git", branch = "leptos-0.8", features = [
   "chrono",
   "uuid",
 ] }

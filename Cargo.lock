@@ -93,6 +93,49 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d301b3b94cb4b2f23d7917810addbbaff90738e0ca2be692bd027e70d7e0330c"
 
 [[package]]
+name = "api"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+ "async-trait",
+ "axum",
+ "axum-server",
+ "axum-test",
+ "chrono",
+ "common",
+ "data",
+ "data-encoding",
+ "futures",
+ "jsonwebtoken",
+ "log",
+ "minidump",
+ "minidump-processor",
+ "minidump-unwind",
+ "mockall",
+ "rand 0.9.0",
+ "repos",
+ "rmp-serde",
+ "rustls",
+ "serde",
+ "serde_json",
+ "serial_test",
+ "sqlx",
+ "thiserror 2.0.12",
+ "time",
+ "tokio",
+ "tokio-util",
+ "tower",
+ "tower-http",
+ "tower-sessions",
+ "tracing",
+ "tracing-appender",
+ "tracing-log",
+ "tracing-subscriber",
+ "uuid",
+ "webauthn-rs",
+]
+
+[[package]]
 name = "app"
 version = "0.1.0"
 dependencies = [
@@ -101,6 +144,7 @@ dependencies = [
  "cfg-if",
  "chrono",
  "common",
+ "data",
  "dyn-clone",
  "enumflags2",
  "futures",
@@ -716,13 +760,16 @@ checksum = "186dce98367766de751c42c4f03970fc60fc012296e706ccbb9d5df9b6c1e271"
 name = "common"
 version = "0.1.0"
 dependencies = [
+ "argon2",
  "config",
+ "rand 0.9.0",
  "rmp-serde",
  "serde",
  "serde-wasm-bindgen 0.6.5",
  "serde_json",
  "tracing",
  "tracing-subscriber-wasm",
+ "uuid",
 ]
 
 [[package]]
@@ -1028,6 +1075,18 @@ dependencies = [
  "lock_api",
  "once_cell",
  "parking_lot_core",
+]
+
+[[package]]
+name = "data"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -2330,7 +2389,8 @@ dependencies = [
 
 [[package]]
 name = "leptos-struct-table"
-version = "0.14.0"
+version = "0.14.0-beta3"
+source = "git+https://github.com/rcaelers/leptos-struct-table.git?branch=leptos-0.8#c7b8357dba92bf1a495ff90c9b4e196f4b9dad74"
 dependencies = [
  "chrono",
  "leptos",
@@ -2346,9 +2406,9 @@ dependencies = [
 
 [[package]]
 name = "leptos-struct-table-macro"
-version = "0.12.0"
+version = "0.13.0-beta2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "957e9a07f78b1910a42e889e821a002885057ff0edf04e7065df254174ea9dde"
+checksum = "5f532e98aabb7a52784f24a04612826d2c1f81ea70014709db92a8126bfe13b1"
 dependencies = [
  "darling",
  "heck 0.4.1",
@@ -3652,10 +3712,13 @@ version = "0.1.0"
 dependencies = [
  "argon2",
  "chrono",
+ "common",
+ "data",
  "serde",
  "serde_json",
  "sqlx",
  "thiserror 2.0.12",
+ "tokio",
  "tracing",
  "uuid",
 ]
