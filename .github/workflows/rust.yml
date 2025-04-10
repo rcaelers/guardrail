@@ -25,6 +25,8 @@ jobs:
           rustup target add wasm32-unknown-unknown
           rustup upgrade
           cargo install --locked cargo-leptos
+          cargo install --locked sqlx-cli
+          cargo install --locked cargo-llvm-cov
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.os }}
