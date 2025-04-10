@@ -1,16 +1,17 @@
 use super::error::ApiError;
 use super::file_cleanup::FileCleanupTracker;
-use super::{get_product, get_version, validate_api_token_for_product, validate_file_size};
-use crate::api::stream_to_file;
-use crate::app_state::AppState;
 use crate::settings;
+use crate::state::AppState;
+use crate::utils::stream_to_file;
+use crate::utils::{get_product, get_version, validate_api_token_for_product, validate_file_size};
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Query, State};
 use axum::{Extension, Json};
-use repos::api_token::ApiToken;
-use repos::product::Product;
-use repos::symbols::{NewSymbols, SymbolsRepo};
-use repos::version::Version;
+use data::api_token::ApiToken;
+use data::product::Product;
+use data::symbols::NewSymbols;
+use data::version::Version;
+use repos::symbols::SymbolsRepo;
 use serde::{Deserialize, Serialize};
 use sqlx::Postgres;
 use std::path::PathBuf;
@@ -220,8 +221,8 @@ impl SymbolsApi {
     async fn store(
         tx: impl sqlx::Executor<'_, Database = Postgres>,
         data: SymbolsData,
-        product: repos::product::Product,
-        version: repos::version::Version,
+        product: data::product::Product,
+        version: data::version::Version,
     ) -> Result<(), ApiError> {
         let symbols = NewSymbols {
             os: data.os,

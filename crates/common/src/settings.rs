@@ -10,6 +10,7 @@ pub fn settings() -> &'static Settings {
 #[derive(Debug, Deserialize, Default)]
 pub struct Server {
     pub port: u16,
+    pub api_port: u16,
     pub base_path: String,
     pub site: String,
     pub max_minidump_size: Option<u64>,

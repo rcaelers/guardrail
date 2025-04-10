@@ -1,11 +1,12 @@
 use ::chrono::NaiveDateTime;
 use async_trait::async_trait;
+use common::QueryParams;
+use common::SortOrder;
+use data::product::Product;
 use enumflags2::BitFlags;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_struct_table::*;
-use repos::product::Product;
-use repos::{QueryParams, SortOrder};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
 use uuid::Uuid;

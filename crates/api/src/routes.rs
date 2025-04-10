@@ -6,7 +6,7 @@ use super::{
     symbols::SymbolsApi,
     token::generate_jwt_token,
 };
-use crate::app_state::AppState;
+use crate::state::AppState;
 
 pub async fn routes(app_state: AppState) -> Router<AppState> {
     Router::new()

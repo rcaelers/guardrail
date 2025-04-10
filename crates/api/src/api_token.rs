@@ -9,9 +9,9 @@ use std::task::{Context, Poll};
 use tower::{Layer, Service};
 use tracing::{error, info};
 
-use crate::app_state::AppState;
+use crate::state::AppState;
 
-use super::verify_token;
+use common::verify_token;
 
 #[derive(Clone)]
 pub enum RequiredEntitlement {

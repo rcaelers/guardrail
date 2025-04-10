@@ -5,7 +5,8 @@ edition = "2024"
 
 [dependencies]
 common = { path = "../common" }
-repos = { path = "../repos", default-features = false, features = [] }
+repos = { path = "../repos", optional = true }
+data = { path = "../data" }
 
 # Leptos
 leptos = { workspace = true, features = ["tracing"] }
@@ -63,6 +64,7 @@ ssr = [
   "dep:axum",
   "dep:tower",
   "dep:tower-sessions",
+  "dep:repos",
 ]
 
 [dependencies.web-sys]

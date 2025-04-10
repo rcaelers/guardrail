@@ -4,10 +4,8 @@ use std::collections::HashSet;
 use uuid::Uuid;
 
 use crate::{data_server_functions, data_server_name_functions};
-use repos::{
-    QueryParams,
-    product::{NewProduct, Product},
-};
+use common::QueryParams;
+use data::product::{NewProduct, Product};
 
 #[cfg(feature = "ssr")]
 use repos::product::ProductRepo;

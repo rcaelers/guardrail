@@ -1,14 +1,15 @@
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Query, State};
 use axum::{Extension, Json};
+use data::api_token::ApiToken;
+use data::crash::Crash;
+use data::product::Product;
+use data::version::Version;
 use minidump::Minidump;
 use minidump_processor::ProcessorOptions;
 use minidump_unwind::{Symbolizer, simple_symbol_supplier};
-use repos::api_token::ApiToken;
 use repos::attachment::AttachmentRepo;
-use repos::crash::{Crash, CrashRepo};
-use repos::product::Product;
-use repos::version::Version;
+use repos::crash::CrashRepo;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::Postgres;
@@ -18,10 +19,10 @@ use tracing::{debug, error, info};
 
 use super::error::ApiError;
 use super::file_cleanup::FileCleanupTracker;
-use super::{
+use crate::utils::{
     get_product, get_version, stream_to_file, validate_api_token_for_product, validate_file_size,
 };
-use crate::app_state::AppState;
+use crate::state::AppState;
 use crate::settings;
 
 pub struct MinidumpApi;
@@ -174,13 +175,13 @@ impl MinidumpApi {
     async fn store_crash<E>(
         tx: &mut E,
         report: serde_json::Value,
-        product: &repos::product::Product,
-        version: &repos::version::Version,
+        product: &data::product::Product,
+        version: &data::version::Version,
     ) -> Result<uuid::Uuid, ApiError>
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
     {
-        let crash = repos::crash::NewCrash {
+        let crash = data::crash::NewCrash {
             report,
             summary: "".to_string(),
             product_id: product.id,
@@ -195,8 +196,8 @@ impl MinidumpApi {
 
     async fn store_attachment<E>(
         tx: &mut E,
-        product: &repos::product::Product,
-        crash: &repos::crash::Crash,
+        product: &data::product::Product,
+        crash: &data::crash::Crash,
         filename: String,
         filesize: i64,
         mime_type: String,
@@ -204,7 +205,7 @@ impl MinidumpApi {
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
     {
-        let attachment = repos::attachment::NewAttachment {
+        let attachment = data::attachment::NewAttachment {
             name: filename.clone(),
             mime_type,
             size: filesize,

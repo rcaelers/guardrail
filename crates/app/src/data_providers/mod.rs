@@ -1,5 +1,4 @@
 pub mod crash;
-// pub mod symbols;
 pub mod user;
 pub mod version;
 
@@ -54,9 +53,9 @@ macro_rules! table_data_provider_impl {
                             "id".to_string()
                         };
                         let order = match sort {
-                            ColumnSort::Ascending => repos::SortOrder::Ascending,
-                            ColumnSort::Descending => repos::SortOrder::Descending,
-                            _ => repos::SortOrder::Ascending,
+                            ColumnSort::Ascending => common::SortOrder::Ascending,
+                            ColumnSort::Descending => common::SortOrder::Descending,
+                            _ => common::SortOrder::Ascending,
                         };
                         (field, order)
                     })

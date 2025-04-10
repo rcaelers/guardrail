@@ -3,10 +3,8 @@ use paste::paste;
 use uuid::Uuid;
 
 use crate::data_server_functions;
-use repos::{
-    QueryParams,
-    version::{NewVersion, Version},
-};
+use data::version::{NewVersion, Version};
+use common::QueryParams;
 
 #[cfg(feature = "ssr")]
 use repos::version::VersionRepo;

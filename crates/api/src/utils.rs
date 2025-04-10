@@ -1,67 +1,18 @@
-pub mod error;
-use std::path::PathBuf;
-
-use repos::{
-    api_token::ApiToken, product::{Product, ProductRepo}, version::{Version, VersionRepo}
-};
-pub use routes::routes;
-
-mod api_token;
-mod file_cleanup;
-mod minidump;
-mod routes;
-mod symbols;
-mod token;
-mod webauthn;
-
-use argon2::{
-    Argon2,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
-};
 use axum::BoxError;
 use axum::body::Bytes;
 use futures::prelude::*;
-use rand::{Rng, distr::Alphanumeric, rng};
 use sqlx::Postgres;
+use std::path::PathBuf;
 use tokio::fs::File;
 use tokio::io::{self, BufWriter};
 use tokio_util::io::StreamReader;
 use tracing::error;
 
-use error::ApiError;
+use crate::error::ApiError;
+use data::{api_token::ApiToken, product::Product, version::Version};
+use repos::{product::ProductRepo, version::VersionRepo};
 
-pub fn hash_token(token: &str) -> Result<String, argon2::password_hash::Error> {
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-
-    argon2
-        .hash_password(token.as_bytes(), &salt)
-        .map(|hash| hash.to_string())
-}
-
-pub fn verify_token(token: &str, hash: &str) -> Result<bool, argon2::password_hash::Error> {
-    let parsed_hash = PasswordHash::new(hash)?;
-    let argon2 = Argon2::default();
-
-    match argon2.verify_password(token.as_bytes(), &parsed_hash) {
-        Ok(()) => Ok(true),
-        Err(argon2::password_hash::Error::Password) => Ok(false),
-        Err(e) => Err(e),
-    }
-}
-
-#[allow(dead_code)]
-pub fn generate_token() -> String {
-    let mut rng = rng();
-    let token: String = std::iter::repeat(())
-        .map(|()| rng.sample(Alphanumeric))
-        .map(char::from)
-        .take(36)
-        .collect();
-    token
-}
-
-async fn stream_to_file<S, E>(path: &std::path::PathBuf, stream: S) -> Result<(), ApiError>
+pub async fn stream_to_file<S, E>(path: &std::path::PathBuf, stream: S) -> Result<(), ApiError>
 where
     S: Stream<Item = Result<Bytes, E>>,
     E: Into<BoxError>,
@@ -84,7 +35,7 @@ where
     .map_err(|_err| (ApiError::InternalFailure()))
 }
 
-async fn get_product<E>(tx: &mut E, product_name: &str) -> Result<Product, ApiError>
+pub async fn get_product<E>(tx: &mut E, product_name: &str) -> Result<Product, ApiError>
 where
     for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
 {
@@ -100,7 +51,7 @@ where
         })
 }
 
-async fn get_version<E>(
+pub async fn get_version<E>(
     tx: &mut E,
     product: &Product,
     version_name: &str,
@@ -123,7 +74,7 @@ where
         })
 }
 
-fn validate_api_token_for_product(
+pub fn validate_api_token_for_product(
     api_token: &ApiToken,
     product: &Product,
     product_name: &str,
@@ -143,7 +94,7 @@ fn validate_api_token_for_product(
     Ok(())
 }
 
-async fn validate_file_size(
+pub async fn validate_file_size(
     file_path: &PathBuf,
     max_size: u64,
     file_type: &str,
@@ -155,12 +106,7 @@ async fn validate_file_size(
 
     if file_metadata.len() > max_size {
         let _ = tokio::fs::remove_file(file_path).await;
-        error!(
-            "{} too large: {} bytes (max: {} bytes)",
-            file_type,
-            file_metadata.len(),
-            max_size
-        );
+        error!("{} too large: {} bytes (max: {} bytes)", file_type, file_metadata.len(), max_size);
         return Err(ApiError::Failure(format!("{} file too large", file_type)));
     }
 
@@ -172,4 +118,3 @@ async fn validate_file_size(
 
     Ok(file_metadata.len())
 }
-

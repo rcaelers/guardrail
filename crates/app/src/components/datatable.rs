@@ -1,15 +1,15 @@
 use async_trait::async_trait;
+use common::QueryParams;
 use enumflags2::{BitFlags, bitflags};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::{use_navigate, use_query_map};
 use leptos_struct_table::*;
-use repos::QueryParams;
 use serde::{Deserialize, Serialize};
-use tracing::info;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::marker::PhantomData;
+use tracing::info;
 use uuid::Uuid;
 
 use crate::components::confirmation::ConfirmationModal;
@@ -142,9 +142,7 @@ where
         move || (),
         move |_| {
             let value = rows_clone2.clone();
-            async move {
-                value.capabilities().await
-            }
+            async move { value.capabilities().await }
         },
     );
 
@@ -204,10 +202,7 @@ where
                 let foreign = foreign.get(index);
 
                 if let Some(foreign) = foreign {
-                    navigate(
-                        format!("{}{}", foreign.url, id).as_str(),
-                        Default::default(),
-                    );
+                    navigate(format!("{}{}", foreign.url, id).as_str(), Default::default());
                 }
             });
         }
@@ -290,7 +285,7 @@ where
     });
 
     let on_selection_changed = move |evt: SelectionChangeEvent<T::RowType>| {
-        set_selected_row.write().replace(evt.row);
+        set_selected_row.write().replace(evt.row.get_untracked().clone());
     };
 
     view! {

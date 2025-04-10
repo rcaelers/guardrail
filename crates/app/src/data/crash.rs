@@ -3,8 +3,8 @@ use paste::paste;
 use uuid::Uuid;
 
 use crate::data_server_functions;
-use repos::QueryParams;
-use repos::crash::{Crash, NewCrash};
+use common::QueryParams;
+use data::crash::{Crash, NewCrash};
 
 #[cfg(feature = "ssr")]
 use repos::crash::CrashRepo;

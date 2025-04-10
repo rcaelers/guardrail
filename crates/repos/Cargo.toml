@@ -5,12 +5,15 @@ edition = "2024"
 
 [dependencies]
 
+data = { path = "../data", features = ["ssr"] }
+common = { path = "../common", features = ["ssr"] }
+
 # Serde / json
 serde.workspace = true
 serde_json.workspace = true
 
 # SQLx
-sqlx = { workspace = true, optional = true }
+sqlx.workspace = true
 
 # Tracing
 tracing.workspace = true
@@ -19,11 +22,16 @@ tracing.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
 chrono.workspace = true
-argon2 = { version = "0.5", optional = true }
+argon2.workspace = true
 
 [features]
 default = []
-ssr = ["dep:sqlx", "dep:argon2"]
 
 [lints.rust]
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage,coverage_nightly)'] }
+unexpected_cfgs = { level = "warn", check-cfg = [
+  'cfg(coverage,coverage_nightly)',
+] }
+
+[dev-dependencies]
+tokio.workspace = true
+

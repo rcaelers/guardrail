@@ -1,6 +1,6 @@
 use ::chrono::NaiveDateTime;
 use leptos_struct_table::*;
-use repos::user::User;
+use data::user::User;
 use uuid::Uuid;
 
 use crate::{classes::ClassesPreset, components::datatable::ExtraRowTrait};

@@ -1,14 +1,12 @@
-use crate::{api::error::ApiError, app_state::AppState};
-use app::auth::AuthenticatedUser;
+use crate::{error::ApiError, state::AppState};
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
-use repos::{
-    credentials::CredentialRepo,
-    user::{User, UserRepo},
-};
+use common::AuthenticatedUser;
+use data::user::User;
+use repos::{credentials::CredentialRepo, user::UserRepo};
 use serde::{Deserialize, Serialize};
 use sqlx::Postgres;
 use tower_sessions::Session;
