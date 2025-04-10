@@ -31,6 +31,8 @@ jobs:
         with:
           key: ${{ matrix.os }}
       - name: Build
-        run: cargo leptos build -vv
+        run: |
+          export SQLX_OFFLINE=1
+          cargo leptos build -vv
       - name: Run tests
         run: RUST_BACKTRACE=1 cargo test --verbose
