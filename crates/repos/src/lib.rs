@@ -15,8 +15,8 @@ use sqlx::{Executor, pool::PoolConnection};
 use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
 use tracing::error;
 
-use common::QueryParams;
 use crate::error::RepoError;
+use common::QueryParams;
 
 const ADMIN: &str = "admin";
 

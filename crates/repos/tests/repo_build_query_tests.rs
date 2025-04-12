@@ -1,10 +1,10 @@
-#![cfg(feature = "ssr")]
-
-use repos::SortOrder;
+use common::{QueryParams, SortOrder};
 use repos::error::RepoError;
 use repos::*;
-use sqlx::{Postgres, QueryBuilder};
+use sqlx::QueryBuilder;
 use std::collections::VecDeque;
+
+mod testcommon;
 
 #[test]
 fn test_build_query_with_filter() {
@@ -150,7 +150,7 @@ fn test_build_query_with_filter_sorting_and_range() {
     let params = QueryParams {
         filter: Some("test".to_string()),
         sorting,
-        range: Some(0..10)
+        range: Some(0..10),
     };
 
     let allowed_columns = &["name", "description"];

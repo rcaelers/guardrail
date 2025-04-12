@@ -8,7 +8,7 @@ use data::version::Version;
 use minidump::Minidump;
 use minidump_processor::ProcessorOptions;
 use minidump_unwind::{Symbolizer, simple_symbol_supplier};
-use repos::attachment::AttachmentRepo;
+use repos::attachment::AttachmentsRepo;
 use repos::crash::CrashRepo;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -213,7 +213,7 @@ impl MinidumpApi {
             crash_id: crash.id,
             product_id: product.id,
         };
-        let id = AttachmentRepo::create(&mut *tx, attachment)
+        let id = AttachmentsRepo::create(&mut *tx, attachment)
             .await
             .map_err(|e| {
                 error!(

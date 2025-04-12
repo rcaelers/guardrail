@@ -1,83 +1,14 @@
-#![cfg(all(test, feature = "ssr"))]
+#![cfg(test)]
 
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use repos::QueryParams;
+use common::QueryParams;
+use data::symbols::*;
 use repos::symbols::*;
 
-async fn setup_test_dependencies(pool: &PgPool) -> (Uuid, Uuid) {
-    // Create product first
-    let product_id = sqlx::query_scalar!(
-        r#"
-        INSERT INTO guardrail.products (name, description)
-        VALUES ($1, $2)
-        RETURNING id
-        "#,
-        format!("TestProduct_{}", Uuid::new_v4()),
-        "Test Product Description"
-    )
-    .fetch_one(pool)
-    .await
-    .expect("Failed to insert test product");
-
-    // Then create version
-    let version_id = sqlx::query_scalar!(
-        r#"
-        INSERT INTO guardrail.versions (name, hash, tag, product_id)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id
-        "#,
-        format!("Version_{}", Uuid::new_v4()),
-        format!("Hash_{}", Uuid::new_v4()),
-        format!("Tag_{}", Uuid::new_v4()),
-        product_id
-    )
-    .fetch_one(pool)
-    .await
-    .expect("Failed to insert test version");
-
-    (product_id, version_id)
-}
-
-async fn insert_test_symbols(
-    pool: &PgPool,
-    os: &str,
-    arch: &str,
-    build_id: &str,
-    module_id: &str,
-    file_location: &str,
-    product_id: Option<Uuid>,
-    version_id: Option<Uuid>,
-) -> Symbols {
-    let (product_id, version_id) = match (product_id, version_id) {
-        (Some(p), Some(v)) => (p, v),
-        _ => setup_test_dependencies(pool).await,
-    };
-
-    sqlx::query_as!(
-        Symbols,
-        r#"
-        INSERT INTO guardrail.symbols (
-            os, arch, build_id, module_id, file_location,
-            product_id, version_id
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, os, arch, build_id, module_id, file_location,
-                 product_id, version_id, created_at, updated_at
-        "#,
-        os,
-        arch,
-        build_id,
-        module_id,
-        file_location,
-        product_id,
-        version_id
-    )
-    .fetch_one(pool)
-    .await
-    .expect("Failed to insert test symbols")
-}
+mod testcommon;
+use testcommon::{create_test_symbols, setup_test_dependencies};
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id(pool: PgPool) {
@@ -88,7 +19,7 @@ async fn test_get_by_id(pool: PgPool) {
     let file_location = "/path/to/symbols";
 
     let inserted_symbols =
-        insert_test_symbols(&pool, os, arch, build_id, module_id, file_location, None, None).await;
+        create_test_symbols(&pool, os, arch, build_id, module_id, file_location, None, None).await;
 
     let found_symbols = SymbolsRepo::get_by_id(&pool, inserted_symbols.id)
         .await
@@ -102,13 +33,55 @@ async fn test_get_by_id(pool: PgPool) {
     assert_eq!(found_symbols.build_id, build_id);
     assert_eq!(found_symbols.module_id, module_id);
     assert_eq!(found_symbols.file_location, file_location);
-
+}
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_id_not_found(pool: PgPool) {
     let non_existent_id = Uuid::new_v4();
     let not_found = SymbolsRepo::get_by_id(&pool, non_existent_id)
         .await
         .expect("Failed to query with non-existent ID");
 
     assert!(not_found.is_none());
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_id_error(pool: PgPool) {
+    let os = "linux";
+    let arch = "x86_64";
+    let build_id = "build123error";
+    let module_id = "module123error";
+    let file_location = "/path/to/symbols_error";
+
+    let inserted_symbols =
+        create_test_symbols(&pool, os, arch, build_id, module_id, file_location, None, None).await;
+
+    pool.close().await;
+
+    let result = SymbolsRepo::get_by_id(&pool, inserted_symbols.id).await;
+    assert!(result.is_err(), "Expected an error when getting symbols by ID with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_all_error(pool: PgPool) {
+    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+
+    create_test_symbols(
+        &pool,
+        "linux-err",
+        "x86_64-err",
+        "build-err",
+        "module-err",
+        "/path/to/err",
+        Some(product_id),
+        Some(version_id),
+    )
+    .await;
+
+    pool.close().await;
+
+    let query_params = QueryParams::default();
+    let result = SymbolsRepo::get_all(&pool, query_params).await;
+    assert!(result.is_err(), "Expected an error when getting all symbols with closed pool");
 }
 
 #[sqlx::test(migrations = "../../migrations")]
@@ -122,7 +95,7 @@ async fn test_get_all(pool: PgPool) {
     ];
 
     for (os, arch, build_id, module_id, file_location) in &test_symbol_data {
-        insert_test_symbols(
+        create_test_symbols(
             &pool,
             os,
             arch,
@@ -135,7 +108,6 @@ async fn test_get_all(pool: PgPool) {
         .await;
     }
 
-    // Test get_all with no params
     let query_params = QueryParams::default();
     let all_symbols = SymbolsRepo::get_all(&pool, query_params)
         .await
@@ -143,7 +115,6 @@ async fn test_get_all(pool: PgPool) {
 
     assert!(all_symbols.len() >= test_symbol_data.len());
 
-    // Test with filtering - using a filter string that exists in the test data
     let query_params = QueryParams {
         filter: Some("Windows".to_string()),
         ..QueryParams::default()
@@ -153,7 +124,6 @@ async fn test_get_all(pool: PgPool) {
         .await
         .expect("Failed to get filtered symbols");
 
-    // Verify at least one result with the Windows filter
     assert!(!filtered_symbols.is_empty());
     for symbol in &filtered_symbols {
         assert!(
@@ -199,8 +169,28 @@ async fn test_create(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_create_error(pool: PgPool) {
+    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+
+    let new_symbols = NewSymbols {
+        os: "linux".to_string(),
+        arch: "x86_64".to_string(),
+        build_id: "build123error".to_string(),
+        module_id: "module123error".to_string(),
+        file_location: "/path/to/symbols_error".to_string(),
+        version_id,
+        product_id,
+    };
+
+    pool.close().await;
+
+    let result = SymbolsRepo::create(&pool, new_symbols).await;
+    assert!(result.is_err(), "Expected an error when creating symbols with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_update(pool: PgPool) {
-    let mut symbols = insert_test_symbols(
+    let mut symbols = create_test_symbols(
         &pool,
         "linux",
         "arm64",
@@ -238,8 +228,32 @@ async fn test_update(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_update_error(pool: PgPool) {
+    let mut symbols = create_test_symbols(
+        &pool,
+        "linux-update-err",
+        "arm64-err",
+        "build_old_err",
+        "module_old_err",
+        "/path/old_err",
+        None,
+        None,
+    )
+    .await;
+
+    symbols.os = "ios-err".to_string();
+    symbols.arch = "arm64e-err".to_string();
+    symbols.file_location = "/path/new_err".to_string();
+
+    pool.close().await;
+
+    let result = SymbolsRepo::update(&pool, symbols.clone()).await;
+    assert!(result.is_err(), "Expected an error when updating symbols with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_remove(pool: PgPool) {
-    let symbols = insert_test_symbols(
+    let symbols = create_test_symbols(
         &pool,
         "android",
         "arm",
@@ -263,6 +277,26 @@ async fn test_remove(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_remove_error(pool: PgPool) {
+    let symbols = create_test_symbols(
+        &pool,
+        "android-err",
+        "arm-err",
+        "build_android_err",
+        "module_android_err",
+        "/path/android_err",
+        None,
+        None,
+    )
+    .await;
+
+    pool.close().await;
+
+    let result = SymbolsRepo::remove(&pool, symbols.id).await;
+    assert!(result.is_err(), "Expected an error when removing symbols with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_count(pool: PgPool) {
     let initial_count = SymbolsRepo::count(&pool)
         .await
@@ -277,7 +311,7 @@ async fn test_count(pool: PgPool) {
     ];
 
     for (os, arch, build_id, module_id, file_location) in &test_symbols_data {
-        insert_test_symbols(
+        create_test_symbols(
             &pool,
             os,
             arch,
@@ -295,4 +329,26 @@ async fn test_count(pool: PgPool) {
         .expect("Failed to count symbols after insertion");
 
     assert_eq!(new_count, initial_count + test_symbols_data.len() as i64);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_count_error(pool: PgPool) {
+    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+
+    create_test_symbols(
+        &pool,
+        "count-err",
+        "x86-err",
+        "build_count_err",
+        "module_count_err",
+        "/path/count_err",
+        Some(product_id),
+        Some(version_id),
+    )
+    .await;
+
+    pool.close().await;
+
+    let result = SymbolsRepo::count(&pool).await;
+    assert!(result.is_err(), "Expected an error when counting symbols with closed pool");
 }

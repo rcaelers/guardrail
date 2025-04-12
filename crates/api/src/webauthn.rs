@@ -5,8 +5,8 @@ use axum::{
     response::IntoResponse,
 };
 use common::AuthenticatedUser;
-use data::user::User;
-use repos::{credentials::CredentialRepo, user::UserRepo};
+use data::{credentials::NewCredential, user::User};
+use repos::{credentials::CredentialsRepo, user::UserRepo};
 use serde::{Deserialize, Serialize};
 use sqlx::Postgres;
 use tower_sessions::Session;
@@ -46,7 +46,7 @@ pub async fn start_register(
     let user_query = UserRepo::get_by_name(&mut *tx, &username).await?;
     let user_unique_id = get_user_unique_id(user_query, &session).await?;
 
-    let exclude_credentials = CredentialRepo::get_all_by_user_id(&mut *tx, user_unique_id)
+    let exclude_credentials = CredentialsRepo::get_all_by_user_id(&mut *tx, user_unique_id)
         .await?
         .iter()
         .map(|record| serde_json::from_value::<Passkey>(record.data.clone()))
@@ -110,13 +110,15 @@ pub async fn finish_register(
         .await?;
     }
 
-    CredentialRepo::create(
+    CredentialsRepo::create(
         &mut *tx,
-        registration_state.user_unique_id,
-        serde_json::to_value(&passkey).map_err(|e| {
-            error!("failed to serialize passkey: {:?}", e);
-            ApiError::InternalFailure()
-        })?,
+        NewCredential {
+            user_id: registration_state.user_unique_id,
+            data: serde_json::to_value(&passkey).map_err(|e| {
+                error!("failed to serialize passkey: {:?}", e);
+                ApiError::InternalFailure()
+            })?,
+        },
     )
     .await?;
 
@@ -141,7 +143,7 @@ pub async fn start_authentication(
         .map(|record| record.id)
         .ok_or(ApiError::UserNotFound(username))?;
 
-    let allow_credentials = CredentialRepo::get_all_by_user_id(&mut *tx, user_unique_id)
+    let allow_credentials = CredentialsRepo::get_all_by_user_id(&mut *tx, user_unique_id)
         .await?
         .iter()
         .map(|record| serde_json::from_value::<Passkey>(record.data.clone()))
@@ -231,7 +233,7 @@ pub async fn update_passkeys<E>(
 where
     for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
 {
-    let credentials = CredentialRepo::get_all_by_user_id(&mut *tx, user_unique_id).await?;
+    let credentials = CredentialsRepo::get_all_by_user_id(&mut *tx, user_unique_id).await?;
     for cred in credentials {
         let mut passkey = serde_json::from_value::<Passkey>(cred.data.clone()).map_err(|e| {
             error!("failed to deserialize passkey: {:?}", e);
@@ -240,7 +242,7 @@ where
         let updated = passkey.update_credential(&auth_result);
         if let Some(updated) = updated {
             if updated {
-                CredentialRepo::update_data(
+                CredentialsRepo::update_data(
                     &mut *tx,
                     cred.id,
                     serde_json::to_value(&passkey).map_err(|e| {

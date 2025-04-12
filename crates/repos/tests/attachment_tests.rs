@@ -1,96 +1,19 @@
-#![cfg(all(test, feature = "ssr"))]
+#![cfg(test)]
 
 use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use repos::QueryParams;
+use common::QueryParams;
+use data::attachment::*;
+use data::crash::NewCrash;
 use repos::attachment::*;
+use repos::crash::CrashRepo;
 
-async fn setup_test_dependencies(pool: &PgPool) -> (Uuid, Uuid) {
-    // Create product first
-    let product_id = sqlx::query_scalar!(
-        r#"
-        INSERT INTO guardrail.products (name, description)
-        VALUES ($1, $2)
-        RETURNING id
-        "#,
-        format!("TestProduct_{}", Uuid::new_v4()),
-        "Test Product Description"
-    )
-    .fetch_one(pool)
-    .await
-    .expect("Failed to insert test product");
+mod testcommon;
+use testcommon::{create_test_attachment, setup_test_dependencies};
 
-    // Create version
-    let version_id = sqlx::query_scalar!(
-        r#"
-        INSERT INTO guardrail.versions (name, hash, tag, product_id)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id
-        "#,
-        format!("Version_{}", Uuid::new_v4()),
-        format!("Hash_{}", Uuid::new_v4()),
-        format!("Tag_{}", Uuid::new_v4()),
-        product_id
-    )
-    .fetch_one(pool)
-    .await
-    .expect("Failed to insert test version");
-
-    // Create crash
-    let crash_id = sqlx::query_scalar!(
-        r#"
-        INSERT INTO guardrail.crashes (summary, report, version_id, product_id)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id
-        "#,
-        "Test Crash",
-        json!({"test": "data"}),
-        version_id,
-        product_id
-    )
-    .fetch_one(pool)
-    .await
-    .expect("Failed to insert test crash");
-
-    (product_id, crash_id)
-}
-
-async fn insert_test_attachment(
-    pool: &PgPool,
-    name: &str,
-    mime_type: &str,
-    size: i64,
-    filename: &str,
-    product_id: Option<Uuid>,
-    crash_id: Option<Uuid>,
-) -> Attachment {
-    let (product_id, crash_id) = match (product_id, crash_id) {
-        (Some(p), Some(c)) => (p, c),
-        _ => setup_test_dependencies(pool).await,
-    };
-
-    sqlx::query_as!(
-        Attachment,
-        r#"
-        INSERT INTO guardrail.attachments (
-            name, mime_type, size, filename, crash_id, product_id
-        )
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id, name, mime_type, size, filename, crash_id, product_id, created_at, updated_at
-        "#,
-        name,
-        mime_type,
-        size,
-        filename,
-        crash_id,
-        product_id
-    )
-    .fetch_one(pool)
-    .await
-    .expect("Failed to insert test attachment")
-}
+// get_by_id tests
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id(pool: PgPool) {
@@ -100,31 +23,60 @@ async fn test_get_by_id(pool: PgPool) {
     let filename = "log_2024_04_06.txt";
 
     let inserted_attachment =
-        insert_test_attachment(&pool, name, mime_type, size, filename, None, None).await;
+        create_test_attachment(&pool, name, mime_type, size, filename, None, None).await;
 
-    let found_attachment = AttachmentRepo::get_by_id(&pool, inserted_attachment.id)
+    let found_attachment = AttachmentsRepo::get_by_id(&pool, inserted_attachment.id)
         .await
         .expect("Failed to get attachment by ID");
 
     assert!(found_attachment.is_some());
     let found_attachment = found_attachment.unwrap();
     assert_eq!(found_attachment.id, inserted_attachment.id);
-    assert_eq!(found_attachment.name, name);
-    assert_eq!(found_attachment.mime_type, mime_type);
-    assert_eq!(found_attachment.size, size);
-    assert_eq!(found_attachment.filename, filename);
+    assert_eq!(found_attachment.name, "log.txt");
+    assert_eq!(found_attachment.mime_type, "text/plain");
+    assert_eq!(found_attachment.size, 1024);
+}
 
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_id_error(pool: PgPool) {
+    let inserted_attachment =
+        create_test_attachment(&pool, "test.log", "text/plain", 1024, "test_file.log", None, None)
+            .await;
+
+    pool.close().await;
+
+    let result = AttachmentsRepo::get_by_id(&pool, inserted_attachment.id).await;
+    assert!(result.is_err(), "Expected an error when getting attachment by ID with closed pool");
+}
+
+// get_by_id_not_found test
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_id_not_found(pool: PgPool) {
     let non_existent_id = Uuid::new_v4();
-    let not_found = AttachmentRepo::get_by_id(&pool, non_existent_id)
+    let not_found = AttachmentsRepo::get_by_id(&pool, non_existent_id)
         .await
         .expect("Failed to query with non-existent ID");
 
     assert!(not_found.is_none());
 }
 
+// get_all tests
+
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_all(pool: PgPool) {
-    let (product_id, crash_id) = setup_test_dependencies(&pool).await;
+    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+
+    let new_crash = NewCrash {
+        summary: "Test Crash".to_string(),
+        report: json!({"test": "data"}),
+        version_id,
+        product_id,
+    };
+
+    let crash_id = CrashRepo::create(&pool, new_crash)
+        .await
+        .expect("Failed to insert test crash");
 
     let test_attachment_data = vec![
         ("screenshot.png", "image/png", 20480, "crash_screenshot.png"),
@@ -133,7 +85,7 @@ async fn test_get_all(pool: PgPool) {
     ];
 
     for (name, mime_type, size, filename) in &test_attachment_data {
-        insert_test_attachment(
+        create_test_attachment(
             &pool,
             name,
             mime_type,
@@ -145,25 +97,22 @@ async fn test_get_all(pool: PgPool) {
         .await;
     }
 
-    // Test get_all with no params
     let query_params = QueryParams::default();
-    let all_attachments = AttachmentRepo::get_all(&pool, query_params)
+    let all_attachments = AttachmentsRepo::get_all(&pool, query_params)
         .await
         .expect("Failed to get all attachments");
 
     assert!(all_attachments.len() >= test_attachment_data.len());
 
-    // Test with filtering - use a filter that exists in the test data
     let query_params = QueryParams {
         filter: Some("config".to_string()),
         ..QueryParams::default()
     };
 
-    let filtered_attachments = AttachmentRepo::get_all(&pool, query_params)
+    let filtered_attachments = AttachmentsRepo::get_all(&pool, query_params)
         .await
         .expect("Failed to get filtered attachments");
 
-    // Verify at least one result with the filter
     assert!(!filtered_attachments.is_empty());
     for attachment in &filtered_attachments {
         assert!(
@@ -175,8 +124,54 @@ async fn test_get_all(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_get_all_error(pool: PgPool) {
+    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+
+    let new_crash = NewCrash {
+        summary: "Test Crash".to_string(),
+        report: json!({"test": "data"}),
+        version_id,
+        product_id,
+    };
+
+    let crash_id = CrashRepo::create(&pool, new_crash)
+        .await
+        .expect("Failed to insert test crash");
+
+    create_test_attachment(
+        &pool,
+        "screenshot.png",
+        "image/png",
+        20480,
+        "crash_screenshot.png",
+        Some(product_id),
+        Some(crash_id),
+    )
+    .await;
+
+    pool.close().await;
+
+    let query_params = QueryParams::default();
+    let result = AttachmentsRepo::get_all(&pool, query_params).await;
+    assert!(result.is_err(), "Expected an error when getting all attachments with closed pool");
+}
+
+// create tests
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_create(pool: PgPool) {
-    let (product_id, crash_id) = setup_test_dependencies(&pool).await;
+    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+
+    let new_crash = NewCrash {
+        summary: "Test Crash".to_string(),
+        report: json!({"test": "data"}),
+        version_id,
+        product_id,
+    };
+
+    let crash_id = CrashRepo::create(&pool, new_crash)
+        .await
+        .expect("Failed to insert test crash");
 
     let new_attachment = NewAttachment {
         name: "stacktrace.txt".to_string(),
@@ -187,11 +182,11 @@ async fn test_create(pool: PgPool) {
         product_id,
     };
 
-    let attachment_id = AttachmentRepo::create(&pool, new_attachment.clone())
+    let attachment_id = AttachmentsRepo::create(&pool, new_attachment.clone())
         .await
         .expect("Failed to create attachment");
 
-    let created_attachment = AttachmentRepo::get_by_id(&pool, attachment_id)
+    let created_attachment = AttachmentsRepo::get_by_id(&pool, attachment_id)
         .await
         .expect("Failed to get created attachment")
         .expect("Created attachment not found");
@@ -205,8 +200,29 @@ async fn test_create(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_create_error(pool: PgPool) {
+    let (product_id, crash_id) = setup_test_dependencies(&pool).await;
+
+    let new_attachment = NewAttachment {
+        filename: "test_file.txt".to_string(),
+        mime_type: "text/plain".to_string(),
+        size: 123,
+        name: "/path/to/file.txt".to_string(),
+        crash_id,
+        product_id,
+    };
+
+    pool.close().await;
+
+    let result = AttachmentsRepo::create(&pool, new_attachment).await;
+    assert!(result.is_err(), "Expected an error when creating attachment with closed pool");
+}
+
+// update tests
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_update(pool: PgPool) {
-    let mut attachment = insert_test_attachment(
+    let mut attachment = create_test_attachment(
         &pool,
         "original.log",
         "text/plain",
@@ -222,14 +238,14 @@ async fn test_update(pool: PgPool) {
     attachment.size = 3072;
     attachment.filename = "updated_log.txt".to_string();
 
-    let updated_id = AttachmentRepo::update(&pool, attachment.clone())
+    let updated_id = AttachmentsRepo::update(&pool, attachment.clone())
         .await
         .expect("Failed to update attachment")
         .expect("Attachment not found when updating");
 
     assert_eq!(updated_id, attachment.id);
 
-    let updated_attachment = AttachmentRepo::get_by_id(&pool, attachment.id)
+    let updated_attachment = AttachmentsRepo::get_by_id(&pool, attachment.id)
         .await
         .expect("Failed to get updated attachment")
         .expect("Updated attachment not found");
@@ -241,8 +257,34 @@ async fn test_update(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_update_error(pool: PgPool) {
+    let mut attachment = create_test_attachment(
+        &pool,
+        "original.log",
+        "text/plain",
+        2048,
+        "original_log.txt",
+        None,
+        None,
+    )
+    .await;
+
+    attachment.name = "updated.log".to_string();
+    attachment.mime_type = "text/plain; charset=utf-8".to_string();
+    attachment.size = 3072;
+    attachment.filename = "updated_log.txt".to_string();
+
+    pool.close().await;
+
+    let result = AttachmentsRepo::update(&pool, attachment.clone()).await;
+    assert!(result.is_err(), "Expected an error when updating attachment with closed pool");
+}
+
+// remove tests
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_remove(pool: PgPool) {
-    let attachment = insert_test_attachment(
+    let attachment = create_test_attachment(
         &pool,
         "delete_me.log",
         "text/plain",
@@ -253,11 +295,11 @@ async fn test_remove(pool: PgPool) {
     )
     .await;
 
-    AttachmentRepo::remove(&pool, attachment.id)
+    AttachmentsRepo::remove(&pool, attachment.id)
         .await
         .expect("Failed to remove attachment");
 
-    let deleted_attachment = AttachmentRepo::get_by_id(&pool, attachment.id)
+    let deleted_attachment = AttachmentsRepo::get_by_id(&pool, attachment.id)
         .await
         .expect("Failed to query after deletion");
 
@@ -265,12 +307,44 @@ async fn test_remove(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_remove_error(pool: PgPool) {
+    let attachment = create_test_attachment(
+        &pool,
+        "delete_me.log",
+        "text/plain",
+        1024,
+        "file_to_delete.log",
+        None,
+        None,
+    )
+    .await;
+
+    pool.close().await;
+
+    let result = AttachmentsRepo::remove(&pool, attachment.id).await;
+    assert!(result.is_err(), "Expected an error when removing attachment with closed pool");
+}
+
+// count tests
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_count(pool: PgPool) {
-    let initial_count = AttachmentRepo::count(&pool)
+    let initial_count = AttachmentsRepo::count(&pool)
         .await
         .expect("Failed to count initial attachments");
 
-    let (product_id, crash_id) = setup_test_dependencies(&pool).await;
+    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+
+    let new_crash = NewCrash {
+        summary: "Test Crash".to_string(),
+        report: json!({"test": "data"}),
+        version_id,
+        product_id,
+    };
+
+    let crash_id = CrashRepo::create(&pool, new_crash)
+        .await
+        .expect("Failed to insert test crash");
 
     let test_attachments = vec![
         ("count1.txt", "text/plain", 100, "count_file1.txt"),
@@ -279,7 +353,7 @@ async fn test_count(pool: PgPool) {
     ];
 
     for (name, mime_type, size, filename) in &test_attachments {
-        insert_test_attachment(
+        create_test_attachment(
             &pool,
             name,
             mime_type,
@@ -291,9 +365,41 @@ async fn test_count(pool: PgPool) {
         .await;
     }
 
-    let new_count = AttachmentRepo::count(&pool)
+    let new_count = AttachmentsRepo::count(&pool)
         .await
         .expect("Failed to count attachments after insertion");
 
     assert_eq!(new_count, initial_count + test_attachments.len() as i64);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_count_error(pool: PgPool) {
+    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+
+    let new_crash = NewCrash {
+        summary: "Test Crash".to_string(),
+        report: json!({"test": "data"}),
+        version_id,
+        product_id,
+    };
+
+    let crash_id = CrashRepo::create(&pool, new_crash)
+        .await
+        .expect("Failed to insert test crash");
+
+    create_test_attachment(
+        &pool,
+        "count_test.txt",
+        "text/plain",
+        1024,
+        "count_test_file.txt",
+        Some(product_id),
+        Some(crash_id),
+    )
+    .await;
+
+    pool.close().await;
+
+    let result = AttachmentsRepo::count(&pool).await;
+    assert!(result.is_err(), "Expected an error when counting attachments with closed pool");
 }

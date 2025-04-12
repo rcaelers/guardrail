@@ -2,11 +2,11 @@ use sqlx::Postgres;
 use tracing::error;
 
 use crate::error::RepoError;
-use data::credentials::Credential;
+use data::credentials::{Credential, NewCredential};
 
-pub struct CredentialRepo {}
+pub struct CredentialsRepo {}
 
-impl CredentialRepo {
+impl CredentialsRepo {
     pub async fn get_by_id(
         executor: impl sqlx::Executor<'_, Database = Postgres>,
         id: uuid::Uuid,
@@ -49,31 +49,9 @@ impl CredentialRepo {
         })
     }
 
-    pub async fn get_all_by_name(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
-        name: &str,
-    ) -> Result<Vec<Credential>, RepoError> {
-        sqlx::query_as!(
-            Credential,
-            r#"
-                SELECT *
-                FROM guardrail.credentials
-                WHERE guardrail.credentials.name = $1
-            "#,
-            name
-        )
-        .fetch_all(executor)
-        .await
-        .map_err(|err| {
-            error!("Failed to retrieve credentials by name {name}: {err}");
-            RepoError::DatabaseError("Failed to retrieve credentials by name".to_string())
-        })
-    }
-
     pub async fn create(
         executor: impl sqlx::Executor<'_, Database = Postgres>,
-        user_id: uuid::Uuid,
-        data: serde_json::Value,
+        credentials: NewCredential,
     ) -> Result<uuid::Uuid, RepoError> {
         sqlx::query_scalar!(
             r#"
@@ -88,14 +66,14 @@ impl CredentialRepo {
                 RETURNING
                   id
             "#,
-            user_id,
-            data,
+            credentials.user_id,
+            credentials.data,
             chrono::Utc::now().naive_utc(),
         )
         .fetch_one(executor)
         .await
         .map_err(|err| {
-            error!("Failed to create credential for user {user_id}: {err}");
+            error!("Failed to create credential for user {}: {}", credentials.user_id, err);
             RepoError::DatabaseError("Failed to create credential".to_string())
         })
     }

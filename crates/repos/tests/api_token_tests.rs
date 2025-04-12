@@ -1,85 +1,20 @@
-#![cfg(all(test, feature = "ssr"))]
-
-use argon2::{
-    Argon2,
-    password_hash::{PasswordHasher, SaltString, rand_core::OsRng},
-};
 use chrono::{Duration, Utc};
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use data::api_token::NewApiToken;
 use repos::api_token::*;
 
-// Updated to use argon2 instead of sha256
-fn hash_token(token: &str) -> String {
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
+mod testcommon;
+use testcommon::create_test_api_token;
 
-    argon2
-        .hash_password(token.as_bytes(), &salt)
-        .expect("Failed to hash password")
-        .to_string()
-}
-
-async fn insert_test_api_token(
-    pool: &PgPool,
-    description: &str,
-    token: &str,
-    product_id: Option<Uuid>,
-    user_id: Option<Uuid>,
-    entitlements: &[&str],
-) -> ApiToken {
-    let product_id = match product_id {
-        Some(id) => id,
-        None => {
-            // Create a test product first
-            sqlx::query_scalar!(
-                r#"
-                INSERT INTO guardrail.products (name, description)
-                VALUES ($1, $2)
-                RETURNING id
-                "#,
-                format!("TestProduct_{}", Uuid::new_v4()),
-                "Test Product Description"
-            )
-            .fetch_one(pool)
-            .await
-            .expect("Failed to insert test product")
-        }
-    };
-
-    // Convert entitlements to a SQL array
-    let entitlements: Vec<String> = entitlements.iter().map(|&s| s.to_string()).collect();
-
-    // Hash the token using argon2
-    let token_hash = hash_token(token);
-
-    // Create the API token
-    sqlx::query_as!(
-        ApiToken,
-        r#"
-        INSERT INTO guardrail.api_tokens (
-            description, token_hash, product_id, user_id, entitlements, is_active
-        )
-        VALUES ($1, $2, $3, $4, $5, true)
-        RETURNING id, description, token_hash, product_id, user_id, entitlements, is_active, last_used_at, expires_at, created_at, updated_at
-        "#,
-        description,
-        token_hash,
-        product_id,
-        user_id,
-        &entitlements as &[String],
-    )
-    .fetch_one(pool)
-    .await
-    .expect("Failed to insert test API token")
-}
+// get_by_id tests
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id(pool: PgPool) {
     let description = "Test Token";
     let inserted_token =
-        insert_test_api_token(&pool, description, "test_token", None, None, &["symbol-upload"])
+        create_test_api_token(&pool, description, "test_token", None, None, &["symbol-upload"])
             .await;
 
     let found_token = ApiTokenRepo::get_by_id(&pool, inserted_token.id)
@@ -90,7 +25,10 @@ async fn test_get_by_id(pool: PgPool) {
     let found_token = found_token.unwrap();
     assert_eq!(found_token.id, inserted_token.id);
     assert_eq!(found_token.description, description);
+}
 
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_id_not_found(pool: PgPool) {
     let non_existent_id = Uuid::new_v4();
     let not_found = ApiTokenRepo::get_by_id(&pool, non_existent_id)
         .await
@@ -98,6 +36,21 @@ async fn test_get_by_id(pool: PgPool) {
 
     assert!(not_found.is_none());
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_id_error(pool: PgPool) {
+    let description = "Test Token";
+    let inserted_token =
+        create_test_api_token(&pool, description, "test_token", None, None, &["symbol-upload"])
+            .await;
+
+    pool.close().await;
+
+    let result = ApiTokenRepo::get_by_id(&pool, inserted_token.id).await;
+    assert!(result.is_err(), "Expected an error when getting token by ID with closed pool");
+}
+
+// get_by_token_hash tests
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_token_hash(pool: PgPool) {
@@ -124,7 +77,10 @@ async fn test_get_by_token_hash(pool: PgPool) {
     assert!(found_token.is_some());
     let found_token = found_token.unwrap();
     assert_eq!(found_token.token_hash, token_hash);
+}
 
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_token_hash_not_found(pool: PgPool) {
     let non_existent_hash = "non-existent-hash";
     let not_found = ApiTokenRepo::get_by_token_hash(&pool, non_existent_hash)
         .await
@@ -134,8 +90,34 @@ async fn test_get_by_token_hash(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_token_hash_error(pool: PgPool) {
+    let description = "Test Token";
+    let token_hash = format!("unique_hash_{}", Uuid::new_v4());
+
+    let new_token = NewApiToken {
+        description: description.to_string(),
+        token_hash: token_hash.clone(),
+        product_id: None,
+        user_id: None,
+        entitlements: vec!["symbol-upload".to_string()],
+        expires_at: None,
+    };
+
+    ApiTokenRepo::create(&pool, new_token)
+        .await
+        .expect("Failed to create API token");
+
+    pool.close().await;
+
+    let result = ApiTokenRepo::get_by_token_hash(&pool, &token_hash).await;
+    assert!(result.is_err(), "Expected an error when getting token by hash with closed pool");
+}
+
+// update_last_used tests
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_update_last_used(pool: PgPool) {
-    let token = insert_test_api_token(
+    let token = create_test_api_token(
         &pool,
         "Update Last Used",
         "update_token",
@@ -160,8 +142,73 @@ async fn test_update_last_used(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_update_last_used_error(pool: PgPool) {
+    let token = create_test_api_token(
+        &pool,
+        "Update Last Used Error",
+        "update_token_error",
+        None,
+        None,
+        &["symbol-upload"],
+    )
+    .await;
+
+    pool.close().await;
+
+    let result = ApiTokenRepo::update_last_used(&pool, token.id).await;
+    assert!(
+        result.is_err(),
+        "Expected an error when updating last used timestamp with closed pool"
+    );
+}
+
+// get_by_product_id tests
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_product_id(pool: PgPool) {
-    // First create a product in the database
+    use data::product::NewProduct;
+
+    let product = NewProduct {
+        name: format!("TestProduct_{}", Uuid::new_v4()),
+        description: "Test Product Description".to_string(),
+    };
+
+    let product_id = repos::product::ProductRepo::create(&pool, product)
+        .await
+        .expect("Failed to create test product");
+
+    create_test_api_token(
+        &pool,
+        "Product Token 1",
+        "product_token_1",
+        Some(product_id),
+        None,
+        &["symbol-upload"],
+    )
+    .await;
+    create_test_api_token(
+        &pool,
+        "Product Token 2",
+        "product_token_2",
+        Some(product_id),
+        None,
+        &["minidump-upload"],
+    )
+    .await;
+    create_test_api_token(&pool, "Other Token", "other_token", None, None, &["token"]).await;
+
+    let product_tokens = ApiTokenRepo::get_by_product_id(&pool, product_id)
+        .await
+        .expect("Failed to get tokens by product ID");
+
+    assert_eq!(product_tokens.len(), 2);
+    for token in product_tokens {
+        assert_eq!(token.product_id, Some(product_id));
+    }
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_product_id_error(pool: PgPool) {
     let product_id = sqlx::query_scalar!(
         r#"
         INSERT INTO guardrail.products (name, description)
@@ -175,51 +222,29 @@ async fn test_get_by_product_id(pool: PgPool) {
     .await
     .expect("Failed to create test product");
 
-    insert_test_api_token(
-        &pool,
-        "Product Token 1",
-        "product_token_1",
-        Some(product_id),
-        None,
-        &["symbol-upload"],
-    )
-    .await;
-    insert_test_api_token(
-        &pool,
-        "Product Token 2",
-        "product_token_2",
-        Some(product_id),
-        None,
-        &["minidump-upload"],
-    )
-    .await;
-    insert_test_api_token(&pool, "Other Token", "other_token", None, None, &["token"]).await;
+    pool.close().await;
 
-    let product_tokens = ApiTokenRepo::get_by_product_id(&pool, product_id)
-        .await
-        .expect("Failed to get tokens by product ID");
-
-    assert_eq!(product_tokens.len(), 2);
-    for token in product_tokens {
-        assert_eq!(token.product_id, Some(product_id));
-    }
+    let result = ApiTokenRepo::get_by_product_id(&pool, product_id).await;
+    assert!(
+        result.is_err(),
+        "Expected an error when getting tokens by product ID with closed pool"
+    );
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_user_id(pool: PgPool) {
-    let user_id = Uuid::new_v4();
+    use data::user::NewUser;
 
-    // First, create a user since we have foreign key constraints
-    sqlx::query!(
-        "INSERT INTO guardrail.users (id, username, is_admin) VALUES ($1, $2, false)",
-        user_id,
-        format!("user_{}", Uuid::new_v4())
-    )
-    .execute(&pool)
-    .await
-    .expect("Failed to create test user");
+    let user = NewUser {
+        username: format!("user_{}", Uuid::new_v4()),
+        is_admin: false,
+    };
 
-    insert_test_api_token(
+    let user_id = repos::user::UserRepo::create(&pool, user)
+        .await
+        .expect("Failed to create test user");
+
+    create_test_api_token(
         &pool,
         "User Token 1",
         "user_token_1",
@@ -228,7 +253,7 @@ async fn test_get_by_user_id(pool: PgPool) {
         &["symbol-upload"],
     )
     .await;
-    insert_test_api_token(
+    create_test_api_token(
         &pool,
         "User Token 2",
         "user_token_2",
@@ -237,7 +262,7 @@ async fn test_get_by_user_id(pool: PgPool) {
         &["minidump-upload"],
     )
     .await;
-    insert_test_api_token(&pool, "Other Token", "other_token", None, None, &["token"]).await;
+    create_test_api_token(&pool, "Other Token", "other_token", None, None, &["token"]).await;
 
     let user_tokens = ApiTokenRepo::get_by_user_id(&pool, user_id)
         .await
@@ -247,6 +272,25 @@ async fn test_get_by_user_id(pool: PgPool) {
     for token in user_tokens {
         assert_eq!(token.user_id, Some(user_id));
     }
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_user_id_error(pool: PgPool) {
+    use data::user::NewUser;
+
+    let user = NewUser {
+        username: format!("user_{}", Uuid::new_v4()),
+        is_admin: false,
+    };
+
+    let user_id = repos::user::UserRepo::create(&pool, user)
+        .await
+        .expect("Failed to create test user");
+
+    pool.close().await;
+
+    let result = ApiTokenRepo::get_by_user_id(&pool, user_id).await;
+    assert!(result.is_err(), "Expected an error when getting tokens by user ID with closed pool");
 }
 
 #[sqlx::test(migrations = "../../migrations")]
@@ -280,8 +324,29 @@ async fn test_create(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_create_error(pool: PgPool) {
+    let description = "New API Token Error";
+    let token_hash = format!("create_error_hash_{}", Uuid::new_v4());
+    let entitlements = vec!["symbol-upload".to_string(), "minidump-upload".to_string()];
+
+    let new_token = NewApiToken {
+        description: description.to_string(),
+        token_hash: token_hash.clone(),
+        product_id: None,
+        user_id: None,
+        entitlements: entitlements.clone(),
+        expires_at: None,
+    };
+
+    pool.close().await;
+
+    let result = ApiTokenRepo::create(&pool, new_token).await;
+    assert!(result.is_err(), "Expected an error when creating API token with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_update(pool: PgPool) {
-    let mut token = insert_test_api_token(
+    let mut token = create_test_api_token(
         &pool,
         "Update Token",
         "update_token",
@@ -310,8 +375,29 @@ async fn test_update(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_update_error(pool: PgPool) {
+    let mut token = create_test_api_token(
+        &pool,
+        "Update Token Error",
+        "update_token_error",
+        None,
+        None,
+        &["symbol-upload"],
+    )
+    .await;
+
+    token.description = "Updated Description".to_string();
+    token.entitlements = vec!["symbol-upload".to_string(), "token".to_string()];
+
+    pool.close().await;
+
+    let result = ApiTokenRepo::update(&pool, token.clone()).await;
+    assert!(result.is_err(), "Expected an error when updating API token with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_revoke(pool: PgPool) {
-    let token = insert_test_api_token(
+    let token = create_test_api_token(
         &pool,
         "Revoke Token",
         "revoke_token",
@@ -336,8 +422,28 @@ async fn test_revoke(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_revoke_error(pool: PgPool) {
+    let token = create_test_api_token(
+        &pool,
+        "Revoke Token Error",
+        "revoke_token_error",
+        None,
+        None,
+        &["symbol-upload"],
+    )
+    .await;
+
+    assert!(token.is_active);
+
+    pool.close().await;
+
+    let result = ApiTokenRepo::revoke(&pool, token.id).await;
+    assert!(result.is_err(), "Expected an error when revoking API token with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_delete(pool: PgPool) {
-    let token = insert_test_api_token(
+    let token = create_test_api_token(
         &pool,
         "Delete Token",
         "delete_token",
@@ -359,8 +465,26 @@ async fn test_delete(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_delete_error(pool: PgPool) {
+    let token = create_test_api_token(
+        &pool,
+        "Delete Token Error",
+        "delete_token_error",
+        None,
+        None,
+        &["symbol-upload"],
+    )
+    .await;
+
+    pool.close().await;
+
+    let result = ApiTokenRepo::delete(&pool, token.id).await;
+    assert!(result.is_err(), "Expected an error when deleting API token with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_has_entitlement(pool: PgPool) {
-    let token = insert_test_api_token(
+    let token = create_test_api_token(
         &pool,
         "Entitlement Token",
         "entitlement_token",
@@ -370,21 +494,18 @@ async fn test_has_entitlement(pool: PgPool) {
     )
     .await;
 
-    // Test exact entitlement match
     assert!(ApiTokenRepo::has_entitlement(&token, "symbol-upload"));
     assert!(ApiTokenRepo::has_entitlement(&token, "minidump-upload"));
     assert!(!ApiTokenRepo::has_entitlement(&token, "non-existent"));
 
-    // Create token with the special "token" entitlement that grants all permissions
     let super_token =
-        insert_test_api_token(&pool, "Super Token", "super_token", None, None, &["token"]).await;
+        create_test_api_token(&pool, "Super Token", "super_token", None, None, &["token"]).await;
 
     assert!(ApiTokenRepo::has_entitlement(&super_token, "symbol-upload"));
     assert!(ApiTokenRepo::has_entitlement(&super_token, "minidump-upload"));
     assert!(ApiTokenRepo::has_entitlement(&super_token, "anything"));
 
-    // Test expired token
-    let mut expired_token = insert_test_api_token(
+    let mut expired_token = create_test_api_token(
         &pool,
         "Expired Token",
         "expired_token",
@@ -401,8 +522,7 @@ async fn test_has_entitlement(pool: PgPool) {
 
     assert!(!ApiTokenRepo::has_entitlement(&expired_token, "symbol-upload"));
 
-    // Test inactive token
-    let mut inactive_token = insert_test_api_token(
+    let mut inactive_token = create_test_api_token(
         &pool,
         "Inactive Token",
         "inactive_token",
@@ -428,15 +548,29 @@ async fn test_get_all(pool: PgPool) {
 
     let initial_count = initial_tokens.len();
 
-    insert_test_api_token(&pool, "All Token 1", "all_token_1", None, None, &["symbol-upload"])
+    create_test_api_token(&pool, "All Token 1", "all_token_1", None, None, &["symbol-upload"])
         .await;
-    insert_test_api_token(&pool, "All Token 2", "all_token_2", None, None, &["minidump-upload"])
+    create_test_api_token(&pool, "All Token 2", "all_token_2", None, None, &["minidump-upload"])
         .await;
-    insert_test_api_token(&pool, "All Token 3", "all_token_3", None, None, &["token"]).await;
+    create_test_api_token(&pool, "All Token 3", "all_token_3", None, None, &["token"]).await;
 
     let all_tokens = ApiTokenRepo::get_all(&pool)
         .await
         .expect("Failed to get all tokens");
 
     assert_eq!(all_tokens.len(), initial_count + 3);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_all_error(pool: PgPool) {
+    create_test_api_token(&pool, "All Token 1", "all_token_1", None, None, &["symbol-upload"])
+        .await;
+    create_test_api_token(&pool, "All Token 2", "all_token_2", None, None, &["minidump-upload"])
+        .await;
+    create_test_api_token(&pool, "All Token 3", "all_token_3", None, None, &["token"]).await;
+
+    pool.close().await;
+
+    let all_tokens = ApiTokenRepo::get_all(&pool).await;
+    assert!(all_tokens.is_err(), "Expected an error when getting all tokens with closed pool");
 }

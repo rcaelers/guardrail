@@ -17,7 +17,6 @@ pub struct Credential {
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 pub struct NewCredential {
     pub user_id: uuid::Uuid,
-    pub name: String,
     pub data: serde_json::Value,
 }
 

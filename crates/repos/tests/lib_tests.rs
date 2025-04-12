@@ -1,4 +1,4 @@
-use repos::*;
+use common::{QueryParams, SortOrder};
 use std::collections::VecDeque;
 
 #[test]
@@ -26,7 +26,6 @@ fn test_query_params_with_sorting() {
     let (col, order) = &params.sorting[0];
     assert_eq!(col, "name");
     if let SortOrder::Ascending = order {
-        // Test passed
     } else {
         panic!("Expected Ascending order");
     }

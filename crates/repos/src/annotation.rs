@@ -2,12 +2,12 @@ use sqlx::{Postgres, QueryBuilder};
 use tracing::error;
 
 use crate::{Repo, error::RepoError};
-use data::annotation::{Annotation, NewAnnotation};
 use common::QueryParams;
+use data::annotation::{Annotation, NewAnnotation};
 
-pub struct AnnotationRepo {}
+pub struct AnnotationsRepo {}
 
-impl AnnotationRepo {
+impl AnnotationsRepo {
     pub async fn get_by_id(
         executor: impl sqlx::Executor<'_, Database = Postgres>,
         id: uuid::Uuid,

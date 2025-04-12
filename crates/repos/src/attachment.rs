@@ -5,9 +5,9 @@ use tracing::error;
 use crate::{Repo, error::RepoError};
 use data::attachment::{Attachment, NewAttachment};
 
-pub struct AttachmentRepo {}
+pub struct AttachmentsRepo {}
 
-impl AttachmentRepo {
+impl AttachmentsRepo {
     pub async fn get_by_id(
         executor: impl sqlx::Executor<'_, Database = Postgres>,
         id: uuid::Uuid,

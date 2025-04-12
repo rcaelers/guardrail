@@ -1,34 +1,24 @@
-#![cfg(all(test, feature = "ssr"))]
+#![cfg(test)]
 
 use sqlx::PgPool;
 use uuid::Uuid;
 
+use common::{QueryParams, SortOrder};
+use data::user::*;
 use repos::user::*;
-use repos::{QueryParams, SortOrder};
 
-async fn insert_test_user(pool: &PgPool, username: &str, is_admin: bool) -> User {
-    // Insert directly through SQL to avoid depending on the function we're testing
-    sqlx::query_as!(
-        User,
-        r#"
-        INSERT INTO guardrail.users (username, is_admin)
-        VALUES ($1, $2)
-        RETURNING id, username, is_admin, created_at, updated_at, last_login_at
-    "#,
-        username,
-        is_admin
-    )
-    .fetch_one(pool)
-    .await
-    .expect("Failed to insert test user")
-}
+mod testcommon;
+use testcommon::create_test_user;
 
-// Use the migrations parameter to have SQLx automatically run migrations
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id(pool: PgPool) {
-    let username = "testuser";
+    let username = "testuser1";
     let is_admin = false;
-    let inserted_user = insert_test_user(&pool, username, is_admin).await;
+    let _inserted_user = create_test_user(&pool, username, is_admin).await;
+
+    let username = "testuser2";
+    let is_admin = true;
+    let inserted_user = create_test_user(&pool, username, is_admin).await;
 
     let found_user = UserRepo::get_by_id(&pool, inserted_user.id)
         .await
@@ -39,7 +29,10 @@ async fn test_get_by_id(pool: PgPool) {
     assert_eq!(found_user.id, inserted_user.id);
     assert_eq!(found_user.username, username);
     assert_eq!(found_user.is_admin, is_admin);
+}
 
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_id_not_found(pool: PgPool) {
     let non_existent_id = Uuid::new_v4();
     let not_found = UserRepo::get_by_id(&pool, non_existent_id)
         .await
@@ -49,10 +42,26 @@ async fn test_get_by_id(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
-async fn test_get_by_name(pool: PgPool) {
-    let username = "testuser";
+async fn test_get_by_id_error(pool: PgPool) {
+    let username = "testuser_error";
     let is_admin = false;
-    insert_test_user(&pool, username, is_admin).await;
+    let inserted_user = create_test_user(&pool, username, is_admin).await;
+
+    pool.close().await;
+
+    let result = UserRepo::get_by_id(&pool, inserted_user.id).await;
+    assert!(result.is_err(), "Expected an error when getting user by ID with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_name(pool: PgPool) {
+    let username = "testuser1";
+    let is_admin = false;
+    create_test_user(&pool, username, is_admin).await;
+
+    let username = "testuser2";
+    let is_admin = true;
+    create_test_user(&pool, username, is_admin).await;
 
     let found_user = UserRepo::get_by_name(&pool, username)
         .await
@@ -62,7 +71,10 @@ async fn test_get_by_name(pool: PgPool) {
     let found_user = found_user.unwrap();
     assert_eq!(found_user.username, username);
     assert_eq!(found_user.is_admin, is_admin);
+}
 
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_name_not_found(pool: PgPool) {
     let non_existent_name = "nonexistentuser";
     let not_found = UserRepo::get_by_name(&pool, non_existent_name)
         .await
@@ -72,10 +84,22 @@ async fn test_get_by_name(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_get_by_name_error(pool: PgPool) {
+    let username = "getbynameuser_error";
+    let is_admin = false;
+    create_test_user(&pool, username, is_admin).await;
+
+    pool.close().await;
+
+    let result = UserRepo::get_by_name(&pool, username).await;
+    assert!(result.is_err(), "Expected an error when getting user by name with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_get_all_names(pool: PgPool) {
     let usernames = vec!["user1", "user2", "user3"];
     for username in &usernames {
-        insert_test_user(&pool, username, false).await;
+        create_test_user(&pool, username, false).await;
     }
 
     let user_names = UserRepo::get_all_names(&pool)
@@ -89,10 +113,21 @@ async fn test_get_all_names(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_get_all_names_error(pool: PgPool) {
+    create_test_user(&pool, "names_user1_error", false).await;
+    create_test_user(&pool, "names_user2_error", false).await;
+
+    pool.close().await;
+
+    let result = UserRepo::get_all_names(&pool).await;
+    assert!(result.is_err(), "Expected an error when getting all names with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_get_all(pool: PgPool) {
     let usernames = vec!["user3", "user1", "user2"];
     for username in &usernames {
-        insert_test_user(&pool, username, false).await;
+        create_test_user(&pool, username, false).await;
     }
 
     let query_params = QueryParams::default();
@@ -120,6 +155,18 @@ async fn test_get_all(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_get_all_error(pool: PgPool) {
+    create_test_user(&pool, "get_all_user1_error", false).await;
+    create_test_user(&pool, "get_all_user2_error", false).await;
+
+    pool.close().await;
+
+    let query_params = QueryParams::default();
+    let result = UserRepo::get_all(&pool, query_params).await;
+    assert!(result.is_err(), "Expected an error when getting all users with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_create_user(pool: PgPool) {
     let new_user = NewUser {
         username: "newuser".to_string(),
@@ -137,6 +184,19 @@ async fn test_create_user(pool: PgPool) {
 
     assert_eq!(found_user.username, new_user.username);
     assert!(!found_user.is_admin);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_create_error(pool: PgPool) {
+    let new_user = NewUser {
+        username: "createuser_error".to_string(),
+        is_admin: false,
+    };
+
+    pool.close().await;
+
+    let result = UserRepo::create(&pool, new_user).await;
+    assert!(result.is_err(), "Expected an error when creating user with closed pool");
 }
 
 #[sqlx::test(migrations = "../../migrations")]
@@ -161,8 +221,19 @@ async fn test_create_with_id(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_create_with_id_error(pool: PgPool) {
+    let user_id = Uuid::new_v4();
+    let username = "userwithid_error";
+
+    pool.close().await;
+
+    let result = UserRepo::create_with_id(&pool, user_id, username).await;
+    assert!(result.is_err(), "Expected an error when creating user with ID and closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_update(pool: PgPool) {
-    let mut user = insert_test_user(&pool, "updateuser", false).await;
+    let mut user = create_test_user(&pool, "updateuser", false).await;
 
     user.username = "updated_username".to_string();
     user.is_admin = true;
@@ -184,8 +255,21 @@ async fn test_update(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_update_error(pool: PgPool) {
+    let mut user = create_test_user(&pool, "updateuser_error", false).await;
+
+    user.username = "updated_username_error".to_string();
+    user.is_admin = true;
+
+    pool.close().await;
+
+    let result = UserRepo::update(&pool, user.clone()).await;
+    assert!(result.is_err(), "Expected an error when updating user with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_remove(pool: PgPool) {
-    let user = insert_test_user(&pool, "removeuser", false).await;
+    let user = create_test_user(&pool, "removeuser", false).await;
 
     let found_user = UserRepo::get_by_id(&pool, user.id)
         .await
@@ -205,14 +289,35 @@ async fn test_remove(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_remove_error(pool: PgPool) {
+    let user = create_test_user(&pool, "removeuser_error", false).await;
+
+    pool.close().await;
+
+    let result = UserRepo::remove(&pool, user.id).await;
+    assert!(result.is_err(), "Expected an error when removing user with closed pool");
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_count(pool: PgPool) {
     let count = UserRepo::count(&pool).await.expect("Failed to count users");
     assert_eq!(count, 0);
 
     for i in 0..3 {
-        insert_test_user(&pool, &format!("countuser{}", i), false).await;
+        create_test_user(&pool, &format!("countuser{}", i), false).await;
     }
 
     let count = UserRepo::count(&pool).await.expect("Failed to count users");
     assert_eq!(count, 3);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_count_error(pool: PgPool) {
+    create_test_user(&pool, "count_user1_error", false).await;
+    create_test_user(&pool, "count_user2_error", false).await;
+
+    pool.close().await;
+
+    let result = UserRepo::count(&pool).await;
+    assert!(result.is_err(), "Expected an error when counting users with closed pool");
 }
