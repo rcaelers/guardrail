@@ -1,12 +1,12 @@
 use super::error::ApiError;
 use super::file_cleanup::FileCleanupTracker;
-use crate::settings;
 use crate::state::AppState;
 use crate::utils::stream_to_file;
 use crate::utils::{get_product, get_version, validate_api_token_for_product, validate_file_size};
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Query, State};
 use axum::{Extension, Json};
+use common::settings::Settings;
 use data::api_token::ApiToken;
 use data::product::Product;
 use data::symbols::NewSymbols;
@@ -15,9 +15,10 @@ use repos::symbols::SymbolsRepo;
 use serde::{Deserialize, Serialize};
 use sqlx::Postgres;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::fs::{self, File};
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 #[derive(Debug, Deserialize)]
 pub struct SymbolsRequestParams {
@@ -87,18 +88,18 @@ impl SymbolsApi {
         Ok(())
     }
 
-    fn get_max_symbols_size() -> u64 {
+    fn get_max_symbols_size(settings: Arc<Settings>) -> u64 {
         const MAX_ATTACHMENT_SIZE: u64 = 10 * 1024 * 1024; // 10 MB default limit
-        settings()
+        settings
             .server
             .max_symbols_size
             .unwrap_or(MAX_ATTACHMENT_SIZE)
     }
 
-    async fn get_temp_symbols_file() -> Result<PathBuf, ApiError> {
+    async fn get_temp_symbols_file(settings: Arc<Settings>) -> Result<PathBuf, ApiError> {
         let id = uuid::Uuid::new_v4();
 
-        let upload_path = std::path::Path::new(&settings().server.base_path)
+        let upload_path = std::path::Path::new(&settings.server.base_path)
             .join("symbols")
             .join("tmp");
         let symbol_file = std::path::Path::new(&upload_path).join(id.to_string());
@@ -172,6 +173,7 @@ impl SymbolsApi {
     async fn process_symbol_file(
         symbol_file: &PathBuf,
         cleanup_tracker: &mut FileCleanupTracker,
+        settings: Arc<Settings>,
     ) -> Result<SymbolsData, ApiError> {
         let first_line = Self::get_header(symbol_file).await?;
 
@@ -188,7 +190,7 @@ impl SymbolsApi {
         Self::validate_build_id(&build_id)?;
         Self::validate_module_id(&module_id)?;
 
-        let final_path = std::path::Path::new(&settings().server.base_path)
+        let final_path = std::path::Path::new(&settings.server.base_path)
             .join("symbols")
             .join(&module_id)
             .join(&build_id);
@@ -246,6 +248,7 @@ impl SymbolsApi {
         version: &Version,
         field: Field<'_>,
         cleanup_tracker: &mut FileCleanupTracker,
+        settings: Arc<Settings>,
     ) -> Result<(), ApiError>
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
@@ -260,7 +263,7 @@ impl SymbolsApi {
         let content_type = field.content_type().unwrap_or_default();
         Self::validate_symbols_content_type(content_type)?;
 
-        let symbol_file = Self::get_temp_symbols_file().await?;
+        let symbol_file = Self::get_temp_symbols_file(settings.clone()).await?;
         cleanup_tracker.track_file(symbol_file.clone());
 
         if let Err(e) = stream_to_file(&symbol_file, field).await {
@@ -268,10 +271,11 @@ impl SymbolsApi {
             return Err(ApiError::InternalFailure());
         }
 
-        let max_size = Self::get_max_symbols_size();
+        let max_size = Self::get_max_symbols_size(settings.clone());
         let _filesize = validate_file_size(&symbol_file, max_size, "symbols").await? as i64;
 
-        let data = Self::process_symbol_file(&symbol_file, cleanup_tracker).await?;
+        let data =
+            Self::process_symbol_file(&symbol_file, cleanup_tracker, settings.clone()).await?;
 
         Self::store(&mut *tx, data.clone(), product.clone(), version.clone()).await?;
 
@@ -291,14 +295,22 @@ impl SymbolsApi {
         product: &Product,
         version: &Version,
         cleanup_tracker: &mut FileCleanupTracker,
+        settings: Arc<Settings>,
     ) -> Result<(), ApiError>
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
     {
         match field.name() {
             Some("upload_file_symbols") => {
-                Self::handle_symbol_upload(&mut *tx, product, version, field, cleanup_tracker)
-                    .await?;
+                Self::handle_symbol_upload(
+                    &mut *tx,
+                    product,
+                    version,
+                    field,
+                    cleanup_tracker,
+                    settings.clone(),
+                )
+                .await?;
                 Ok(())
             }
             Some("options") => {
@@ -318,6 +330,9 @@ impl SymbolsApi {
         Query(params): Query<SymbolsRequestParams>,
         mut multipart: Multipart,
     ) -> Result<Json<SymbolsResponse>, ApiError> {
+        debug!("SymbolsApi::upload called with params: {:?}", params);
+        tracing::info!("Logging initialized");
+
         Self::audit_log(
             "symbols_upload_start",
             &format!("Starting symbols upload process for {}/{}", params.product, params.version),
@@ -350,7 +365,15 @@ impl SymbolsApi {
             error!("Failed to get next multipart field: {:?}", e);
             ApiError::Failure("failed to read multipart field from upload".to_string())
         })? {
-            Self::process_field(&mut *tx, field, &product, &version, &mut cleanup_tracker).await?;
+            Self::process_field(
+                &mut *tx,
+                field,
+                &product,
+                &version,
+                &mut cleanup_tracker,
+                state.settings.clone(),
+            )
+            .await?;
         }
 
         let commit_result = tx.commit().await;

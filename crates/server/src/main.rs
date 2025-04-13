@@ -1,6 +1,6 @@
 //mod api;
-mod state;
 mod session_store;
+mod state;
 
 use app::auth::AuthSession;
 use app::auth::layer::AuthLayer;
@@ -31,44 +31,141 @@ use tracing_subscriber::{EnvFilter, FmtSubscriber, fmt};
 use webauthn_rs::prelude::*;
 
 use app::*;
-use state::AppState;
-use common::settings::settings;
+use common::settings::Settings;
 use session_store::PostgresStore;
+use state::AppState;
 
-async fn init_logging() {
-    let directory = &settings().logger.directory;
 
-    let file_appender = tracing_appender::rolling::never(directory, "guardrail.log");
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-    let max_level = settings().logger.level.parse().unwrap_or(Level::DEBUG);
-
-    let filter = EnvFilter::builder()
-        .with_default_directive(LevelFilter::INFO.into())
-        .from_env()
-        .unwrap()
-        .add_directive("server=debug".parse().unwrap())
-        .add_directive("leptos=debug".parse().unwrap())
-        .add_directive("app=debug".parse().unwrap());
-
-    let subscriber = FmtSubscriber::builder()
-        .with_max_level(max_level)
-        .with_ansi(std::io::stdout().is_terminal())
-        .with_env_filter(filter)
-        .finish()
-        .with(fmt::Layer::new().with_writer(non_blocking));
-
-    tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
-
-    tracing_log::LogTracer::init().expect("Failed to set logger");
+struct GuardrailApp {
+    settings: Arc<Settings>,
+    db: PgPool,
+    repo: Repo,
+    webauthn: Arc<Webauthn>,
 }
 
-fn create_webauthn() -> Arc<Webauthn> {
-    let rp_id = settings().auth.id.as_str();
-    let rp_origin = Url::parse(settings().auth.origin.as_str()).expect("Invalid URL");
-    let builder = WebauthnBuilder::new(rp_id, &rp_origin).expect("Invalid configuration");
-    let builder = builder.rp_name(settings().auth.name.as_str());
+impl GuardrailApp {
+    async fn new() -> Self {
+        let settings = Arc::new(Settings::new().expect("Failed to load settings"));
+        Self::init_logging(settings.clone()).await;
 
-    Arc::new(builder.build().expect("Invalid configuration"))
+        let db = Self::init_db(settings.clone()).await.unwrap();
+        let webauthn = Self::create_webauthn(settings.clone());
+        let repo = Repo::new(db.clone());
+
+        Self {
+            settings: settings.clone(),
+            db,
+            repo,
+            webauthn,
+        }
+    }
+
+    async fn init_logging(settings: Arc<Settings>) {
+        let directory = &settings.logger.directory;
+
+        let file_appender = tracing_appender::rolling::never(directory, "guardrail.log");
+        let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+        let max_level = settings.logger.level.parse().unwrap_or(Level::DEBUG);
+
+        let filter = EnvFilter::builder()
+            .with_default_directive(LevelFilter::INFO.into())
+            .from_env()
+            .unwrap()
+            .add_directive("server=debug".parse().unwrap())
+            .add_directive("leptos=debug".parse().unwrap())
+            .add_directive("app=debug".parse().unwrap());
+
+        let subscriber = FmtSubscriber::builder()
+            .with_max_level(max_level)
+            .with_ansi(std::io::stdout().is_terminal())
+            .with_env_filter(filter)
+            .finish()
+            .with(fmt::Layer::new().with_writer(non_blocking));
+
+        tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
+
+        tracing_log::LogTracer::init().expect("Failed to set logger");
+    }
+
+    async fn init_db(settings: Arc<Settings>) -> Result<PgPool, sqlx::Error> {
+        let database_url = &settings.database.uri;
+        let mut opts: PgConnectOptions = database_url.parse()?;
+        opts = opts.log_statements(log::LevelFilter::Debug);
+
+        let pool = PgPoolOptions::new()
+            .max_connections(5)
+            .connect_with(opts)
+            .await?;
+
+        Ok(pool)
+    }
+
+    fn create_webauthn(settings: Arc<Settings>) -> Arc<Webauthn> {
+        let rp_id = &settings.auth.id.as_str();
+        let rp_origin = Url::parse(settings.auth.origin.as_str()).expect("Invalid URL");
+        let builder = WebauthnBuilder::new(rp_id, &rp_origin).expect("Invalid configuration");
+        let builder = builder.rp_name(settings.auth.name.as_str());
+
+        Arc::new(builder.build().expect("Invalid configuration"))
+    }
+
+    async fn run(self) {
+        info!("Starting server on port {}", self.settings.server.port);
+
+        let conf = get_configuration(None).unwrap();
+        let leptos_options = conf.leptos_options;
+        let _addr = leptos_options.site_addr;
+        let routes = generate_route_list(App);
+
+        let state = AppState {
+            leptos_options: leptos_options.clone(),
+            routes: routes.clone(),
+            repo: self.repo.clone(),
+            webauthn: self.webauthn.clone(),
+        };
+        let session_store = PostgresStore::new(self.db.clone());
+        let session_layer = SessionManagerLayer::new(session_store)
+            .with_name("guardrail")
+            .with_same_site(SameSite::Lax)
+            .with_expiry(Expiry::OnInactivity(Duration::hours(4)))
+            .with_secure(false);
+
+        let auth_layer = AuthLayer::new();
+
+        // Build our router with all routes and middleware
+        let routes_all = Router::new()
+            .route("/api/{*fn_name}", axum::routing::get(server_fn_handler).post(server_fn_handler))
+            .leptos_routes_with_handler(routes, axum::routing::get(leptos_routes_handler))
+            .fallback(leptos_axum::file_and_error_handler::<AppState, _>(shell))
+            .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
+            .layer(TraceLayer::new_for_http())
+            .layer(auth_layer)
+            .layer(session_layer)
+            .with_state(state);
+
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+        //TODO: Make configurable
+        let config = RustlsConfig::from_pem_file(
+            PathBuf::from("dev").join("cert.pem"),
+            PathBuf::from("dev").join("key.pem"),
+        )
+        .await
+        .unwrap();
+
+        let port = self.settings.server.port;
+        let addr = SocketAddr::from(([127, 0, 0, 1], port));
+        axum_server::bind_rustls(addr, config)
+            .serve(routes_all.into_make_service())
+            .await
+            .unwrap();
+    }
+}
+
+#[tokio::main]
+async fn main() {
+    let app = GuardrailApp::new().await;
+    app.run().await;
 }
 
 async fn server_fn_handler(
@@ -103,76 +200,4 @@ async fn leptos_routes_handler(
         move || shell(app_state.leptos_options.clone()),
     );
     handler(state, req).await.into_response()
-}
-
-async fn init_db() -> Result<PgPool, sqlx::Error> {
-    let database_url = &settings().database.uri;
-    let mut opts: PgConnectOptions = database_url.parse()?;
-    opts = opts.log_statements(log::LevelFilter::Debug);
-
-    let pool = PgPoolOptions::new()
-        .max_connections(5)
-        .connect_with(opts)
-        .await?;
-
-    Ok(pool)
-}
-
-#[tokio::main]
-async fn main() {
-    init_logging().await;
-
-    info!("Starting server on port {}", settings().server.port);
-
-    let conf = get_configuration(None).unwrap();
-    let leptos_options = conf.leptos_options;
-    let _addr = leptos_options.site_addr;
-    let routes = generate_route_list(App);
-
-    let db = init_db().await.unwrap();
-    let webauthn = create_webauthn();
-    let repo = Repo::new(db.clone());
-
-    let state = AppState {
-        leptos_options: leptos_options.clone(),
-        routes: routes.clone(),
-        repo,
-        webauthn,
-    };
-    let session_store = PostgresStore::new(db);
-    let session_layer = SessionManagerLayer::new(session_store)
-        .with_name("guardrail")
-        .with_same_site(SameSite::Lax)
-        .with_expiry(Expiry::OnInactivity(Duration::hours(4)))
-        .with_secure(false);
-
-    let auth_layer = AuthLayer::new();
-
-    // Build our router with all routes and middleware
-    let routes_all = Router::new()
-        .route("/api/{*fn_name}", axum::routing::get(server_fn_handler).post(server_fn_handler))
-        .leptos_routes_with_handler(routes, axum::routing::get(leptos_routes_handler))
-        .fallback(leptos_axum::file_and_error_handler::<AppState, _>(shell))
-        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
-        .layer(TraceLayer::new_for_http())
-        .layer(auth_layer)
-        .layer(session_layer)
-        .with_state(state);
-
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-    //TODO: Make configurable
-    let config = RustlsConfig::from_pem_file(
-        PathBuf::from("dev").join("cert.pem"),
-        PathBuf::from("dev").join("key.pem"),
-    )
-    .await
-    .unwrap();
-
-    let port = settings().server.port;
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    axum_server::bind_rustls(addr, config)
-        .serve(routes_all.into_make_service())
-        .await
-        .unwrap();
 }

@@ -82,7 +82,7 @@ impl IntoResponse for ApiError {
             }
             ApiError::VersionNotFound(product, version) => (
                 StatusCode::BAD_REQUEST,
-                format!("Version {} of product {} not found", product, version),
+                format!("Version {} of product {} not found", version, product),
             ),
             ApiError::CrashNotFound() => (StatusCode::BAD_REQUEST, "Crash not found".to_string()),
         };

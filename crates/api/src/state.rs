@@ -1,4 +1,5 @@
 use axum::extract::FromRef;
+use common::settings::Settings;
 use repos::Repo;
 use std::sync::Arc;
 use webauthn_rs::prelude::*;
@@ -7,4 +8,5 @@ use webauthn_rs::prelude::*;
 pub struct AppState {
     pub repo: Repo,
     pub webauthn: Arc<Webauthn>,
+    pub settings: Arc<Settings>,
 }

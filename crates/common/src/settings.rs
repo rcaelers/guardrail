@@ -1,11 +1,6 @@
 use config::{Config, ConfigError, Environment, File};
 use serde::Deserialize;
-use std::{env, sync::OnceLock};
-
-pub fn settings() -> &'static Settings {
-    static INSTANCE: OnceLock<Settings> = OnceLock::new();
-    INSTANCE.get_or_init(|| Settings::new().expect("Failed to setup settings"))
-}
+use std::env;
 
 #[derive(Debug, Deserialize, Default)]
 pub struct Server {
@@ -56,7 +51,7 @@ impl Default for Database {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct Settings {
     pub server: Server,
     pub logger: Logger,

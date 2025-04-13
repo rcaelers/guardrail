@@ -14,16 +14,17 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::Postgres;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::task;
 use tracing::{debug, error, info};
 
 use super::error::ApiError;
 use super::file_cleanup::FileCleanupTracker;
+use crate::state::AppState;
 use crate::utils::{
     get_product, get_version, stream_to_file, validate_api_token_for_product, validate_file_size,
 };
-use crate::state::AppState;
-use crate::settings;
+use common::settings::Settings;
 
 pub struct MinidumpApi;
 
@@ -116,17 +117,17 @@ impl MinidumpApi {
         Self::validate_content_type(content_type, "minidump")
     }
 
-    fn get_max_attachment_size() -> u64 {
+    fn get_max_attachment_size(settings: Arc<Settings>) -> u64 {
         const MAX_ATTACHMENT_SIZE: u64 = 10 * 1024 * 1024; // 10 MB default limit
-        settings()
+        settings
             .server
             .max_attachment_size
             .unwrap_or(MAX_ATTACHMENT_SIZE)
     }
 
-    fn get_max_minidump_size() -> u64 {
+    fn get_max_minidump_size(settings: Arc<Settings>) -> u64 {
         const MAX_MINIDUMP_SIZE: u64 = 50 * 1024 * 1024; // 50 MB default limit
-        settings()
+        settings
             .server
             .max_minidump_size
             .unwrap_or(MAX_MINIDUMP_SIZE)
@@ -140,8 +141,11 @@ impl MinidumpApi {
         Ok(filename)
     }
 
-    async fn get_minidump_file(name: &String) -> Result<PathBuf, ApiError> {
-        let upload_path = std::path::Path::new(&settings().server.base_path).join("minidumps");
+    async fn get_minidump_file(
+        name: &String,
+        settings: Arc<Settings>,
+    ) -> Result<PathBuf, ApiError> {
+        let upload_path = std::path::Path::new(&settings.server.base_path).join("minidumps");
         let minidump_file = std::path::Path::new(&upload_path).join(name);
         tokio::fs::create_dir_all(&upload_path).await.map_err(|e| {
             error!(
@@ -155,8 +159,12 @@ impl MinidumpApi {
         Ok(minidump_file)
     }
 
-    async fn get_attachment_file(crash: uuid::Uuid, name: &String) -> Result<PathBuf, ApiError> {
-        let upload_path = std::path::Path::new(&settings().server.base_path)
+    async fn get_attachment_file(
+        crash: uuid::Uuid,
+        name: &String,
+        settings: Arc<Settings>,
+    ) -> Result<PathBuf, ApiError> {
+        let upload_path = std::path::Path::new(&settings.server.base_path)
             .join("attachments")
             .join(crash.to_string());
         let attachment_file = std::path::Path::new(&upload_path).join(name);
@@ -244,13 +252,16 @@ impl MinidumpApi {
             })
     }
 
-    async fn process_minidump_file(minidump_file: PathBuf) -> Result<serde_json::Value, ApiError> {
+    async fn process_minidump_file(
+        minidump_file: PathBuf,
+        settings: Arc<Settings>,
+    ) -> Result<serde_json::Value, ApiError> {
         let dump = Minidump::read_path(minidump_file)?;
 
         let mut options = ProcessorOptions::default();
         options.recover_function_args = true;
 
-        let path = std::path::Path::new(&settings().server.base_path)
+        let path = std::path::Path::new(&settings.server.base_path)
             .join("symbols")
             .to_path_buf();
         debug!("provider: {:?}", path);
@@ -278,12 +289,13 @@ impl MinidumpApi {
         product: &Product,
         version: &Version,
         minidump_file: PathBuf,
+        settings: Arc<Settings>,
     ) -> Result<uuid::Uuid, ApiError>
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
     {
         let data_result =
-            task::spawn(async move { Self::process_minidump_file(minidump_file).await })
+            task::spawn(async move { Self::process_minidump_file(minidump_file, settings).await })
                 .await
                 .map_err(|e| {
                     error!("Failed to process minidump file: {:?}", e);
@@ -301,6 +313,7 @@ impl MinidumpApi {
         version: &Version,
         field: Field<'_>,
         cleanup_tracker: &mut FileCleanupTracker,
+        settings: Arc<Settings>,
     ) -> Result<uuid::Uuid, ApiError>
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
@@ -316,9 +329,9 @@ impl MinidumpApi {
         let content_type = field.content_type().unwrap_or_default();
         Self::validate_minidump_content_type(content_type)?;
 
-        let max_size = Self::get_max_minidump_size();
+        let max_size = Self::get_max_minidump_size(settings.clone());
         let filename = Self::extract_filename(&field)?;
-        let minidump_file = Self::get_minidump_file(&filename).await?;
+        let minidump_file = Self::get_minidump_file(&filename, settings.clone()).await?;
 
         cleanup_tracker.track_file(minidump_file.clone());
 
@@ -346,7 +359,8 @@ impl MinidumpApi {
         );
 
         let crash_id =
-            Self::process_and_store_minidump(tx, product, version, minidump_file.clone()).await?;
+            Self::process_and_store_minidump(tx, product, version, minidump_file.clone(), settings)
+                .await?;
 
         Self::audit_log(
             "minidump_processing_complete",
@@ -366,6 +380,7 @@ impl MinidumpApi {
         _version: &Version,
         field: Field<'_>,
         cleanup_tracker: &mut FileCleanupTracker,
+        settings: Arc<Settings>,
     ) -> Result<(), ApiError>
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
@@ -400,7 +415,8 @@ impl MinidumpApi {
         );
 
         let storage_filename = uuid::Uuid::new_v4().to_string();
-        let attachment_file = Self::get_attachment_file(crash_id, &storage_filename).await?;
+        let attachment_file =
+            Self::get_attachment_file(crash_id, &storage_filename, settings.clone()).await?;
 
         cleanup_tracker.track_file(attachment_file.clone());
 
@@ -417,7 +433,7 @@ impl MinidumpApi {
             Some(crash_id),
         );
 
-        let max_size = Self::get_max_attachment_size();
+        let max_size = Self::get_max_attachment_size(settings);
         let filesize = validate_file_size(&attachment_file, max_size, "attachment").await? as i64;
 
         let crash = Self::get_crash(tx, crash_id).await?;
@@ -433,15 +449,22 @@ impl MinidumpApi {
         version: &Version,
         crash_id: &mut Option<uuid::Uuid>,
         cleanup_tracker: &mut FileCleanupTracker,
+        settings: Arc<Settings>,
     ) -> Result<(), ApiError>
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
     {
         match field.name() {
             Some("upload_file_minidump") => {
-                let new_crash_id =
-                    Self::handle_minidump_upload(tx, product, version, field, cleanup_tracker)
-                        .await?;
+                let new_crash_id = Self::handle_minidump_upload(
+                    tx,
+                    product,
+                    version,
+                    field,
+                    cleanup_tracker,
+                    settings,
+                )
+                .await?;
                 *crash_id = Some(new_crash_id);
                 Ok(())
             }
@@ -463,6 +486,7 @@ impl MinidumpApi {
                     version,
                     field,
                     cleanup_tracker,
+                    settings,
                 )
                 .await
             }
@@ -518,6 +542,7 @@ impl MinidumpApi {
                 &version,
                 &mut crash_id,
                 &mut cleanup_tracker,
+                state.settings.clone(),
             )
             .await?;
         }

@@ -4,9 +4,8 @@ use axum::{
     response::IntoResponse,
 };
 use chrono::{Duration, Utc};
-use common::settings::settings;
-use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use data::api_token::ApiToken;
+use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use tracing::{error, info};
@@ -26,7 +25,8 @@ pub async fn generate_jwt_token(
     State(state): State<AppState>,
     Extension(api_token): Extension<ApiToken>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let expiration = Utc::now() + Duration::minutes(settings().auth.jwk.token_validity_in_minutes);
+    let settings = state.settings.clone();
+    let expiration = Utc::now() + Duration::minutes(settings.clone().auth.jwk.token_validity_in_minutes);
     let expiration_timestamp = expiration.timestamp();
 
     let mut conn = match state.repo.acquire_admin().await {
@@ -58,13 +58,14 @@ pub async fn generate_jwt_token(
         username: username.clone(),
         role: "guardrail_apiuser".to_string(),
         sub: username.clone(),
-        iss: settings().auth.id.clone(),
+        iss: settings.clone().auth.id.clone(),
         aud: "guardrail".to_string(),
         exp: expiration_timestamp,
         iat: Utc::now().timestamp(),
     };
 
-    let private_key_path = &settings().auth.jwk.private_key;
+
+    let private_key_path = &settings.clone().auth.jwk.private_key;
     let private_key = match fs::read(private_key_path) {
         Ok(key) => key,
         Err(err) => {
