@@ -3,6 +3,8 @@ name: Rust
 on:
   push:
     branches: ["main", "dev"]
+    tags:
+      - "v*.*.*"
   pull_request:
     branches: ["main", "dev"]
 
@@ -35,4 +37,4 @@ jobs:
           export SQLX_OFFLINE=1
           cargo leptos build -vv
       - name: Run tests
-        run: RUST_BACKTRACE=1 cargo test --verbose
+        run: RUST_BACKTRACE=1 cargo test  -p api -p repos --no-fail-fast

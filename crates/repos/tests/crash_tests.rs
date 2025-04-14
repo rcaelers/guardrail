@@ -8,8 +8,7 @@ use common::{QueryParams, SortOrder};
 use data::crash::*;
 use repos::crash::*;
 
-mod testcommon;
-use testcommon::{create_test_crash as insert_test_crash, setup_test_dependencies};
+use testware::{create_test_crash as insert_test_crash, setup_test_dependencies};
 
 // get_by_id tests
 

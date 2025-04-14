@@ -1,8 +1,10 @@
-#![cfg(test)]
+use std::sync::Arc;
 
 use chrono::Utc;
+use common::settings::Settings;
 use serde_json::json;
 use sqlx::PgPool;
+use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
 // Data models
@@ -34,6 +36,8 @@ use data::product::Product;
 use data::symbols::Symbols;
 use data::user::User;
 use data::version::Version;
+use webauthn_rs::prelude::Url;
+use webauthn_rs::{Webauthn, WebauthnBuilder};
 
 /// Create a test product with a random name
 pub async fn create_test_product(pool: &PgPool) -> Uuid {
@@ -359,4 +363,55 @@ pub async fn create_test_api_token(
         .await
         .expect("Failed to retrieve the created API token")
         .expect("Created API token not found")
+}
+
+pub fn init_logging() {
+    tracing_subscriber::fmt()
+        .with_env_filter(EnvFilter::from_default_env())
+        .with_target(true)
+        .with_level(true)
+        .init();
+
+    //    tracing_log::LogTracer::init().expect("Failed to set logger");
+}
+
+pub fn create_webauthn(settings: Arc<Settings>) -> Arc<Webauthn> {
+    let rp_id = settings.auth.id.as_str();
+    let rp_origin = Url::parse(settings.auth.origin.as_str()).expect("Invalid URL");
+    let builder = WebauthnBuilder::new(rp_id, &rp_origin).expect("Invalid configuration");
+    let builder = builder.rp_name(settings.auth.name.as_str());
+
+    Arc::new(builder.build().expect("Invalid configuration"))
+}
+
+pub async fn create_token(
+    pool: &PgPool,
+    token: &str,
+    product: Option<Uuid>,
+    entitement: &str,
+) -> Uuid {
+    let token_hash = hash_token(token);
+    let new_token = NewApiToken {
+        description: "Test API token".to_string(),
+        token_hash,
+        product_id: product,
+        user_id: None,
+        entitlements: vec![entitement.to_string()],
+        expires_at: None,
+    };
+
+    ApiTokenRepo::create(pool, new_token)
+        .await
+        .expect("Failed to insert test API token")
+}
+
+pub fn create_settings() -> Arc<Settings> {
+    let mut settings = Settings::default();
+    tracing::info!("Logging initialized");
+
+    settings.auth.id = "localhost".to_string();
+    settings.auth.origin = "http://localhost:3000".to_string();
+    settings.auth.name = "TestApp".to_string();
+
+    Arc::new(settings)
 }

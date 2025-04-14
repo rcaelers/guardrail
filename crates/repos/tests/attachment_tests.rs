@@ -10,8 +10,7 @@ use data::crash::NewCrash;
 use repos::attachment::*;
 use repos::crash::CrashRepo;
 
-mod testcommon;
-use testcommon::{create_test_attachment, setup_test_dependencies};
+use testware::{create_test_attachment, setup_test_dependencies};
 
 // get_by_id tests
 

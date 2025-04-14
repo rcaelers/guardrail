@@ -5,8 +5,7 @@ use uuid::Uuid;
 use data::api_token::NewApiToken;
 use repos::api_token::*;
 
-mod testcommon;
-use testcommon::create_test_api_token;
+use testware::create_test_api_token;
 
 // get_by_id tests
 

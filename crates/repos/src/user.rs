@@ -2,9 +2,9 @@ use sqlx::{Postgres, QueryBuilder};
 use std::collections::HashSet;
 use tracing::error;
 
+use crate::{Repo, error::RepoError};
 use common::QueryParams;
 use data::user::{NewUser, User};
-use crate::{Repo, error::RepoError};
 
 pub struct UserRepo {}
 
@@ -132,11 +132,12 @@ impl UserRepo {
                     username,
                     is_admin
                   )
-                VALUES ($1, false)
+                VALUES ($1, $2)
                 RETURNING
                   id
             "#,
             user.username,
+            user.is_admin,
         )
         .fetch_one(executor)
         .await

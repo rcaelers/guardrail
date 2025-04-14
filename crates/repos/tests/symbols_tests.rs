@@ -7,8 +7,7 @@ use common::QueryParams;
 use data::symbols::*;
 use repos::symbols::*;
 
-mod testcommon;
-use testcommon::{create_test_symbols, setup_test_dependencies};
+use testware::{create_test_symbols, setup_test_dependencies};
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id(pool: PgPool) {

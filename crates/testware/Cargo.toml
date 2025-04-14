@@ -1,5 +1,5 @@
 [package]
-name = "api"
+name = "testware"
 version = "0.1.0"
 edition = "2024"
 
@@ -65,4 +65,3 @@ log.workspace = true
 axum-test.workspace = true
 serial_test.workspace = true
 mockall.workspace = true
-testware = { path = "../testware" }

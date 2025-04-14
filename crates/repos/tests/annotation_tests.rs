@@ -11,8 +11,6 @@ use repos::{annotation::AnnotationsRepo, error::RepoError};
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
-mod testcommon;
-
 // AnnotationKind tests
 
 #[test]

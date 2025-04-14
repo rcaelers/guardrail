@@ -1,124 +1,28 @@
 #![cfg(test)]
 
-use std::sync::Arc;
-
 use api::routes::routes;
 use api::state::AppState;
 use axum::extract::DefaultBodyLimit;
 use axum::http::{Request, StatusCode};
 use axum::{Router, body::Body};
-use common::{QueryParams, hash_token};
-use data::api_token::NewApiToken;
-use data::product::{NewProduct, Product};
-use data::version::{NewVersion, Version};
+use common::QueryParams;
 use repos::Repo;
-use repos::api_token::ApiTokenRepo;
-use repos::product::ProductRepo;
-use repos::version::VersionRepo;
 use serde_json::json;
 use sqlx::PgPool;
 use tower::ServiceExt;
 use tower_http::trace::TraceLayer;
-use webauthn_rs::prelude::*;
 
-use common::settings::Settings;
 use repos::symbols::SymbolsRepo;
-use tracing_subscriber::EnvFilter;
 
-fn init_logging() {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_target(true)
-        .with_level(true)
-        .init();
-
-    //    tracing_log::LogTracer::init().expect("Failed to set logger");
-}
-
-pub async fn create_test_product_with_details(
-    pool: &PgPool,
-    name: &str,
-    description: &str,
-) -> Product {
-    let new_product = NewProduct {
-        name: name.to_string(),
-        description: description.to_string(),
-    };
-
-    let product_id = ProductRepo::create(pool, new_product)
-        .await
-        .expect("Failed to insert test product");
-
-    ProductRepo::get_by_id(pool, product_id)
-        .await
-        .expect("Failed to retrieve created product")
-        .expect("Created product not found")
-}
-
-pub async fn create_test_version(
-    pool: &PgPool,
-    name: &str,
-    hash: &str,
-    tag: &str,
-    product_id: Uuid,
-) -> Version {
-    let new_version = NewVersion {
-        name: name.to_string(),
-        hash: hash.to_string(),
-        tag: tag.to_string(),
-        product_id,
-    };
-
-    let version_id = VersionRepo::create(pool, new_version)
-        .await
-        .expect("Failed to insert test version");
-
-    VersionRepo::get_by_id(pool, version_id)
-        .await
-        .expect("Failed to retrieve created version")
-        .expect("Created version not found")
-}
-
-fn create_webauthn(settings: Arc<Settings>) -> Arc<Webauthn> {
-    let rp_id = settings.auth.id.as_str();
-    let rp_origin = Url::parse(settings.auth.origin.as_str()).expect("Invalid URL");
-    let builder = WebauthnBuilder::new(rp_id, &rp_origin).expect("Invalid configuration");
-    let builder = builder.rp_name(settings.auth.name.as_str());
-
-    Arc::new(builder.build().expect("Invalid configuration"))
-}
-
-async fn create_token(pool: &PgPool, token: &str, product: Option<Uuid>, entitement: &str) -> Uuid {
-    let token_hash = hash_token(token).expect("Failed to hash token");
-    let new_token = NewApiToken {
-        description: "Test API token".to_string(),
-        token_hash,
-        product_id: product,
-        user_id: None,
-        entitlements: vec![entitement.to_string()],
-        expires_at: None,
-    };
-
-    ApiTokenRepo::create(pool, new_token)
-        .await
-        .expect("Failed to insert test API token")
-}
-
-fn create_setting() -> Arc<Settings> {
-    let mut settings = Settings::default();
-    tracing::info!("Logging initialized");
-
-    settings.auth.id = "localhost".to_string();
-    settings.auth.origin = "http://localhost:3000".to_string();
-    settings.auth.name = "TestApp".to_string();
-
-    Arc::new(settings)
-}
+use testware::{
+    create_settings, create_test_product_with_details, create_test_version, create_token,
+    create_webauthn,
+};
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_upload(pool: PgPool) {
     //init_logging();
-    let settings = create_setting();
+    let settings = create_settings();
 
     let repo = Repo::new(pool.clone());
     let state = AppState {
@@ -142,7 +46,8 @@ async fn test_symbol_upload(pool: PgPool) {
 
     let product =
         create_test_product_with_details(&pool, "TestProduct", "Test product description").await;
-    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", product.id).await;
+    let _version =
+        create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", Some(product.id)).await;
 
     let request = Request::builder()
         .method("POST")
@@ -176,7 +81,7 @@ async fn test_symbol_upload(pool: PgPool) {
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_upload_no_such_product(pool: PgPool) {
     //init_logging();
-    let settings = create_setting();
+    let settings = create_settings();
 
     let repo = Repo::new(pool.clone());
     let state = AppState {
@@ -200,7 +105,7 @@ async fn test_symbol_upload_no_such_product(pool: PgPool) {
 
     let product =
         create_test_product_with_details(&pool, "TestProduct", "Test product description").await;
-    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", product.id).await;
+    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", Some(product.id)).await;
 
     let request = Request::builder()
         .method("POST")
@@ -234,7 +139,7 @@ async fn test_symbol_upload_no_such_product(pool: PgPool) {
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_upload_no_such_version(pool: PgPool) {
     //init_logging();
-    let settings = create_setting();
+    let settings = create_settings();
 
     let repo = Repo::new(pool.clone());
     let state = AppState {
@@ -258,7 +163,7 @@ async fn test_symbol_upload_no_such_version(pool: PgPool) {
 
     let product =
         create_test_product_with_details(&pool, "TestProduct", "Test product description").await;
-    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", product.id).await;
+    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", Some(product.id)).await;
 
     let request = Request::builder()
         .method("POST")
@@ -292,7 +197,7 @@ async fn test_symbol_upload_no_such_version(pool: PgPool) {
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_upload_empty_version(pool: PgPool) {
     //init_logging();
-    let settings = create_setting();
+    let settings = create_settings();
 
     let repo = Repo::new(pool.clone());
     let state = AppState {
@@ -316,7 +221,7 @@ async fn test_symbol_upload_empty_version(pool: PgPool) {
 
     let product =
         create_test_product_with_details(&pool, "TestProduct", "Test product description").await;
-    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", product.id).await;
+    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", Some(product.id)).await;
 
     let request = Request::builder()
         .method("POST")
@@ -350,7 +255,7 @@ async fn test_symbol_upload_empty_version(pool: PgPool) {
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_upload_empty_product(pool: PgPool) {
     //init_logging();
-    let settings = create_setting();
+    let settings = create_settings();
 
     let repo = Repo::new(pool.clone());
     let state = AppState {
@@ -374,7 +279,7 @@ async fn test_symbol_upload_empty_product(pool: PgPool) {
 
     let product =
         create_test_product_with_details(&pool, "TestProduct", "Test product description").await;
-    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", product.id).await;
+    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", Some(product.id)).await;
 
     let request = Request::builder()
         .method("POST")
@@ -408,7 +313,7 @@ async fn test_symbol_upload_empty_product(pool: PgPool) {
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_upload_wrong_entitlement(pool: PgPool) {
     //init_logging();
-    let settings = create_setting();
+    let settings = create_settings();
 
     let repo = Repo::new(pool.clone());
     let state = AppState {
@@ -431,7 +336,7 @@ async fn test_symbol_upload_wrong_entitlement(pool: PgPool) {
     create_token(&pool, "test_token", None, "minidump-upload").await;
     let product =
         create_test_product_with_details(&pool, "TestProduct", "Test product description").await;
-    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", product.id).await;
+    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", Some(product.id)).await;
 
     let request = Request::builder()
         .method("POST")
@@ -463,7 +368,7 @@ async fn test_symbol_upload_wrong_entitlement(pool: PgPool) {
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_upload_unknown_token(pool: PgPool) {
     //init_logging();
-    let settings = create_setting();
+    let settings = create_settings();
 
     let repo = Repo::new(pool.clone());
     let state = AppState {
@@ -486,7 +391,7 @@ async fn test_symbol_upload_unknown_token(pool: PgPool) {
     create_token(&pool, "test_token", None, "minidump-upload").await;
     let product =
         create_test_product_with_details(&pool, "TestProduct", "Test product description").await;
-    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", product.id).await;
+    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", Some(product.id)).await;
 
     let request = Request::builder()
         .method("POST")
@@ -518,7 +423,7 @@ async fn test_symbol_upload_unknown_token(pool: PgPool) {
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_upload_no_token(pool: PgPool) {
     //init_logging();
-    let settings = create_setting();
+    let settings = create_settings();
 
     let repo = Repo::new(pool.clone());
     let state = AppState {
@@ -540,7 +445,7 @@ async fn test_symbol_upload_no_token(pool: PgPool) {
 
     let product =
         create_test_product_with_details(&pool, "TestProduct", "Test product description").await;
-    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", product.id).await;
+    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", Some(product.id)).await;
 
     let request = Request::builder()
         .method("POST")
@@ -571,7 +476,7 @@ async fn test_symbol_upload_no_token(pool: PgPool) {
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_no_version(pool: PgPool) {
     //init_logging();
-    let settings = create_setting();
+    let settings = create_settings();
 
     let repo = Repo::new(pool.clone());
     let state = AppState {
@@ -595,7 +500,7 @@ async fn test_symbol_no_version(pool: PgPool) {
 
     let product =
         create_test_product_with_details(&pool, "TestProduct", "Test product description").await;
-    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", product.id).await;
+    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", Some(product.id)).await;
 
     let request = Request::builder()
         .method("POST")
@@ -624,7 +529,7 @@ async fn test_symbol_no_version(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_no_product(pool: PgPool) {
-    let settings = create_setting();
+    let settings = create_settings();
 
     let repo = Repo::new(pool.clone());
     let state = AppState {
@@ -648,7 +553,7 @@ async fn test_symbol_no_product(pool: PgPool) {
 
     let product =
         create_test_product_with_details(&pool, "TestProduct", "Test product description").await;
-    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", product.id).await;
+    let _version = create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", Some(product.id)).await;
 
     let request = Request::builder()
         .method("POST")

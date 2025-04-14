@@ -7,8 +7,7 @@ use common::{QueryParams, SortOrder};
 use data::version::*;
 use repos::version::*;
 
-mod testcommon;
-use testcommon::{create_test_product, create_test_version};
+use testware::{create_test_product, create_test_version};
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id(pool: PgPool) {

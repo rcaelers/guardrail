@@ -7,8 +7,7 @@ use common::{QueryParams, SortOrder};
 use data::user::*;
 use repos::user::*;
 
-mod testcommon;
-use testcommon::create_test_user;
+use testware::create_test_user;
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id(pool: PgPool) {

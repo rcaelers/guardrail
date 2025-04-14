@@ -7,8 +7,7 @@ use uuid::Uuid;
 use data::credentials::*;
 use repos::credentials::*;
 
-mod testcommon;
-use testcommon::{create_random_test_user, create_test_credential};
+use testware::{create_random_test_user, create_test_credential};
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id(pool: PgPool) {

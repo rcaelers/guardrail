@@ -34,4 +34,4 @@ unexpected_cfgs = { level = "warn", check-cfg = [
 
 [dev-dependencies]
 tokio.workspace = true
-
+testware = { path = "../testware" }

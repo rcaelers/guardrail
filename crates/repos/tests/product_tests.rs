@@ -7,8 +7,7 @@ use common::QueryParams;
 use data::product::*;
 use repos::product::*;
 
-mod testcommon;
-use testcommon::create_test_product_with_details;
+use testware::create_test_product_with_details;
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id(pool: PgPool) {

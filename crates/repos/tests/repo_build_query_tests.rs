@@ -4,7 +4,6 @@ use repos::*;
 use sqlx::QueryBuilder;
 use std::collections::VecDeque;
 
-mod testcommon;
 
 #[test]
 fn test_build_query_with_filter() {
