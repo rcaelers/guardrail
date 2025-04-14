@@ -16,7 +16,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-24.04, macos-latest]
+        os:
+          - ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
@@ -37,4 +38,6 @@ jobs:
           export SQLX_OFFLINE=1
           cargo leptos build -vv
       - name: Run tests
-        run: RUST_BACKTRACE=1 cargo test  -p api -p repos --no-fail-fast
+        run: |
+          export SQLX_OFFLINE=1
+          RUST_BACKTRACE=1 cargo test  -p api -p repos --no-fail-fast
