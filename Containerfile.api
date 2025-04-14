@@ -1,0 +1,51 @@
+##
+## Builder
+##
+
+FROM --platform=$BUILDPLATFORM rustlang/rust:nightly-slim AS builder
+
+ENV RUSTUP_PERMIT_COPY_RENAME=true
+ENV SQLX_OFFLINE=1
+
+RUN \
+    apt-get update -y && \
+    apt-get dist-upgrade -y && \
+    apt-get install -y --no-install-recommends \
+        clang \
+        openssl \
+        pkg-config \
+        libssl3 \
+        libssl-dev
+
+RUN mkdir -p /app
+WORKDIR /app
+COPY . .
+
+RUN cargo build --release -p api
+
+#
+# Runtime
+#
+
+FROM debian:bookworm-slim
+
+WORKDIR /app
+
+RUN apt-get update -y \
+  && apt-get install -y --no-install-recommends openssl ca-certificates \
+  && apt-get autoremove -y \
+  && apt-get clean -y \
+  && rm -rf /var/lib/apt/lists/*
+
+#
+COPY --from=builder /app/target/*/release/server /app/
+COPY config  /app/config/
+
+RUN mkdir -p /app/_data/logs \
+             /app/_data/attachments \
+             /app/_data/minidumps \
+             /app/_data/symbols
+
+EXPOSE 3001
+
+CMD ["/app/server"]
