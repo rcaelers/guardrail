@@ -1,0 +1,139 @@
+name: Build, Push & Sign Multiarch Images
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+env:
+  GHCR: ghcr.io/${{ github.repository }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - name: api
+            file: Containerfile.api
+            arch: amd64
+            target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            platform: linux/amd64
+
+          - name: api
+            file: Containerfile.api
+            arch: arm64
+            target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest-arm64
+            platform: linux/arm64
+
+          - name: leptos
+            file: Containerfile.leptos
+            arch: amd64
+            target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+            platform: linux/amd64
+
+          - name: leptos
+            file: Containerfile.leptos
+            arch: arm64
+            target: aarch64-unknown-linux-gnu
+            runner: ubuntu-latest-arm64
+            platform: linux/arm64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.name }} image (${{ matrix.arch }})
+        run: |
+          docker buildx build \
+            --platform ${{ matrix.platform }} \
+            --build-arg TARGET=${{ matrix.target }} \
+            --file ${{ matrix.file }} \
+            --tag ${{ env.GHCR }}-${{ matrix.name }}:${{ matrix.arch }}-${{ github.sha }} \
+            --push .
+
+  create-and-sign-manifests:
+    name: Create & Sign Multiarch Image Manifests
+    runs-on: ubuntu-latest
+    needs: build
+    strategy:
+      matrix:
+        name: [api, leptos]
+
+    steps:
+      - name: Set up Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Check CoSign version
+        run: cosign version
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch manifest for ${{ matrix.name }}
+        run: |
+          IMAGE=${{ env.GHCR }}-${{ matrix.name }}
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION_TAG="${GITHUB_REF_NAME}"
+            docker buildx imagetools create \
+              --tag ${IMAGE}:${VERSION_TAG} \
+              --tag ${IMAGE}:latest \
+              ${IMAGE}:amd64-${GITHUB_SHA} \
+              ${IMAGE}:arm64-${GITHUB_SHA}
+          else
+            docker buildx imagetools create \
+              --tag ${IMAGE}:latest \
+              ${IMAGE}:amd64-${GITHUB_SHA} \
+              ${IMAGE}:arm64-${GITHUB_SHA}
+          fi
+
+      - name: Sign multi-arch image for ${{ matrix.name }}
+        run: |
+          IMAGE=${{ env.GHCR }}-${{ matrix.name }}
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            cosign sign --yes ${IMAGE}:${GITHUB_REF_NAME}
+            cosign sign --yes ${IMAGE}:latest
+          else
+            cosign sign --yes ${IMAGE}:latest
+          fi
+
+      - name: Generate and attach attestation
+        run: |
+          IMAGE=${{ env.GHCR }}-${{ matrix.name }}
+
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            cosign attest \
+              --yes \
+              --predicate-type=https://slsa.dev/provenance/v0.2 \
+              --predicate <(echo '{"buildType":"github-actions","builder":{"id":"https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/tags/${{ github.ref_name }}"}}') \
+              ${IMAGE}:${GITHUB_REF_NAME}
+          fi
+
+          cosign attest \
+            --yes \
+            --predicate-type=https://slsa.dev/provenance/v0.2 \
+            --predicate <(echo '{"buildType":"github-actions","builder":{"id":"https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/heads/${{ github.ref_name || github.ref_name }}"}}') \
+            ${IMAGE}:latest
