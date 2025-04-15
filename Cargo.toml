@@ -120,6 +120,9 @@ jsonwebtoken = "9.3.1"
 indexmap = "2.9.0"
 itertools = "0.14.0"
 dyn-clone = "1.0.19"
+object_store = { version = "0.12", features = ["aws"] }
+apalis = { version = "0.7.0", features = ["layers", "uuid"] }
+apalis-sql = { version = "0.7.0", features = ["postgres", "tokio-comp"] }
 
 #
 # oauth2 = "4.4.2"

@@ -60,6 +60,7 @@ webauthn-rs.workspace = true
 # jwt-authorizer.workspace = true
 jsonwebtoken.workspace = true
 log.workspace = true
+object_store.workspace = true
 
 [dev-dependencies]
 axum-test.workspace = true

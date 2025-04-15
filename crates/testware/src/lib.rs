@@ -218,7 +218,7 @@ pub async fn create_test_attachment(
         .expect("Created attachment not found")
 }
 
-/// Create a test symbols and its associated product and version if needed
+#[allow(clippy::too_many_arguments)]
 pub async fn create_test_symbols(
     pool: &PgPool,
     os: &str,

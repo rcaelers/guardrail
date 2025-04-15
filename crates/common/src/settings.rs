@@ -11,6 +11,7 @@ pub struct Server {
     pub max_minidump_size: Option<u64>,
     pub max_attachment_size: Option<u64>,
     pub max_symbols_size: Option<u64>,
+    pub store: String,
 }
 
 #[derive(Debug, Deserialize, Default)]

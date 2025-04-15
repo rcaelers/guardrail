@@ -41,6 +41,12 @@ impl GuardrailApp {
         let db = self.init_db().await.unwrap();
         let webauthn = self.create_webauthn();
         let repo = Repo::new(db.clone());
+        let store = Arc::new(
+            object_store::aws::AmazonS3Builder::from_env()
+                .with_url(settings.clone().server.store.clone())
+                .build()
+                .expect("Failed to create object store"),
+        );
 
         if let Err(err) = self.ensure_default_api_token(&repo).await {
             tracing::error!("Failed to create default API token: {}", err);
@@ -49,6 +55,7 @@ impl GuardrailApp {
             repo,
             webauthn,
             settings: settings.clone(),
+            storage: store,
         };
 
         let routes_all = Router::new()

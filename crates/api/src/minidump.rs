@@ -22,7 +22,7 @@ use super::error::ApiError;
 use super::file_cleanup::FileCleanupTracker;
 use crate::state::AppState;
 use crate::utils::{
-    get_product, get_version, stream_to_file, validate_api_token_for_product, validate_file_size,
+    get_product, get_version, stream_to_s3, validate_api_token_for_product, validate_file_size,
 };
 use common::settings::Settings;
 
@@ -313,7 +313,7 @@ impl MinidumpApi {
         version: &Version,
         field: Field<'_>,
         cleanup_tracker: &mut FileCleanupTracker,
-        settings: Arc<Settings>,
+        state: AppState,
     ) -> Result<uuid::Uuid, ApiError>
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
@@ -329,16 +329,18 @@ impl MinidumpApi {
         let content_type = field.content_type().unwrap_or_default();
         Self::validate_minidump_content_type(content_type)?;
 
-        let max_size = Self::get_max_minidump_size(settings.clone());
+        let max_size = Self::get_max_minidump_size(state.settings.clone());
         let filename = Self::extract_filename(&field)?;
-        let minidump_file = Self::get_minidump_file(&filename, settings.clone()).await?;
+        let minidump_file = Self::get_minidump_file(&filename, state.settings.clone()).await?;
 
         cleanup_tracker.track_file(minidump_file.clone());
 
-        stream_to_file(&minidump_file, field).await.map_err(|e| {
-            error!("Failed to save minidump file {:?}: {:?}", &minidump_file, e);
-            ApiError::Failure("failed to save minidump".to_string())
-        })?;
+        stream_to_s3(state.storage.clone(), "minidump_key", field)
+            .await
+            .map_err(|e| {
+                error!("Failed to stream to S3: {:?}", e);
+                ApiError::InternalFailure()
+            })?;
 
         Self::audit_log(
             "minidump_file_saved",
@@ -359,7 +361,7 @@ impl MinidumpApi {
         );
 
         let crash_id =
-            Self::process_and_store_minidump(tx, product, version, minidump_file.clone(), settings)
+            Self::process_and_store_minidump(tx, product, version, minidump_file.clone(), state.settings)
                 .await?;
 
         Self::audit_log(
@@ -380,7 +382,7 @@ impl MinidumpApi {
         _version: &Version,
         field: Field<'_>,
         cleanup_tracker: &mut FileCleanupTracker,
-        settings: Arc<Settings>,
+        state: AppState,
     ) -> Result<(), ApiError>
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
@@ -416,14 +418,16 @@ impl MinidumpApi {
 
         let storage_filename = uuid::Uuid::new_v4().to_string();
         let attachment_file =
-            Self::get_attachment_file(crash_id, &storage_filename, settings.clone()).await?;
+            Self::get_attachment_file(crash_id, &storage_filename, state.settings.clone()).await?;
 
         cleanup_tracker.track_file(attachment_file.clone());
 
-        stream_to_file(&attachment_file, field).await.map_err(|e| {
-            error!("Failed to save attachment file {:?}: {:?}", &attachment_file, e);
-            ApiError::Failure("failed to save attachment".to_string())
-        })?;
+        stream_to_s3(state.storage.clone(), "attachment_key", field)
+            .await
+            .map_err(|e| {
+                error!("Failed to stream to S3: {:?}", e);
+                ApiError::InternalFailure()
+            })?;
 
         Self::audit_log(
             "attachment_file_saved",
@@ -433,7 +437,7 @@ impl MinidumpApi {
             Some(crash_id),
         );
 
-        let max_size = Self::get_max_attachment_size(settings);
+        let max_size = Self::get_max_attachment_size(state.settings);
         let filesize = validate_file_size(&attachment_file, max_size, "attachment").await? as i64;
 
         let crash = Self::get_crash(tx, crash_id).await?;
@@ -449,7 +453,7 @@ impl MinidumpApi {
         version: &Version,
         crash_id: &mut Option<uuid::Uuid>,
         cleanup_tracker: &mut FileCleanupTracker,
-        settings: Arc<Settings>,
+        state: AppState,
     ) -> Result<(), ApiError>
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
@@ -462,7 +466,7 @@ impl MinidumpApi {
                     version,
                     field,
                     cleanup_tracker,
-                    settings,
+                    state,
                 )
                 .await?;
                 *crash_id = Some(new_crash_id);
@@ -486,7 +490,7 @@ impl MinidumpApi {
                     version,
                     field,
                     cleanup_tracker,
-                    settings,
+                    state,
                 )
                 .await
             }
@@ -542,7 +546,7 @@ impl MinidumpApi {
                 &version,
                 &mut crash_id,
                 &mut cleanup_tracker,
-                state.settings.clone(),
+                state.clone(),
             )
             .await?;
         }

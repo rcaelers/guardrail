@@ -1,10 +1,13 @@
 use axum::BoxError;
 use axum::body::Bytes;
-use futures::prelude::*;
+use axum::extract::multipart::Field;
+use futures::{Stream, StreamExt, TryStreamExt};
+use object_store::{ObjectStore, path::Path};
 use sqlx::Postgres;
 use std::path::PathBuf;
-use tokio::fs::File;
-use tokio::io::{self, BufWriter};
+use std::sync::Arc;
+use tokio::io::AsyncWriteExt;
+use tokio::io::{self};
 use tokio_util::io::StreamReader;
 use tracing::error;
 
@@ -12,7 +15,53 @@ use crate::error::ApiError;
 use data::{api_token::ApiToken, product::Product, version::Version};
 use repos::{product::ProductRepo, version::VersionRepo};
 
-pub async fn stream_to_file<S, E>(path: &std::path::PathBuf, stream: S) -> Result<(), ApiError>
+pub async fn peek_line<'a>(
+    field: Field<'a>,
+) -> io::Result<(String, impl Stream<Item = Result<Bytes, BoxError>> + Send + 'a)> {
+    let mut stream = field.map_err(io::Error::other);
+
+    let mut buffer = Vec::new();
+    let mut first_line = None;
+    let mut remaining_buffer = None;
+
+    while first_line.is_none() {
+        if let Some(bytes_result) = stream.next().await {
+            let bytes = bytes_result?;
+            buffer.extend_from_slice(&bytes);
+
+            if let Some(newline_pos) = buffer.iter().position(|&b| b == b'\n') {
+                let line = String::from_utf8_lossy(&buffer[..=newline_pos]).to_string();
+                first_line = Some(line);
+
+                if newline_pos < buffer.len() - 1 {
+                    remaining_buffer = Some(Bytes::copy_from_slice(&buffer[(newline_pos + 1)..]));
+                }
+            }
+        } else {
+            return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "No complete line found"));
+        }
+    }
+
+    let line = first_line.unwrap();
+
+    let mut initial_chunks: Vec<Result<Bytes, BoxError>> =
+        vec![Ok(Bytes::copy_from_slice(line.as_bytes()))];
+
+    if let Some(remaining) = remaining_buffer {
+        initial_chunks.push(Ok(remaining));
+    }
+
+    let combined_stream = futures::stream::iter(initial_chunks)
+        .chain(stream.map(|result| result.map_err(BoxError::from)));
+
+    Ok((line, combined_stream))
+}
+
+pub async fn stream_to_s3<S, E>(
+    store: Arc<dyn ObjectStore>,
+    key: &str,
+    stream: S,
+) -> Result<(), ApiError>
 where
     S: Stream<Item = Result<Bytes, E>>,
     E: Into<BoxError>,
@@ -21,13 +70,21 @@ where
         let body_with_io_error = stream.map_err(io::Error::other);
         let body_reader = StreamReader::new(body_with_io_error);
         futures::pin_mut!(body_reader);
+        let path = Path::from(key);
 
-        let file = File::create(path).await.map_err(|e| {
-            error!("failed to create file {:?}: {:?}", path, e);
+        let mut writer = object_store::buffered::BufWriter::new(store, path);
+
+        tokio::io::copy(&mut body_reader, &mut writer)
+            .await
+            .map_err(|e| {
+                error!("Failed to copy stream to S3: {:?}", e);
+                ApiError::InternalFailure()
+            })?;
+
+        writer.shutdown().await.map_err(|e| {
+            error!("Failed to shutdown buffered writer: {:?}", e);
             ApiError::InternalFailure()
         })?;
-        let mut file = BufWriter::new(file);
-        let _r = tokio::io::copy(&mut body_reader, &mut file).await;
 
         Ok::<(), ApiError>(())
     }

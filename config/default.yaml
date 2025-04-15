@@ -3,6 +3,7 @@ server:
   api_port: 4434
   base_path: _data
   site: https://guardrail.home.krandor.org:4433
+  store: TODO
 logger:
   directory: _data/logs
   level: debug
