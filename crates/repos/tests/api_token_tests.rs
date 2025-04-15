@@ -5,7 +5,7 @@ use uuid::Uuid;
 use data::api_token::NewApiToken;
 use repos::api_token::*;
 
-use testware::create_test_api_token;
+use testware::{create_test_api_token, create_test_product};
 
 // get_by_id tests
 
@@ -208,18 +208,7 @@ async fn test_get_by_product_id(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_product_id_error(pool: PgPool) {
-    let product_id = sqlx::query_scalar!(
-        r#"
-        INSERT INTO guardrail.products (name, description)
-        VALUES ($1, $2)
-        RETURNING id
-        "#,
-        format!("TestProduct_{}", Uuid::new_v4()),
-        "Test Product Description"
-    )
-    .fetch_one(&pool)
-    .await
-    .expect("Failed to create test product");
+    let product_id = create_test_product(&pool).await;
 
     pool.close().await;
 
