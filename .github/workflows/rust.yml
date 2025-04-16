@@ -37,7 +37,42 @@ jobs:
         run: |
           export SQLX_OFFLINE=1
           cargo leptos build -vv
+
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: guardrail
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/guardrail
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup toolchain install nightly
+          rustup default nightly
+          rustup target add wasm32-unknown-unknown
+          rustup upgrade
+          cargo install --locked cargo-leptos
+          cargo install --locked sqlx-cli
+          cargo install --locked cargo-llvm-cov
+
       - name: Run tests
         run: |
           export SQLX_OFFLINE=1
-          RUST_BACKTRACE=1 cargo test  -p api -p repos --no-fail-fast
+          RUST_BACKTRACE=1 cargo test -p api -p repos --no-fail-fast
