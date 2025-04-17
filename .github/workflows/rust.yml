@@ -48,6 +48,8 @@ jobs:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: guardrail
+        volumes:
+          - ${{ github.workspace }}/dev.initdb/:/docker-entrypoint-initdb.d/
         ports:
           - 5432:5432
         options: >-
