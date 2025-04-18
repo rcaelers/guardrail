@@ -16,8 +16,16 @@ RUN npx @tailwindcss/cli -i ./crates/server/static/input.css -o style.css
 
 FROM rustlang/rust:nightly-bookworm AS builder
 
-RUN wget https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz
-RUN tar -xvf cargo-binstall-x86_64-unknown-linux-musl.tgz
+RUN ARCH=$(uname -m) && \
+  if [ "$ARCH" = "x86_64" ]; then \
+    wget https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz && \
+    tar -xvf cargo-binstall-x86_64-unknown-linux-musl.tgz; \
+  elif [ "$ARCH" = "aarch64" ]; then \
+    wget https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-aarch64-unknown-linux-musl.tgz && \
+    tar -xvf cargo-binstall-aarch64-unknown-linux-musl.tgz; \
+  else \
+    echo "Unsupported architecture: $ARCH" && exit 1; \
+  fi
 RUN cp cargo-binstall /usr/local/cargo/bin
 
 RUN apt-get update -y \
