@@ -14,7 +14,8 @@ RUN npx @tailwindcss/cli -i ./crates/server/static/input.css -o style.css
 ## Builder
 ##
 
-FROM rustlang/rust:nightly-bookworm AS builder
+# FROM rustlang/rust:nightly-bookworm AS builder
+FROM --platform=$BUILDPLATFORM rust:1-bookworm AS builder
 
 RUN ARCH=$(uname -m) && \
   if [ "$ARCH" = "x86_64" ]; then \
