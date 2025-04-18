@@ -1,8 +1,8 @@
 use sqlx::{Postgres, QueryBuilder};
 use tracing::error;
 
-use common::QueryParams;
 use crate::{Repo, error::RepoError};
+use common::QueryParams;
 use data::symbols::{NewSymbols, Symbols};
 
 pub struct SymbolsRepo {}
@@ -25,6 +25,31 @@ impl SymbolsRepo {
         .await
         .map_err(|err| {
             error!("Failed to retrieve symbols {id}: {err}");
+            RepoError::DatabaseError("Failed to retrieve symbols".to_string())
+        })
+    }
+
+    pub async fn get_by_module_and_build_id(
+        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        build_id: &str,
+        module_id: &str,
+    ) -> Result<Option<Symbols>, RepoError> {
+        sqlx::query_as!(
+            Symbols,
+            r#"
+                SELECT *
+                FROM guardrail.symbols
+                WHERE guardrail.symbols.build_id = $1 AND guardrail.symbols.module_id = $2
+            "#,
+            build_id,
+            module_id
+        )
+        .fetch_optional(executor)
+        .await
+        .map_err(|err| {
+            error!(
+                "Failed to retrieve symbols for build_id: {build_id}, module_id: {module_id}: {err}"
+            );
             RepoError::DatabaseError("Failed to retrieve symbols".to_string())
         })
     }

@@ -1,53 +1,127 @@
-use std::{path::PathBuf, sync::Arc};
+use std::sync::Arc;
 
 use apalis::prelude::{Context, Data, Worker};
-use common::settings::Settings;
-use data::{crash::Crash, product::Product};
+use bytes::Bytes;
+use data::{
+    crash::{Crash, State},
+    product::Product,
+};
 use minidump::Minidump;
 use minidump_processor::ProcessorOptions;
-use minidump_unwind::{Symbolizer, simple_symbol_supplier};
-use repos::{crash::CrashRepo, product::ProductRepo, version::VersionRepo};
+use minidump_unwind::Symbolizer;
+use object_store::{ObjectStore, path::Path};
+use repos::{Repo, crash::CrashRepo, product::ProductRepo};
 use serde_json::Value;
 use sqlx::Postgres;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
-use crate::{error::JobError, jobs::MinidumpJob, state::AppState};
+use crate::{
+    error::JobError, jobs::MinidumpJob, state::AppState, symbol_provider::s3_symbol_supplier,
+};
 
 pub struct MinidumpProcessor {
-    settings: Arc<Settings>,
+    storage: Arc<dyn ObjectStore>,
+    repo: Repo,
 }
 
 impl MinidumpProcessor {
-    async fn process_minidump_file(
-        &self,
-        minidump_file: PathBuf,
-    ) -> Result<serde_json::Value, JobError> {
-        let dump = Minidump::read_path(minidump_file)?;
+    pub fn new(s: Data<AppState>) -> MinidumpProcessor {
+        let storage = s.storage.clone();
+        let repo = s.repo.clone();
+
+        MinidumpProcessor {
+            storage,
+            repo,
+        }
+    }
+
+    async fn handle_job(&self, job: MinidumpJob) -> Result<(), JobError> {
+        let mut tx = self.repo.begin_admin().await.map_err(|e| {
+            error!("Failed to start transaction: {:?}", e);
+            JobError::Failure("failed to start transaction".to_string())
+        })?;
+
+        let (mut crash, product) = self.retrieve_data(&mut *tx, job).await?;
+
+        let minidump = crash.minidump.ok_or_else(|| {
+            error!("No minidump found for crash {}", crash.id);
+            JobError::Failure("no minidump found".to_string())
+        })?;
+        let path = format!("minidumps/{}", minidump);
+        let data = self.get_minidump_object(&path).await?;
 
         let mut options = ProcessorOptions::default();
         options.recover_function_args = true;
 
-        let path = std::path::Path::new(&self.settings.server.base_path)
-            .join("symbols")
-            .to_path_buf();
-        debug!("provider: {:?}", path);
-        let provider = Symbolizer::new(simple_symbol_supplier(vec![path]));
-
-        let state =
-            minidump_processor::process_minidump_with_options(&dump, &provider, options).await?;
+        let dump = Minidump::read(data).map_err(|e| {
+            error!("Failed to read minidump: {:?}", e);
+            JobError::Failure("failed to read minidump".to_string())
+        })?;
+        let provider = Symbolizer::new(s3_symbol_supplier(self.storage.clone(), self.repo.clone()));
+        let state = minidump_processor::process_minidump_with_options(&dump, &provider, options)
+            .await
+            .expect("Failed to process minidump");
 
         let mut json_output = Vec::new();
-        state.print_json(&mut json_output, false).map_err(|e| {
-            error!("Failed to print minidump json: {:?}", e);
-            JobError::Failure("failed to print minidump json".to_string())
-        })?;
+        state
+            .print_json(&mut json_output, false)
+            .expect("Failed to print json");
         let json: Value = serde_json::from_slice(&json_output).map_err(|e| {
             error!("Failed to parse minidump json: {:?}", e);
             JobError::Failure("failed to parse minidump json".to_string())
         })?;
 
-        debug!("json: {:?}", json);
-        Ok(json)
+        crash.report = Some(json);
+        crash.state = State::Complete;
+        Self::update_crash(&mut *tx, crash.clone(), product).await?;
+        info!("Updated crash report with ID: {:?}", crash.id);
+        Ok(())
+    }
+
+    async fn retrieve_data<E>(
+        &self,
+        tx: &mut E,
+        job: MinidumpJob,
+    ) -> Result<(Crash, Product), JobError>
+    where
+        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
+    {
+        let crash = CrashRepo::get_by_id(&mut *tx, job.crash_id)
+            .await
+            .map_err(|e| {
+                error!("Failed to get crash report: {:?}", e);
+                JobError::Failure("failed to get crash report".to_string())
+            })?
+            .ok_or_else(|| {
+                error!("No such crash report {}", job.crash_id);
+                JobError::Failure(format!("no such crash report {}", job.crash_id))
+            })?;
+
+        let product = ProductRepo::get_by_id(&mut *tx, crash.product_id)
+            .await
+            .map_err(|_| {
+                error!("Failed to get product {}", crash.product_id);
+                JobError::Failure(format!("failed to get product {}", crash.product_id))
+            })?
+            .ok_or_else(|| {
+                error!("No such product  {}", crash.product_id);
+                JobError::Failure(format!("no such productt {}", crash.product_id))
+            })?;
+
+        Ok((crash, product))
+    }
+
+    async fn get_minidump_object(&self, path: &str) -> Result<Bytes, JobError> {
+        let object = self.storage.get(&Path::from(path)).await.map_err(|err| {
+            error!("Failed to get minidump object: {err}");
+            JobError::Failure("Failed to retrieve minidump".to_string())
+        })?;
+        info!("Got minidump object: {:?}", object);
+        let data = object.bytes().await.map_err(|err| {
+            error!("Failed to read minidump object: {err}");
+            JobError::Failure("Failed to retrieve minidump ".to_string())
+        })?;
+        Ok(data)
     }
 
     async fn update_crash<E>(
@@ -73,46 +147,14 @@ impl MinidumpProcessor {
 
     pub async fn process(
         job: MinidumpJob,
-        worker: Worker<Context>,
+        _worker: Worker<Context>,
         state: Data<AppState>,
     ) -> Result<(), JobError> {
         info!("Process minidump: {}", job.crash_id);
 
-        let mut tx = state.repo.begin_admin().await.map_err(|e| {
-            error!("Failed to start transaction: {:?}", e);
-            JobError::Failure("failed to start transaction".to_string())
-        })?;
-
-        let crash = CrashRepo::get_by_id(&mut *tx, job.crash_id)
-            .await
-            .map_err(|e| {
-                error!("Failed to get crash report: {:?}", e);
-                JobError::Failure("failed to get crash report".to_string())
-            })?
-            .ok_or_else(|| {
-                error!("No such crash report {}", job.crash_id);
-                JobError::Failure(format!("no such crash report {}", job.crash_id))
-            })?;
-
-        let product = ProductRepo::get_by_id(&mut *tx, crash.product_id)
-            .await
-            .map_err(|_| {
-                error!("Failed to get product {}", crash.product_id);
-                JobError::Failure(format!("failed to get product {}", crash.product_id))
-            })?;
-
-        let version = VersionRepo::get_by_id(&mut *tx, crash.version_id)
-            .await
-            .map_err(|_| {
-                error!("Failed to get version {}", crash.version_id);
-                JobError::Failure(format!("failed to get version {}", crash.version_id))
-            })?;
-
-        // process_minidump_file(minidump_file).await.map_err(|e| {
-        //     error!("Failed to process minidump file: {:?}", e);
-        //     JobError::Failure("Failed to process minidump file".to_string())
-        // })?;
-
+        let processor = MinidumpProcessor::new(state);
+        processor.handle_job(job.clone()).await?;
+        info!("Successfully processed minidump for crash ID: {}", job.crash_id);
         Ok(())
     }
 }

@@ -43,11 +43,6 @@ tracing-subscriber.workspace = true
 tracing-appender.workspace = true
 tracing-log.workspace = true
 
-# Minidump processing
-minidump.workspace = true
-minidump-processor.workspace = true
-minidump-unwind.workspace = true
-
 # Misc
 async-trait.workspace = true
 chrono.workspace = true
@@ -58,10 +53,4 @@ thiserror.workspace = true
 time.workspace = true
 uuid.workspace = true
 webauthn-rs.workspace = true
-jsonwebtoken.workspace = true
 log.workspace = true
-
-[dev-dependencies]
-axum-test.workspace = true
-serial_test.workspace = true
-mockall.workspace = true

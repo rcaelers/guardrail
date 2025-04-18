@@ -12,7 +12,6 @@ testware = { path = "../testware" }
 # Serde / json
 serde.workspace = true
 serde_json.workspace = true
-rmp-serde.workspace = true
 
 # SQLx
 sqlx.workspace = true
@@ -20,14 +19,6 @@ sqlx.workspace = true
 # Tokio / Axum
 tokio.workspace = true
 tokio-util.workspace = true
-# axum.workspace = true
-# axum-server.workspace = true
-# rustls.workspace = true
-
-# Tower
-# tower.workspace = true
-# tower-http.workspace = true
-# tower-sessions.workspace = true
 
 # Security
 argon2.workspace = true
@@ -49,25 +40,16 @@ async-trait.workspace = true
 # cfg-if.workspace = true
 chrono.workspace = true
 data-encoding.workspace = true
-# console_error_panic_hook.workspace = true
-# console_log.workspace = true
 futures.workspace = true
-# mime.workspace = true
 rand.workspace = true
 thiserror.workspace = true
 time.workspace = true
 uuid.workspace = true
-# url.workspace = true
-# webauthn-rs.workspace = true
-# jwt-authorizer.workspace = true
-# jsonwebtoken.workspace = true
 log.workspace = true
 object_store.workspace = true
 apalis.workspace = true
 apalis-sql.workspace = true
+bytes.workspace = true
 
 [dev-dependencies]
-axum-test.workspace = true
-serial_test.workspace = true
-mockall.workspace = true
 testware = { path = "../testware" }

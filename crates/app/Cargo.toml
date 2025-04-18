@@ -48,9 +48,6 @@ indexmap.workspace = true
 dyn-clone.workspace = true
 paste.workspace = true
 
-[dev-dependencies]
-serial_test.workspace = true
-
 [features]
 default = []
 hydrate = ["leptos/hydrate"]

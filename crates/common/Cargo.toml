@@ -8,12 +8,6 @@ edition = "2024"
 # Serde / json
 serde.workspace = true
 serde_json.workspace = true
-serde-wasm-bindgen.workspace = true
-rmp-serde.workspace = true
-
-# Tracing
-tracing.workspace = true
-tracing-subscriber-wasm.workspace = true
 
 # Misc
 config.workspace = true

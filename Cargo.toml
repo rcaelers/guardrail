@@ -129,6 +129,7 @@ apalis-sql = { version = "0.7.0", features = ["postgres", "tokio-comp"] }
 strum = "0.27"
 strum_macros = "0.27"
 base64 = "0.22.1"
+bytes = "1.10.1"
 
 #
 # oauth2 = "4.4.2"
@@ -137,10 +138,6 @@ base64 = "0.22.1"
 #     "accept-string-booleans",
 # ] }
 
-# Dev dependencies
-axum-test = "17.3.0"
-serial_test = "3.2.0"
-mockall = "0.13.1"
 
 [[workspace.metadata.leptos]]
 # this name is used for the wasm, js and css file names

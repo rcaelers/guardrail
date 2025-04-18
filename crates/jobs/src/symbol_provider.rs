@@ -1,26 +1,83 @@
-use std::{path::PathBuf, sync::Arc};
-
 use async_trait::async_trait;
-use breakpad_symbols::lookup;
+use bytes::Bytes;
+use data::symbols::Symbols;
 use minidump::Module;
 use minidump_unwind::{
     FileError, FileKind, LocateSymbolsResult, SymbolError, SymbolFile, SymbolSupplier,
 };
-use object_store::ObjectStore;
-use tracing::{info, trace};
+use object_store::{ObjectStore, path::Path};
+use repos::{Repo, symbols::SymbolsRepo};
+use std::{path::PathBuf, sync::Arc};
+use tracing::{error, info};
 
-pub fn s3_symbol_supplier(storage: Arc<dyn ObjectStore>) -> impl SymbolSupplier {
-    S3SymbolSupplier::new(storage)
+pub fn s3_symbol_supplier(storage: Arc<dyn ObjectStore>, repo: Repo) -> impl SymbolSupplier {
+    S3SymbolSupplier::new(storage, repo)
 }
 
 pub struct S3SymbolSupplier {
     pub storage: Arc<dyn ObjectStore>,
+    pub repo: Repo,
 }
 
 impl S3SymbolSupplier {
-    pub fn new(storage: Arc<dyn ObjectStore>) -> S3SymbolSupplier {
-        S3SymbolSupplier { storage }
+    pub fn new(storage: Arc<dyn ObjectStore>, repo: Repo) -> S3SymbolSupplier {
+        S3SymbolSupplier { storage, repo }
     }
+
+    async fn get_symbols_by_module_and_build_id(
+        &self,
+        module_id: &str,
+        build_id: &str,
+    ) -> Result<Symbols, SymbolError> {
+        let mut conn = self.repo.acquire_admin().await.map_err(|err| {
+            error!("Failed to acquire database connection: {err}");
+            SymbolError::NotFound
+        })?;
+
+        let symbol = SymbolsRepo::get_by_module_and_build_id(
+            &mut *conn,
+            build_id,
+            module_id,
+        )
+        .await
+        .map_err(|err| {
+            error!(
+                "Failed to retrieve symbols for build_id: {build_id}, module_id: {module_id}: {err}"
+            );
+            SymbolError::NotFound
+        })?
+        .ok_or_else(|| {
+            error!(
+                "Failed to retrieve symbols for build_id: {build_id}, module_id: {module_id}"
+            );
+            SymbolError::NotFound
+        })?;
+        Ok(symbol)
+    }
+
+    async fn get_symbols_object(&self, path: &str) -> Result<Bytes, SymbolError> {
+        let object = self.storage.get(&Path::from(path)).await.map_err(|err| {
+            error!("Failed to get symbols object: {err}");
+            SymbolError::NotFound
+        })?;
+        info!("Got symbols object: {:?}", object);
+        let data = object.bytes().await.map_err(|err| {
+            error!("Failed to read symbols object: {err}");
+            SymbolError::NotFound
+        })?;
+        Ok(data)
+    }
+
+    async fn parse_symbols(&self, data: &[u8]) -> Result<SymbolFile, SymbolError> {
+        SymbolFile::from_bytes(data).map_err(|e| {
+            error!("Failed to parse symbols: {}", e);
+            SymbolError::NotFound
+        })
+    }
+}
+
+fn convert(s: &str) -> &str {
+    s
 }
 
 #[async_trait]
@@ -29,33 +86,28 @@ impl SymbolSupplier for S3SymbolSupplier {
         &self,
         module: &(dyn Module + Sync),
     ) -> Result<LocateSymbolsResult, SymbolError> {
-        info!(
-            "locate_symbols {} {} {} {} {} {} {}",
-            module.base_address(),
-            module.size(),
-            module.code_file(),
-            module.code_identifier().unwrap_or_default(),
-            module.debug_file().unwrap_or_default(),
-            module.debug_identifier().unwrap_or_default(),
-            module.version().unwrap_or_default()
-        );
+        let build_id = module.debug_identifier().ok_or(SymbolError::NotFound)?;
+        let build_id = build_id.breakpad().to_string();
+        let module_id = module.debug_file().ok_or(SymbolError::NotFound)?;
+        let module_id = std::path::Path::new(convert(module_id.as_ref()))
+            .file_name()
+            .and_then(|f| f.to_str())
+            .ok_or(SymbolError::NotFound)?
+            .to_string();
 
-        let file_path = self
-            .locate_file(module, FileKind::BreakpadSym)
-            .await
-            .map_err(|_| SymbolError::NotFound)?;
+        info!("Searching symbols for module_id: {}, build_id: {}", module_id, build_id);
 
-        trace!("S3SymbolSupplier found file {:?}", file_path);
-        // let symbols = SymbolFile::from_file(&file_path).map_err(|e| {
-        //     trace!("S3SymbolSupplier failed: {}", e);
-        //     e
-        // })?;
-        // trace!("S3SymbolSupplier parsed file!");
-        // Ok(LocateSymbolsResult {
-        //     symbols,
-        //     extra_debug_info: None,
-        // })
-        Err(SymbolError::NotFound)
+        let symbols = self
+            .get_symbols_by_module_and_build_id(&module_id, &build_id)
+            .await?;
+        let data = self.get_symbols_object(&symbols.file_location).await?;
+        let symbols = self.parse_symbols(&data).await?;
+
+        info!("S3SymbolSupplier parsed file!");
+        Ok(LocateSymbolsResult {
+            symbols,
+            extra_debug_info: None,
+        })
     }
 
     async fn locate_file(
@@ -63,15 +115,11 @@ impl SymbolSupplier for S3SymbolSupplier {
         module: &(dyn Module + Sync),
         file_kind: FileKind,
     ) -> Result<PathBuf, FileError> {
-        trace!("SimpleSymbolSupplier search");
-        if let Some(lookup) = lookup(module, file_kind) {
-            trace!("SimpleSymbolSupplier found lookup {:?}", lookup);
-            // let test_path = path.join(lookup.cache_rel.clone());
-            // if fs::metadata(&test_path).ok().is_some_and(|m| m.is_file()) {
-            //     trace!("SimpleSymbolSupplier found file {}", test_path.display());
-            //     return Ok(test_path);
-            // }
-        }
+        info!(
+            "S3SymbolSupplier locate_file {:?} {}",
+            file_kind,
+            module.debug_file().unwrap_or_default()
+        );
         Err(FileError::NotFound)
     }
 }
@@ -88,17 +136,13 @@ mod test {
 
     use super::*;
     use repos::{Repo, symbols::SymbolsRepo};
-    use testware::{
-        create_settings, create_test_product_with_details, create_test_version, setup::TestSetup,
-    };
+    use testware::{create_test_product_with_details, create_test_version, setup::TestSetup};
 
     #[sqlx::test(migrations = "../../migrations")]
     async fn test_s3_symbol_supplier(pool: PgPool) {
         TestSetup::init();
-        //let settings = create_settings();
-        //let repo = Repo::new(pool.clone());
+        let repo = Repo::new(pool.clone());
         let store = Arc::new(object_store::memory::InMemory::new());
-        //let worker = Arc::new(TestMinidumpProcessor::new());
 
         let product =
             create_test_product_with_details(&pool, "TestProduct", "Test product description")
@@ -118,9 +162,7 @@ mod test {
         info!("minidump path: {:?}", path);
         let dump = Minidump::read_path(path).unwrap();
 
-        // MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 crash.pdb
-
-        let module_id = "EE9E2672A6863B084C4C44205044422E1".to_string();
+        let module_id = "crash.pdb".to_string();
         let build_id = "EE9E2672A6863B084C4C44205044422E1".to_string();
         let symbols_path = format!("symbols/{}-{}", module_id, build_id);
         let data = NewSymbols {
@@ -146,23 +188,52 @@ mod test {
         let _symbol_id = SymbolsRepo::create(&pool, data)
             .await
             .expect("Failed to create symbol");
+
         let mut options = ProcessorOptions::default();
         options.recover_function_args = true;
 
-        let provider = Symbolizer::new(s3_symbol_supplier(store));
-
+        let provider = Symbolizer::new(s3_symbol_supplier(store, repo));
         let state = minidump_processor::process_minidump_with_options(&dump, &provider, options)
             .await
             .expect("Failed to process minidump");
 
-        // let mut json_output = Vec::new();
-        // state.print_json(&mut json_output, false).map_err(|e| {
-        //     error!("Failed to print minidump json: {:?}", e);
-        //     JobError::Failure("failed to print minidump json".to_string())
-        // })?;
-        // let json: Value = serde_json::from_slice(&json_output).map_err(|e| {
-        //     error!("Failed to parse minidump json: {:?}", e);
-        //     JobError::Failure("failed to parse minidump json".to_string())
-        // })?;
+        let mut json_output = Vec::new();
+        state
+            .print_json(&mut json_output, false)
+            .expect("Failed to print json");
+        let json_str = String::from_utf8_lossy(&json_output);
+        let json: serde_json::Value =
+            serde_json::from_str(&json_str).expect("Failed to parse json");
+        info!(
+            "json_output pretty: {}",
+            serde_json::to_string_pretty(&json).expect("Failed to format json")
+        );
+
+        assert!(json["crashing_thread"].is_object());
+        assert!(json["crashing_thread"]["frames"].is_array());
+        assert!(json["crashing_thread"]["frames"][0]["missing_symbols"].is_boolean());
+        assert!(
+            !json["crashing_thread"]["frames"][0]["missing_symbols"]
+                .as_bool()
+                .unwrap()
+        );
+        assert_eq!(
+            json["crashing_thread"]["frames"][0]["module"]
+                .as_str()
+                .unwrap(),
+            "crash.exe"
+        );
+        assert_eq!(
+            json["crashing_thread"]["frames"][0]["function"]
+                .as_str()
+                .unwrap(),
+            "crash2()"
+        );
+        assert_eq!(
+            json["crashing_thread"]["frames"][4]["function"]
+                .as_str()
+                .unwrap(),
+            "main(int, char**)"
+        );
     }
 }
