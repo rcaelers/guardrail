@@ -69,7 +69,7 @@ jobs:
             -e POSTGRES_PASSWORD=postgres \
             -e POSTGRES_DB=guardrail \
             -p 5432:5432 \
-            -v $${{ github.workspace }}/dev/initdb/:/docker-entrypoint-initdb.d/:ro \
+            -v ${{ github.workspace }}/dev/initdb/:/docker-entrypoint-initdb.d/:ro \
             --health-cmd "pg_isready -U postgres" \
             --health-interval 10s \
             --health-timeout 5s \
