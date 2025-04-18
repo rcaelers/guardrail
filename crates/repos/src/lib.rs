@@ -1,5 +1,3 @@
-#![feature(cfg_match)]
-
 pub mod annotation;
 pub mod api_token;
 pub mod attachment;
