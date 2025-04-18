@@ -19,9 +19,9 @@ opt-level = 'z'
 
 [workspace.dependencies]
 # Leptos
-leptos = { version = "0.8.0-rc2" }
+leptos = { version = "0.8.0-rc2", features = ["nightly"] }
 leptos_meta = { version = "0.8.0-rc2" }
-leptos_router = { version = "0.8.0-rc2" }
+leptos_router = { version = "0.8.0-rc2", features = ["nightly"] }
 leptos_axum = { version = "0.8.0-rc2" }
 leptos-use = { version = "0.16.0-beta" }
 leptos-struct-table = { git = "https://github.com/rcaelers/leptos-struct-table.git", branch = "leptos-0.8", features = [
