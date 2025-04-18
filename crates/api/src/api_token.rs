@@ -1,17 +1,18 @@
 use axum::{
+    Json,
     extract::Request,
     http::{StatusCode, header},
-    response::Response,
+    response::{IntoResponse, Response},
 };
+use common::token::{decode_api_token, verify_api_secret};
 use futures::future::BoxFuture;
 use repos::api_token::ApiTokenRepo;
+use serde_json::json;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 use tracing::{error, info};
 
 use crate::state::AppState;
-
-use common::verify_token;
 
 #[derive(Clone)]
 pub enum RequiredEntitlement {
@@ -103,8 +104,34 @@ where
                 None => {
                     return Ok(Response::builder()
                         .status(StatusCode::UNAUTHORIZED)
-                        .header(header::CONTENT_TYPE, "text/plain")
-                        .body("Unauthorized: Missing API token".into())
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(
+                            Json(json!({
+                                "result": "failed",
+                                "error": "Missing API token"
+                            }))
+                            .into_response()
+                            .into_body(),
+                        )
+                        .unwrap());
+                }
+            };
+
+            let (token_id, token_secret) = match decode_api_token(&token_str) {
+                Ok((id, secret)) => (id, secret),
+                Err(err) => {
+                    error!("Failed to get decode api key {}: {}", token_str, err);
+                    return Ok(Response::builder()
+                        .status(StatusCode::UNAUTHORIZED)
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(
+                            Json(json!({
+                                "result": "failed",
+                                "error": "Invalid API token"
+                            }))
+                            .into_response()
+                            .into_body(),
+                        )
                         .unwrap());
                 }
             };
@@ -115,58 +142,114 @@ where
                     error!("Failed to get database connection: {}", err);
                     return Ok(Response::builder()
                         .status(StatusCode::INTERNAL_SERVER_ERROR)
-                        .header(header::CONTENT_TYPE, "text/plain")
-                        .body("Internal server error".into())
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(
+                            Json(json!({
+                                "result": "failed",
+                                "error": "Internal server error"
+                            }))
+                            .into_response()
+                            .into_body(),
+                        )
                         .unwrap());
                 }
             };
 
-            let tokens = match ApiTokenRepo::get_all(&mut *conn).await {
-                Ok(tokens) => tokens
-                    .into_iter()
-                    .filter(|t| t.is_active)
-                    .collect::<Vec<_>>(),
-                Err(err) => {
-                    error!("Database error when retrieving tokens: {}", err);
-                    return Ok(Response::builder()
-                        .status(StatusCode::INTERNAL_SERVER_ERROR)
-                        .header(header::CONTENT_TYPE, "text/plain")
-                        .body("Internal server error".into())
-                        .unwrap());
-                }
-            };
-
-            let mut valid_token = None;
-            for token in tokens {
-                match verify_token(&token_str, &token.token_hash) {
-                    Ok(true) => {
-                        valid_token = Some(token);
-                        break;
-                    }
-                    Ok(false) => continue,
-                    Err(err) => {
-                        error!("Error verifying token: {}", err);
-                        continue;
-                    }
-                }
-            }
-
-            let api_token = match valid_token {
-                Some(token) => token,
-                None => {
+            let api_token = match ApiTokenRepo::get_by_token_id(&mut *conn, token_id).await {
+                Ok(Some(api_token)) => api_token,
+                Ok(None) => {
                     return Ok(Response::builder()
                         .status(StatusCode::UNAUTHORIZED)
-                        .header(header::CONTENT_TYPE, "text/plain")
-                        .body("Unauthorized: Invalid API token".into())
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(
+                            Json(json!({
+                                "result": "failed",
+                                "error": "Invalid API token"
+                            }))
+                            .into_response()
+                            .into_body(),
+                        )
+                        .unwrap());
+                }
+                Err(err) => {
+                    error!("Database error when retrieving api token: {}", err);
+                    return Ok(Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(
+                            Json(json!({
+                                "result": "failed",
+                                "error": "Internal server error"
+                            }))
+                            .into_response()
+                            .into_body(),
+                        )
                         .unwrap());
                 }
             };
 
-            if !ApiTokenRepo::has_entitlement(&api_token, required_entitlement.as_str()) {
+            let token_status = match verify_api_secret(&token_secret, &api_token.token_hash) {
+                Ok(true) => true,
+                Ok(false) => false,
+                Err(err) => {
+                    error!("Failed to verify API token: {}", err);
+                    return Ok(Response::builder()
+                        .status(StatusCode::UNAUTHORIZED)
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(
+                            Json(json!({
+                                "result": "failed",
+                                "error": "Invalid API token"
+                            }))
+                            .into_response()
+                            .into_body(),
+                        )
+                        .unwrap());
+                }
+            };
+
+            if !token_status {
+                return Ok(Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(
+                        Json(json!({
+                            "result": "failed",
+                            "error": "Invalid API token"
+                        }))
+                        .into_response()
+                        .into_body(),
+                    )
+                    .unwrap());
+            }
+
+            if !api_token.is_valid() {
+                return Ok(Response::builder()
+                    .status(StatusCode::UNAUTHORIZED)
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(
+                        Json(json!({
+                            "result": "failed",
+                            "error": "API token is expired or inactive"
+                        }))
+                        .into_response()
+                        .into_body(),
+                    )
+                    .unwrap());
+            }
+
+            if !api_token.has_entitlement(required_entitlement.as_str()) {
                 return Ok(Response::builder()
                     .status(StatusCode::FORBIDDEN)
-                    .header(header::CONTENT_TYPE, "text/plain")
-                    .body("Forbidden: Insufficient permissions".into())
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(
+                        Json(json!({
+                            "result": "failed",
+                            "error": "Insufficient permissions"
+                        }))
+                        .into_response()
+                        .into_body(),
+                    )
                     .unwrap());
             }
 
@@ -200,4 +283,3 @@ where
         })
     }
 }
-

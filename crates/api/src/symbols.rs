@@ -5,7 +5,7 @@ use crate::utils::{peek_line, stream_to_s3};
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Query, State};
 use axum::{Extension, Json};
-use common::settings::Settings;
+use axum_extra::extract::WithRejection;
 use data::api_token::ApiToken;
 use data::product::Product;
 use data::symbols::NewSymbols;
@@ -13,9 +13,7 @@ use data::version::Version;
 use repos::symbols::SymbolsRepo;
 use serde::{Deserialize, Serialize};
 use sqlx::Postgres;
-use std::sync::Arc;
 use tracing::{debug, error, info};
-use uuid::Uuid;
 
 #[derive(Debug, Deserialize)]
 pub struct SymbolsRequestParams {
@@ -38,15 +36,6 @@ impl SymbolsRequestParams {
 #[derive(Debug, Serialize)]
 pub struct SymbolsResponse {
     pub result: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct SymbolsData {
-    pub os: String,
-    pub arch: String,
-    pub build_id: String,
-    pub module_id: String,
-    pub file_location: String,
 }
 
 pub struct SymbolsApi;
@@ -83,14 +72,6 @@ impl SymbolsApi {
             )));
         }
         Ok(())
-    }
-
-    fn get_max_symbols_size(settings: Arc<Settings>) -> u64 {
-        const MAX_ATTACHMENT_SIZE: u64 = 10 * 1024 * 1024; // 10 MB default limit
-        settings
-            .server
-            .max_symbols_size
-            .unwrap_or(MAX_ATTACHMENT_SIZE)
     }
 
     fn validate_build_id(build_id: &str) -> Result<(), ApiError> {
@@ -138,7 +119,11 @@ impl SymbolsApi {
         Ok(())
     }
 
-    async fn parse_header(first_line: String) -> Result<SymbolsData, ApiError> {
+    async fn process_header(
+        first_line: String,
+        product: data::product::Product,
+        version: data::version::Version,
+    ) -> Result<NewSymbols, ApiError> {
         let collection: Vec<&str> = first_line.split_whitespace().collect();
         if collection.len() < 5 {
             error!("invalid symbols file header: {:?}", first_line);
@@ -153,33 +138,14 @@ impl SymbolsApi {
         Self::validate_build_id(&build_id)?;
         Self::validate_module_id(&module_id)?;
 
-        Ok(SymbolsData {
+        Ok(NewSymbols {
             os,
             arch,
             build_id,
             module_id,
             file_location: path,
-        })
-    }
-
-    async fn store(
-        tx: impl sqlx::Executor<'_, Database = Postgres>,
-        data: SymbolsData,
-        product: data::product::Product,
-        version: data::version::Version,
-    ) -> Result<Uuid, ApiError> {
-        let symbols = NewSymbols {
-            os: data.os,
-            arch: data.arch,
-            build_id: data.build_id,
-            module_id: data.module_id,
-            file_location: data.file_location,
             product_id: product.id,
             version_id: version.id,
-        };
-        SymbolsRepo::create(tx, symbols).await.map_err(|e| {
-            error!("failed to stored symbols {:?}", e);
-            ApiError::InternalFailure()
         })
     }
 
@@ -207,12 +173,13 @@ impl SymbolsApi {
             error!("failed to read symbols file: {:?}", e);
             ApiError::Failure("failed to read symbols file".to_string())
         })?;
-        tracing::info!("Line: {:?}", line);
 
-        let _max_size = Self::get_max_symbols_size(state.settings.clone());
-        let data = Self::parse_header(line).await?;
+        let data = Self::process_header(line, product.clone(), version.clone()).await?;
 
-        Self::store(&mut *tx, data.clone(), product.clone(), version.clone()).await?;
+        SymbolsRepo::create(tx, data.clone()).await.map_err(|e| {
+            error!("failed to stored symbols {:?}", e);
+            ApiError::InternalFailure()
+        })?;
 
         if let Err(e) = stream_to_s3(state.storage.clone(), &data.file_location, stream).await {
             error!("Failed to stream to S3: {:?}", e);
@@ -258,7 +225,7 @@ impl SymbolsApi {
     pub async fn upload(
         State(state): State<AppState>,
         Extension(api_token): Extension<ApiToken>,
-        Query(params): Query<SymbolsRequestParams>,
+        WithRejection(Query(params), _): WithRejection<Query<SymbolsRequestParams>, ApiError>,
         mut multipart: Multipart,
     ) -> Result<Json<SymbolsResponse>, ApiError> {
         debug!("SymbolsApi::upload called with params: {:?}", params);
@@ -302,6 +269,8 @@ impl SymbolsApi {
             error!("Failed to commit transaction: {:?}", e);
             return Err(ApiError::Failure("failed to commit transaction".to_string()));
         }
+
+        //TODO: remove from storage if commit fails
 
         Self::audit_log(
             "upload_complete",

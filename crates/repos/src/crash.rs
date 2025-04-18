@@ -1,9 +1,9 @@
 use sqlx::{Postgres, QueryBuilder};
 use tracing::error;
 
-use common::QueryParams;
 use crate::{Repo, error::RepoError};
-use data::crash::{Crash, NewCrash};
+use common::QueryParams;
+use data::crash::{Crash, NewCrash, State};
 pub struct CrashRepo {}
 
 impl CrashRepo {
@@ -14,7 +14,7 @@ impl CrashRepo {
         sqlx::query_as!(
             Crash,
             r#"
-                SELECT *
+                SELECT id, minidump, report, version_id, product_id, info, state as "state: State", created_at, updated_at
                 FROM guardrail.crashes
                 WHERE guardrail.crashes.id = $1
             "#,
@@ -36,8 +36,8 @@ impl CrashRepo {
         Repo::build_query(
             &mut builder,
             &params,
-            &["id", "summary", "created_at", "updated_at"],
-            &["summary"],
+            &["id", "info", "state", "created_at", "updated_at"],
+            &["info"],
         )?;
 
         let query = builder.build_query_as();
@@ -56,8 +56,8 @@ impl CrashRepo {
             r#"
                 INSERT INTO guardrail.crashes
                   (
-                    summary,
-                    report,
+                    minidump,
+                    info,
                     version_id,
                     product_id
                   )
@@ -65,8 +65,8 @@ impl CrashRepo {
                 RETURNING
                   id
             "#,
-            crash.summary,
-            crash.report,
+            Some(crash.minidump),
+            crash.info,
             crash.version_id,
             crash.product_id,
         )
@@ -84,15 +84,17 @@ impl CrashRepo {
     ) -> Result<Option<uuid::Uuid>, RepoError> {
         sqlx::query_scalar!(
             r#"
-                UPDATE guardrail.crashes
-                SET summary = $1, report = $2, version_id = $3, product_id = $4
-                WHERE id = $5
+            UPDATE guardrail.crashes
+                SET minidump = $1, report = $2, version_id = $3, product_id = $4, info = $5, state = $6
+                WHERE id = $7
                 RETURNING id
             "#,
-            crash.summary,
+            crash.minidump,
             crash.report,
             crash.version_id,
             crash.product_id,
+            crash.info,
+            crash.state as _,
             crash.id,
         )
         .fetch_optional(executor)

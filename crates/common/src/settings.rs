@@ -20,7 +20,6 @@ pub struct Auth {
     pub origin: String,
     pub name: String,
     pub jwk: Jwk,
-    pub initial_admin_token: String,
 }
 
 #[derive(Debug, Deserialize, Default)]

@@ -1,8 +1,8 @@
-use api::routes;
+use apalis_sql::Config;
+use apalis_sql::postgres::PostgresStorage;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum_server::tls_rustls::RustlsConfig;
-use common::hash_token;
 use sqlx::ConnectOptions;
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -11,14 +11,15 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
-use tracing::level_filters::LevelFilter;
-use tracing::{Level, info};
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::{EnvFilter, FmtSubscriber, fmt};
+use tracing::{Level, info, level_filters::LevelFilter};
+use tracing_subscriber::{EnvFilter, FmtSubscriber, fmt, layer::SubscriberExt};
 use webauthn_rs::prelude::*;
 
+use api::routes;
 use api::state::AppState;
+use api::worker::MinidumpProcessor;
 use common::settings::Settings;
+use common::token::generate_api_token;
 use repos::Repo;
 
 struct GuardrailApp {
@@ -51,16 +52,21 @@ impl GuardrailApp {
         if let Err(err) = self.ensure_default_api_token(&repo).await {
             tracing::error!("Failed to create default API token: {}", err);
         }
+
+        let pg = PostgresStorage::new_with_config(db.clone(), Config::new("guardrail::Jobs"));
+        let worker = Arc::new(MinidumpProcessor::new(pg.clone()));
+
         let state = AppState {
             repo,
             webauthn,
             settings: settings.clone(),
             storage: store,
+            worker,
         };
 
         let routes_all = Router::new()
             .nest("/api", routes::routes(state.clone()).await)
-            .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
+            .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
             .layer(TraceLayer::new_for_http())
             .with_state(state);
 
@@ -148,16 +154,18 @@ impl GuardrailApp {
             return Ok(());
         }
 
-        let token = &self.settings.auth.initial_admin_token;
-        let token_hash = hash_token(token).map_err(|_| "Failed to hash token")?;
+        let (token_id, token, token_hash) =
+            generate_api_token().map_err(|_| "Failed to generate API token")?;
 
         let new_token = NewApiToken {
             description: "Default API token".to_string(),
+            token_id,
             token_hash,
             product_id: None,
             user_id: None,
             entitlements: vec!["token".to_string()],
             expires_at: None,
+            is_active: true,
         };
 
         let _token_id = ApiTokenRepo::create(&mut *conn, new_token).await?;

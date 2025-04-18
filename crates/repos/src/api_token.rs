@@ -1,4 +1,3 @@
-use chrono::Utc;
 use sqlx::Postgres;
 use tracing::error;
 use uuid::Uuid;
@@ -30,20 +29,18 @@ impl ApiTokenRepo {
         })
     }
 
-    pub async fn get_by_token_hash(
+    pub async fn get_by_token_id(
         executor: impl sqlx::Executor<'_, Database = Postgres>,
-        token_hash: &str,
+        token_id: Uuid,
     ) -> Result<Option<ApiToken>, RepoError> {
         sqlx::query_as!(
                 ApiToken,
                 r#"
                 SELECT *
                 FROM guardrail.api_tokens
-                WHERE guardrail.api_tokens.token_hash = $1
-                AND (guardrail.api_tokens.expires_at IS NULL OR guardrail.api_tokens.expires_at > now())
-                AND guardrail.api_tokens.is_active = true
+                WHERE guardrail.api_tokens.token_id = $1
             "#,
-                token_hash
+                token_id
             )
             .fetch_optional(executor)
             .await
@@ -128,6 +125,7 @@ impl ApiTokenRepo {
                 INSERT INTO guardrail.api_tokens
                   (
                     description,
+                    token_id,
                     token_hash,
                     product_id,
                     user_id,
@@ -135,16 +133,18 @@ impl ApiTokenRepo {
                     expires_at,
                     is_active
                   )
-                VALUES ($1, $2, $3, $4, $5, $6, true)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING
                   id
             "#,
             new_token.description,
+            new_token.token_id,
             new_token.token_hash,
             new_token.product_id,
             new_token.user_id,
             &new_token.entitlements as &[String],
             new_token.expires_at,
+            new_token.is_active,
         )
         .fetch_one(executor)
         .await
@@ -227,32 +227,6 @@ impl ApiTokenRepo {
         Ok(())
     }
 
-    pub fn has_entitlement(token: &ApiToken, required_entitlement: &str) -> bool {
-        if !token.is_active {
-            return false;
-        }
-
-        if let Some(expires_at) = token.expires_at {
-            let now = Utc::now().naive_utc();
-            if expires_at < now {
-                return false;
-            }
-        }
-
-        if token
-            .entitlements
-            .contains(&required_entitlement.to_string())
-        {
-            return true;
-        }
-
-        if token.entitlements.contains(&"token".to_string()) {
-            return true;
-        }
-
-        false
-    }
-
     pub async fn get_all(
         executor: impl sqlx::Executor<'_, Database = Postgres>,
     ) -> Result<Vec<ApiToken>, RepoError> {
@@ -261,7 +235,6 @@ impl ApiTokenRepo {
             r#"
                 SELECT *
                 FROM guardrail.api_tokens
-                ORDER BY created_at DESC
             "#
         )
         .fetch_all(executor)

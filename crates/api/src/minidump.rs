@@ -1,30 +1,20 @@
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Query, State};
 use axum::{Extension, Json};
+use axum_extra::extract::WithRejection;
 use data::api_token::ApiToken;
 use data::crash::Crash;
 use data::product::Product;
 use data::version::Version;
-use minidump::Minidump;
-use minidump_processor::ProcessorOptions;
-use minidump_unwind::{Symbolizer, simple_symbol_supplier};
 use repos::attachment::AttachmentsRepo;
 use repos::crash::CrashRepo;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use sqlx::Postgres;
-use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::task;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 use super::error::ApiError;
-use super::file_cleanup::FileCleanupTracker;
 use crate::state::AppState;
-use crate::utils::{
-    get_product, get_version, stream_to_s3, validate_api_token_for_product, validate_file_size,
-};
-use common::settings::Settings;
+use crate::utils::{get_product, get_version, stream_to_s3, validate_api_token_for_product};
 
 pub struct MinidumpApi;
 
@@ -49,6 +39,7 @@ impl MinidumpRequestParams {
 #[derive(Debug, Serialize)]
 pub struct MinidumpResponse {
     pub result: String,
+    pub crash_id: Option<uuid::Uuid>,
 }
 
 impl MinidumpApi {
@@ -117,22 +108,6 @@ impl MinidumpApi {
         Self::validate_content_type(content_type, "minidump")
     }
 
-    fn get_max_attachment_size(settings: Arc<Settings>) -> u64 {
-        const MAX_ATTACHMENT_SIZE: u64 = 10 * 1024 * 1024; // 10 MB default limit
-        settings
-            .server
-            .max_attachment_size
-            .unwrap_or(MAX_ATTACHMENT_SIZE)
-    }
-
-    fn get_max_minidump_size(settings: Arc<Settings>) -> u64 {
-        const MAX_MINIDUMP_SIZE: u64 = 50 * 1024 * 1024; // 50 MB default limit
-        settings
-            .server
-            .max_minidump_size
-            .unwrap_or(MAX_MINIDUMP_SIZE)
-    }
-
     fn extract_filename(field: &Field<'_>) -> Result<String, ApiError> {
         let filename = field
             .file_name()
@@ -141,48 +116,9 @@ impl MinidumpApi {
         Ok(filename)
     }
 
-    async fn get_minidump_file(
-        name: &String,
-        settings: Arc<Settings>,
-    ) -> Result<PathBuf, ApiError> {
-        let upload_path = std::path::Path::new(&settings.server.base_path).join("minidumps");
-        let minidump_file = std::path::Path::new(&upload_path).join(name);
-        tokio::fs::create_dir_all(&upload_path).await.map_err(|e| {
-            error!(
-                "Failed to create directories {} for storing minidump {} ({:?})",
-                upload_path.to_str().unwrap_or("?"),
-                name,
-                e
-            );
-            ApiError::Failure(format!("failed to store minidump {}", name))
-        })?;
-        Ok(minidump_file)
-    }
-
-    async fn get_attachment_file(
-        crash: uuid::Uuid,
-        name: &String,
-        settings: Arc<Settings>,
-    ) -> Result<PathBuf, ApiError> {
-        let upload_path = std::path::Path::new(&settings.server.base_path)
-            .join("attachments")
-            .join(crash.to_string());
-        let attachment_file = std::path::Path::new(&upload_path).join(name);
-        tokio::fs::create_dir_all(&upload_path).await.map_err(|e| {
-            error!(
-                "Failed to create directories {} for storing attachment {} ({:?})",
-                name,
-                upload_path.to_str().unwrap_or("?"),
-                e
-            );
-            ApiError::Failure(format!("failed to store attachment {}", name))
-        })?;
-        Ok(attachment_file)
-    }
-
     async fn store_crash<E>(
         tx: &mut E,
-        report: serde_json::Value,
+        minidump: uuid::Uuid,
         product: &data::product::Product,
         version: &data::version::Version,
     ) -> Result<uuid::Uuid, ApiError>
@@ -190,8 +126,8 @@ impl MinidumpApi {
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
     {
         let crash = data::crash::NewCrash {
-            report,
-            summary: "".to_string(),
+            minidump,
+            info: None,
             product_id: product.id,
             version_id: version.id,
         };
@@ -252,67 +188,11 @@ impl MinidumpApi {
             })
     }
 
-    async fn process_minidump_file(
-        minidump_file: PathBuf,
-        settings: Arc<Settings>,
-    ) -> Result<serde_json::Value, ApiError> {
-        let dump = Minidump::read_path(minidump_file)?;
-
-        let mut options = ProcessorOptions::default();
-        options.recover_function_args = true;
-
-        let path = std::path::Path::new(&settings.server.base_path)
-            .join("symbols")
-            .to_path_buf();
-        debug!("provider: {:?}", path);
-        let provider = Symbolizer::new(simple_symbol_supplier(vec![path]));
-
-        let state =
-            minidump_processor::process_minidump_with_options(&dump, &provider, options).await?;
-
-        let mut json_output = Vec::new();
-        state.print_json(&mut json_output, false).map_err(|e| {
-            error!("Failed to print minidump json: {:?}", e);
-            ApiError::Failure("failed to print minidump json".to_string())
-        })?;
-        let json: Value = serde_json::from_slice(&json_output).map_err(|e| {
-            error!("Failed to parse minidump json: {:?}", e);
-            ApiError::Failure("failed to parse minidump json".to_string())
-        })?;
-
-        debug!("json: {:?}", json);
-        Ok(json)
-    }
-
-    async fn process_and_store_minidump<E>(
-        tx: &mut E,
-        product: &Product,
-        version: &Version,
-        minidump_file: PathBuf,
-        settings: Arc<Settings>,
-    ) -> Result<uuid::Uuid, ApiError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
-        let data_result =
-            task::spawn(async move { Self::process_minidump_file(minidump_file, settings).await })
-                .await
-                .map_err(|e| {
-                    error!("Failed to process minidump file: {:?}", e);
-                    ApiError::Failure("Failed to process minidump file".to_string())
-                })
-                .and_then(|result| result);
-
-        let data = data_result?;
-        Self::store_crash(tx, data, product, version).await
-    }
-
     async fn handle_minidump_upload<E>(
         tx: &mut E,
         product: &Product,
         version: &Version,
         field: Field<'_>,
-        cleanup_tracker: &mut FileCleanupTracker,
         state: AppState,
     ) -> Result<uuid::Uuid, ApiError>
     where
@@ -329,50 +209,29 @@ impl MinidumpApi {
         let content_type = field.content_type().unwrap_or_default();
         Self::validate_minidump_content_type(content_type)?;
 
-        let max_size = Self::get_max_minidump_size(state.settings.clone());
-        let filename = Self::extract_filename(&field)?;
-        let minidump_file = Self::get_minidump_file(&filename, state.settings.clone()).await?;
+        let _filename = Self::extract_filename(&field)?;
 
-        cleanup_tracker.track_file(minidump_file.clone());
+        let minidump = uuid::Uuid::new_v4();
+        let path = format!("minidumps/{}", minidump);
 
-        stream_to_s3(state.storage.clone(), "minidump_key", field)
+        stream_to_s3(state.storage.clone(), &path, field)
             .await
             .map_err(|e| {
                 error!("Failed to stream to S3: {:?}", e);
                 ApiError::InternalFailure()
             })?;
 
+        let id = Self::store_crash(tx, minidump, product, version).await?;
+
         Self::audit_log(
             "minidump_file_saved",
-            &format!("Saved minidump file {}", filename),
+            &format!("Saved minidump file {}", path),
             Some(&product.name),
             Some(&version.name),
             None,
         );
 
-        let _filesize = validate_file_size(&minidump_file, max_size, "minidump").await?;
-
-        Self::audit_log(
-            "minidump_processing_start",
-            "Processing minidump file",
-            Some(&product.name),
-            Some(&version.name),
-            None,
-        );
-
-        let crash_id =
-            Self::process_and_store_minidump(tx, product, version, minidump_file.clone(), state.settings)
-                .await?;
-
-        Self::audit_log(
-            "minidump_processing_complete",
-            "Successfully processed and stored minidump",
-            Some(&product.name),
-            Some(&version.name),
-            Some(crash_id),
-        );
-
-        Ok(crash_id)
+        Ok(id)
     }
 
     async fn handle_attachment_upload<E>(
@@ -381,7 +240,6 @@ impl MinidumpApi {
         product: &Product,
         _version: &Version,
         field: Field<'_>,
-        cleanup_tracker: &mut FileCleanupTracker,
         state: AppState,
     ) -> Result<(), ApiError>
     where
@@ -417,12 +275,9 @@ impl MinidumpApi {
         );
 
         let storage_filename = uuid::Uuid::new_v4().to_string();
-        let attachment_file =
-            Self::get_attachment_file(crash_id, &storage_filename, state.settings.clone()).await?;
+        let path = format!("attachments/{}", storage_filename);
 
-        cleanup_tracker.track_file(attachment_file.clone());
-
-        stream_to_s3(state.storage.clone(), "attachment_key", field)
+        stream_to_s3(state.storage.clone(), &path, field)
             .await
             .map_err(|e| {
                 error!("Failed to stream to S3: {:?}", e);
@@ -437,10 +292,9 @@ impl MinidumpApi {
             Some(crash_id),
         );
 
-        let max_size = Self::get_max_attachment_size(state.settings);
-        let filesize = validate_file_size(&attachment_file, max_size, "attachment").await? as i64;
-
         let crash = Self::get_crash(tx, crash_id).await?;
+        let filesize = 0; // Placeholder for actual file size
+        // TODO: add storage_filename
         Self::store_attachment(tx, product, &crash, original_filename, filesize, mimetype).await?;
 
         Ok(())
@@ -452,7 +306,6 @@ impl MinidumpApi {
         product: &Product,
         version: &Version,
         crash_id: &mut Option<uuid::Uuid>,
-        cleanup_tracker: &mut FileCleanupTracker,
         state: AppState,
     ) -> Result<(), ApiError>
     where
@@ -460,15 +313,8 @@ impl MinidumpApi {
     {
         match field.name() {
             Some("upload_file_minidump") => {
-                let new_crash_id = Self::handle_minidump_upload(
-                    tx,
-                    product,
-                    version,
-                    field,
-                    cleanup_tracker,
-                    state,
-                )
-                .await?;
+                let new_crash_id =
+                    Self::handle_minidump_upload(tx, product, version, field, state).await?;
                 *crash_id = Some(new_crash_id);
                 Ok(())
             }
@@ -483,16 +329,8 @@ impl MinidumpApi {
                 let crash_id_value = crash_id
                     .ok_or(ApiError::Failure("Expect crash before attachment".to_string()))?;
 
-                Self::handle_attachment_upload(
-                    tx,
-                    crash_id_value,
-                    product,
-                    version,
-                    field,
-                    cleanup_tracker,
-                    state,
-                )
-                .await
+                Self::handle_attachment_upload(tx, crash_id_value, product, version, field, state)
+                    .await
             }
             _ => Ok(()),
         }
@@ -501,7 +339,7 @@ impl MinidumpApi {
     pub async fn upload(
         State(state): State<AppState>,
         Extension(api_token): Extension<ApiToken>,
-        Query(params): Query<MinidumpRequestParams>,
+        WithRejection(Query(params), _): WithRejection<Query<MinidumpRequestParams>, ApiError>,
         mut multipart: Multipart,
     ) -> Result<Json<MinidumpResponse>, ApiError> {
         Self::audit_log(
@@ -521,7 +359,6 @@ impl MinidumpApi {
 
         let product = get_product(&mut *tx, &params.product).await?;
         validate_api_token_for_product(&api_token, &product, &params.product)?;
-
         let version = get_version(&mut *tx, &product, &params.version).await?;
 
         Self::audit_log(
@@ -532,30 +369,29 @@ impl MinidumpApi {
             None,
         );
 
-        let mut cleanup_tracker = FileCleanupTracker::new();
-
         let mut crash_id: Option<uuid::Uuid> = None;
         while let Some(field) = multipart.next_field().await.map_err(|e| {
             error!("Failed to get next multipart field: {:?}", e);
             ApiError::Failure("failed to read multipart field from upload".to_string())
         })? {
-            Self::process_field(
-                &mut *tx,
-                field,
-                &product,
-                &version,
-                &mut crash_id,
-                &mut cleanup_tracker,
-                state.clone(),
-            )
-            .await?;
+            Self::process_field(&mut *tx, field, &product, &version, &mut crash_id, state.clone())
+                .await?;
         }
 
         let commit_result = tx.commit().await;
         if let Err(e) = commit_result {
             error!("Failed to commit transaction: {:?}", e);
-            cleanup_tracker.cleanup_all().await;
             return Err(ApiError::Failure("failed to commit transaction".to_string()));
+        }
+
+        if let Some(crash_id) = crash_id {
+            state.worker.queue_minidump(crash_id).await.map_err(|e| {
+                error!("Failed to queue minidump job: {:?}", e);
+                ApiError::Failure("failed to queue minidump job".to_string())
+            })?;
+        } else {
+            error!("No crash ID found after processing");
+            return Err(ApiError::Failure("no crash ID found".to_string()));
         }
 
         Self::audit_log(
@@ -568,6 +404,8 @@ impl MinidumpApi {
 
         Ok(Json(MinidumpResponse {
             result: "ok".to_string(),
+            crash_id,
         }))
     }
+
 }

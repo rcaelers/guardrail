@@ -1,6 +1,5 @@
 #![cfg(test)]
 
-use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -67,8 +66,8 @@ async fn test_get_all(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
     let new_crash = NewCrash {
-        summary: "Test Crash".to_string(),
-        report: json!({"test": "data"}),
+        minidump: Uuid::new_v4(),
+        info: Some("Test crash".to_string()),
         version_id,
         product_id,
     };
@@ -127,8 +126,8 @@ async fn test_get_all_error(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
     let new_crash = NewCrash {
-        summary: "Test Crash".to_string(),
-        report: json!({"test": "data"}),
+        minidump: Uuid::new_v4(),
+        info: Some("Test crash".to_string()),
         version_id,
         product_id,
     };
@@ -162,8 +161,8 @@ async fn test_create(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
     let new_crash = NewCrash {
-        summary: "Test Crash".to_string(),
-        report: json!({"test": "data"}),
+        minidump: Uuid::new_v4(),
+        info: Some("Test crash".to_string()),
         version_id,
         product_id,
     };
@@ -335,8 +334,8 @@ async fn test_count(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
     let new_crash = NewCrash {
-        summary: "Test Crash".to_string(),
-        report: json!({"test": "data"}),
+        minidump: Uuid::new_v4(),
+        info: Some("Test crash".to_string()),
         version_id,
         product_id,
     };
@@ -376,8 +375,8 @@ async fn test_count_error(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
     let new_crash = NewCrash {
-        summary: "Test Crash".to_string(),
-        report: json!({"test": "data"}),
+        minidump: Uuid::new_v4(),
+        info: Some("Test crash".to_string()),
         version_id,
         product_id,
     };

@@ -1,14 +1,11 @@
 use common::QueryParams;
 use data::annotation::AnnotationKind;
 use data::annotation::NewAnnotation;
-use data::crash::NewCrash;
-use data::product::NewProduct;
-use data::version::NewVersion;
-use repos::crash::CrashRepo;
-use repos::product::ProductRepo;
-use repos::version::VersionRepo;
 use repos::{annotation::AnnotationsRepo, error::RepoError};
 use sqlx::{Pool, Postgres};
+use testware::create_test_crash;
+use testware::create_test_product;
+use testware::create_test_version;
 use uuid::Uuid;
 
 // AnnotationKind tests
@@ -44,63 +41,21 @@ fn test_annotation_kind_try_from_invalid_str() {
     assert_eq!(result.unwrap_err(), "Invalid annotation kind: invalid");
 }
 
-async fn setup_test_product(pool: &Pool<Postgres>) -> Uuid {
-    let product = NewProduct {
-        name: format!("test_product_{}", Uuid::new_v4()),
-        description: "Test product for annotation tests".to_string(),
-    };
-
-    ProductRepo::create(pool, product)
-        .await
-        .expect("Failed to create test product")
-}
-
-async fn setup_test_version(pool: &Pool<Postgres>, product_id: Uuid) -> Uuid {
-    let version = NewVersion {
-        name: format!("test_version_{}", Uuid::new_v4()),
-        hash: format!("hash_{}", Uuid::new_v4()),
-        tag: format!("tag_{}", Uuid::new_v4()),
-        product_id,
-    };
-
-    VersionRepo::create(pool, version)
-        .await
-        .expect("Failed to create test version")
-}
-
-async fn setup_test_crash(pool: &Pool<Postgres>, product_id: Uuid, version_id: Uuid) -> Uuid {
-    let crash = NewCrash {
-        summary: "Test crash for annotation tests".to_string(),
-        report: serde_json::json!({
-            "crash_info": {
-                "type": "Test",
-                "address": "0x0",
-                "crashing_thread": 0
-            }
-        }),
-        version_id,
-        product_id,
-    };
-
-    CrashRepo::create(pool, crash)
-        .await
-        .expect("Failed to create test crash")
-}
-
 async fn create_test_annotation(pool: &Pool<Postgres>) -> (NewAnnotation, Uuid, Uuid) {
-    let product_id = setup_test_product(pool).await;
-    let version_id = setup_test_version(pool, product_id).await;
-    let crash_id = setup_test_crash(pool, product_id, version_id).await;
+    let product = create_test_product(pool).await;
+    let version =
+        create_test_version(pool, "1.0.0", "Test Version", "test-platform", Some(product.id)).await;
+    let crash = create_test_crash(pool, None, Some(product.id), Some(version.id)).await;
 
     let new_annotation = NewAnnotation {
         key: format!("test_key_{}", Uuid::new_v4()),
         kind: "system".to_string(),
         value: "test_value".to_string(),
-        crash_id,
-        product_id,
+        crash_id: crash.id,
+        product_id: product.id,
     };
 
-    (new_annotation, product_id, crash_id)
+    (new_annotation, product.id, crash.id)
 }
 
 // get_by_id tests
@@ -151,35 +106,36 @@ async fn test_get_by_id_error(pool: Pool<Postgres>) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_crash_id(pool: Pool<Postgres>) {
-    let product_id = setup_test_product(&pool).await;
-    let version_id = setup_test_version(&pool, product_id).await;
-
-    let crash_id = setup_test_crash(&pool, product_id, version_id).await;
+    let product = create_test_product(&pool).await;
+    let version =
+        create_test_version(&pool, "1.0.0", "Test Version", "test-platform", Some(product.id))
+            .await;
+    let crash = create_test_crash(&pool, None, Some(product.id), Some(version.id)).await;
 
     let new_annotation1 = NewAnnotation {
         key: "key1".to_string(),
         kind: "system".to_string(),
         value: "test_value1".to_string(),
-        crash_id,
-        product_id,
+        crash_id: crash.id,
+        product_id: product.id,
     };
 
     let new_annotation2 = NewAnnotation {
         key: "key2".to_string(),
         kind: "system".to_string(),
         value: "test_value2".to_string(),
-        crash_id,
-        product_id,
+        crash_id: crash.id,
+        product_id: product.id,
     };
 
-    let different_crash_id = setup_test_crash(&pool, product_id, version_id).await;
+    let different_crash = create_test_crash(&pool, None, Some(product.id), Some(version.id)).await;
 
     let new_annotation3 = NewAnnotation {
         key: "key3".to_string(),
         kind: "system".to_string(),
         value: "test_value3".to_string(),
-        crash_id: different_crash_id,
-        product_id,
+        crash_id: different_crash.id,
+        product_id: product.id,
     };
 
     let _id1 = AnnotationsRepo::create(&pool, new_annotation1)
@@ -195,7 +151,7 @@ async fn test_get_by_crash_id(pool: Pool<Postgres>) {
         .expect("Failed to create test annotation 3");
 
     let params = QueryParams::default();
-    let annotations = AnnotationsRepo::get_by_crash_id(&pool, crash_id, params)
+    let annotations = AnnotationsRepo::get_by_crash_id(&pool, crash.id, params)
         .await
         .expect("Failed to get annotations by crash_id");
 
@@ -207,16 +163,18 @@ async fn test_get_by_crash_id(pool: Pool<Postgres>) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_crash_id_error(pool: Pool<Postgres>) {
-    let product_id = setup_test_product(&pool).await;
-    let version_id = setup_test_version(&pool, product_id).await;
-    let crash_id = setup_test_crash(&pool, product_id, version_id).await;
+    let product = create_test_product(&pool).await;
+    let version =
+        create_test_version(&pool, "1.0.0", "Test Version", "test-platform", Some(product.id))
+            .await;
+    let crash = create_test_crash(&pool, None, Some(product.id), Some(version.id)).await;
 
     let new_annotation = NewAnnotation {
         key: "key1".to_string(),
         kind: "system".to_string(),
         value: "test_value1".to_string(),
-        crash_id,
-        product_id,
+        crash_id: crash.id,
+        product_id: product.id,
     };
 
     AnnotationsRepo::create(&pool, new_annotation)
@@ -225,7 +183,7 @@ async fn test_get_by_crash_id_error(pool: Pool<Postgres>) {
 
     pool.close().await;
 
-    let result = AnnotationsRepo::get_by_crash_id(&pool, crash_id, QueryParams::default()).await;
+    let result = AnnotationsRepo::get_by_crash_id(&pool, crash.id, QueryParams::default()).await;
     assert!(
         result.is_err(),
         "Expected an error when getting annotations by crash_id with closed pool"

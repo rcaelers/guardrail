@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT *\n                FROM guardrail.api_tokens\n                WHERE guardrail.api_tokens.token_hash = $1\n                AND (guardrail.api_tokens.expires_at IS NULL OR guardrail.api_tokens.expires_at > now())\n                AND guardrail.api_tokens.is_active = true\n            ",
+  "query": "\n                SELECT *\n                FROM guardrail.api_tokens\n            ",
   "describe": {
     "columns": [
       {
@@ -25,46 +25,50 @@
       },
       {
         "ordinal": 4,
+        "name": "token_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
         "name": "token_hash",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "product_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "user_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "entitlements",
         "type_info": "TextArray"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "last_used_at",
         "type_info": "Timestamp"
       },
       {
-        "ordinal": 9,
+        "ordinal": 10,
         "name": "expires_at",
         "type_info": "Timestamp"
       },
       {
-        "ordinal": 10,
+        "ordinal": 11,
         "name": "is_active",
         "type_info": "Bool"
       }
     ],
     "parameters": {
-      "Left": [
-        "Text"
-      ]
+      "Left": []
     },
     "nullable": [
+      false,
       false,
       false,
       false,
@@ -78,5 +82,5 @@
       false
     ]
   },
-  "hash": "5b64d467f266654421bcd7a21ca2a58e95e9c4f2ede446b51925c2553736435b"
+  "hash": "eb9d5f8115a17dde012dcd03eac5e1df2e1b3c6f61e814153f8cb4462ba436da"
 }

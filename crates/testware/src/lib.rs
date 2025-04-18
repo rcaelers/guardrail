@@ -2,10 +2,12 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use common::settings::Settings;
-use serde_json::json;
+use common::token::generate_api_token;
 use sqlx::PgPool;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
+
+pub mod setup;
 
 // Data models
 use data::api_token::NewApiToken;
@@ -40,15 +42,20 @@ use webauthn_rs::prelude::Url;
 use webauthn_rs::{Webauthn, WebauthnBuilder};
 
 /// Create a test product with a random name
-pub async fn create_test_product(pool: &PgPool) -> Uuid {
+pub async fn create_test_product(pool: &PgPool) -> Product {
     let new_product = NewProduct {
         name: format!("TestProduct_{}", Uuid::new_v4()),
         description: "Test Product Description".to_string(),
     };
 
-    ProductRepo::create(pool, new_product)
+    let product_id = ProductRepo::create(pool, new_product)
         .await
-        .expect("Failed to insert test product")
+        .expect("Failed to insert test product");
+
+    ProductRepo::get_by_id(pool, product_id)
+        .await
+        .expect("Failed to retrieve created product")
+        .expect("Created product not found")
 }
 
 /// Create a test product with a specific name and description
@@ -82,7 +89,7 @@ pub async fn create_test_version(
 ) -> Version {
     let product_id = match product_id {
         Some(id) => id,
-        None => create_test_product(pool).await,
+        None => create_test_product(pool).await.id,
     };
 
     let new_version = NewVersion {
@@ -132,8 +139,7 @@ pub async fn setup_test_dependencies(pool: &PgPool) -> (Uuid, Uuid) {
 /// Create a test crash and its associated product and version if needed
 pub async fn create_test_crash(
     pool: &PgPool,
-    summary: &str,
-    report_data: serde_json::Value,
+    info: Option<&str>,
     product_id: Option<Uuid>,
     version_id: Option<Uuid>,
 ) -> Crash {
@@ -143,8 +149,8 @@ pub async fn create_test_crash(
     };
 
     let new_crash = NewCrash {
-        summary: summary.to_string(),
-        report: report_data,
+        minidump: Uuid::new_v4(),
+        info: info.map(|s| s.to_string()),
         product_id,
         version_id,
     };
@@ -175,8 +181,8 @@ pub async fn create_test_attachment(
             let (product_id, version_id) = setup_test_dependencies(pool).await;
 
             let new_crash = NewCrash {
-                summary: "Test Crash".to_string(),
-                report: json!({"test": "data"}),
+                minidump: Uuid::new_v4(),
+                info: None,
                 version_id,
                 product_id,
             };
@@ -323,48 +329,6 @@ pub fn hash_token(token: &str) -> String {
         .to_string()
 }
 
-/// Create a test API token
-pub async fn create_test_api_token(
-    pool: &PgPool,
-    description: &str,
-    token: &str,
-    product_id: Option<Uuid>,
-    user_id: Option<Uuid>,
-    entitlements: &[&str],
-) -> ApiToken {
-    let product_id = match product_id {
-        Some(id) => id,
-        None => create_test_product(pool).await,
-    };
-
-    // Convert entitlements to a vector of strings
-    let entitlements: Vec<String> = entitlements.iter().map(|&s| s.to_string()).collect();
-
-    // Hash the token using argon2
-    let token_hash = hash_token(token);
-
-    // Create the new API token
-    let new_token = NewApiToken {
-        description: description.to_string(),
-        token_hash,
-        product_id: Some(product_id),
-        user_id,
-        entitlements,
-        expires_at: Some(Utc::now().naive_utc() + chrono::Duration::days(30)), // Default expiry of 30 days
-    };
-
-    // Create the API token using the repository
-    let token_id = ApiTokenRepo::create(pool, new_token)
-        .await
-        .expect("Failed to create API token");
-
-    // Retrieve the created token
-    ApiTokenRepo::get_by_id(pool, token_id)
-        .await
-        .expect("Failed to retrieve the created API token")
-        .expect("Created API token not found")
-}
-
 pub fn init_logging() {
     tracing_subscriber::fmt()
         .with_env_filter(EnvFilter::from_default_env())
@@ -384,25 +348,37 @@ pub fn create_webauthn(settings: Arc<Settings>) -> Arc<Webauthn> {
     Arc::new(builder.build().expect("Invalid configuration"))
 }
 
-pub async fn create_token(
+pub async fn create_test_token(
     pool: &PgPool,
-    token: &str,
+    description: &str,
     product: Option<Uuid>,
-    entitement: &str,
-) -> Uuid {
-    let token_hash = hash_token(token);
+    user: Option<Uuid>,
+    entitlements: &[&str],
+) -> (String, ApiToken) {
+    let (token_id, token, token_hash) = generate_api_token().expect("Failed to generate API token");
+
+    let entitlements: Vec<String> = entitlements.iter().map(|&s| s.to_string()).collect();
     let new_token = NewApiToken {
-        description: "Test API token".to_string(),
+        description: description.to_string(),
+        token_id,
         token_hash,
         product_id: product,
-        user_id: None,
-        entitlements: vec![entitement.to_string()],
-        expires_at: None,
+        user_id: user,
+        entitlements,
+        expires_at: Some(Utc::now().naive_utc() + chrono::Duration::days(30)), // Default expiry of 30 days
+        is_active: true,
     };
 
-    ApiTokenRepo::create(pool, new_token)
+    let id = ApiTokenRepo::create(pool, new_token)
         .await
-        .expect("Failed to insert test API token")
+        .expect("Failed to insert test API token");
+
+    let api_token = ApiTokenRepo::get_by_id(pool, id)
+        .await
+        .expect("Failed to retrieve the created API token")
+        .expect("Created API token not found");
+
+    (token, api_token)
 }
 
 pub fn create_settings() -> Arc<Settings> {

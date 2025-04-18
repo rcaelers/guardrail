@@ -1,6 +1,5 @@
 #![cfg(test)]
 
-use serde_json::json;
 use sqlx::PgPool;
 use uuid::Uuid;
 
@@ -8,25 +7,14 @@ use common::{QueryParams, SortOrder};
 use data::crash::*;
 use repos::crash::*;
 
-use testware::{create_test_crash as insert_test_crash, setup_test_dependencies};
+use testware::{create_test_crash, setup_test_dependencies};
 
 // get_by_id tests
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id(pool: PgPool) {
-    let summary = "Test Crash";
-    let report = json!({
-        "crash_info": {
-            "type": "SIGSEGV",
-            "address": "0x0",
-            "crashing_thread": 0
-        },
-        "threads": [
-            { "frames": [{"module": "test", "function": "main", "offset": 0}] }
-        ]
-    });
-
-    let inserted_crash = insert_test_crash(&pool, summary, report.clone(), None, None).await;
+    let info = "Test Crash";
+    let inserted_crash = create_test_crash(&pool, Some(info), None, None).await;
 
     let found_crash = CrashRepo::get_by_id(&pool, inserted_crash.id)
         .await
@@ -35,8 +23,7 @@ async fn test_get_by_id(pool: PgPool) {
     assert!(found_crash.is_some());
     let found_crash = found_crash.unwrap();
     assert_eq!(found_crash.id, inserted_crash.id);
-    assert_eq!(found_crash.summary, summary);
-    assert_eq!(found_crash.report, report);
+    assert_eq!(found_crash.info, Some(info.to_string()));
 
     let non_existent_id = Uuid::new_v4();
     let not_found = CrashRepo::get_by_id(&pool, non_existent_id)
@@ -52,14 +39,10 @@ async fn test_get_by_id(pool: PgPool) {
 async fn test_get_all(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
-    let test_crash_data = vec![
-        ("Crash A", json!({"type": "null pointer", "address": "0x0"})),
-        ("Crash B", json!({"type": "stack overflow", "address": "0xFFF"})),
-        ("Crash C", json!({"type": "assertion failure", "condition": "x > 0"})),
-    ];
+    let test_crash_data = vec![("Crash A"), ("Crash B"), ("Crash C")];
 
-    for (summary, report) in &test_crash_data {
-        insert_test_crash(&pool, summary, report.clone(), Some(product_id), Some(version_id)).await;
+    for info in &test_crash_data {
+        create_test_crash(&pool, Some(info), Some(product_id), Some(version_id)).await;
     }
 
     let query_params = QueryParams::default();
@@ -72,17 +55,17 @@ async fn test_get_all(pool: PgPool) {
     let mut query_params = QueryParams::default();
     query_params
         .sorting
-        .push_back(("summary".to_string(), SortOrder::Ascending));
+        .push_back(("info".to_string(), SortOrder::Ascending));
 
     let sorted_crashes = CrashRepo::get_all(&pool, query_params)
         .await
         .expect("Failed to get sorted crashes");
 
     for i in 1..sorted_crashes.len() {
-        if sorted_crashes[i - 1].summary == sorted_crashes[i].summary {
+        if sorted_crashes[i - 1].info == sorted_crashes[i].info {
             continue;
         }
-        assert!(sorted_crashes[i - 1].summary <= sorted_crashes[i].summary);
+        assert!(sorted_crashes[i - 1].info <= sorted_crashes[i].info);
     }
 
     let query_params = QueryParams {
@@ -95,7 +78,13 @@ async fn test_get_all(pool: PgPool) {
         .expect("Failed to get filtered crashes");
 
     for crash in filtered_crashes {
-        assert!(crash.summary.contains("Crash B"));
+        assert!(
+            crash
+                .info
+                .as_ref()
+                .unwrap_or(&String::new())
+                .contains("Crash B")
+        );
     }
 }
 
@@ -105,21 +94,11 @@ async fn test_get_all(pool: PgPool) {
 async fn test_create(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
-    let report_data = json!({
-        "crash_reason": "division by zero",
-        "cpu": "x86_64",
-        "os": "Linux",
-        "frames": [
-            { "function": "calculate", "offset": 123 },
-            { "function": "main", "offset": 456 }
-        ]
-    });
-
     let new_crash = NewCrash {
-        summary: "Calculation Error".to_string(),
-        report: report_data.clone(),
+        info: Some("Calculation Error".to_string()),
         version_id,
         product_id,
+        minidump: Uuid::new_v4(),
     };
 
     let crash_id = CrashRepo::create(&pool, new_crash.clone())
@@ -131,8 +110,7 @@ async fn test_create(pool: PgPool) {
         .expect("Failed to get created crash")
         .expect("Created crash not found");
 
-    assert_eq!(created_crash.summary, new_crash.summary);
-    assert_eq!(created_crash.report, new_crash.report);
+    assert_eq!(created_crash.info, new_crash.info);
     assert_eq!(created_crash.version_id, new_crash.version_id);
     assert_eq!(created_crash.product_id, new_crash.product_id);
 }
@@ -141,11 +119,9 @@ async fn test_create(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_update(pool: PgPool) {
-    let mut crash =
-        insert_test_crash(&pool, "Original Crash", json!({"original": "data"}), None, None).await;
+    let mut crash = create_test_crash(&pool, Some("Original Crash"), None, None).await;
 
-    crash.summary = "Updated Crash".to_string();
-    crash.report = json!({"updated": "data", "with": "more information"});
+    crash.info = Some("Updated Crash".to_string());
 
     let updated_id = CrashRepo::update(&pool, crash.clone())
         .await
@@ -159,16 +135,14 @@ async fn test_update(pool: PgPool) {
         .expect("Failed to get updated crash")
         .expect("Updated crash not found");
 
-    assert_eq!(updated_crash.summary, "Updated Crash");
-    assert_eq!(updated_crash.report, json!({"updated": "data", "with": "more information"}));
+    assert_eq!(updated_crash.info, Some("Updated Crash".to_string()));
 }
 
 // remove tests
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_remove(pool: PgPool) {
-    let crash =
-        insert_test_crash(&pool, "Crash to Delete", json!({"delete": "me"}), None, None).await;
+    let crash = create_test_crash(&pool, Some("Crash to Delete"), None, None).await;
 
     CrashRepo::remove(&pool, crash.id)
         .await
@@ -191,14 +165,10 @@ async fn test_count(pool: PgPool) {
 
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
-    let test_crashes = vec![
-        ("Count Crash 1", json!({"count": 1})),
-        ("Count Crash 2", json!({"count": 2})),
-        ("Count Crash 3", json!({"count": 3})),
-    ];
+    let test_crashes = vec![("Count Crash 1"), ("Count Crash 2"), ("Count Crash 3")];
 
-    for (summary, report) in &test_crashes {
-        insert_test_crash(&pool, summary, report.clone(), Some(product_id), Some(version_id)).await;
+    for info in &test_crashes {
+        create_test_crash(&pool, Some(info), Some(product_id), Some(version_id)).await;
     }
 
     let new_count = CrashRepo::count(&pool)
@@ -213,13 +183,8 @@ async fn test_create_error(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
     let new_crash = NewCrash {
-        summary: "Test crash with closed pool".to_string(),
-        report: json!({
-            "crash_info": {
-                "type": "SIGSEGV",
-                "address": "0x0"
-            }
-        }),
+        info: Some("Test crash with closed pool".to_string()),
+        minidump: Uuid::new_v4(),
         product_id,
         version_id,
     };
@@ -232,9 +197,7 @@ async fn test_create_error(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id_error(pool: PgPool) {
-    let crash =
-        insert_test_crash(&pool, "Test crash for closed pool", json!({"test": "data"}), None, None)
-            .await;
+    let crash = create_test_crash(&pool, Some("Test crash for closed pool"), None, None).await;
 
     pool.close().await;
 
@@ -246,10 +209,9 @@ async fn test_get_by_id_error(pool: PgPool) {
 async fn test_get_all_error(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
-    insert_test_crash(
+    create_test_crash(
         &pool,
-        "Test crash for get_all with closed pool",
-        json!({"test": "data"}),
+        Some("Test crash for get_all with closed pool"),
         Some(product_id),
         Some(version_id),
     )
@@ -264,17 +226,10 @@ async fn test_get_all_error(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_update_error(pool: PgPool) {
-    let mut crash = insert_test_crash(
-        &pool,
-        "Original Crash for Update Test",
-        json!({"original": "data"}),
-        None,
-        None,
-    )
-    .await;
+    let mut crash =
+        create_test_crash(&pool, Some("Original Crash for Update Test"), None, None).await;
 
-    crash.summary = "Updated Crash With Closed Pool".to_string();
-    crash.report = json!({"updated": "data", "with": "closed pool"});
+    crash.info = Some("Updated Crash With Closed Pool".to_string());
 
     pool.close().await;
 
@@ -284,14 +239,7 @@ async fn test_update_error(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_remove_error(pool: PgPool) {
-    let crash = insert_test_crash(
-        &pool,
-        "Crash to Delete with Error",
-        json!({"delete": "me with error"}),
-        None,
-        None,
-    )
-    .await;
+    let crash = create_test_crash(&pool, Some("Crash to Delete with Error"), None, None).await;
 
     pool.close().await;
 
@@ -303,10 +251,9 @@ async fn test_remove_error(pool: PgPool) {
 async fn test_count_error(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
-    insert_test_crash(
+    create_test_crash(
         &pool,
-        "Test crash for count with closed pool",
-        json!({"test": "data"}),
+        Some("Test crash for count with closed pool"),
         Some(product_id),
         Some(version_id),
     )

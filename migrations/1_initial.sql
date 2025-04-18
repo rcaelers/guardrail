@@ -19,7 +19,7 @@ GRANT USAGE ON SCHEMA guardrail TO guardrail;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 --
--- products
+-- Products
 --
 CREATE TABLE guardrail.products (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
@@ -190,10 +190,14 @@ ALTER TABLE guardrail.symbols OWNER TO guardrail;
 --
 CREATE TABLE guardrail.crashes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    state TEXT NOT NULL CHECK (
+        state IN ('pending', 'failed', 'complete')
+    ) DEFAULT 'pending',
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
-    summary TEXT NOT NULL,
-    report JSONB NOT NULL,
+    info TEXT,
+    report JSONB,
+    minidump UUID,
     version_id UUID NOT NULL REFERENCES guardrail.versions (id),
     product_id UUID NOT NULL REFERENCES guardrail.products (id)
 );
@@ -242,6 +246,7 @@ CREATE TABLE guardrail.api_tokens (
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     description TEXT NOT NULL,
+    token_id UUID NOT NULL UNIQUE,
     token_hash TEXT NOT NULL UNIQUE,
     product_id UUID REFERENCES guardrail.products (id),
     user_id UUID REFERENCES guardrail.users (id),
@@ -483,8 +488,10 @@ ALTER TABLE guardrail.api_tokens ENABLE ROW LEVEL SECURITY;
 CREATE POLICY policy_token_can_read ON guardrail.api_tokens
 FOR SELECT USING (
     guardrail.is_admin() OR
-    (user_id = guardrail.get_current_user_id()) AND
-    (product_id IS NOT NULL AND guardrail.is_admin_of_product(product_id))
+    (
+        (user_id = guardrail.get_current_user_id()) AND
+        (product_id IS NOT NULL AND guardrail.is_admin_of_product(product_id))
+    )
 );
 
 CREATE POLICY policy_token_can_insert ON guardrail.api_tokens

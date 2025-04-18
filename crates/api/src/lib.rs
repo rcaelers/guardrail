@@ -6,6 +6,6 @@ pub mod routes;
 pub mod state;
 pub mod symbols;
 pub mod token;
-pub mod webauthn;
 pub mod utils;
-
+pub mod webauthn;
+pub mod worker;

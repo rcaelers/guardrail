@@ -142,10 +142,7 @@ pub fn validate_api_token_for_product(
                 "API token not authorized for product {}, token is for product_id: {}",
                 product_name, token_product_id
             );
-            return Err(ApiError::Failure(format!(
-                "API token not authorized for product {}",
-                product_name
-            )));
+            return Err(ApiError::ProductAccessDenied(product_name.to_owned()));
         }
     }
     Ok(())

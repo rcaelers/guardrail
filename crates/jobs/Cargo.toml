@@ -1,13 +1,13 @@
 [package]
-name = "api"
+name = "jobs"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
 repos = { path = "../repos" }
-jobs = { path = "../jobs" }
 data = { path = "../data", default-features = false, features = ["ssr"] }
 common = { path = "../common", default-features = false, features = ["ssr"] }
+testware = { path = "../testware" }
 
 # Serde / json
 serde.workspace = true
@@ -20,15 +20,14 @@ sqlx.workspace = true
 # Tokio / Axum
 tokio.workspace = true
 tokio-util.workspace = true
-axum.workspace = true
-axum-extra.workspace = true
-axum-server.workspace = true
-rustls.workspace = true
+# axum.workspace = true
+# axum-server.workspace = true
+# rustls.workspace = true
 
 # Tower
-tower.workspace = true
-tower-http.workspace = true
-tower-sessions.workspace = true
+# tower.workspace = true
+# tower-http.workspace = true
+# tower-sessions.workspace = true
 
 # Security
 argon2.workspace = true
@@ -40,9 +39,10 @@ tracing-appender.workspace = true
 tracing-log.workspace = true
 
 # Minidump processing
-#minidump.workspace = true
-#minidump-processor.workspace = true
-#minidump-unwind.workspace = true
+minidump.workspace = true
+minidump-processor.workspace = true
+minidump-unwind.workspace = true
+breakpad-symbols.workspace = true
 
 # Misc
 async-trait.workspace = true
@@ -58,9 +58,9 @@ thiserror.workspace = true
 time.workspace = true
 uuid.workspace = true
 # url.workspace = true
-webauthn-rs.workspace = true
+# webauthn-rs.workspace = true
 # jwt-authorizer.workspace = true
-jsonwebtoken.workspace = true
+# jsonwebtoken.workspace = true
 log.workspace = true
 object_store.workspace = true
 apalis.workspace = true

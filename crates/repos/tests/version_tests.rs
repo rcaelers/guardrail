@@ -61,31 +61,31 @@ async fn test_get_by_id_error(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_product_and_name(pool: PgPool) {
-    let product_id = create_test_product(&pool).await;
+    let product = create_test_product(&pool).await;
     let name = "2.0.0";
     let hash = "fedcba654321";
     let tag = "v2.0.0";
 
-    create_test_version(&pool, name, hash, tag, Some(product_id)).await;
+    create_test_version(&pool, name, hash, tag, Some(product.id)).await;
 
-    let product_id = create_test_product(&pool).await;
+    let product = create_test_product(&pool).await;
     let name = "3.0.0";
     let hash = "09fedcba654321";
     let tag = "v3.0.0";
 
-    create_test_version(&pool, name, hash, tag, Some(product_id)).await;
+    create_test_version(&pool, name, hash, tag, Some(product.id)).await;
 
-    let found_version = VersionRepo::get_by_product_and_name(&pool, product_id, name)
+    let found_version = VersionRepo::get_by_product_and_name(&pool, product.id, name)
         .await
         .expect("Failed to get version by product and name");
 
     assert!(found_version.is_some());
     let found_version = found_version.unwrap();
     assert_eq!(found_version.name, name);
-    assert_eq!(found_version.product_id, product_id);
+    assert_eq!(found_version.product_id, product.id);
 
     let non_existent_name = "999.0.0";
-    let not_found = VersionRepo::get_by_product_and_name(&pool, product_id, non_existent_name)
+    let not_found = VersionRepo::get_by_product_and_name(&pool, product.id, non_existent_name)
         .await
         .expect("Failed to query with non-existent name");
 
@@ -94,16 +94,16 @@ async fn test_get_by_product_and_name(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_product_and_name_error(pool: PgPool) {
-    let product_id = create_test_product(&pool).await;
+    let product = create_test_product(&pool).await;
     let name = "2.0.0-error";
     let hash = "hash-error";
     let tag = "v2.0.0-error";
 
-    create_test_version(&pool, name, hash, tag, Some(product_id)).await;
+    create_test_version(&pool, name, hash, tag, Some(product.id)).await;
 
     pool.close().await;
 
-    let result = VersionRepo::get_by_product_and_name(&pool, product_id, name).await;
+    let result = VersionRepo::get_by_product_and_name(&pool, product.id, name).await;
     assert!(
         result.is_err(),
         "Expected an error when getting version by product and name with closed pool"
@@ -112,13 +112,13 @@ async fn test_get_by_product_and_name_error(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_all_names(pool: PgPool) {
-    let product_id = create_test_product(&pool).await;
+    let product = create_test_product(&pool).await;
     let version_names = vec!["1.1.0", "1.2.0", "1.3.0", "2.0.0", "2.1.0"];
 
     for (i, name) in version_names.iter().enumerate() {
         let hash = format!("hash{}", i);
         let tag = format!("v{}", name);
-        create_test_version(&pool, name, &hash, &tag, Some(product_id)).await;
+        create_test_version(&pool, name, &hash, &tag, Some(product.id)).await;
     }
 
     let all_names = VersionRepo::get_all_names(&pool)
@@ -132,9 +132,9 @@ async fn test_get_all_names(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_all_names_error(pool: PgPool) {
-    let product_id = create_test_product(&pool).await;
-    create_test_version(&pool, "1.1.0-error", "hash1e", "v1.1.0-e", Some(product_id)).await;
-    create_test_version(&pool, "1.2.0-error", "hash2e", "v1.2.0-e", Some(product_id)).await;
+    let product = create_test_product(&pool).await;
+    create_test_version(&pool, "1.1.0-error", "hash1e", "v1.1.0-e", Some(product.id)).await;
+    create_test_version(&pool, "1.2.0-error", "hash2e", "v1.2.0-e", Some(product.id)).await;
 
     pool.close().await;
 
@@ -144,7 +144,7 @@ async fn test_get_all_names_error(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_all(pool: PgPool) {
-    let product_id = create_test_product(&pool).await;
+    let product = create_test_product(&pool).await;
 
     let version_data = vec![
         ("3.0.0", "hash3", "v3.0.0"),
@@ -155,7 +155,7 @@ async fn test_get_all(pool: PgPool) {
     ];
 
     for (name, hash, tag) in &version_data {
-        create_test_version(&pool, name, hash, tag, Some(product_id)).await;
+        create_test_version(&pool, name, hash, tag, Some(product.id)).await;
     }
 
     let query_params = QueryParams::default();
@@ -194,10 +194,10 @@ async fn test_get_all(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_all_error(pool: PgPool) {
-    let product_id = create_test_product(&pool).await;
+    let product = create_test_product(&pool).await;
 
-    create_test_version(&pool, "3.0.0-error", "hash3e", "v3.0.0-e", Some(product_id)).await;
-    create_test_version(&pool, "3.1.0-error", "hash31e", "v3.1.0-e", Some(product_id)).await;
+    create_test_version(&pool, "3.0.0-error", "hash3e", "v3.0.0-e", Some(product.id)).await;
+    create_test_version(&pool, "3.1.0-error", "hash31e", "v3.1.0-e", Some(product.id)).await;
 
     pool.close().await;
 
@@ -208,13 +208,13 @@ async fn test_get_all_error(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_create(pool: PgPool) {
-    let product_id = create_test_product(&pool).await;
+    let product = create_test_product(&pool).await;
 
     let new_version = NewVersion {
         name: "4.0.0".to_string(),
         hash: "hash4".to_string(),
         tag: "v4.0.0".to_string(),
-        product_id,
+        product_id: product.id,
     };
 
     let version_id = VersionRepo::create(&pool, new_version.clone())
@@ -234,13 +234,13 @@ async fn test_create(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_create_error(pool: PgPool) {
-    let product_id = create_test_product(&pool).await;
+    let product = create_test_product(&pool).await;
 
     let new_version = NewVersion {
         name: "4.0.0-error".to_string(),
         hash: "hash4e".to_string(),
         tag: "v4.0.0-e".to_string(),
-        product_id,
+        product_id: product.id,
     };
 
     pool.close().await;
@@ -319,7 +319,7 @@ async fn test_count(pool: PgPool) {
         .await
         .expect("Failed to count initial versions");
 
-    let product_id = create_test_product(&pool).await;
+    let product = create_test_product(&pool).await;
 
     let test_versions = vec![
         ("7.0.0", "hash7", "v7.0.0"),
@@ -328,7 +328,7 @@ async fn test_count(pool: PgPool) {
     ];
 
     for (name, hash, tag) in &test_versions {
-        create_test_version(&pool, name, hash, tag, Some(product_id)).await;
+        create_test_version(&pool, name, hash, tag, Some(product.id)).await;
     }
 
     let new_count = VersionRepo::count(&pool)
@@ -340,10 +340,10 @@ async fn test_count(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_count_error(pool: PgPool) {
-    let product_id = create_test_product(&pool).await;
+    let product = create_test_product(&pool).await;
 
-    create_test_version(&pool, "7.0.0-error", "hash7e", "v7.0.0-e", Some(product_id)).await;
-    create_test_version(&pool, "7.1.0-error", "hash71e", "v7.1.0-e", Some(product_id)).await;
+    create_test_version(&pool, "7.0.0-error", "hash7e", "v7.0.0-e", Some(product.id)).await;
+    create_test_version(&pool, "7.1.0-error", "hash71e", "v7.1.0-e", Some(product.id)).await;
 
     pool.close().await;
 

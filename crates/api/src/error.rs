@@ -1,9 +1,9 @@
 use axum::{
     Json,
+    extract::rejection::QueryRejection,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-use minidump_processor::ProcessError;
 use thiserror::Error;
 use tracing::error;
 use webauthn_rs::prelude::WebauthnError;
@@ -16,14 +16,14 @@ pub enum ApiError {
     #[error("general failure")]
     Failure(String),
 
+    #[error("parameters rejected: `{0}`")]
+    QueryExtractorRejection(#[from] QueryRejection),
+
     #[error("database error: `{0}`")]
     RepoError(#[from] repos::error::RepoError),
 
-    #[error("failed to process minidump: `{0}`")]
-    MinidumpError(#[from] minidump::Error),
-
-    #[error("failed to process minidump: `{0}`")]
-    MinidumpProcessError(#[from] ProcessError),
+    #[error("ccess denied for product {0}")]
+    ProductAccessDenied(String),
 
     #[error("Product {0} not found")]
     ProductNotFound(String),
@@ -59,9 +59,8 @@ impl IntoResponse for ApiError {
             ApiError::Failure(err) => {
                 (StatusCode::BAD_REQUEST, format!("general failure : {}", err))
             }
+            ApiError::QueryExtractorRejection(err) => (StatusCode::BAD_REQUEST, err.to_string()),
             ApiError::RepoError(err) => (StatusCode::BAD_REQUEST, err.to_string()),
-            ApiError::MinidumpError(err) => (StatusCode::BAD_REQUEST, err.to_string()),
-            ApiError::MinidumpProcessError(err) => (StatusCode::BAD_REQUEST, err.to_string()),
             ApiError::UserNotFound(user) => {
                 (StatusCode::BAD_REQUEST, format!("User {} not found", user))
             }
@@ -76,6 +75,9 @@ impl IntoResponse for ApiError {
             }
             ApiError::WebauthnError(err) => {
                 (StatusCode::INTERNAL_SERVER_ERROR, format!("Webauthn Error: {}", err))
+            }
+            ApiError::ProductAccessDenied(product) => {
+                (StatusCode::FORBIDDEN, format!("Access denied for product {}", product))
             }
             ApiError::ProductNotFound(product) => {
                 (StatusCode::BAD_REQUEST, format!("Product {} not found", product))
