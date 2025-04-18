@@ -30,6 +30,7 @@ jobs:
           cargo install --locked cargo-leptos
           cargo install --locked sqlx-cli
           cargo install --locked cargo-llvm-cov
+
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.os }}
@@ -43,23 +44,6 @@ jobs:
 
   test:
     runs-on: ubuntu-24.04
-
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: guardrail
-        volumes:
-          - ${{ github.workspace }}/dev/initdb/:/docker-entrypoint-initdb.d/:ro
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/guardrail
@@ -76,6 +60,28 @@ jobs:
           cargo install --locked cargo-leptos
           cargo install --locked sqlx-cli
           cargo install --locked cargo-llvm-cov
+
+      - name: Run PostgreSQL container
+        run: |
+          docker run -d \
+            --name safebase_db \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_DB=guardrail \
+            -p 5432:5432 \
+            -v $${{ github.workspace }}/dev/initdb/:/docker-entrypoint-initdb.d/:ro \
+            --health-cmd "pg_isready -U postgres" \
+            --health-interval 10s \
+            --health-timeout 5s \
+            --health-retries 5 \
+            postgres:17
+
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          until pg_isready -h localhost -p 5432; do
+            echo "Waiting for PostgreSQL to be ready..."
+            sleep 1
+          done
 
       - name: Run tests
         run: |
