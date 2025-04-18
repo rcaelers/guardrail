@@ -27,28 +27,28 @@ jobs:
             file: Containerfile.api
             arch: amd64
             target: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             platform: linux/amd64
 
           - name: api
             file: Containerfile.api
             arch: arm64
             target: aarch64-unknown-linux-gnu
-            runner: ubuntu-latest-arm64
+            runner: ubuntu-24.04-arm64
             platform: linux/arm64
 
           - name: leptos
             file: Containerfile.leptos
             arch: amd64
             target: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
+            runner: ubuntu-24.04
             platform: linux/amd64
 
           - name: leptos
             file: Containerfile.leptos
             arch: arm64
             target: aarch64-unknown-linux-gnu
-            runner: ubuntu-latest-arm64
+            runner: ubuntu-24.04-arm64
             platform: linux/arm64
 
     steps:
@@ -75,7 +75,7 @@ jobs:
 
   create-and-sign-manifests:
     name: Create & Sign Multiarch Image Manifests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build
     strategy:
       matrix:
@@ -123,7 +123,6 @@ jobs:
           else
             cosign sign --yes ${IMAGE}:latest
           fi
-
 
       - name: Verify the images
         run: |
