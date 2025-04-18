@@ -2,8 +2,7 @@
 ## Builder
 ##
 
-# FROM --platform=$BUILDPLATFORM rustlang/rust:nightly-slim AS builder
-FROM --platform=$BUILDPLATFORM rust:1-bookworm AS builder
+FROM --platform=$BUILDPLATFORM rustlang/rust:nightly-slim AS builder
 
 ENV RUSTUP_PERMIT_COPY_RENAME=true
 ENV SQLX_OFFLINE=1
