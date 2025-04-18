@@ -1,6 +1,8 @@
 volumes:
   postgresql17-storage:
   pgadmin4-storage:
+  garage-data:
+  garage-meta:
 
 services:
   postgresql:
@@ -63,12 +65,23 @@ services:
       - postgresql
     restart: unless-stopped
 
-#  traefik:
-#    image: traefik:latest
-#    ports:
-#      - "443:443"
-#    volumes:
-#      - "./traefik.yaml:/etc/traefik/traefik.yaml"
-#      - acme:/acme
-#    env_file: ../../env
-#
+  garage:
+    container_name: garage
+    image: dxflrs/garage:v1.1.0
+    ports:
+      - 3900:3900
+      - 3901:3901
+      - 3902:3902
+      - 3903:3903
+    volumes:
+      - garage-data:/var/lib/garage/data
+      - garage-meta:/var/lib/garage/meta
+      - ./garage-config/garage.toml:/etc/garage.toml
+    environment:
+      - RUST_LOG=debug
+    restart: unless-stopped
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:3900/health"]
+    #   interval: 30s
+    #   timeout: 10s
+    #   retries: 3

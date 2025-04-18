@@ -1,0 +1,29 @@
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+rpc_public_addr = "127.0.0.1:3901"
+rpc_secret = "c512d5557d7716cf88fcb9dac5d9cc65ac81c0053475bd3f2df377de8b56229d"
+
+[s3_api]
+# S3 API listen address
+api_bind_addr = "0.0.0.0:3900"
+# S3 region
+s3_region = "garage"
+root_domain = ".s3.krandor.localhost"
+
+[s3_web]
+bind_addr = "[::]:3902"
+root_domain = ".web.krandor.localhost"
+index = "index.html"
+
+[k2v_api]
+api_bind_addr = "[::]:3904"
+
+[admin]
+api_bind_addr = "[::]:3903"
+admin_token = "aba143e4cefd5b51821c07c60c1e6d8faa001afe8c0720f32c1fd04196f92ff8"
+metrics_token = "34cade943c06f4bc15e8956bd448bd1528b3c5c13520488d507ceb550f6cdafa"
