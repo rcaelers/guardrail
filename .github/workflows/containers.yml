@@ -140,13 +140,11 @@ jobs:
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             cosign attest \
               --yes \
-              --predicate-type=https://slsa.dev/provenance/v0.2 \
               --predicate <(echo '{"buildType":"github-actions","builder":{"id":"https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/tags/${{ github.ref_name }}"}}') \
               ${IMAGE}:${GITHUB_REF_NAME}
           fi
 
           cosign attest \
             --yes \
-            --predicate-type=https://slsa.dev/provenance/v0.2 \
             --predicate <(echo '{"buildType":"github-actions","builder":{"id":"https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/heads/${{ github.ref_name || github.ref_name }}"}}') \
             ${IMAGE}:latest
