@@ -21,6 +21,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Rust
         run: |
           rustup toolchain install nightly
@@ -34,6 +35,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.os }}
+
       - name: Build
         run: |
           export SQLX_OFFLINE=1
@@ -60,6 +62,10 @@ jobs:
           cargo install --locked cargo-leptos
           cargo install --locked sqlx-cli
           cargo install --locked cargo-llvm-cov
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ubuntu-24.04
 
       - name: Run PostgreSQL container
         run: |
