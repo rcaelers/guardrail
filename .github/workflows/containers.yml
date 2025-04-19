@@ -76,6 +76,8 @@ jobs:
   create-and-sign-manifests:
     name: Create & Sign Multiarch Image Manifests
     runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
     needs: build
     strategy:
       matrix:
