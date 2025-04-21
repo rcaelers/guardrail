@@ -56,3 +56,4 @@ apalis-sql.workspace = true
 
 [dev-dependencies]
 testware = { path = "../testware" }
+bytes.workspace = true

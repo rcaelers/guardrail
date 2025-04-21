@@ -1,8 +1,10 @@
 use common::QueryParams;
 use sqlx::{Postgres, QueryBuilder};
-use tracing::error;
 
-use crate::{Repo, error::RepoError};
+use crate::{
+    Repo,
+    error::{RepoError, handle_sql_error},
+};
 use data::attachment::{Attachment, NewAttachment};
 
 pub struct AttachmentsRepo {}
@@ -23,10 +25,7 @@ impl AttachmentsRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve attachment {id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve attachment".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_all(
@@ -43,10 +42,7 @@ impl AttachmentsRepo {
 
         let query = builder.build_query_as();
 
-        query.fetch_all(executor).await.map_err(|err| {
-            error!("Failed to retrieve all attachments: {err}");
-            RepoError::DatabaseError("Failed to retrieve attachments".to_string())
-        })
+        query.fetch_all(executor).await.map_err(handle_sql_error)
     }
 
     pub async fn create(
@@ -77,10 +73,7 @@ impl AttachmentsRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to create attachment: {err}");
-            RepoError::DatabaseError("Failed to create attachment".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn update(
@@ -102,10 +95,7 @@ impl AttachmentsRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to update attachment {}: {err}", attachment.id);
-            RepoError::DatabaseError("Failed to update attachment".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn remove(
@@ -121,12 +111,8 @@ impl AttachmentsRepo {
         )
         .execute(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to remove attachment {id}: {err}");
-            RepoError::DatabaseError("Failed to remove attachment".to_string())
-        })?;
-
-        Ok(())
+        .map_err(handle_sql_error)
+        .map(|_| ())
     }
 
     pub async fn count(
@@ -140,10 +126,7 @@ impl AttachmentsRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to count attachments: {err}");
-            RepoError::DatabaseError("Failed to count attachments".to_string())
-        })
+        .map_err(handle_sql_error)
         .map(|count| count.unwrap_or(0))
     }
 }

@@ -1,7 +1,9 @@
 use sqlx::{Postgres, QueryBuilder};
-use tracing::error;
 
-use crate::{Repo, error::RepoError};
+use crate::{
+    Repo,
+    error::{RepoError, handle_sql_error},
+};
 use common::QueryParams;
 use data::annotation::{Annotation, NewAnnotation};
 
@@ -23,10 +25,7 @@ impl AnnotationsRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve annotation {id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve annotation".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_all(
@@ -43,10 +42,7 @@ impl AnnotationsRepo {
 
         let query = builder.build_query_as();
 
-        query.fetch_all(executor).await.map_err(|err| {
-            error!("Failed to retrieve all annotations: {err}");
-            RepoError::DatabaseError("Failed to retrieve annotations".to_string())
-        })
+        query.fetch_all(executor).await.map_err(handle_sql_error)
     }
 
     pub async fn create(
@@ -82,10 +78,7 @@ impl AnnotationsRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to create annotation: {err}");
-            RepoError::DatabaseError(format!("Failed to create annotation: {}", err))
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn update(
@@ -113,10 +106,7 @@ impl AnnotationsRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to update annotation {}: {err}", annotation.id);
-            RepoError::DatabaseError("Failed to update annotation".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn remove(
@@ -132,10 +122,7 @@ impl AnnotationsRepo {
         )
         .execute(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to remove annotation {}: {}", id, err);
-            RepoError::DatabaseError("Failed to remove annotation".to_string())
-        })?;
+        .map_err(handle_sql_error)?;
         Ok(())
     }
 
@@ -150,10 +137,7 @@ impl AnnotationsRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to count annotations: {err}");
-            RepoError::DatabaseError("Failed to count annotations".to_string())
-        })
+        .map_err(handle_sql_error)
         .map(|count| count.unwrap_or(0))
     }
 
@@ -177,9 +161,6 @@ impl AnnotationsRepo {
 
         let query = builder.build_query_as();
 
-        query.fetch_all(executor).await.map_err(|err| {
-            error!("Failed to retrieve annotations for crash {crash_id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve annotations by crash ID".to_string())
-        })
+        query.fetch_all(executor).await.map_err(handle_sql_error)
     }
 }

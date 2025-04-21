@@ -1,7 +1,9 @@
 use sqlx::{Postgres, QueryBuilder};
-use tracing::error;
 
-use crate::{Repo, error::RepoError};
+use crate::{
+    Repo,
+    error::{RepoError, handle_sql_error},
+};
 use common::QueryParams;
 use data::symbols::{NewSymbols, Symbols};
 
@@ -23,10 +25,7 @@ impl SymbolsRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve symbols {id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve symbols".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_by_module_and_build_id(
@@ -46,12 +45,7 @@ impl SymbolsRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!(
-                "Failed to retrieve symbols for build_id: {build_id}, module_id: {module_id}: {err}"
-            );
-            RepoError::DatabaseError("Failed to retrieve symbols".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_all(
@@ -68,10 +62,7 @@ impl SymbolsRepo {
 
         let query = builder.build_query_as();
 
-        query.fetch_all(executor).await.map_err(|err| {
-            error!("Failed to retrieve all symbols: {err}");
-            RepoError::DatabaseError("Failed to retrieve symbols".to_string())
-        })
+        query.fetch_all(executor).await.map_err(handle_sql_error)
     }
 
     pub async fn create(
@@ -104,10 +95,7 @@ impl SymbolsRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to create symbols: {err}");
-            RepoError::DatabaseError("Failed to create symbols".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn update(
@@ -130,10 +118,7 @@ impl SymbolsRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to update symbols {}: {err}", symbols.id);
-            RepoError::DatabaseError("Failed to update symbols".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn remove(
@@ -149,12 +134,8 @@ impl SymbolsRepo {
         )
         .execute(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to remove symbols {id}: {err}");
-            RepoError::DatabaseError("Failed to remove symbols".to_string())
-        })?;
-
-        Ok(())
+        .map_err(handle_sql_error)
+        .map(|_| ())
     }
 
     pub async fn count(
@@ -168,10 +149,7 @@ impl SymbolsRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to count symbols: {err}");
-            RepoError::DatabaseError("Failed to count symbols".to_string())
-        })
+        .map_err(handle_sql_error)
         .map(|count| count.unwrap_or(0))
     }
 }

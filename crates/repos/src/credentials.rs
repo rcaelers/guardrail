@@ -1,7 +1,6 @@
 use sqlx::Postgres;
-use tracing::error;
 
-use crate::error::RepoError;
+use crate::error::{RepoError, handle_sql_error};
 use data::credentials::{Credential, NewCredential};
 
 pub struct CredentialsRepo {}
@@ -22,10 +21,7 @@ impl CredentialsRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve credential {id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve credential".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_all_by_user_id(
@@ -43,10 +39,7 @@ impl CredentialsRepo {
         )
         .fetch_all(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve credentials for user {user_id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve credentials for user".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn create(
@@ -72,10 +65,7 @@ impl CredentialsRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to create credential for user {}: {}", credentials.user_id, err);
-            RepoError::DatabaseError("Failed to create credential".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn update_data(
@@ -96,9 +86,6 @@ impl CredentialsRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to update credential {id}: {err}");
-            RepoError::DatabaseError("Failed to update credential".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 }

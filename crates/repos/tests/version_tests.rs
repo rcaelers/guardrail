@@ -233,6 +233,99 @@ async fn test_create(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_create_name_not_unique(pool: PgPool) {
+    let product = create_test_product(&pool).await;
+
+    let new_version = NewVersion {
+        name: "4.0.0".to_string(),
+        hash: "hash4".to_string(),
+        tag: "v4.0.0".to_string(),
+        product_id: product.id,
+    };
+
+    VersionRepo::create(&pool, new_version.clone())
+        .await
+        .expect("Failed to create version");
+
+    let duplicate_version = NewVersion {
+        name: "4.0.0".to_string(),
+        hash: "hash4-duplicate".to_string(),
+        tag: "v4.0.0-duplicate".to_string(),
+        product_id: product.id,
+    };
+
+    let duplicate_version_id = VersionRepo::create(&pool, duplicate_version.clone()).await;
+
+    assert!(
+        duplicate_version_id.is_err(),
+        "Expected an error when creating a version with a non-unique name"
+    );
+    assert_eq!(duplicate_version_id.unwrap_err().to_string(), "database uniqueness violation")
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_create_hash_not_unique(pool: PgPool) {
+    let product = create_test_product(&pool).await;
+
+    let new_version = NewVersion {
+        name: "4.0.0".to_string(),
+        hash: "hash4".to_string(),
+        tag: "v4.0.0".to_string(),
+        product_id: product.id,
+    };
+
+    VersionRepo::create(&pool, new_version.clone())
+        .await
+        .expect("Failed to create version");
+
+    let duplicate_version = NewVersion {
+        name: "4.0.0-duplicate".to_string(),
+        hash: "hash4".to_string(),
+        tag: "v4.0.0-duplicate".to_string(),
+        product_id: product.id,
+    };
+
+    let duplicate_version_id = VersionRepo::create(&pool, duplicate_version.clone()).await;
+
+    assert!(
+        duplicate_version_id.is_err(),
+        "Expected an error when creating a version with a non-unique name"
+    );
+    assert_eq!(duplicate_version_id.unwrap_err().to_string(), "database uniqueness violation")
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_create_tag_not_unique(pool: PgPool) {
+    let product = create_test_product(&pool).await;
+
+    let new_version = NewVersion {
+        name: "4.0.0".to_string(),
+        hash: "hash4".to_string(),
+        tag: "v4.0.0".to_string(),
+        product_id: product.id,
+    };
+
+    VersionRepo::create(&pool, new_version.clone())
+        .await
+        .expect("Failed to create version");
+
+    let duplicate_version = NewVersion {
+        name: "4.0.0-duplicate".to_string(),
+        hash: "hash4-duplicate".to_string(),
+        tag: "v4.0.0".to_string(),
+        product_id: product.id,
+    };
+
+    let duplicate_version_id = VersionRepo::create(&pool, duplicate_version.clone()).await;
+
+    assert!(
+        duplicate_version_id.is_err(),
+        "Expected an error when creating a version with a non-unique name"
+    );
+    assert_eq!(duplicate_version_id.unwrap_err().to_string(), "database uniqueness violation")
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_create_error(pool: PgPool) {
     let product = create_test_product(&pool).await;
 

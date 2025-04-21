@@ -1,6 +1,5 @@
 #![cfg(test)]
 
-use api::worker::TestMinidumpProcessor;
 use axum::extract::DefaultBodyLimit;
 use axum::http::{Request, StatusCode};
 use axum::{Router, body::Body};
@@ -15,6 +14,7 @@ use tower_http::trace::TraceLayer;
 
 use api::routes::routes;
 use api::state::AppState;
+use api::worker::TestMinidumpProcessor;
 use common::QueryParams;
 use common::token::generate_api_token;
 use data::api_token::NewApiToken;
@@ -42,7 +42,7 @@ async fn setup(pool: &PgPool) -> (Router, Arc<dyn ObjectStore>, String, String, 
         storage: store.clone(),
         worker,
     };
-    let app = Router::new()
+    let app: Router = Router::new()
         .nest("/api", routes(state.clone()).await)
         .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
         .layer(TraceLayer::new_for_http())
@@ -58,7 +58,7 @@ async fn setup(pool: &PgPool) -> (Router, Arc<dyn ObjectStore>, String, String, 
                    Hello world\r\n";
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"upload_file_symbols\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
+        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
         boundary, content, boundary
     );
 
@@ -101,7 +101,7 @@ async fn assert_response_error(
 }
 
 #[sqlx::test(migrations = "../../migrations")]
-async fn test_symbol_upload(pool: PgPool) {
+async fn test_symbol_upload_ok(pool: PgPool) {
     let (app, store, boundary, content, body, token) = setup(&pool).await;
 
     let request = Request::builder()
@@ -147,12 +147,11 @@ async fn test_symbol_upload_no_such_product(pool: PgPool) {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    // tracing::info!("Response: {:?}", response);
 
     assert_response_error(
         response,
         StatusCode::BAD_REQUEST,
-        Some("Product TestProductxx not found"),
+        Some("product TestProductxx not found"),
     )
     .await;
 
@@ -179,7 +178,7 @@ async fn test_symbol_upload_no_such_version(pool: PgPool) {
     assert_response_error(
         response,
         StatusCode::BAD_REQUEST,
-        Some("Version 2.0.0 of product TestProduct not found"),
+        Some("version 2.0.0 of product TestProduct not found"),
     )
     .await;
 
@@ -205,7 +204,7 @@ async fn test_symbol_upload_empty_version(pool: PgPool) {
     assert_response_error(
         response,
         StatusCode::BAD_REQUEST,
-        Some("general failure : version cannot be empty"),
+        Some("general failure: version cannot be empty"),
     )
     .await;
 
@@ -231,13 +230,335 @@ async fn test_symbol_upload_empty_product(pool: PgPool) {
     assert_response_error(
         response,
         StatusCode::BAD_REQUEST,
-        Some("general failure : product name cannot be empty"),
+        Some("general failure: product name cannot be empty"),
     )
     .await;
 
     let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
+    assert_eq!(allsymbols.len(), 0);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_symbol_upload_invalid_content_type(pool: PgPool) {
+    let (app, _store, boundary, content, _body, token) = setup(&pool).await;
+
+    let body = format!(
+        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: text/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
+        boundary, content, boundary
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_response_error(
+        response,
+        StatusCode::BAD_REQUEST,
+        Some("general failure: invalid symbols content type: text/octet-stream"),
+    )
+    .await;
+
+    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+        .await
+        .expect("Failed to fetch symbol entry from database");
+
+    assert_eq!(allsymbols.len(), 0);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_symbol_upload_invalid_header(pool: PgPool) {
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let content = "MODULE windows EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
+                   Hello world\r\n\
+                   Hello world\r\n";
+
+    let body = format!(
+        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
+        boundary, content, boundary
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_response_error(
+        response,
+        StatusCode::BAD_REQUEST,
+        Some("general failure: invalid symbols file header"),
+    )
+    .await;
+
+    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+        .await
+        .expect("Failed to fetch symbol entry from database");
+
+    assert_eq!(allsymbols.len(), 0);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_symbol_upload_invalid_buildid_1(pool: PgPool) {
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1EE9E2672A6863B084C4C44205044422E1EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
+                   Hello world\r\n\
+                   Hello world\r\n";
+
+    let body = format!(
+        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
+        boundary, content, boundary
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_response_error(
+        response,
+        StatusCode::BAD_REQUEST,
+        Some("general failure: invalid build_id length"),
+    )
+    .await;
+
+    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+        .await
+        .expect("Failed to fetch symbol entry from database");
+
+    assert_eq!(allsymbols.len(), 0);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_symbol_upload_invalid_buildid_2(pool: PgPool) {
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let content = "MODULE windows x86_64 EE9E2672A6863B084@4C44205044422E1 crash.pdb\r\n\
+                   Hello world\r\n\
+                   Hello world\r\n";
+
+    let body = format!(
+        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
+        boundary, content, boundary
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_response_error(
+        response,
+        StatusCode::BAD_REQUEST,
+        Some("general failure: invalid build_id format"),
+    )
+    .await;
+
+    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+        .await
+        .expect("Failed to fetch symbol entry from database");
+
+    assert_eq!(allsymbols.len(), 0);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_symbol_upload_invalid_module_id1(pool: PgPool) {
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 crashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.pdb\r\n\
+                   Hello world\r\n\
+                   Hello world\r\n";
+
+    let body = format!(
+        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
+        boundary, content, boundary
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_response_error(
+        response,
+        StatusCode::BAD_REQUEST,
+        Some("general failure: invalid module_id length"),
+    )
+    .await;
+
+    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+        .await
+        .expect("Failed to fetch symbol entry from database");
+
+    assert_eq!(allsymbols.len(), 0);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_symbol_upload_invalid_module_id2(pool: PgPool) {
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 cr&ash.pdb\r\n\
+                   Hello world\r\n\
+                   Hello world\r\n";
+
+    let body = format!(
+        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
+        boundary, content, boundary
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_response_error(
+        response,
+        StatusCode::BAD_REQUEST,
+        Some("general failure: invalid module_id format"),
+    )
+    .await;
+
+    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+        .await
+        .expect("Failed to fetch symbol entry from database");
+
+    assert_eq!(allsymbols.len(), 0);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_symbol_upload_invalid_module_id3(pool: PgPool) {
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 ../crash.pdb\r\n\
+                   Hello world\r\n\
+                   Hello world\r\n";
+
+    let body = format!(
+        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
+        boundary, content, boundary
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_response_error(
+        response,
+        StatusCode::BAD_REQUEST,
+        Some("general failure: invalid module_id format"),
+    )
+    .await;
+
+    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+        .await
+        .expect("Failed to fetch symbol entry from database");
+
+    assert_eq!(allsymbols.len(), 0);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_symbol_upload_invalid_multipart(pool: PgPool) {
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
+                   Hello world\r\n\
+                   Hello world\r\n";
+    let boundary2 = "----WebKitFormBoundaryX7MA4YWxkTrZu0gW";
+
+    let body = format!(
+        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
+        boundary2, content, boundary2
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_response_error(
+        response,
+        StatusCode::BAD_REQUEST,
+        Some("general failure: failed to read multipart field from upload"),
+    )
+    .await;
+
+    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+        .await
+        .expect("Failed to fetch symbol entry from database");
+
+    assert_eq!(allsymbols.len(), 0);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_symbol_upload_invalid_boundary(pool: PgPool) {
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
+                   Hello world\r\n\
+                   Hello world\r\n";
+    let boundary2 = "----WebKitFormBoundaryX7MA4YWxkTrZu0gW";
+
+    let body = format!(
+        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
+        boundary, content, boundary2
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_response_error(
+        response,
+        StatusCode::BAD_REQUEST,
+        Some("general failure: failed to read symbols file"),
+    )
+    .await;
+
+    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+        .await
+        .expect("Failed to fetch symbol entry from database");
+
     assert_eq!(allsymbols.len(), 0);
 }
 
@@ -256,7 +577,7 @@ async fn test_symbol_upload_wrong_entitlement(pool: PgPool) {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_response_error(response, StatusCode::FORBIDDEN, Some("Insufficient permissions")).await;
+    assert_response_error(response, StatusCode::FORBIDDEN, Some("insufficient permissions")).await;
 
     let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
         .await
@@ -390,7 +711,7 @@ async fn test_symbol_upload_other_product(pool: PgPool) {
     assert_response_error(
         response,
         StatusCode::FORBIDDEN,
-        Some("Access denied for product TestProduct"),
+        Some("access denied for product TestProduct"),
     )
     .await;
 
@@ -413,11 +734,11 @@ async fn test_symbol_upload_unknown_token(pool: PgPool) {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_response_error(response, StatusCode::UNAUTHORIZED, Some("Invalid API token")).await;
+    assert_response_error(response, StatusCode::UNAUTHORIZED, Some("invalid API token")).await;
 
     let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
         .await
-        .expect("Failed to fetch symbol entry from database");
+        .expect("failed to fetch symbol entry from database");
     assert_eq!(allsymbols.len(), 0);
 }
 
@@ -433,7 +754,7 @@ async fn test_symbol_upload_no_token(pool: PgPool) {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_response_error(response, StatusCode::UNAUTHORIZED, Some("Missing API token")).await;
+    assert_response_error(response, StatusCode::UNAUTHORIZED, Some("missing API token")).await;
 
     let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
         .await

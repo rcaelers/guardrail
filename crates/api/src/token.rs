@@ -31,13 +31,7 @@ pub async fn generate_jwt_token(
         Utc::now() + Duration::minutes(settings.clone().auth.jwk.token_validity_in_minutes);
     let expiration_timestamp = expiration.timestamp();
 
-    let mut conn = match state.repo.acquire_admin().await {
-        Ok(conn) => conn,
-        Err(err) => {
-            error!("Failed to get database connection: {}", err);
-            return Err(ApiError::InternalFailure());
-        }
-    };
+    let mut conn = state.repo.acquire_admin().await?;
 
     let username = if let Some(user_id) = api_token.user_id {
         match repos::user::UserRepo::get_by_id(&mut *conn, user_id).await {

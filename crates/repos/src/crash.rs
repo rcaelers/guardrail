@@ -1,7 +1,9 @@
 use sqlx::{Postgres, QueryBuilder};
-use tracing::error;
 
-use crate::{Repo, error::RepoError};
+use crate::{
+    Repo,
+    error::{RepoError, handle_sql_error},
+};
 use common::QueryParams;
 use data::crash::{Crash, NewCrash, State};
 pub struct CrashRepo {}
@@ -22,10 +24,7 @@ impl CrashRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve crash {id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve crash".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_all(
@@ -42,10 +41,7 @@ impl CrashRepo {
 
         let query = builder.build_query_as();
 
-        query.fetch_all(executor).await.map_err(|err| {
-            error!("Failed to retrieve all crashes: {err}");
-            RepoError::DatabaseError("Failed to retrieve crashes".to_string())
-        })
+        query.fetch_all(executor).await.map_err(handle_sql_error)
     }
 
     pub async fn create(
@@ -72,10 +68,7 @@ impl CrashRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to create crash: {err}");
-            RepoError::DatabaseError("Failed to create crash".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn update(
@@ -99,10 +92,7 @@ impl CrashRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to update crash {}: {err}", crash.id);
-            RepoError::DatabaseError("Failed to update crash".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn remove(
@@ -118,12 +108,8 @@ impl CrashRepo {
         )
         .execute(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to remove crash {id}: {err}");
-            RepoError::DatabaseError("Failed to remove crash".to_string())
-        })?;
-
-        Ok(())
+        .map_err(handle_sql_error)
+        .map(|_| ())
     }
 
     pub async fn count(
@@ -137,10 +123,7 @@ impl CrashRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to count crashes: {err}");
-            RepoError::DatabaseError("Failed to count crashes".to_string())
-        })
+        .map_err(handle_sql_error)
         .map(|count| count.unwrap_or(0))
     }
 }

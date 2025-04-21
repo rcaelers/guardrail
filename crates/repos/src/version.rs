@@ -2,9 +2,12 @@ use sqlx::{Postgres, QueryBuilder};
 use std::collections::HashSet;
 use tracing::error;
 
+use crate::{
+    Repo,
+    error::{RepoError, handle_sql_error},
+};
 use common::QueryParams;
 use data::version::{NewVersion, Version};
-use crate::{Repo, error::RepoError};
 
 pub struct VersionRepo {}
 
@@ -24,10 +27,7 @@ impl VersionRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve version {id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve version".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_by_product_and_name(
@@ -47,10 +47,7 @@ impl VersionRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve version by name {name} for product {product_id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve version by name".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_all_names(
@@ -64,10 +61,7 @@ impl VersionRepo {
         )
         .fetch_all(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve all version names: {err}");
-            RepoError::DatabaseError("Failed to retrieve all version names".to_string())
-        })
+        .map_err(handle_sql_error)
         .map(|rows| {
             rows.into_iter()
                 .map(|row| row.name)
@@ -119,10 +113,7 @@ impl VersionRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to create version: {err}");
-            RepoError::DatabaseError("Failed to create version".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn update(
@@ -144,10 +135,7 @@ impl VersionRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to update version {}: {err}", version.id);
-            RepoError::DatabaseError("Failed to update version".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn remove(
@@ -163,12 +151,8 @@ impl VersionRepo {
         )
         .execute(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to remove version {id}: {err}");
-            RepoError::DatabaseError("Failed to remove version".to_string())
-        })?;
-
-        Ok(())
+        .map_err(handle_sql_error)
+        .map(|_| ())
     }
 
     pub async fn count(
@@ -182,10 +166,7 @@ impl VersionRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to count versions: {err}");
-            RepoError::DatabaseError("Failed to count versions".to_string())
-        })
+        .map_err(handle_sql_error)
         .map(|count| count.unwrap_or(0))
     }
 }

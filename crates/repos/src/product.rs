@@ -1,9 +1,11 @@
 use sqlx::{Postgres, QueryBuilder};
 use std::collections::HashSet;
-use tracing::error;
 
+use crate::{
+    Repo,
+    error::{RepoError, handle_sql_error},
+};
 use common::QueryParams;
-use crate::{Repo, error::RepoError};
 use data::product::{NewProduct, Product};
 
 pub struct ProductRepo {}
@@ -24,10 +26,7 @@ impl ProductRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve product {id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve product".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_by_name(
@@ -45,10 +44,7 @@ impl ProductRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve product by name {name}: {err}");
-            RepoError::DatabaseError("Failed to retrieve product by name".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_all_names(
@@ -62,10 +58,7 @@ impl ProductRepo {
         )
         .fetch_all(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve all product names: {err}");
-            RepoError::DatabaseError("Failed to retrieve all product names".to_string())
-        })
+        .map_err(handle_sql_error)
         .map(|rows| {
             rows.into_iter()
                 .map(|row| row.name)
@@ -87,10 +80,7 @@ impl ProductRepo {
 
         let query = builder.build_query_as();
 
-        query.fetch_all(executor).await.map_err(|err| {
-            error!("Failed to retrieve all products: {err}");
-            RepoError::DatabaseError("Failed to retrieve products".to_string())
-        })
+        query.fetch_all(executor).await.map_err(handle_sql_error)
     }
 
     pub async fn create(
@@ -113,10 +103,7 @@ impl ProductRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to create product: {err}");
-            RepoError::DatabaseError("Failed to create product".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn update(
@@ -136,10 +123,7 @@ impl ProductRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to update product {}: {err}", product.id);
-            RepoError::DatabaseError("Failed to update product".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn remove(
@@ -155,12 +139,8 @@ impl ProductRepo {
         )
         .execute(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to remove product {id}: {err}");
-            RepoError::DatabaseError("Failed to remove product".to_string())
-        })?;
-
-        Ok(())
+        .map_err(handle_sql_error)
+        .map(|_| ())
     }
 
     pub async fn count(
@@ -174,10 +154,7 @@ impl ProductRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to count products: {err}");
-            RepoError::DatabaseError("Failed to count products".to_string())
-        })
+        .map_err(handle_sql_error)
         .map(|count| count.unwrap_or(0))
     }
 }

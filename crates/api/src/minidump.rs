@@ -3,7 +3,7 @@ use axum::extract::{Multipart, Query, State};
 use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
 use data::api_token::ApiToken;
-use data::crash::Crash;
+use data::attachment::NewAttachment;
 use data::product::Product;
 use data::version::Version;
 use repos::attachment::AttachmentsRepo;
@@ -27,10 +27,10 @@ pub struct MinidumpRequestParams {
 impl MinidumpRequestParams {
     pub fn validate(&self) -> Result<(), ApiError> {
         if self.product.trim().is_empty() {
-            return Err(ApiError::Failure("Product name cannot be empty".to_string()));
+            return Err(ApiError::Failure("product name cannot be empty".to_string()));
         }
         if self.version.trim().is_empty() {
-            return Err(ApiError::Failure("Version cannot be empty".to_string()));
+            return Err(ApiError::Failure("version cannot be empty".to_string()));
         }
         Ok(())
     }
@@ -93,7 +93,7 @@ impl MinidumpApi {
         if !is_valid {
             error!("Invalid {} content type: {}", content_type_category, content_type);
             return Err(ApiError::Failure(format!(
-                "Invalid {} content type: {}",
+                "invalid {} content type: {}",
                 content_type_category, content_type
             )));
         }
@@ -114,78 +114,6 @@ impl MinidumpApi {
             .map(|name| name.to_string())
             .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
         Ok(filename)
-    }
-
-    async fn store_crash<E>(
-        tx: &mut E,
-        minidump: uuid::Uuid,
-        product: &data::product::Product,
-        version: &data::version::Version,
-    ) -> Result<uuid::Uuid, ApiError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
-        let crash = data::crash::NewCrash {
-            minidump,
-            info: None,
-            product_id: product.id,
-            version_id: version.id,
-        };
-        let id = CrashRepo::create(&mut *tx, crash).await.map_err(|e| {
-            error!("Failed to store crash report for {}/{} ({:?})", product.name, version.name, e);
-            ApiError::Failure("failed to store crash report".to_string())
-        })?;
-        Ok(id)
-    }
-
-    async fn store_attachment<E>(
-        tx: &mut E,
-        product: &data::product::Product,
-        crash: &data::crash::Crash,
-        filename: String,
-        filesize: i64,
-        mime_type: String,
-    ) -> Result<uuid::Uuid, ApiError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
-        let attachment = data::attachment::NewAttachment {
-            name: filename.clone(),
-            mime_type,
-            size: filesize,
-            filename: filename.clone(),
-            crash_id: crash.id,
-            product_id: product.id,
-        };
-        let id = AttachmentsRepo::create(&mut *tx, attachment)
-            .await
-            .map_err(|e| {
-                error!(
-                    "Failed to store attachment {} for {}/{} ({:?})",
-                    filename.clone(),
-                    product.name,
-                    crash.id,
-                    e
-                );
-                ApiError::Failure(format!("failed to store attachment {}", filename))
-            })?;
-        Ok(id)
-    }
-
-    async fn get_crash<E>(tx: &mut E, crash_id: uuid::Uuid) -> Result<Crash, ApiError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
-        CrashRepo::get_by_id(tx, crash_id)
-            .await
-            .map_err(|_| {
-                error!("Failed to get crash {}", crash_id);
-                ApiError::Failure(format!("failed to get crash {}", crash_id))
-            })?
-            .ok_or_else(|| {
-                error!("No such crash {}", crash_id);
-                ApiError::CrashNotFound()
-            })
     }
 
     async fn handle_minidump_upload<E>(
@@ -221,7 +149,13 @@ impl MinidumpApi {
                 ApiError::InternalFailure()
             })?;
 
-        let id = Self::store_crash(tx, minidump, product, version).await?;
+        let crash = data::crash::NewCrash {
+            minidump,
+            info: None,
+            product_id: product.id,
+            version_id: version.id,
+        };
+        let id = CrashRepo::create(&mut *tx, crash).await?;
 
         Self::audit_log(
             "minidump_file_saved",
@@ -230,7 +164,6 @@ impl MinidumpApi {
             Some(&version.name),
             None,
         );
-
         Ok(id)
     }
 
@@ -253,14 +186,15 @@ impl MinidumpApi {
             Some(crash_id),
         );
 
-        let content_type = field.content_type().unwrap_or("application/octet-stream");
-        Self::validate_attachment_content_type(content_type)?;
-
-        let mimetype = field
+        let content_type = field
             .content_type()
             .unwrap_or("application/octet-stream")
             .to_owned();
+        Self::validate_attachment_content_type(&content_type)?;
 
+        let storage_filename = uuid::Uuid::new_v4().to_string();
+        let path = format!("attachments/{}", storage_filename);
+        let mimetype = content_type.clone();
         let original_filename = field
             .file_name()
             .map(|name| name.to_string())
@@ -268,14 +202,11 @@ impl MinidumpApi {
 
         Self::audit_log(
             "attachment_details",
-            &format!("Attachment: {} ({})", original_filename, mimetype),
+            &format!("attachment: {} ({})", original_filename, mimetype),
             Some(&product.name),
             None,
             Some(crash_id),
         );
-
-        let storage_filename = uuid::Uuid::new_v4().to_string();
-        let path = format!("attachments/{}", storage_filename);
 
         stream_to_s3(state.storage.clone(), &path, field)
             .await
@@ -284,6 +215,20 @@ impl MinidumpApi {
                 ApiError::InternalFailure()
             })?;
 
+        let crash = CrashRepo::get_by_id(&mut *tx, crash_id)
+            .await?
+            .ok_or(ApiError::Failure("crash not found".to_string()))?;
+
+        let attachment = NewAttachment {
+            name: original_filename.clone(),
+            mime_type: content_type.to_owned(),
+            size: 0, // TODO: Add correct size
+            filename: storage_filename.clone(),
+            crash_id: crash.id,
+            product_id: product.id,
+        };
+        AttachmentsRepo::create(&mut *tx, attachment).await?;
+
         Self::audit_log(
             "attachment_file_saved",
             &format!("Saved attachment file (storage name: {})", storage_filename),
@@ -291,11 +236,6 @@ impl MinidumpApi {
             None,
             Some(crash_id),
         );
-
-        let crash = Self::get_crash(tx, crash_id).await?;
-        let filesize = 0; // Placeholder for actual file size
-        // TODO: add storage_filename
-        Self::store_attachment(tx, product, &crash, original_filename, filesize, mimetype).await?;
 
         Ok(())
     }
@@ -312,7 +252,7 @@ impl MinidumpApi {
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
     {
         match field.name() {
-            Some("upload_file_minidump") => {
+            Some("minidump_file") => {
                 let new_crash_id =
                     Self::handle_minidump_upload(tx, product, version, field, state).await?;
                 *crash_id = Some(new_crash_id);
@@ -352,10 +292,7 @@ impl MinidumpApi {
 
         params.validate()?;
 
-        let mut tx = state.repo.begin_admin().await.map_err(|e| {
-            error!("Failed to start transaction: {:?}", e);
-            ApiError::Failure("failed to start transaction".to_string())
-        })?;
+        let mut tx = state.repo.begin_admin().await?;
 
         let product = get_product(&mut *tx, &params.product).await?;
         validate_api_token_for_product(&api_token, &product, &params.product)?;
@@ -378,11 +315,7 @@ impl MinidumpApi {
                 .await?;
         }
 
-        let commit_result = tx.commit().await;
-        if let Err(e) = commit_result {
-            error!("Failed to commit transaction: {:?}", e);
-            return Err(ApiError::Failure("failed to commit transaction".to_string()));
-        }
+        state.repo.end(tx).await?;
 
         if let Some(crash_id) = crash_id {
             state.worker.queue_minidump(crash_id).await.map_err(|e| {
@@ -407,5 +340,4 @@ impl MinidumpApi {
             crash_id,
         }))
     }
-
 }

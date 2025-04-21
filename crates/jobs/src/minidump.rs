@@ -36,10 +36,7 @@ impl MinidumpProcessor {
     }
 
     async fn handle_job(&self, job: MinidumpJob) -> Result<(), JobError> {
-        let mut tx = self.repo.begin_admin().await.map_err(|e| {
-            error!("Failed to start transaction: {:?}", e);
-            JobError::Failure("failed to start transaction".to_string())
-        })?;
+        let mut tx = self.repo.begin_admin().await?;
 
         let (mut crash, product) = self.retrieve_data(&mut *tx, job).await?;
 

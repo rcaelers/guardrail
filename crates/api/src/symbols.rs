@@ -59,15 +59,11 @@ impl SymbolsApi {
     }
 
     fn validate_symbols_content_type(content_type: &str) -> Result<(), ApiError> {
-        let is_valid = content_type == "application/octet-stream"
-            || content_type == "text/plain"
-            || content_type.is_empty()  // Accept empty content type for compatibility
-            || content_type.starts_with("text/");
-
+        let is_valid = content_type == "application/octet-stream";
         if !is_valid {
             error!("Invalid symbols content type: {}", content_type);
             return Err(ApiError::Failure(format!(
-                "Invalid symbols content type: {}",
+                "invalid symbols content type: {}",
                 content_type
             )));
         }
@@ -77,19 +73,12 @@ impl SymbolsApi {
     fn validate_build_id(build_id: &str) -> Result<(), ApiError> {
         if build_id.is_empty() || build_id.len() > 64 {
             error!("Invalid build_id length: {}", build_id);
-            return Err(ApiError::Failure("Invalid build_id length".to_string()));
-        }
-
-        if build_id.contains("..") || build_id.contains('/') || build_id.contains('\\') {
-            error!("Invalid build_id contains path traversal characters: {}", build_id);
-            return Err(ApiError::Failure(
-                "Invalid build_id format (path traversal attempt)".to_string(),
-            ));
+            return Err(ApiError::Failure("invalid build_id length".to_string()));
         }
 
         if !build_id.chars().all(|c| c.is_ascii_hexdigit() || c == '-') {
             error!("Invalid build_id format: {}", build_id);
-            return Err(ApiError::Failure("Invalid build_id format".to_string()));
+            return Err(ApiError::Failure("invalid build_id format".to_string()));
         }
 
         Ok(())
@@ -98,14 +87,12 @@ impl SymbolsApi {
     fn validate_module_id(module_id: &str) -> Result<(), ApiError> {
         if module_id.is_empty() || module_id.len() > 256 {
             error!("Invalid module_id length: {}", module_id);
-            return Err(ApiError::Failure("Invalid module_id length".to_string()));
+            return Err(ApiError::Failure("invalid module_id length".to_string()));
         }
 
         if module_id.contains("..") || module_id.contains('/') || module_id.contains('\\') {
             error!("Invalid module_id contains path traversal characters: {}", module_id);
-            return Err(ApiError::Failure(
-                "Invalid module_id format (path traversal attempt)".to_string(),
-            ));
+            return Err(ApiError::Failure("invalid module_id format".to_string()));
         }
 
         if !module_id
@@ -113,7 +100,7 @@ impl SymbolsApi {
             .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_')
         {
             error!("Invalid module_id format: {}", module_id);
-            return Err(ApiError::Failure("Invalid module_id format".to_string()));
+            return Err(ApiError::Failure("invalid module_id format".to_string()));
         }
 
         Ok(())
@@ -176,10 +163,7 @@ impl SymbolsApi {
 
         let data = Self::process_header(line, product.clone(), version.clone()).await?;
 
-        SymbolsRepo::create(tx, data.clone()).await.map_err(|e| {
-            error!("failed to stored symbols {:?}", e);
-            ApiError::InternalFailure()
-        })?;
+        SymbolsRepo::create(tx, data.clone()).await?;
 
         if let Err(e) = stream_to_s3(state.storage.clone(), &data.file_location, stream).await {
             error!("Failed to stream to S3: {:?}", e);
@@ -207,15 +191,8 @@ impl SymbolsApi {
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
     {
         match field.name() {
-            Some("upload_file_symbols") => {
+            Some("symbols_file") => {
                 Self::handle_symbol_upload(&mut *tx, product, version, field, state).await?;
-                Ok(())
-            }
-            Some("options") => {
-                let _content = field.bytes().await.map_err(|e| {
-                    error!("failed to read options field: {:?}", e);
-                    ApiError::Failure("failed to read options field".to_string())
-                })?;
                 Ok(())
             }
             _ => Ok(()),
@@ -240,14 +217,10 @@ impl SymbolsApi {
 
         params.validate()?;
 
-        let mut tx = state.repo.begin_admin().await.map_err(|e| {
-            error!("Failed to start transaction: {:?}", e);
-            ApiError::Failure("failed to start transaction".to_string())
-        })?;
+        let mut tx = state.repo.begin_admin().await?;
 
         let product = get_product(&mut *tx, &params.product).await?;
         validate_api_token_for_product(&api_token, &product, &params.product)?;
-
         let version = get_version(&mut *tx, &product, &params.version).await?;
 
         Self::audit_log(
@@ -263,12 +236,7 @@ impl SymbolsApi {
         })? {
             Self::process_field(&mut *tx, field, &product, &version, state.clone()).await?;
         }
-
-        let commit_result = tx.commit().await;
-        if let Err(e) = commit_result {
-            error!("Failed to commit transaction: {:?}", e);
-            return Err(ApiError::Failure("failed to commit transaction".to_string()));
-        }
+        state.repo.end(tx).await?;
 
         //TODO: remove from storage if commit fails
 

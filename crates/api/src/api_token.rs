@@ -108,7 +108,7 @@ where
                         .body(
                             Json(json!({
                                 "result": "failed",
-                                "error": "Missing API token"
+                                "error": "missing API token"
                             }))
                             .into_response()
                             .into_body(),
@@ -127,7 +127,7 @@ where
                         .body(
                             Json(json!({
                                 "result": "failed",
-                                "error": "Invalid API token"
+                                "error": "invalid API token"
                             }))
                             .into_response()
                             .into_body(),
@@ -146,7 +146,7 @@ where
                         .body(
                             Json(json!({
                                 "result": "failed",
-                                "error": "Internal server error"
+                                "error": "internal server error"
                             }))
                             .into_response()
                             .into_body(),
@@ -164,7 +164,7 @@ where
                         .body(
                             Json(json!({
                                 "result": "failed",
-                                "error": "Invalid API token"
+                                "error": "invalid API token"
                             }))
                             .into_response()
                             .into_body(),
@@ -179,7 +179,7 @@ where
                         .body(
                             Json(json!({
                                 "result": "failed",
-                                "error": "Internal server error"
+                                "error": "internal server error"
                             }))
                             .into_response()
                             .into_body(),
@@ -199,7 +199,7 @@ where
                         .body(
                             Json(json!({
                                 "result": "failed",
-                                "error": "Invalid API token"
+                                "error": "invalid API token"
                             }))
                             .into_response()
                             .into_body(),
@@ -215,7 +215,7 @@ where
                     .body(
                         Json(json!({
                             "result": "failed",
-                            "error": "Invalid API token"
+                            "error": "invalid API token"
                         }))
                         .into_response()
                         .into_body(),
@@ -245,7 +245,7 @@ where
                     .body(
                         Json(json!({
                             "result": "failed",
-                            "error": "Insufficient permissions"
+                            "error": "insufficient permissions"
                         }))
                         .into_response()
                         .into_body(),

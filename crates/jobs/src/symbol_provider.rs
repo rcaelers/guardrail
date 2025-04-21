@@ -30,7 +30,7 @@ impl S3SymbolSupplier {
         build_id: &str,
     ) -> Result<Symbols, SymbolError> {
         let mut conn = self.repo.acquire_admin().await.map_err(|err| {
-            error!("Failed to acquire database connection: {err}");
+            error!("Failed to acquire connection: {err}");
             SymbolError::NotFound
         })?;
 

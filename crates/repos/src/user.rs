@@ -1,8 +1,10 @@
 use sqlx::{Postgres, QueryBuilder};
 use std::collections::HashSet;
-use tracing::error;
 
-use crate::{Repo, error::RepoError};
+use crate::{
+    Repo,
+    error::{RepoError, handle_sql_error},
+};
 use common::QueryParams;
 use data::user::{NewUser, User};
 
@@ -24,10 +26,7 @@ impl UserRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve user {id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve user".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_by_name(
@@ -45,10 +44,7 @@ impl UserRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve user by username {username}: {err}");
-            RepoError::DatabaseError("Failed to retrieve user by username".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_all_names(
@@ -62,10 +58,7 @@ impl UserRepo {
         )
         .fetch_all(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve all user names: {err}");
-            RepoError::DatabaseError("Failed to retrieve all user names".to_string())
-        })
+        .map_err(handle_sql_error)
         .map(|rows| {
             rows.into_iter()
                 .map(|row| row.username)
@@ -87,10 +80,7 @@ impl UserRepo {
 
         let query = builder.build_query_as();
 
-        query.fetch_all(executor).await.map_err(|err| {
-            error!("Failed to retrieve all users: {err}");
-            RepoError::DatabaseError("Failed to retrieve users".to_string())
-        })
+        query.fetch_all(executor).await.map_err(handle_sql_error)
     }
 
     pub async fn create_with_id(
@@ -115,10 +105,7 @@ impl UserRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to create user with ID {id} and username {username}: {err}");
-            RepoError::DatabaseError("Failed to create user".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn create(
@@ -141,10 +128,7 @@ impl UserRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to create user with username {}: {err}", user.username);
-            RepoError::DatabaseError("Failed to create user".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn update(
@@ -164,10 +148,7 @@ impl UserRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to update user {}: {err}", user.id);
-            RepoError::DatabaseError("Failed to update user".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn remove(
@@ -183,12 +164,8 @@ impl UserRepo {
         )
         .execute(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to remove user {id}: {err}");
-            RepoError::DatabaseError("Failed to remove user".to_string())
-        })?;
-
-        Ok(())
+        .map_err(handle_sql_error)
+        .map(|_| ())
     }
 
     pub async fn count(
@@ -202,10 +179,7 @@ impl UserRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to count users: {err}");
-            RepoError::DatabaseError("Failed to count users".to_string())
-        })
+        .map_err(handle_sql_error)
         .map(|count| count.unwrap_or(0))
     }
 }

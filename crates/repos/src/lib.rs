@@ -37,61 +37,54 @@ impl Repo {
                 .bind(auth)
                 .execute(conn)
                 .await
-                .map_err(|err| RepoError::DatabaseError(format!("Failed to set config: {}", err)))?;
-
-        Ok(())
+                .map_err(|err| {
+                    error!("Failed to set user to {}: {}", auth, err);
+                    RepoError::TransactionError()
+                }).
+                map(|_| ())
     }
 
     pub async fn begin_admin(&self) -> Result<Transaction<'static, Postgres>, RepoError> {
         let mut transaction = self.pool.begin().await.map_err(|err| {
-            RepoError::DatabaseError(format!("Failed to begin transaction: {}", err))
+            error!("Failed to begin admin transaction: {}", err);
+            RepoError::TransactionError()
         })?;
-        match self.set_config(&mut *transaction, ADMIN).await {
-            Ok(_) => Ok(transaction),
-            Err(err) => {
-                error!("Failed to set admin configuration: {err}");
-                Err(err)
-            }
-        }
+        self.set_config(&mut *transaction, ADMIN).await?;
+        Ok(transaction)
     }
 
     pub async fn acquire_admin(&self) -> Result<PoolConnection<Postgres>, RepoError> {
         let mut con = self.pool.acquire().await.map_err(|err| {
-            RepoError::DatabaseError(format!("Failed to acquire connection: {}", err))
+            error!("Failed to acquire admin connection: {}", err);
+            RepoError::TransactionError()
         })?;
-        match self.set_config(&mut *con, ADMIN).await {
-            Ok(_) => Ok(con),
-            Err(err) => {
-                error!("Failed to acquire admin connection: {err}");
-                Err(err)
-            }
-        }
+        self.set_config(&mut *con, ADMIN).await?;
+        Ok(con)
     }
 
     pub async fn acquire(&self, auth: &str) -> Result<PoolConnection<Postgres>, RepoError> {
         let mut con = self.pool.acquire().await.map_err(|err| {
-            RepoError::DatabaseError(format!("Failed to acquire connection: {}", err))
+            error!("Failed to acquire connection for {}: {}", auth, err);
+            RepoError::TransactionError()
         })?;
-        match self.set_config(&mut *con, auth).await {
-            Ok(_) => Ok(con),
-            Err(err) => {
-                error!("Failed to acquire connection for user {auth}: {err}");
-                Err(err)
-            }
-        }
+        self.set_config(&mut *con, auth).await?;
+        Ok(con)
     }
 
     pub async fn begin(self, auth: &str) -> Result<Transaction<'static, Postgres>, RepoError> {
         let mut transaction = self.pool.begin().await.map_err(|err| {
-            RepoError::DatabaseError(format!("Failed to begin transaction: {}", err))
+            error!("Failed to begin transaction for {}: {}", auth, err);
+            RepoError::TransactionError()
         })?;
-        match self.set_config(&mut *transaction, auth).await {
-            Ok(_) => Ok(transaction),
-            Err(err) => {
-                error!("Failed to begin transaction for user {auth}: {err}");
-                Err(err)
-            }
-        }
+        self.set_config(&mut *transaction, auth).await?;
+        Ok(transaction)
+    }
+
+    pub async fn end(&self, transaction: Transaction<'static, Postgres>) -> Result<(), RepoError> {
+        transaction.commit().await.map_err(|err| {
+            error!("Failed to commit transaction: {}", err);
+            RepoError::TransactionError()
+        })
     }
 
     pub fn build_query(

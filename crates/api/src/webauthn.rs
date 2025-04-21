@@ -74,10 +74,7 @@ pub async fn start_register(
         )
         .await?;
 
-    tx.commit().await.map_err(|e| {
-        error!("failed to commit transaction: {:?}", e);
-        ApiError::InternalFailure()
-    })?;
+    state.repo.end(tx).await?;
 
     Ok(Json(creation_challenge_response))
 }
@@ -122,10 +119,7 @@ pub async fn finish_register(
     )
     .await?;
 
-    tx.commit().await.map_err(|e| {
-        error!("failed to commit transaction: {:?}", e);
-        ApiError::InternalFailure()
-    })?;
+    state.repo.end(tx).await?;
     Ok(StatusCode::OK)
 }
 
@@ -163,10 +157,7 @@ pub async fn start_authentication(
         .insert("authentication_state", (user_unique_id, passkey_authentication))
         .await?;
 
-    tx.commit().await.map_err(|e| {
-        error!("failed to commit transaction: {:?}", e);
-        ApiError::InternalFailure()
-    })?;
+    state.repo.end(tx).await?;
 
     Ok(Json(request_challenge_response))
 }
@@ -199,10 +190,7 @@ pub async fn finish_authentication(
         .insert("authenticated_user", authenticated_user)
         .await?;
 
-    tx.commit().await.map_err(|e| {
-        error!("failed to commit transaction: {:?}", e);
-        ApiError::InternalFailure()
-    })?;
+    state.repo.end(tx).await?;
 
     Ok(StatusCode::OK)
 }

@@ -1,8 +1,7 @@
 use sqlx::Postgres;
-use tracing::error;
 use uuid::Uuid;
 
-use crate::error::RepoError;
+use crate::error::{RepoError, handle_sql_error};
 use data::api_token::{ApiToken, NewApiToken};
 
 pub struct ApiTokenRepo {}
@@ -23,10 +22,7 @@ impl ApiTokenRepo {
         )
         .fetch_optional(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve API token {id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve API token".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_by_token_id(
@@ -34,20 +30,17 @@ impl ApiTokenRepo {
         token_id: Uuid,
     ) -> Result<Option<ApiToken>, RepoError> {
         sqlx::query_as!(
-                ApiToken,
-                r#"
+            ApiToken,
+            r#"
                 SELECT *
                 FROM guardrail.api_tokens
                 WHERE guardrail.api_tokens.token_id = $1
             "#,
-                token_id
-            )
-            .fetch_optional(executor)
-            .await
-            .map_err(|err| {
-                error!("Failed to retrieve API token by token hash: {err}");
-                RepoError::DatabaseError("Failed to retrieve API token by token hash".to_string())
-            })
+            token_id
+        )
+        .fetch_optional(executor)
+        .await
+        .map_err(handle_sql_error)
     }
 
     pub async fn update_last_used(
@@ -64,12 +57,8 @@ impl ApiTokenRepo {
         )
         .execute(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to update last_used_at for token {token_id}: {err}");
-            RepoError::DatabaseError("Failed to update API token".to_string())
-        })?;
-
-        Ok(())
+        .map_err(handle_sql_error)
+        .map(|_| ())
     }
 
     pub async fn get_by_product_id(
@@ -88,10 +77,7 @@ impl ApiTokenRepo {
         )
         .fetch_all(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve API tokens for product {product_id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve API tokens for product".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn get_by_user_id(
@@ -110,10 +96,7 @@ impl ApiTokenRepo {
         )
         .fetch_all(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve API tokens for user {user_id}: {err}");
-            RepoError::DatabaseError("Failed to retrieve API tokens for user".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn create(
@@ -148,10 +131,7 @@ impl ApiTokenRepo {
         )
         .fetch_one(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to create API token: {err}");
-            RepoError::DatabaseError("Failed to create API token".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 
     pub async fn update(
@@ -176,12 +156,8 @@ impl ApiTokenRepo {
         )
         .execute(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to update API token {}: {err}", token.id);
-            RepoError::DatabaseError("Failed to update API token".to_string())
-        })?;
-
-        Ok(())
+        .map_err(handle_sql_error)
+        .map(|_| ())
     }
 
     pub async fn revoke(
@@ -198,11 +174,7 @@ impl ApiTokenRepo {
         )
         .execute(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to revoke API token {token_id}: {err}");
-            RepoError::DatabaseError("Failed to revoke API token".to_string())
-        })?;
-
+        .map_err(handle_sql_error)?;
         Ok(())
     }
 
@@ -219,10 +191,7 @@ impl ApiTokenRepo {
         )
         .execute(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to delete API token {token_id}: {err}");
-            RepoError::DatabaseError("Failed to delete API token".to_string())
-        })?;
+        .map_err(handle_sql_error)?;
 
         Ok(())
     }
@@ -239,9 +208,6 @@ impl ApiTokenRepo {
         )
         .fetch_all(executor)
         .await
-        .map_err(|err| {
-            error!("Failed to retrieve all API tokens: {err}");
-            RepoError::DatabaseError("Failed to retrieve API tokens".to_string())
-        })
+        .map_err(handle_sql_error)
     }
 }
