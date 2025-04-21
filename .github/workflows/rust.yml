@@ -73,7 +73,6 @@ jobs:
             --name postgresql \
             -e POSTGRES_USER=postgres \
             -e POSTGRES_PASSWORD=postgres \
-            -e POSTGRES_DB=guardrail \
             -e POSTGRES_PORT=5432 \
             -p 5432:5432 \
             -v $GITHUB_WORKSPACE/dev/initdb/:/docker-entrypoint-initdb.d/ \
