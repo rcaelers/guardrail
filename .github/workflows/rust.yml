@@ -76,7 +76,7 @@ jobs:
             -e POSTGRES_DB=guardrail \
             -e POSTGRES_PORT=5432 \
             -p 5432:5432 \
-            -v $GITHUB_WORKSPACE/dev/initdb/:/docker-entrypoint-initdb.d/:ro \
+            -v $GITHUB_WORKSPACE/dev/initdb/:/docker-entrypoint-initdb.d/ \
             --health-cmd "pg_isready -U postgres" \
             --health-interval 10s \
             --health-timeout 5s \
@@ -87,10 +87,11 @@ jobs:
         run: |
           docker ps -a
           docker logs postgresql
-          for i in {1..20}; do
+          for i in {1..36}; do
             docker exec postgresql pg_isready && break
             sleep 5
           done
+          docker logs postgresql
 
       - name: Run tests
         run: |
