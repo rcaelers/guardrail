@@ -1,6 +1,5 @@
 pub mod api_token;
 pub mod error;
-pub mod file_cleanup;
 pub mod minidump;
 pub mod routes;
 pub mod state;
