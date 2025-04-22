@@ -649,3 +649,63 @@ async fn test_symbol_no_product(pool: PgPool) {
 
     assert_eq!(crashes.len(), 0);
 }
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_minidump_upload_empty(pool: PgPool) {
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
+        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from(""))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_response_error(
+        response,
+        StatusCode::BAD_REQUEST,
+        Some("general failure: failed to read multipart field from upload"),
+    )
+    .await;
+
+    let crashes = CrashRepo::get_all(&pool, QueryParams::default())
+        .await
+        .expect("Failed to fetch crash entry from database");
+
+    assert_eq!(crashes.len(), 0);
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_minidump_upload_wrong_name(pool: PgPool) {
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let content = "MINIDUMP DATA";
+    let body = format!(
+        "--{}\r\nContent-Disposition: form-data; name=\"xminidump_file\"; filename=\"test.dmp\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
+        boundary, content, boundary
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
+        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Authorization", format!("Bearer {}", token))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_response_error(
+        response,
+        StatusCode::BAD_REQUEST,
+        Some("general failure: expect crash as first document"),
+    )
+    .await;
+
+    let crashes = CrashRepo::get_all(&pool, QueryParams::default())
+        .await
+        .expect("Failed to fetch crash entry from database");
+
+    assert_eq!(crashes.len(), 0);
+}

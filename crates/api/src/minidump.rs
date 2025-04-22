@@ -258,16 +258,9 @@ impl MinidumpApi {
                 *crash_id = Some(new_crash_id);
                 Ok(())
             }
-            Some("options") => {
-                let _content = field.bytes().await.map_err(|e| {
-                    error!("Failed to read options field: {:?}", e);
-                    ApiError::Failure("failed to read options field".to_string())
-                })?;
-                Ok(())
-            }
             Some(_) => {
                 let crash_id_value = crash_id
-                    .ok_or(ApiError::Failure("Expect crash before attachment".to_string()))?;
+                    .ok_or(ApiError::Failure("expect crash as first document".to_string()))?;
 
                 Self::handle_attachment_upload(tx, crash_id_value, product, version, field, state)
                     .await
@@ -322,9 +315,6 @@ impl MinidumpApi {
                 error!("Failed to queue minidump job: {:?}", e);
                 ApiError::Failure("failed to queue minidump job".to_string())
             })?;
-        } else {
-            error!("No crash ID found after processing");
-            return Err(ApiError::Failure("no crash ID found".to_string()));
         }
 
         Self::audit_log(
