@@ -20,7 +20,7 @@ RUN mkdir -p /app
 WORKDIR /app
 COPY . .
 
-RUN cargo build --release -p api
+RUN cargo build --release -p jobs
 
 #
 # Runtime
@@ -32,10 +32,10 @@ WORKDIR /app
 
 RUN apk add --no-cache openssl ca-certificates
 
-COPY --from=builder /app/target/release/api /app/
+COPY --from=builder /app/target/release/jobs /app/
 
 VOLUME ["/app/config"]
 
-EXPOSE 3001
+EXPOSE 3002
 
-CMD ["/app/api"]
+CMD ["/app/jobs"]

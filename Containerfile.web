@@ -2,19 +2,25 @@
 ## Builder
 ##
 
-FROM node AS style
+FROM --platform=$BUILDPLATFORM rustlang/rust:nightly-alpine AS builder
+
+RUN apk add --no-cache \
+    clang \
+    openssl \
+    pkgconfig \
+    openssl-dev \
+    openssl-libs-static \
+    musl-dev \
+    build-base \
+    nodejs \
+    npm
+
 RUN mkdir -p /app
 WORKDIR /app
 COPY . .
 
 RUN npm install
 RUN npx @tailwindcss/cli -i ./crates/server/static/input.css -o style.css
-
-##
-## Builder
-##
-
-FROM rustlang/rust:nightly-bookworm AS builder
 
 RUN ARCH=$(uname -m) && \
   if [ "$ARCH" = "x86_64" ]; then \
@@ -28,38 +34,26 @@ RUN ARCH=$(uname -m) && \
   fi
 RUN cp cargo-binstall /usr/local/cargo/bin
 
-RUN apt-get update -y \
-  && apt-get install -y --no-install-recommends clang
+ENV RUSTUP_PERMIT_COPY_RENAME=true
 RUN cargo binstall cargo-leptos -y
-
 RUN rustup target add wasm32-unknown-unknown
-
-RUN mkdir -p /app
-WORKDIR /app
-COPY . .
-COPY --from=style /app/style.css ./crates/server/static/css/
 
 ARG SQLX_OFFLINE=true
 RUN cargo leptos build --release --precompress -vv
-RUN ls -laR /app/target/site
 
-##
-## Runtime
-##
+#
+# Runtime
+#
 
-FROM debian:bookworm-slim AS runtime
+FROM alpine:latest AS runtime
 WORKDIR /app
 
-RUN apt-get update -y \
-  && apt-get install -y --no-install-recommends openssl ca-certificates \
-  && apt-get autoremove -y \
-  && apt-get clean -y \
-  && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache openssl ca-certificates
 
 COPY --from=builder /app/target/release/server /app/
 COPY --from=builder /app/target/site /app/site
 
-COPY config  /app/config/
+VOLUME ["/app/config"]
 
 ENV RUST_LOG="info"
 ENV LEPTOS_SITE_ADDR="0.0.0.0:3000"
