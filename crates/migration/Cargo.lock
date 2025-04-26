@@ -1298,7 +1298,7 @@ checksum = "93f00c865fe7cabf650081affecd3871070f26767e7b2070a3ffae14c654b447"
 dependencies = [
  "cfg-if",
  "libc",
- "redox_syscall",
+ "redox_syscall 0.3.5",
  "smallvec",
  "windows-targets 0.48.5",
 ]
@@ -1505,6 +1505,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "redox_syscall"
+version = "0.5.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2f103c6d277498fbceb16e84d317e2a400f160f46904d5f5410848c829511a3"
+dependencies = [
+ "bitflags 2.4.0",
+]
+
+[[package]]
 name = "regex"
 version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1564,16 +1573,14 @@ dependencies = [
 
 [[package]]
 name = "rsa"
-version = "0.9.2"
+version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ab43bb47d23c1a631b4b680199a45255dce26fa9ab2fa902581f624ff13e6a8"
+checksum = "78928ac1ed176a5ca1d17e578a1825f3d81ca54cf41053a592584b020cfd691b"
 dependencies = [
- "byteorder",
  "const-oid",
  "digest",
  "num-bigint-dig",
  "num-integer",
- "num-iter",
  "num-traits",
  "pkcs1",
  "pkcs8",
@@ -1956,9 +1963,9 @@ dependencies = [
 
 [[package]]
 name = "spki"
-version = "0.7.2"
+version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d1e996ef02c474957d681f1b05213dfb0abab947b446a62d37770b23500184a"
+checksum = "d91ed6c858b01f942cd56b37a94b3e0a1798290327d1236e4d9cf4eaca44d29d"
 dependencies = [
  "base64ct",
  "der",
@@ -1966,9 +1973,9 @@ dependencies = [
 
 [[package]]
 name = "sqlx"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14e22987355fbf8cfb813a0cf8cd97b1b4ec834b94dbd759a9e8679d41fabe83"
+checksum = "f3c3a85280daca669cfd3bcb68a337882a8bc57ec882f72c5d13a430613a738e"
 dependencies = [
  "sqlx-core",
  "sqlx-macros",
@@ -1979,9 +1986,9 @@ dependencies = [
 
 [[package]]
 name = "sqlx-core"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55c4720d7d4cd3d5b00f61d03751c685ad09c33ae8290c8a2c11335e0604300b"
+checksum = "f743f2a3cea30a58cd479013f75550e879009e3a02f616f18ca699335aa248c3"
 dependencies = [
  "base64",
  "bytes",
@@ -2016,9 +2023,9 @@ dependencies = [
 
 [[package]]
 name = "sqlx-macros"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "175147fcb75f353ac7675509bc58abb2cb291caf0fd24a3623b8f7e3eb0a754b"
+checksum = "7f4200e0fde19834956d4252347c12a083bdcb237d7a1a1446bffd8768417dce"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2029,9 +2036,9 @@ dependencies = [
 
 [[package]]
 name = "sqlx-macros-core"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cde983058e53bfa75998e1982086c5efe3c370f3250bf0357e344fa3352e32b"
+checksum = "882ceaa29cade31beca7129b6beeb05737f44f82dbe2a9806ecea5a7093d00b7"
 dependencies = [
  "dotenvy",
  "either",
@@ -2055,9 +2062,9 @@ dependencies = [
 
 [[package]]
 name = "sqlx-mysql"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "847d2e5393a4f39e47e4f36cab419709bc2b83cbe4223c60e86e1471655be333"
+checksum = "0afdd3aa7a629683c2d750c2df343025545087081ab5942593a5288855b1b7a7"
 dependencies = [
  "atoi",
  "base64",
@@ -2098,9 +2105,9 @@ dependencies = [
 
 [[package]]
 name = "sqlx-postgres"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc35947a541b9e0a2e3d85da444f1c4137c13040267141b208395a0d0ca4659f"
+checksum = "a0bedbe1bbb5e2615ef347a5e9d8cd7680fb63e77d9dafc0f29be15e53f1ebe6"
 dependencies = [
  "atoi",
  "base64",
@@ -2136,9 +2143,9 @@ dependencies = [
 
 [[package]]
 name = "sqlx-sqlite"
-version = "0.8.4"
+version = "0.8.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c48291dac4e5ed32da0927a0b981788be65674aeb62666d19873ab4289febde"
+checksum = "c26083e9a520e8eb87a06b12347679b142dc2ea29e6e409f805644a7a979a5bc"
 dependencies = [
  "atoi",
  "flume",
@@ -2476,6 +2483,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasite"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b8dad83b4f25e74f184f64c43b150b91efe7647395b42289f38e50566d82855b"
+
+[[package]]
 name = "wasm-bindgen"
 version = "0.2.87"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2562,9 +2575,13 @@ dependencies = [
 
 [[package]]
 name = "whoami"
-version = "1.4.1"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22fc3756b8a9133049b26c7f61ab35416c130e8c09b660f5b3958b446f52cc50"
+checksum = "6994d13118ab492c3c80c1f81928718159254c53c472bf9ce36f8dae4add02a7"
+dependencies = [
+ "redox_syscall 0.5.11",
+ "wasite",
+]
 
 [[package]]
 name = "windows"
