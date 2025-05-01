@@ -4,18 +4,14 @@ use apalis_sql::{
     Config,
     postgres::{PgListen, PostgresStorage},
 };
-use common::settings::Settings;
+use common::{init_logging, settings::Settings};
 use jobs::{minidump::MinidumpProcessor, state::AppState};
 use repos::Repo;
+use sqlx::ConnectOptions;
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use sqlx::ConnectOptions;
 use std::sync::Arc;
-use std::io::IsTerminal;
-use tracing::{Level, debug, info};
-use tracing::level_filters::LevelFilter;
-use tracing_subscriber::{layer::SubscriberExt, FmtSubscriber};
-use tracing_subscriber::{EnvFilter, fmt};
+use tracing::{debug, info};
 
 struct GuardrailJobs {
     settings: Arc<Settings>,
@@ -29,16 +25,15 @@ impl GuardrailJobs {
     }
 
     async fn run(&self) {
-        self.init_logging().await;
+        init_logging().await;
 
         let settings = Arc::new(Settings::new().expect("Failed to load settings"));
-        info!("Starting server on port {}", settings.clone().server.api_port);
 
         let db = self.init_db().await.unwrap();
         let repo = Repo::new(db.clone());
         let store = Arc::new(
             object_store::aws::AmazonS3Builder::from_env()
-                .with_url(settings.clone().server.store.clone())
+                .with_url(settings.clone().api_server.store.clone())
                 .build()
                 .expect("Failed to create object store"),
         );
@@ -79,34 +74,6 @@ impl GuardrailJobs {
             })
             .await
             .expect("Failed to run the monitor");
-    }
-
-    async fn init_logging(&self) {
-        let directory = self.settings.logger.directory.clone();
-
-        let file_appender = tracing_appender::rolling::never(directory, "guardrail.log");
-        let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-        let max_level = self.settings.logger.level.parse().unwrap_or(Level::DEBUG);
-
-        let filter = EnvFilter::builder()
-            .with_default_directive(LevelFilter::INFO.into())
-            .from_env()
-            .unwrap()
-            .add_directive("server=debug".parse().unwrap())
-            .add_directive("leptos=debug".parse().unwrap())
-            .add_directive("app=debug".parse().unwrap());
-
-        let subscriber = FmtSubscriber::builder()
-            .with_max_level(max_level)
-            .with_ansi(std::io::stdout().is_terminal())
-            .with_env_filter(filter)
-            .finish()
-            .with(fmt::Layer::new().with_writer(non_blocking));
-
-        tracing::subscriber::set_global_default(subscriber)
-            .expect("setting default subscriber failed");
-
-        tracing_log::LogTracer::init().expect("Failed to set logger");
     }
 
     async fn init_db(&self) -> Result<PgPool, sqlx::Error> {

@@ -1,4 +1,3 @@
-//mod api;
 mod session_store;
 mod state;
 
@@ -10,31 +9,26 @@ use axum::extract::{DefaultBodyLimit, State};
 use axum::http::Request;
 use axum::response::{IntoResponse, Response};
 use axum_server::tls_rustls::RustlsConfig;
+use common::init_logging;
 use leptos::prelude::*;
 use leptos_axum::{LeptosRoutes, generate_route_list, handle_server_fns_with_context};
 use repos::Repo;
 use sqlx::ConnectOptions;
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use std::io::IsTerminal;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::sync::Arc;
 use time::Duration;
 use tower_http::trace::TraceLayer;
 use tower_sessions::cookie::SameSite;
 use tower_sessions::{Expiry, SessionManagerLayer};
-use tracing::level_filters::LevelFilter;
-use tracing::{Level, info};
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::{EnvFilter, FmtSubscriber, fmt};
+use tracing::info;
 use webauthn_rs::prelude::*;
 
 use app::*;
 use common::settings::Settings;
 use session_store::PostgresStore;
 use state::AppState;
-
 
 struct GuardrailApp {
     settings: Arc<Settings>,
@@ -46,7 +40,7 @@ struct GuardrailApp {
 impl GuardrailApp {
     async fn new() -> Self {
         let settings = Arc::new(Settings::new().expect("Failed to load settings"));
-        Self::init_logging(settings.clone()).await;
+        init_logging().await;
 
         let db = Self::init_db(settings.clone()).await.unwrap();
         let webauthn = Self::create_webauthn(settings.clone());
@@ -58,33 +52,6 @@ impl GuardrailApp {
             repo,
             webauthn,
         }
-    }
-
-    async fn init_logging(settings: Arc<Settings>) {
-        let directory = &settings.logger.directory;
-
-        let file_appender = tracing_appender::rolling::never(directory, "guardrail.log");
-        let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-        let max_level = settings.logger.level.parse().unwrap_or(Level::DEBUG);
-
-        let filter = EnvFilter::builder()
-            .with_default_directive(LevelFilter::INFO.into())
-            .from_env()
-            .unwrap()
-            .add_directive("server=debug".parse().unwrap())
-            .add_directive("leptos=debug".parse().unwrap())
-            .add_directive("app=debug".parse().unwrap());
-
-        let subscriber = FmtSubscriber::builder()
-            .with_max_level(max_level)
-            .with_ansi(std::io::stdout().is_terminal())
-            .with_env_filter(filter)
-            .finish()
-            .with(fmt::Layer::new().with_writer(non_blocking));
-
-        tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
-
-        tracing_log::LogTracer::init().expect("Failed to set logger");
     }
 
     async fn init_db(settings: Arc<Settings>) -> Result<PgPool, sqlx::Error> {
@@ -110,7 +77,7 @@ impl GuardrailApp {
     }
 
     async fn run(self) {
-        info!("Starting server on port {}", self.settings.server.port);
+        info!("Starting server on port {}", self.settings.web_server.port);
 
         let conf = get_configuration(None).unwrap();
         let leptos_options = conf.leptos_options;
@@ -132,7 +99,6 @@ impl GuardrailApp {
 
         let auth_layer = AuthLayer::new();
 
-        // Build our router with all routes and middleware
         let routes_all = Router::new()
             .route("/api/{*fn_name}", axum::routing::get(server_fn_handler).post(server_fn_handler))
             .leptos_routes_with_handler(routes, axum::routing::get(leptos_routes_handler))
@@ -145,20 +111,40 @@ impl GuardrailApp {
 
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-        //TODO: Make configurable
-        let config = RustlsConfig::from_pem_file(
-            PathBuf::from("dev").join("cert.pem"),
-            PathBuf::from("dev").join("key.pem"),
-        )
-        .await
-        .unwrap();
-
-        let port = self.settings.server.port;
-        let addr = SocketAddr::from(([127, 0, 0, 1], port));
-        axum_server::bind_rustls(addr, config)
-            .serve(routes_all.into_make_service())
+        if self.settings.web_server.public_key.is_some()
+            && self.settings.web_server.private_key.is_some()
+        {
+            let config = RustlsConfig::from_pem(
+                self.settings
+                    .api_server
+                    .public_key
+                    .clone()
+                    .unwrap_or_default()
+                    .into_bytes(),
+                self.settings
+                    .api_server
+                    .private_key
+                    .clone()
+                    .unwrap_or_default()
+                    .into_bytes(),
+            )
             .await
             .unwrap();
+
+            let port = self.settings.clone().web_server.port;
+            let addr = SocketAddr::from(([127, 0, 0, 1], port));
+            axum_server::bind_rustls(addr, config)
+                .serve(routes_all.into_make_service())
+                .await
+                .unwrap();
+        } else {
+            let port = self.settings.clone().web_server.port;
+            let addr = SocketAddr::from(([127, 0, 0, 1], port));
+            axum_server::bind(addr)
+                .serve(routes_all.into_make_service())
+                .await
+                .unwrap();
+        }
     }
 }
 

@@ -4,15 +4,18 @@ use natord::compare as natord_compare;
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize, Default)]
-pub struct Server {
+pub struct ApiServer {
     pub port: u16,
-    pub api_port: u16,
-    pub base_path: String,
-    pub site: String,
-    pub max_minidump_size: Option<u64>,
-    pub max_attachment_size: Option<u64>,
-    pub max_symbols_size: Option<u64>,
+    pub public_key: Option<String>,
+    pub private_key: Option<String>,
     pub store: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct WebServer {
+    pub port: u16,
+    pub public_key: Option<String>,
+    pub private_key: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -30,12 +33,6 @@ pub struct Jwk {
     pub private_key: String,
 }
 
-#[derive(Debug, Deserialize, Default)]
-pub struct Logger {
-    pub directory: String,
-    pub level: String,
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Database {
@@ -50,8 +47,8 @@ impl Default for Database {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct Settings {
-    pub server: Server,
-    pub logger: Logger,
+    pub api_server: ApiServer,
+    pub web_server: WebServer,
     pub database: Database,
     pub auth: Auth,
 }

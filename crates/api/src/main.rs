@@ -3,24 +3,28 @@ use apalis_sql::postgres::PostgresStorage;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum_server::tls_rustls::RustlsConfig;
+use k8s_openapi::api::core::v1::Secret;
+use kube::{
+    Api, Client,
+    api::{ObjectMeta, PostParams},
+};
 use sqlx::ConnectOptions;
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use std::io::IsTerminal;
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
-use tracing::{Level, info, level_filters::LevelFilter};
-use tracing_subscriber::{EnvFilter, FmtSubscriber, fmt, layer::SubscriberExt};
+use tracing::info;
 use webauthn_rs::prelude::*;
 
 use api::routes;
 use api::state::AppState;
 use api::worker::MinidumpProcessor;
-use common::settings::Settings;
 use common::token::generate_api_token;
+use common::{init_logging, settings::Settings};
 use repos::Repo;
+
+const SECRET_NAME: &str = "guardrail-initial-admin-token";
 
 struct GuardrailApp {
     settings: Arc<Settings>,
@@ -34,20 +38,22 @@ impl GuardrailApp {
     }
 
     async fn run(&self) {
-        self.init_logging().await;
+        init_logging().await;
 
         let settings = Arc::new(Settings::new().expect("Failed to load settings"));
-        info!("Starting server on port {}", settings.clone().server.api_port);
+        info!("Starting server on port {}", settings.clone().api_server.port);
 
         let db = self.init_db().await.unwrap();
         let webauthn = self.create_webauthn();
         let repo = Repo::new(db.clone());
         let store = Arc::new(
             object_store::aws::AmazonS3Builder::from_env()
-                .with_url(settings.clone().server.store.clone())
+                .with_url(settings.clone().api_server.store.clone())
                 .build()
                 .expect("Failed to create object store"),
         );
+
+        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
         if let Err(err) = self.ensure_default_api_token(&repo).await {
             tracing::error!("Failed to create default API token: {}", err);
@@ -70,50 +76,40 @@ impl GuardrailApp {
             .layer(TraceLayer::new_for_http())
             .with_state(state);
 
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-        //TODO: Make configurable
-        let config = RustlsConfig::from_pem_file(
-            PathBuf::from("dev").join("cert.pem"),
-            PathBuf::from("dev").join("key.pem"),
-        )
-        .await
-        .unwrap();
-
-        let port = self.settings.clone().server.api_port;
-        let addr = SocketAddr::from(([127, 0, 0, 1], port));
-        axum_server::bind_rustls(addr, config)
-            .serve(routes_all.into_make_service())
+        if self.settings.api_server.public_key.is_some()
+            && self.settings.api_server.private_key.is_some()
+        {
+            let config = RustlsConfig::from_pem(
+                self.settings
+                    .api_server
+                    .public_key
+                    .clone()
+                    .unwrap_or_default()
+                    .into_bytes(),
+                self.settings
+                    .api_server
+                    .private_key
+                    .clone()
+                    .unwrap_or_default()
+                    .into_bytes(),
+            )
             .await
             .unwrap();
-    }
 
-    async fn init_logging(&self) {
-        let directory = self.settings.logger.directory.clone();
-
-        let file_appender = tracing_appender::rolling::never(directory, "guardrail.log");
-        let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-        let max_level = self.settings.logger.level.parse().unwrap_or(Level::DEBUG);
-
-        let filter = EnvFilter::builder()
-            .with_default_directive(LevelFilter::INFO.into())
-            .from_env()
-            .unwrap()
-            .add_directive("server=debug".parse().unwrap())
-            .add_directive("leptos=debug".parse().unwrap())
-            .add_directive("app=debug".parse().unwrap());
-
-        let subscriber = FmtSubscriber::builder()
-            .with_max_level(max_level)
-            .with_ansi(std::io::stdout().is_terminal())
-            .with_env_filter(filter)
-            .finish()
-            .with(fmt::Layer::new().with_writer(non_blocking));
-
-        tracing::subscriber::set_global_default(subscriber)
-            .expect("setting default subscriber failed");
-
-        tracing_log::LogTracer::init().expect("Failed to set logger");
+            let port = self.settings.clone().api_server.port;
+            let addr = SocketAddr::from(([127, 0, 0, 1], port));
+            axum_server::bind_rustls(addr, config)
+                .serve(routes_all.into_make_service())
+                .await
+                .unwrap();
+        } else {
+            let port = self.settings.clone().api_server.port;
+            let addr = SocketAddr::from(([127, 0, 0, 1], port));
+            axum_server::bind(addr)
+                .serve(routes_all.into_make_service())
+                .await
+                .unwrap();
+        }
     }
 
     fn create_webauthn(&self) -> Arc<Webauthn> {
@@ -136,6 +132,44 @@ impl GuardrailApp {
             .await?;
 
         Ok(pool)
+    }
+
+    async fn create_k8s_initial_token_secret(
+        &self,
+        token: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let client = Client::try_default().await?;
+        let namespace =
+            std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+                .unwrap_or_else(|_| {
+                    tracing::warn!("Could not determine current namespace, using 'default'");
+                    "default".to_string()
+                });
+
+        let secrets: Api<Secret> = Api::namespaced(client, &namespace);
+
+        if secrets.get_opt(SECRET_NAME).await?.is_some() {
+            return Ok(());
+        }
+
+        let secret = Secret {
+            metadata: ObjectMeta {
+                name: Some(SECRET_NAME.to_string()),
+                labels: Some(
+                    [("app.kubernetes.io/part-of".to_string(), "guardrail".to_string())].into(),
+                ),
+                ..Default::default()
+            },
+            string_data: Some([("token".to_string(), token.to_string())].into()),
+            type_: Some("Opaque".to_string()),
+            ..Default::default()
+        };
+
+        secrets
+            .create(&PostParams::default(), &secret)
+            .await
+            .expect("Failed to create secret");
+        Ok(())
     }
 
     async fn ensure_default_api_token(
@@ -170,6 +204,8 @@ impl GuardrailApp {
 
         let _token_id = ApiTokenRepo::create(&mut *conn, new_token).await?;
         info!("Created default API token: {}", token);
+
+        self.create_k8s_initial_token_secret(&token).await?;
 
         Ok(())
     }
