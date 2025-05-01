@@ -15,11 +15,10 @@ argon2 = { workspace = true, optional = true }
 rand = { workspace = true, optional = true }
 uuid.workspace = true
 base64.workspace = true
+glob.workspace = true
+natord.workspace = true
 
 [features]
 default = []
 
-ssr = [
-  "dep:rand",
-  "dep:argon2",
-]
+ssr = ["dep:rand", "dep:argon2"]

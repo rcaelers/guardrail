@@ -1,6 +1,7 @@
-use config::{Config, ConfigError, Environment, File};
+use config::{Config, ConfigError, File};
+use glob::glob;
+use natord::compare as natord_compare;
 use serde::Deserialize;
-use std::env;
 
 #[derive(Debug, Deserialize, Default)]
 pub struct Server {
@@ -39,15 +40,11 @@ pub struct Logger {
 #[serde(default)]
 pub struct Database {
     pub uri: String,
-    pub name: String,
 }
 
 impl Default for Database {
     fn default() -> Self {
-        Self {
-            uri: "xx".into(),
-            name: "".into(),
-        }
+        Self { uri: "xx".into() }
     }
 }
 
@@ -61,13 +58,27 @@ pub struct Settings {
 
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {
-        let run_mode = env::var("RUN_MODE").unwrap_or_else(|_| "development".into());
+        let mut files: Vec<_> = glob("config/*.yaml")
+            .expect("Failed to read config files")
+            .filter_map(|entry| entry.ok())
+            .collect();
+
+        files.sort_by(|a, b| {
+            natord_compare(
+                a.file_name().and_then(|n| n.to_str()).unwrap_or(""),
+                b.file_name().and_then(|n| n.to_str()).unwrap_or(""),
+            )
+        });
 
         let builder = Config::builder()
-            .add_source(File::with_name("config/default"))
-            .add_source(File::with_name(&format!("config/{run_mode}")).required(false))
-            .add_source(File::with_name("config/local").required(false))
-            .add_source(Environment::default().separator("__"));
+            .add_source(files.into_iter().map(File::from).collect::<Vec<_>>())
+            .add_source(
+                config::Environment::with_prefix("GUARDRAIL")
+                    .try_parsing(true)
+                    .separator("_")
+                    .list_separator(",")
+                    .ignore_empty(true),
+            );
 
         builder.build()?.try_deserialize()
     }
