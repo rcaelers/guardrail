@@ -1,6 +1,7 @@
 use ::chrono::NaiveDateTime;
-use leptos_struct_table::*;
 use data::crash::Crash;
+use leptos::prelude::*;
+use leptos_struct_table::*;
 use std::fmt::Debug;
 use uuid::Uuid;
 

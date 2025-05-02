@@ -259,7 +259,7 @@ async fn test_create_with_invalid_kind(pool: Pool<Postgres>) {
     assert!(result.is_err());
     match result {
         Err(RepoError::InvalidColumn(_)) => (),
-        _ => panic!("Expected InvalidColumn error, got: {:?}", result),
+        _ => panic!("Expected InvalidColumn error, got: {result:?}"),
     }
 }
 
@@ -325,7 +325,7 @@ async fn test_update_with_invalid_kind(pool: Pool<Postgres>) {
     assert!(result.is_err());
     match result {
         Err(RepoError::InvalidColumn(_)) => (),
-        _ => panic!("Expected InvalidColumn error, got: {:?}", result),
+        _ => panic!("Expected InvalidColumn error, got: {result:?}"),
     }
 }
 

@@ -63,8 +63,7 @@ impl SymbolsApi {
         if !is_valid {
             error!("Invalid symbols content type: {}", content_type);
             return Err(ApiError::Failure(format!(
-                "invalid symbols content type: {}",
-                content_type
+                "invalid symbols content type: {content_type}"
             )));
         }
         Ok(())
@@ -120,7 +119,7 @@ impl SymbolsApi {
         let arch = String::from(collection[2]);
         let build_id = String::from(collection[3]);
         let module_id = String::from(collection[4]);
-        let path = format!("symbols/{}-{}", module_id, build_id);
+        let path = format!("symbols/{module_id}-{build_id}");
 
         Self::validate_build_id(&build_id)?;
         Self::validate_module_id(&module_id)?;

@@ -54,8 +54,7 @@ async fn setup(pool: &PgPool) -> (Router, Arc<dyn ObjectStore>, String, String, 
     let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
     let content = "MINIDUMP DATA";
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"minidump_file\"; filename=\"test.dmp\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"minidump_file\"; filename=\"test.dmp\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
     );
 
     let (token, _) = create_test_token(pool, "Test Token", None, None, &["minidump-upload"]).await;
@@ -114,8 +113,8 @@ async fn test_minidump_upload_ok(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -143,19 +142,18 @@ async fn test_minidump_upload_with_attachments_ok(pool: PgPool) {
     let attachment1_content = "LOG DATA 1";
     let attachment2_content = "LOG DATA 2";
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"minidump_file\"; filename=\"test.dmp\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n\
-         --{}\r\nContent-Disposition: form-data; name=\"attachment1\"; filename=\"log.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n\
-         --{}\r\nContent-Disposition: form-data; name=\"attachment2\"; filename=\"trace.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n\
-         --{}--\r\n",
-        boundary, content, boundary, attachment1_content, boundary, attachment2_content, boundary
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"minidump_file\"; filename=\"test.dmp\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n\
+         --{boundary}\r\nContent-Disposition: form-data; name=\"attachment1\"; filename=\"log.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n{attachment1_content}\r\n\
+         --{boundary}\r\nContent-Disposition: form-data; name=\"attachment2\"; filename=\"trace.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n{attachment2_content}\r\n\
+         --{boundary}--\r\n"
     );
 
-    log::info!("Body: {}", body);
+    log::info!("Body: {body}");
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -201,8 +199,8 @@ async fn test_minidump_upload_no_such_product(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProductxx&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -229,8 +227,8 @@ async fn test_minidump_upload_no_such_version(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=2.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -255,8 +253,8 @@ async fn test_minidump_upload_empty_version(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -281,8 +279,8 @@ async fn test_minidump_upload_empty_product(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -305,15 +303,14 @@ async fn test_minidump_upload_invalid_content_type(pool: PgPool) {
     let (app, _store, boundary, content, _body, token) = setup(&pool).await;
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"minidump_file\"; filename=\"test.sym\"\r\nContent-Type: text/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"minidump_file\"; filename=\"test.sym\"\r\nContent-Type: text/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
     );
 
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -342,15 +339,14 @@ async fn test_minidump_upload_invalid_multipart(pool: PgPool) {
     let boundary2 = "----WebKitFormBoundaryX7MA4YWxkTrZu0gW";
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"minidump_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary2, content, boundary2
+        "--{boundary2}\r\nContent-Disposition: form-data; name=\"minidump_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary2}--\r\n"
     );
 
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -375,15 +371,14 @@ async fn test_minidump_upload_invalid_boundary(pool: PgPool) {
 
     let boundary2 = "----WebKitFormBoundaryX7MA4YWxkTrZu0gW";
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"minidump_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary2
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"minidump_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary2}--\r\n"
     );
 
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -407,8 +402,8 @@ async fn test_minidump_upload_wrong_entitlement(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -449,8 +444,8 @@ async fn test_minidump_upload_expired_entitlement(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -495,8 +490,8 @@ async fn test_minidump_upload_inactive_entitlement(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -538,8 +533,8 @@ async fn test_minidump_upload_other_product(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -564,7 +559,7 @@ async fn test_minidump_upload_unknown_token(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {}", "test_tokenx"))
         .body(Body::from(body))
         .unwrap();
@@ -585,7 +580,7 @@ async fn test_minidump_upload_no_token(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -605,8 +600,8 @@ async fn test_symbol_no_version(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -630,8 +625,8 @@ async fn test_symbol_no_product(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -657,8 +652,8 @@ async fn test_minidump_upload_empty(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(""))
         .unwrap();
 
@@ -683,15 +678,14 @@ async fn test_minidump_upload_wrong_name(pool: PgPool) {
 
     let content = "MINIDUMP DATA";
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"xminidump_file\"; filename=\"test.dmp\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"xminidump_file\"; filename=\"test.dmp\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
     );
 
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 

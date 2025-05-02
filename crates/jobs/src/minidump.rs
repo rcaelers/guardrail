@@ -44,7 +44,7 @@ impl MinidumpProcessor {
             error!("No minidump found for crash {}", crash.id);
             JobError::Failure("no minidump found".to_string())
         })?;
-        let path = format!("minidumps/{}", minidump);
+        let path = format!("minidumps/{minidump}");
         let data = self.get_minidump_object(&path).await?;
 
         let mut options = ProcessorOptions::default();

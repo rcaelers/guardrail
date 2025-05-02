@@ -54,23 +54,23 @@ impl IntoResponse for ApiError {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal failure".to_string())
             }
             ApiError::Failure(err) => {
-                (StatusCode::BAD_REQUEST, format!("general failure: {}", err))
+                (StatusCode::BAD_REQUEST, format!("general failure: {err}"))
             }
             ApiError::ProductAccessDenied(product) => {
-                (StatusCode::FORBIDDEN, format!("access denied for product {}", product))
+                (StatusCode::FORBIDDEN, format!("access denied for product {product}"))
             }
             ApiError::ProductNotFound(product) => {
-                (StatusCode::BAD_REQUEST, format!("product {} not found", product))
+                (StatusCode::BAD_REQUEST, format!("product {product} not found"))
             }
             ApiError::VersionNotFound(product, version) => (
                 StatusCode::BAD_REQUEST,
-                format!("version {} of product {} not found", version, product),
+                format!("version {version} of product {product} not found"),
             ),
             ApiError::UserNotFound(user) => {
-                (StatusCode::BAD_REQUEST, format!("user {} not found", user))
+                (StatusCode::BAD_REQUEST, format!("user {user} not found"))
             }
             ApiError::UserAlreadyExists(user) => {
-                (StatusCode::BAD_REQUEST, format!("user {} already exists", user))
+                (StatusCode::BAD_REQUEST, format!("user {user} already exists"))
             }
             ApiError::QueryExtractorRejection(err) => {
                 error!("query extractor rejection: {:?}", err);
@@ -86,7 +86,7 @@ impl IntoResponse for ApiError {
             }
             ApiError::WebauthnError(err) => {
                 error!("webauthn error: {:?}", err);
-                (StatusCode::INTERNAL_SERVER_ERROR, format!("webauthn error: {}", err))
+                (StatusCode::INTERNAL_SERVER_ERROR, format!("webauthn error: {err}"))
             }
         };
 

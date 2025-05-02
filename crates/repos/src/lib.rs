@@ -108,7 +108,7 @@ impl Repo {
                 }
                 separated.push(col);
                 separated.push_unseparated(" ILIKE ");
-                separated.push_bind_unseparated(format!("%{}%", filter));
+                separated.push_bind_unseparated(format!("%{filter}%"));
             }
         }
 

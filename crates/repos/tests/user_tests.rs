@@ -303,7 +303,7 @@ async fn test_count(pool: PgPool) {
     assert_eq!(count, 0);
 
     for i in 0..3 {
-        create_test_user(&pool, &format!("countuser{}", i), false).await;
+        create_test_user(&pool, &format!("countuser{i}"), false).await;
     }
 
     let count = UserRepo::count(&pool).await.expect("Failed to count users");

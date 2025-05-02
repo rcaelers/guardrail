@@ -22,8 +22,7 @@ impl TableClassesProvider for ClassesPreset {
         };
 
         format!(
-            "bg-zinc-200 dark:bg-zinc-700 cursor-pointer px-5 py-2 sticky top-0 whitespace-nowrap {} {}",
-            sort_class, template_classes
+            "bg-zinc-200 dark:bg-zinc-700 cursor-pointer px-5 py-2 sticky top-0 whitespace-nowrap {sort_class} {template_classes}"
         )
     }
 
@@ -62,8 +61,7 @@ impl TableClassesProvider for ClassesPreset {
             _ => "w-[calc(60%-2.5rem)]",
         };
         format!(
-            "animate-pulse h-2 bg-zinc-200 rounded-full dark:bg-zinc-700 inline-block align-middle {} {}",
-            width, prop_class
+            "animate-pulse h-2 bg-zinc-200 rounded-full dark:bg-zinc-700 inline-block align-middle {width} {prop_class}"
         )
     }
 

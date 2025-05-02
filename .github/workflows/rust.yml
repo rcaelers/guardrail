@@ -29,8 +29,6 @@ jobs:
           rustup target add wasm32-unknown-unknown
           rustup upgrade
           cargo install --locked cargo-leptos
-          cargo install --locked sqlx-cli
-          cargo install --locked cargo-llvm-cov
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -60,7 +58,6 @@ jobs:
           rustup target add wasm32-unknown-unknown
           rustup upgrade
           cargo install --locked cargo-leptos
-          cargo install --locked sqlx-cli
           cargo install --locked cargo-llvm-cov
 
       - uses: Swatinem/rust-cache@v2
@@ -85,12 +82,10 @@ jobs:
       - name: Wait for PostgreSQL to be ready
         run: |
           docker ps -a
-          docker logs postgresql
           for i in {1..36}; do
             docker exec postgresql pg_isready && break
             sleep 5
           done
-          docker logs postgresql
 
       - name: Run tests
         run: |

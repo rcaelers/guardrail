@@ -93,8 +93,7 @@ impl MinidumpApi {
         if !is_valid {
             error!("Invalid {} content type: {}", content_type_category, content_type);
             return Err(ApiError::Failure(format!(
-                "invalid {} content type: {}",
-                content_type_category, content_type
+                "invalid {content_type_category} content type: {content_type}"
             )));
         }
         Ok(())
@@ -140,7 +139,7 @@ impl MinidumpApi {
         let _filename = Self::extract_filename(&field)?;
 
         let minidump = uuid::Uuid::new_v4();
-        let path = format!("minidumps/{}", minidump);
+        let path = format!("minidumps/{minidump}");
 
         stream_to_s3(state.storage.clone(), &path, field)
             .await
@@ -159,7 +158,7 @@ impl MinidumpApi {
 
         Self::audit_log(
             "minidump_file_saved",
-            &format!("Saved minidump file {}", path),
+            &format!("Saved minidump file {path}"),
             Some(&product.name),
             Some(&version.name),
             None,
@@ -193,7 +192,7 @@ impl MinidumpApi {
         Self::validate_attachment_content_type(&content_type)?;
 
         let storage_filename = uuid::Uuid::new_v4().to_string();
-        let path = format!("attachments/{}", storage_filename);
+        let path = format!("attachments/{storage_filename}");
         let mimetype = content_type.clone();
         let original_filename = field
             .file_name()
@@ -202,7 +201,7 @@ impl MinidumpApi {
 
         Self::audit_log(
             "attachment_details",
-            &format!("attachment: {} ({})", original_filename, mimetype),
+            &format!("attachment: {original_filename} ({mimetype})"),
             Some(&product.name),
             None,
             Some(crash_id),
@@ -231,7 +230,7 @@ impl MinidumpApi {
 
         Self::audit_log(
             "attachment_file_saved",
-            &format!("Saved attachment file (storage name: {})", storage_filename),
+            &format!("Saved attachment file (storage name: {storage_filename})"),
             Some(&product.name),
             None,
             Some(crash_id),

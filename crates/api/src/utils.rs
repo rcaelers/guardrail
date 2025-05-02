@@ -100,7 +100,7 @@ where
         .await
         .map_err(|_| {
             error!("Failed to get product {}", product_name);
-            ApiError::Failure(format!("failed to get product {}", product_name))
+            ApiError::Failure(format!("failed to get product {product_name}"))
         })?
         .ok_or_else(|| {
             error!("No such product {}", product_name);
@@ -155,19 +155,19 @@ pub async fn validate_file_size(
 ) -> Result<u64, ApiError> {
     let file_metadata = tokio::fs::metadata(file_path).await.map_err(|e| {
         error!("Failed to get metadata for {} file: {:?}", file_type, e);
-        ApiError::Failure(format!("failed to verify {} file", file_type))
+        ApiError::Failure(format!("failed to verify {file_type} file"))
     })?;
 
     if file_metadata.len() > max_size {
         let _ = tokio::fs::remove_file(file_path).await;
         error!("{} too large: {} bytes (max: {} bytes)", file_type, file_metadata.len(), max_size);
-        return Err(ApiError::Failure(format!("{} file too large", file_type)));
+        return Err(ApiError::Failure(format!("{file_type} file too large")));
     }
 
     if file_metadata.len() == 0 {
         let _ = tokio::fs::remove_file(file_path).await;
         error!("Empty {} file", file_type);
-        return Err(ApiError::Failure(format!("empty {} file", file_type)));
+        return Err(ApiError::Failure(format!("empty {file_type} file")));
     }
 
     Ok(file_metadata.len())

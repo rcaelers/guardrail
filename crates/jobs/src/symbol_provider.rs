@@ -164,7 +164,7 @@ mod test {
 
         let module_id = "crash.pdb".to_string();
         let build_id = "EE9E2672A6863B084C4C44205044422E1".to_string();
-        let symbols_path = format!("symbols/{}-{}", module_id, build_id);
+        let symbols_path = format!("symbols/{module_id}-{build_id}");
         let data = NewSymbols {
             build_id,
             module_id,

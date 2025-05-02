@@ -116,8 +116,8 @@ async fn test_get_all_names(pool: PgPool) {
     let version_names = vec!["1.1.0", "1.2.0", "1.3.0", "2.0.0", "2.1.0"];
 
     for (i, name) in version_names.iter().enumerate() {
-        let hash = format!("hash{}", i);
-        let tag = format!("v{}", name);
+        let hash = format!("hash{i}");
+        let tag = format!("v{name}");
         create_test_version(&pool, name, &hash, &tag, Some(product.id)).await;
     }
 

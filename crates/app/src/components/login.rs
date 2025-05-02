@@ -1,6 +1,5 @@
-use hooks::use_navigate;
 use leptos::{html, prelude::*, task::spawn_local};
-use leptos_router::*;
+use leptos_router::{hooks::use_navigate, NavigateOptions};
 use std::time::Duration;
 use tracing::error;
 use web_sys::SubmitEvent;

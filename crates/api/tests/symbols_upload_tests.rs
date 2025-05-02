@@ -58,8 +58,7 @@ async fn setup(pool: &PgPool) -> (Router, Arc<dyn ObjectStore>, String, String, 
                    Hello world\r\n";
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
     );
 
     let (token, _) = create_test_token(pool, "Test Token", None, None, &["symbol-upload"]).await;
@@ -107,8 +106,8 @@ async fn test_symbol_upload_ok(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -141,8 +140,8 @@ async fn test_symbol_upload_no_such_product(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProductxx&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -169,8 +168,8 @@ async fn test_symbol_upload_no_such_version(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=2.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -195,8 +194,8 @@ async fn test_symbol_upload_empty_version(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -221,8 +220,8 @@ async fn test_symbol_upload_empty_product(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -245,15 +244,14 @@ async fn test_symbol_upload_invalid_content_type(pool: PgPool) {
     let (app, _store, boundary, content, _body, token) = setup(&pool).await;
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: text/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: text/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
     );
 
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -281,15 +279,14 @@ async fn test_symbol_upload_invalid_header(pool: PgPool) {
                    Hello world\r\n";
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
     );
 
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -317,15 +314,14 @@ async fn test_symbol_upload_invalid_buildid_1(pool: PgPool) {
                    Hello world\r\n";
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
     );
 
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -353,15 +349,14 @@ async fn test_symbol_upload_invalid_buildid_2(pool: PgPool) {
                    Hello world\r\n";
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
     );
 
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -389,15 +384,14 @@ async fn test_symbol_upload_invalid_module_id1(pool: PgPool) {
                    Hello world\r\n";
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
     );
 
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -425,15 +419,14 @@ async fn test_symbol_upload_invalid_module_id2(pool: PgPool) {
                    Hello world\r\n";
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
     );
 
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -461,15 +454,14 @@ async fn test_symbol_upload_invalid_module_id3(pool: PgPool) {
                    Hello world\r\n";
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
     );
 
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -498,15 +490,14 @@ async fn test_symbol_upload_invalid_multipart(pool: PgPool) {
     let boundary2 = "----WebKitFormBoundaryX7MA4YWxkTrZu0gW";
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary2, content, boundary2
+        "--{boundary2}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary2}--\r\n"
     );
 
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -535,15 +526,14 @@ async fn test_symbol_upload_invalid_boundary(pool: PgPool) {
     let boundary2 = "----WebKitFormBoundaryX7MA4YWxkTrZu0gW";
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary2
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary2}--\r\n"
     );
 
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -571,8 +561,8 @@ async fn test_symbol_upload_wrong_entitlement(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -613,8 +603,8 @@ async fn test_symbol_upload_expired_entitlement(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -659,8 +649,8 @@ async fn test_symbol_upload_inactive_entitlement(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -702,8 +692,8 @@ async fn test_symbol_upload_other_product(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -728,7 +718,7 @@ async fn test_symbol_upload_unknown_token(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {}", "test_tokenx"))
         .body(Body::from(body))
         .unwrap();
@@ -749,7 +739,7 @@ async fn test_symbol_upload_no_token(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -769,8 +759,8 @@ async fn test_symbol_no_version(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -794,8 +784,8 @@ async fn test_symbol_no_product(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -821,8 +811,8 @@ async fn test_symbol_upload_empty(pool: PgPool) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(""))
         .unwrap();
 
@@ -845,14 +835,13 @@ async fn test_symbol_upload_wrong_name(pool: PgPool) {
     let (app, _store, boundary, content, _body, token) = setup(&pool).await;
 
     let body = format!(
-        "--{}\r\nContent-Disposition: form-data; name=\"foo\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{}\r\n--{}--\r\n",
-        boundary, content, boundary
+        "--{boundary}\r\nContent-Disposition: form-data; name=\"foo\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
     );
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={}", boundary))
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
         .unwrap();
 

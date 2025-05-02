@@ -46,7 +46,7 @@ impl TryFrom<&str> for AnnotationKind {
         match s.to_lowercase().as_str() {
             "system" => Ok(AnnotationKind::System),
             "user" => Ok(AnnotationKind::User),
-            _ => Err(format!("Invalid annotation kind: {}", s)),
+            _ => Err(format!("Invalid annotation kind: {s}")),
         }
     }
 }
