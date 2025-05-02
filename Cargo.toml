@@ -19,10 +19,10 @@ opt-level = 'z'
 
 [workspace.dependencies]
 # Leptos
-leptos = { version = "0.8.0-rc3", features = ["nightly"] }
-leptos_meta = { version = "0.8.0-rc3" }
-leptos_router = { version = "0.8.0-rc3", features = ["nightly"] }
-leptos_axum = { version = "0.8.0-rc3" }
+leptos = { version = "0.8.0", features = ["nightly"] }
+leptos_meta = { version = "0.8.0" }
+leptos_router = { version = "0.8.0", features = ["nightly"] }
+leptos_axum = { version = "0.8.0" }
 leptos-use = { version = "0.16.0-beta" }
 leptos-struct-table = { git = "https://github.com/rcaelers/leptos-struct-table.git", branch = "leptos-0.8", features = [
   "chrono",
