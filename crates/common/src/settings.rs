@@ -8,7 +8,6 @@ pub struct ApiServer {
     pub port: u16,
     pub public_key: Option<String>,
     pub private_key: Option<String>,
-    pub store: String,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -46,10 +45,21 @@ impl Default for Database {
 }
 
 #[derive(Debug, Deserialize, Default)]
+pub struct ObjectStorage {
+    pub bucket: String,
+    pub region: Option<String>,
+    pub endpoint: Option<String>,
+    pub access_key_id: Option<String>,
+    pub secret_access_key: Option<String>,
+    pub allow_http: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Default)]
 pub struct Settings {
     pub api_server: ApiServer,
     pub web_server: WebServer,
     pub database: Database,
+    pub object_storage: ObjectStorage,
     pub auth: Auth,
 }
 

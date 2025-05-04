@@ -87,7 +87,6 @@ web_server:
     -----END PRIVATE KEY-----
 api_server:
   port: 4434
-  store: s3://localhost/guardrail
   public_key: |
     -----BEGIN CERTIFICATE-----
     MIIFRTCCAy2gAwIBAgIUPEsUwWkKGlhvwLZzolvPcjjCE8wwDQYJKoZIhvcNAQEL
@@ -175,6 +174,13 @@ api_server:
     -----END PRIVATE KEY-----
 database:
   uri: postgres://guardrail:wezei4Joozooz8To@localhost/guardrail
+object_storage:
+  region: us-east-1
+  bucket: guardrail
+  endpoint: http://localhost:9000
+  allow_http: true
+  access_key_id: "guardrail"
+  secret_access_key: "guardrail"
 auth:
   id: guardrail.home.krandor.org
   origin: https://guardrail.home.krandor.org:4433
