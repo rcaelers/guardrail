@@ -8,7 +8,6 @@ use kube::{
     Api, Client,
     api::{ObjectMeta, PostParams},
 };
-use object_store::{ObjectStore, aws::AmazonS3Builder};
 use sqlx::ConnectOptions;
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -47,7 +46,7 @@ impl GuardrailApp {
         let db = self.init_db().await.unwrap();
         let webauthn = self.create_webauthn();
         let repo = Repo::new(db.clone());
-        let store = self.init_s3_object_store().await;
+        let store = common::init_s3_object_store(self.settings.clone()).await;
 
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -128,39 +127,6 @@ impl GuardrailApp {
             .await?;
 
         Ok(pool)
-    }
-
-    async fn init_s3_object_store(&self) -> Arc<dyn ObjectStore> {
-        let storage_config = &self.settings.object_storage;
-
-        let mut builder = AmazonS3Builder::from_env();
-
-        if let Some(region) = &storage_config.region {
-            builder = builder.with_region(region);
-        }
-
-        if let Some(endpoint) = &storage_config.endpoint {
-            builder = builder.with_endpoint(endpoint);
-        }
-
-        if let Some(allow_http) = storage_config.allow_http {
-            builder = builder.with_allow_http(allow_http);
-        }
-
-        if let Some(access_key_id) = &storage_config.access_key_id {
-            builder = builder.with_access_key_id(access_key_id);
-        }
-
-        if let Some(secret_access_key) = &storage_config.secret_access_key {
-            builder = builder.with_secret_access_key(secret_access_key);
-        }
-
-        let store = builder
-            .with_bucket_name(storage_config.bucket.clone())
-            .build()
-            .expect("failed to build AmazonS3");
-
-        Arc::new(store)
     }
 
     async fn create_k8s_initial_token_secret(

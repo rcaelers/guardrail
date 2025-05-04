@@ -31,12 +31,7 @@ impl GuardrailJobs {
 
         let db = self.init_db().await.unwrap();
         let repo = Repo::new(db.clone());
-        let store = Arc::new(
-            object_store::aws::AmazonS3Builder::from_env()
-                .with_url(settings.clone().api_server.store.clone())
-                .build()
-                .expect("Failed to create object store"),
-        );
+        let store = common::init_s3_object_store(self.settings.clone()).await;
 
         let state = AppState {
             repo,

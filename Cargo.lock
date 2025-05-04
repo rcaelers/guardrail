@@ -848,6 +848,7 @@ dependencies = [
  "config",
  "glob",
  "natord",
+ "object_store",
  "rand 0.9.1",
  "serde",
  "serde_json",

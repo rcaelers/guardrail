@@ -3,8 +3,10 @@ pub mod settings;
 #[cfg(feature = "ssr")]
 pub mod token;
 
+use object_store::{ObjectStore, aws::AmazonS3Builder};
 use serde::{Deserialize, Serialize};
-use tracing_subscriber::{fmt::format::FmtSpan, layer::SubscriberExt, EnvFilter, FmtSubscriber};
+use settings::Settings;
+use tracing_subscriber::{EnvFilter, FmtSubscriber, fmt::format::FmtSpan, layer::SubscriberExt};
 use uuid::Uuid;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -24,7 +26,7 @@ impl AuthenticatedUser {
     }
 }
 
-use std::{collections::VecDeque, io::IsTerminal, ops::Range};
+use std::{collections::VecDeque, io::IsTerminal, ops::Range, sync::Arc};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SortOrder {
@@ -73,4 +75,37 @@ pub async fn init_logging() {
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     tracing_log::LogTracer::init().expect("Failed to set logger");
+}
+
+pub async fn init_s3_object_store(settings: Arc<Settings>) -> Arc<dyn ObjectStore> {
+    let storage_config = &settings.object_storage;
+
+    let mut builder = AmazonS3Builder::from_env();
+
+    if let Some(region) = &storage_config.region {
+        builder = builder.with_region(region);
+    }
+
+    if let Some(endpoint) = &storage_config.endpoint {
+        builder = builder.with_endpoint(endpoint);
+    }
+
+    if let Some(allow_http) = storage_config.allow_http {
+        builder = builder.with_allow_http(allow_http);
+    }
+
+    if let Some(access_key_id) = &storage_config.access_key_id {
+        builder = builder.with_access_key_id(access_key_id);
+    }
+
+    if let Some(secret_access_key) = &storage_config.secret_access_key {
+        builder = builder.with_secret_access_key(secret_access_key);
+    }
+
+    let store = builder
+        .with_bucket_name(storage_config.bucket.clone())
+        .build()
+        .expect("failed to build AmazonS3");
+
+    Arc::new(store)
 }
