@@ -9,7 +9,7 @@ sleep 5
 
 # Configure MinIO client
 echo "Configuring MinIO client..."
-mc alias set myminio http://minio:9000 admin admin
+mc alias set myminio http://minio:9000 admin minioadmin
 echo "MinIO client configured successfully."
 
 # Create guardrail bucket if it doesn't exist
@@ -21,7 +21,7 @@ echo "Bucket creation completed."
 echo "Creating guardrail user..."
 # Check if user exists first
 if ! mc admin user info myminio guardrail >/dev/null 2>&1; then
-  mc admin user add myminio guardrail secret
+  mc admin user add myminio guardrail guardrail
   echo "User created."
 else
   echo "User already exists."
