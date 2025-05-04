@@ -3,6 +3,7 @@ pub mod settings;
 #[cfg(feature = "ssr")]
 pub mod token;
 
+#[cfg(feature = "ssr")]
 use object_store::{ObjectStore, aws::AmazonS3Builder};
 use serde::{Deserialize, Serialize};
 use settings::Settings;
@@ -77,6 +78,7 @@ pub async fn init_logging() {
     tracing_log::LogTracer::init().expect("Failed to set logger");
 }
 
+#[cfg(feature = "ssr")]
 pub async fn init_s3_object_store(settings: Arc<Settings>) -> Arc<dyn ObjectStore> {
     let storage_config = &settings.object_storage;
 

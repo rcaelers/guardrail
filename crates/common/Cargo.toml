@@ -23,9 +23,9 @@ uuid.workspace = true
 base64.workspace = true
 glob.workspace = true
 natord.workspace = true
-object_store.workspace = true
+object_store = { workspace = true, optional = true }
 
 [features]
 default = []
 
-ssr = ["dep:rand", "dep:argon2"]
+ssr = ["dep:rand", "dep:argon2", "dep:object_store"]
