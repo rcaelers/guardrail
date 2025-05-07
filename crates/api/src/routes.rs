@@ -1,4 +1,4 @@
-use axum::{Router, routing::post};
+use axum::{routing::{get, post}, Router};
 
 use super::{
     api_token::{ApiTokenLayer, RequiredEntitlement},
@@ -33,4 +33,6 @@ pub async fn routes(app_state: AppState) -> Router<AppState> {
         .route("/auth/register_finish", post(super::webauthn::finish_register))
         .route("/auth/authenticate_start/{username}", post(super::webauthn::start_authentication))
         .route("/auth/authenticate_finish", post(super::webauthn::finish_authentication))
+        .route("/live",  get(super::health::live))
+        .route("/ready", get(super::health::ready))
 }

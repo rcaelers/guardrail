@@ -8,3 +8,4 @@ pub mod token;
 pub mod utils;
 pub mod webauthn;
 pub mod worker;
+pub mod health;
