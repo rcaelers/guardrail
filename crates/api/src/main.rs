@@ -43,9 +43,10 @@ impl GuardrailApp {
         let settings = Arc::new(Settings::new().expect("Failed to load settings"));
         info!("Starting server on port {}", settings.clone().api_server.port);
 
-        let db = self.init_db().await.unwrap();
+        let guardrail_db = self.init_guardrail_db().await.unwrap();
+        let worker_db = self.init_worker_db().await.unwrap();
         let webauthn = self.create_webauthn();
-        let repo = Repo::new(db.clone());
+        let repo = Repo::new(guardrail_db.clone());
         let store = common::init_s3_object_store(self.settings.clone()).await;
 
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
@@ -54,7 +55,8 @@ impl GuardrailApp {
             tracing::error!("Failed to create default API token: {}", err);
         }
 
-        let pg = PostgresStorage::new_with_config(db.clone(), Config::new("guardrail::Jobs"));
+        let pg =
+            PostgresStorage::new_with_config(worker_db.clone(), Config::new("guardrail::Jobs"));
         let worker = Arc::new(MinidumpProcessor::new(pg.clone()));
 
         let state = AppState {
@@ -116,8 +118,21 @@ impl GuardrailApp {
         Arc::new(builder.build().expect("Invalid configuration"))
     }
 
-    async fn init_db(&self) -> Result<PgPool, sqlx::Error> {
-        let database_url = &self.settings.database.uri;
+    async fn init_guardrail_db(&self) -> Result<PgPool, sqlx::Error> {
+        let database_url = &self.settings.database.db_uri;
+        let mut opts: PgConnectOptions = database_url.parse()?;
+        opts = opts.log_statements(log::LevelFilter::Debug);
+
+        let pool = PgPoolOptions::new()
+            .max_connections(5)
+            .connect_with(opts)
+            .await?;
+
+        Ok(pool)
+    }
+
+    async fn init_worker_db(&self) -> Result<PgPool, sqlx::Error> {
+        let database_url = &self.settings.job_server.db_uri;
         let mut opts: PgConnectOptions = database_url.parse()?;
         opts = opts.log_statements(log::LevelFilter::Debug);
 

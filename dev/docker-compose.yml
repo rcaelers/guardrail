@@ -1,7 +1,7 @@
 volumes:
   postgresql17-storage:
   pgadmin4-storage:
-  minio-data:
+  minio-storage:
 
 services:
   postgresql:
@@ -71,7 +71,7 @@ services:
       - "9000:9000" # S3 API port
       - "9001:9001" # Console port
     volumes:
-      - minio-data:/data
+      - minio-storage:/data
     environment:
       MINIO_ROOT_USER: admin
       MINIO_ROOT_PASSWORD: minioadmin

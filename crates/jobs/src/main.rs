@@ -29,8 +29,14 @@ impl GuardrailJobs {
 
         let settings = Arc::new(Settings::new().expect("Failed to load settings"));
 
-        let db = self.init_db().await.unwrap();
-        let repo = Repo::new(db.clone());
+        let guardrail_db = self.init_guardrail_db().await.unwrap();
+        let worker_db = self.init_worker_db().await.unwrap();
+
+        PostgresStorage::setup(&worker_db)
+            .await
+            .expect("unable to run migrations for postgres");
+
+        let repo = Repo::new(guardrail_db.clone());
         let store = common::init_s3_object_store(self.settings.clone()).await;
 
         let state = AppState {
@@ -39,12 +45,13 @@ impl GuardrailJobs {
             storage: store,
         };
 
-        PostgresStorage::setup(&db)
+        let mut pg = PostgresStorage::new_with_config(
+            worker_db.clone(),
+            Config::new("guardrail::Jobs").set_poll_interval(std::time::Duration::from_secs(5)),
+        );
+        let mut listener = PgListen::new(worker_db)
             .await
-            .expect("unable to run migrations for postgres");
-
-        let mut pg = PostgresStorage::new_with_config(db.clone(), Config::new("guardrail::Jobs"));
-        let mut listener = PgListen::new(db).await.expect("Failed to create listener");
+            .expect("Failed to create listener");
 
         listener.subscribe_with(&mut pg);
 
@@ -52,6 +59,7 @@ impl GuardrailJobs {
             listener.listen().await.unwrap();
         });
 
+        info!("Start monitoring for minidumps");
         Monitor::new()
             .register({
                 WorkerBuilder::new("minidump")
@@ -61,7 +69,7 @@ impl GuardrailJobs {
                     .backend(pg)
                     .build_fn(MinidumpProcessor::process)
             })
-            .on_event(|e| debug!("{e}"))
+            .on_event(|e| debug!("Apalis event: {e}"))
             .run_with_signal(async {
                 tokio::signal::ctrl_c().await?;
                 info!("Shutting down the system");
@@ -71,8 +79,21 @@ impl GuardrailJobs {
             .expect("Failed to run the monitor");
     }
 
-    async fn init_db(&self) -> Result<PgPool, sqlx::Error> {
-        let database_url = &self.settings.database.uri;
+    async fn init_guardrail_db(&self) -> Result<PgPool, sqlx::Error> {
+        let database_url = &self.settings.database.db_uri;
+        let mut opts: PgConnectOptions = database_url.parse()?;
+        opts = opts.log_statements(log::LevelFilter::Debug);
+
+        let pool = PgPoolOptions::new()
+            .max_connections(5)
+            .connect_with(opts)
+            .await?;
+
+        Ok(pool)
+    }
+
+    async fn init_worker_db(&self) -> Result<PgPool, sqlx::Error> {
+        let database_url = &self.settings.job_server.db_uri;
         let mut opts: PgConnectOptions = database_url.parse()?;
         opts = opts.log_statements(log::LevelFilter::Debug);
 

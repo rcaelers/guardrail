@@ -42,7 +42,7 @@ impl GuardrailApp {
         let settings = Arc::new(Settings::new().expect("Failed to load settings"));
         init_logging().await;
 
-        let db = Self::init_db(settings.clone()).await.unwrap();
+        let db = Self::init_guardrail_db(settings.clone()).await.unwrap();
         let webauthn = Self::create_webauthn(settings.clone());
         let repo = Repo::new(db.clone());
 
@@ -54,8 +54,8 @@ impl GuardrailApp {
         }
     }
 
-    async fn init_db(settings: Arc<Settings>) -> Result<PgPool, sqlx::Error> {
-        let database_url = &settings.database.uri;
+    async fn init_guardrail_db(settings: Arc<Settings>) -> Result<PgPool, sqlx::Error> {
+        let database_url = &settings.database.db_uri;
         let mut opts: PgConnectOptions = database_url.parse()?;
         opts = opts.log_statements(log::LevelFilter::Debug);
 

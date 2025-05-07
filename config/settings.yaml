@@ -172,8 +172,10 @@ api_server:
     Qeqd8A0LJGwWC2dOVwmV06aN/txAvVPEG5KDJkJ6hLzi2BK+zpHz7RpnWn/H6Bgi
     kH89+JqlOvmRo8PEP2GF/hiNjlwfzwg=
     -----END PRIVATE KEY-----
+job_server:
+  db_uri: postgres://guardrail:wezei4Joozooz8To@localhost/apalis
 database:
-  uri: postgres://guardrail:wezei4Joozooz8To@localhost/guardrail
+  db_uri: postgres://guardrail:wezei4Joozooz8To@localhost/guardrail
 object_storage:
   region: us-east-1
   bucket: guardrail

@@ -18,6 +18,11 @@ pub struct WebServer {
 }
 
 #[derive(Debug, Deserialize, Default)]
+pub struct JobServer {
+    pub db_uri: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
 pub struct Auth {
     pub id: String,
     pub origin: String,
@@ -35,12 +40,12 @@ pub struct Jwk {
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Database {
-    pub uri: String,
+    pub db_uri: String,
 }
 
 impl Default for Database {
     fn default() -> Self {
-        Self { uri: "xx".into() }
+        Self { db_uri: "xx".into() }
     }
 }
 
@@ -58,6 +63,7 @@ pub struct ObjectStorage {
 pub struct Settings {
     pub api_server: ApiServer,
     pub web_server: WebServer,
+    pub job_server: JobServer,
     pub database: Database,
     pub object_storage: ObjectStorage,
     pub auth: Auth,
