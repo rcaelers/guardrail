@@ -128,6 +128,10 @@ impl GuardrailApp {
             .connect_with(opts)
             .await?;
 
+        sqlx::migrate!("../../migrations")
+            .run(&pool)
+            .await
+            .expect("Failed to run migrations");
         Ok(pool)
     }
 
