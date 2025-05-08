@@ -8,8 +8,6 @@ use uuid::Uuid;
 cfg_if! { if #[cfg(feature="ssr")] {
     pub mod layer;
     pub mod extract;
-
-    use crate::entity;
     use tower_sessions::Session;
     use tracing::warn;
 }}
@@ -23,11 +21,11 @@ pub struct AuthenticatedUser {
 
 impl AuthenticatedUser {
     #[cfg(feature = "ssr")]
-    pub fn new(user: entity::user::Model) -> Self {
+    pub fn new(id: uuid::Uuid, username: String, is_admin: bool) -> Self {
         Self {
-            id: user.id,
-            username: user.username,
-            is_admin: user.is_admin,
+            id,
+            username,
+            is_admin,
         }
     }
 }

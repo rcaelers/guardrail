@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use enumflags2::BitFlags;
-use leptos::*;
+use leptos::prelude::*;
+use leptos::task::spawn_local;
 use leptos_struct_table::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
@@ -86,7 +87,7 @@ impl DataTableTrait for VersionTable {
         let product_field = fields.get_untracked().get::<FieldCombo>("Product");
         let name_field = fields.get_untracked().get::<FieldString>("Name");
 
-        create_effect(move |_| {
+        Effect::new(move |_| {
             let parents = parents.clone();
             let product_name = product_field.value.get();
             spawn_local(async move {
@@ -218,7 +219,5 @@ table_data_provider_impl!(VersionTable);
 #[allow(non_snake_case)]
 #[component]
 pub fn VersionsPage() -> impl IntoView {
-    view! {
-        <DataTable<VersionTable>/>
-    }
+    view! { <DataTable<VersionTable> /> }
 }

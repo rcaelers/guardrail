@@ -1,12 +1,10 @@
-use async_trait::async_trait;
 use axum::{
     extract::FromRequestParts,
-    http::{request::Parts, StatusCode},
+    http::{StatusCode, request::Parts},
 };
 
 use super::AuthSession;
 
-#[async_trait]
 impl<S> FromRequestParts<S> for AuthSession
 where
     S: Send + Sync,

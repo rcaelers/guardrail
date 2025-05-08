@@ -2,9 +2,11 @@ name: Rust
 
 on:
   push:
-    branches: ["main"]
+    branches: ["main", "dev"]
+    tags:
+      - "v*.*.*"
   pull_request:
-    branches: ["main"]
+    branches: ["main", "dev"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -14,10 +16,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-24.04, macos-latest]
+        os:
+          - ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
+
       - name: Setup Rust
         run: |
           rustup toolchain install nightly
@@ -25,10 +29,65 @@ jobs:
           rustup target add wasm32-unknown-unknown
           rustup upgrade
           cargo install --locked cargo-leptos
+
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.os }}
+
       - name: Build
-        run: cargo leptos build -vv
+        run: |
+          export SQLX_OFFLINE=1
+          npm i
+          npx @tailwindcss/cli -i ./crates/server/static/input.css -o ./crates/server/static/css/style.css --watch
+          cargo leptos build -vv
+          cargo build --workspace --all-features
+
+  test:
+    runs-on: ubuntu-24.04
+
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/guardrail
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        run: |
+          rustup toolchain install nightly
+          rustup default nightly
+          rustup target add wasm32-unknown-unknown
+          rustup upgrade
+          cargo install --locked cargo-leptos
+          cargo install --locked cargo-llvm-cov
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ubuntu-24.04
+
+      - name: Run PostgreSQL container
+        run: |
+          docker run -d \
+            --name postgresql \
+            -e POSTGRES_USER=postgres \
+            -e POSTGRES_PASSWORD=postgres \
+            -e POSTGRES_PORT=5432 \
+            -p 5432:5432 \
+            -v $GITHUB_WORKSPACE/dev/initdb/:/docker-entrypoint-initdb.d/ \
+            --health-cmd "pg_isready -U postgres" \
+            --health-interval 10s \
+            --health-timeout 5s \
+            --health-retries 5 \
+            postgres:17
+
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          docker ps -a
+          for i in {1..36}; do
+            docker exec postgresql pg_isready && break
+            sleep 5
+          done
+
       - name: Run tests
-        run: RUST_BACKTRACE=1 cargo test --verbose
+        run: |
+          export SQLX_OFFLINE=1
+          RUST_BACKTRACE=1 cargo test -p api -p repos -p jobs --no-fail-fast

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE guardrail.credentials\n                SET data = $1, last_used = $2\n                WHERE id = $3\n                RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Json",
+        "Timestamp",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "477f24a8f91b7b99020ead645bec2073d707d8853a6c21ed60cbc5eea741de0e"
+}

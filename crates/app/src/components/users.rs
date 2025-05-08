@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use enumflags2::BitFlags;
-use leptos::*;
+use leptos::prelude::*;
+use leptos::task::spawn_local;
 use leptos_struct_table::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
@@ -123,7 +124,5 @@ table_data_provider_impl!(UserTable);
 #[allow(non_snake_case)]
 #[component]
 pub fn UsersPage() -> impl IntoView {
-    view! {
-        <DataTable<UserTable>/>
-    }
+    view! { <DataTable<UserTable> /> }
 }

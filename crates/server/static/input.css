@@ -1,30 +1,47 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@plugin "daisyui";
+
+/*
+  The default border color has changed to `currentColor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+/* @layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+} */
+
+/* @utility menu-horizontal {
+  @layer base {
+    & > li:not(.menu-title) > details > ul.mt-0 {
+      margin-top: 0rem;
+    }
+  }
+}
+
+@utility mt-0 {
+  @layer base {
+    .menu-horizontal > li:not(.menu-title) > details > &ul {
+      margin-top: 0rem;
+    }
+  }
+}
 
 @layer components {
   @layer base {
-    /* https://github.com/saadeghi/daisyui/pull/2956#issuecomment-2043840868 */
-    :root:has(
-        :is(
-            .modal-open,
-            .modal:target,
-            .modal-toggle:checked + .modal,
-            .modal[open]
-          )
-      ) {
-      scrollbar-gutter: revert !important;
-    }
-
     html {
       font-family: "Montserrat", system-ui, sans-serif;
       font-size: 100%;
       font-weight: 300;
       line-height: 1.5;
     }
-
-    .menu-horizontal > li:not(.menu-title) > details > ul.mt-0 {
-      margin-top: 0rem;
-    }
   }
-}
+} */

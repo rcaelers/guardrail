@@ -1,29 +1,66 @@
+use ::chrono::NaiveDateTime;
 use async_trait::async_trait;
+use common::QueryParams;
+use common::SortOrder;
+use data::product::Product;
 use enumflags2::BitFlags;
-use leptos::*;
+use leptos::prelude::*;
+use leptos::task::spawn_local;
 use leptos_struct_table::*;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
 use uuid::Uuid;
 
-use super::datatable::{Capabilities, DataTableTrait};
+use super::datatable::{Capabilities, DataTableTrait, ExtraRowTrait};
 use super::datatable_form::{FieldString, Fields};
+use crate::classes::ClassesPreset;
 use crate::components::datatable::DataTable;
 use crate::components::datatable_form::Field;
-use crate::data::QueryParams;
-use crate::data_providers::product::{
-    product_add, product_count, product_get, product_list, product_list_names, product_remove,
-    product_update, Product, ProductRow,
+use crate::data::product::{
+    products_add, products_count, products_get, products_list, products_list_names,
+    products_remove, products_update,
 };
 use crate::data_providers::ExtraTableDataProvider;
 use crate::{authenticated_user_is_admin, table_data_provider_impl};
 
 #[derive(Debug, Clone)]
 pub struct ProductTable {
-    sort: VecDeque<(usize, ColumnSort)>,
+    sort: VecDeque<(String, SortOrder)>,
     filter: RwSignal<String>,
     update: RwSignal<u64>,
     parents: HashMap<String, Uuid>,
+}
+
+#[derive(TableRow, Clone, Debug)]
+#[table(sortable, classes_provider = ClassesPreset)]
+pub struct ProductRow {
+    pub id: Uuid,
+    pub name: String,
+    #[table(format(string = "%d/%m/%Y - %H:%M"))]
+    pub created_at: NaiveDateTime,
+    #[table(format(string = "%d/%m/%Y - %H:%M"))]
+    pub updated_at: NaiveDateTime,
+}
+
+impl From<Product> for ProductRow {
+    fn from(product: Product) -> Self {
+        Self {
+            id: product.id,
+            name: product.name,
+            created_at: product.created_at,
+            updated_at: product.updated_at,
+        }
+    }
+}
+
+impl ExtraRowTrait for ProductRow {
+    fn get_id(&self) -> Uuid {
+        self.id
+    }
+
+    fn get_name(&self) -> String {
+        self.name.clone()
+    }
 }
 
 impl ProductTable {
@@ -52,7 +89,8 @@ impl DataTableTrait for ProductTable {
 
     async fn capabilities(&self) -> BitFlags<Capabilities, u8> {
         let mut cap = Capabilities::CanEdit | Capabilities::CanDelete;
-        if authenticated_user_is_admin().await.unwrap_or(false) {
+        let is_admin = authenticated_user_is_admin().await;
+        if is_admin.unwrap_or(false) {
             cap |= Capabilities::CanAdd;
         }
         cap
@@ -75,6 +113,13 @@ impl DataTableTrait for ProductTable {
         ]
     }
 
+    fn get_columns() -> Vec<String> {
+        ["id", "name", "description", "created_at", "updated_at"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect()
+    }
+
     fn init_fields(fields: RwSignal<Fields>, _parents: &HashMap<String, Uuid>) {
         fields.update(|field| {
             field.insert("Name".to_string(), Field::new(FieldString::default()));
@@ -91,7 +136,7 @@ impl DataTableTrait for ProductTable {
         name_field.value.set(product.name);
 
         spawn_local(async move {
-            match product_list_names().await {
+            match products_list_names().await {
                 Ok(fetched_names) => {
                     name_field.disallowed.set(fetched_names);
                 }
@@ -116,28 +161,28 @@ impl DataTableTrait for ProductTable {
     }
 
     async fn get(id: Uuid) -> Result<Product, ServerFnError> {
-        product_get(id).await
+        products_get(id).await
     }
     async fn list(
         _parents: HashMap<String, Uuid>,
         query_params: QueryParams,
     ) -> Result<Vec<Product>, ServerFnError> {
-        product_list(query_params).await
+        products_list(query_params).await
     }
     async fn list_names(_parents: HashMap<String, Uuid>) -> Result<HashSet<String>, ServerFnError> {
-        product_list_names().await
+        products_list_names().await
     }
     async fn add(data: Product) -> Result<(), ServerFnError> {
-        product_add(data).await
+        products_add(data.into()).await
     }
     async fn update(data: Product) -> Result<(), ServerFnError> {
-        product_update(data).await
+        products_update(data).await
     }
     async fn remove(id: Uuid) -> Result<(), ServerFnError> {
-        product_remove(id).await
+        products_remove(id).await
     }
-    async fn count(_parents: HashMap<String, Uuid>) -> Result<usize, ServerFnError> {
-        product_count().await
+    async fn count(_parents: HashMap<String, Uuid>) -> Result<i64, ServerFnError> {
+        products_count().await
     }
 }
 
@@ -146,7 +191,5 @@ table_data_provider_impl!(ProductTable);
 #[allow(non_snake_case)]
 #[component]
 pub fn ProductsPage() -> impl IntoView {
-    view! {
-        <DataTable<ProductTable>/>
-    }
+    view! { <DataTable<ProductTable> /> }
 }

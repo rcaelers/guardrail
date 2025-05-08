@@ -1,21 +1,21 @@
 use dyn_clone::DynClone;
 use indexmap::IndexMap;
-use leptos::*;
+use leptos::prelude::*;
 use std::any::Any;
 use std::collections::HashSet;
 use std::fmt::Debug;
 
-pub trait FieldValueTrait: Debug + Send + DynClone {
-    fn render(&self, options: FieldOptions) -> View;
+pub trait FieldValueTrait: Debug + Sync + Send + DynClone {
+    fn render(&self, options: FieldOptions) -> AnyView;
     fn valid(&self) -> Memo<bool> {
-        create_memo(move |_| true)
+        Memo::new(move |_| true)
     }
     fn as_any(&self) -> &dyn Any;
 }
 dyn_clone::clone_trait_object!(FieldValueTrait);
 
-pub trait FieldTrait: Debug + Send + DynClone {
-    fn render(&self, options: FieldOptions) -> View;
+pub trait FieldTrait: Debug + Sync + Send + DynClone {
+    fn render(&self, options: FieldOptions) -> AnyView;
     fn valid(&self) -> Memo<bool>;
     fn value(&self) -> &dyn FieldValueTrait;
     fn options(&self) -> &FieldOptions;
@@ -41,9 +41,9 @@ impl FieldString {
             value: RwSignal::new(value.clone()),
             disallowed: RwSignal::new(disallowed),
             initial_value: RwSignal::new(value.clone()),
-            valid: create_memo(move |_| true),
+            valid: Memo::new(move |_| true),
         };
-        field.valid = create_memo(move |_| {
+        field.valid = Memo::new(move |_| {
             !field.disallowed.get().contains(&value)
                 || (!field.initial_value.get().is_empty()
                     && field.initial_value.get() == field.value.get())
@@ -59,12 +59,12 @@ impl Default for FieldString {
             value: RwSignal::new("".to_string()),
             disallowed: RwSignal::new(HashSet::new()),
             initial_value: RwSignal::new("".to_string()),
-            valid: create_memo(move |_| true),
+            valid: Memo::new(move |_| true),
         }
     }
 }
 impl FieldValueTrait for FieldString {
-    fn render(&self, options: FieldOptions) -> View {
+    fn render(&self, options: FieldOptions) -> AnyView {
         let valid = self.valid;
         let value = self.value;
         let readonly = options.readonly;
@@ -78,7 +78,7 @@ impl FieldValueTrait for FieldString {
                 on:input=move |ev| { value.set(event_target_value(&ev)) }
             />
         }
-        .into_view()
+        .into_any()
     }
     fn valid(&self) -> Memo<bool> {
         self.valid
@@ -95,7 +95,7 @@ pub struct FieldCombo {
 }
 
 impl FieldValueTrait for FieldCombo {
-    fn render(&self, _options: FieldOptions) -> View {
+    fn render(&self, _options: FieldOptions) -> AnyView {
         let value = self.value;
         let multiselect = self.multiselect;
 
@@ -125,7 +125,7 @@ impl FieldValueTrait for FieldCombo {
 
             </select>
         }
-        .into_view()
+        .into_any()
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -146,7 +146,7 @@ impl FieldCheckbox {
 }
 
 impl FieldValueTrait for FieldCheckbox {
-    fn render(&self, options: FieldOptions) -> View {
+    fn render(&self, options: FieldOptions) -> AnyView {
         let value = self.value;
         let readonly = options.readonly;
         view! {
@@ -163,7 +163,7 @@ impl FieldValueTrait for FieldCheckbox {
                 }
             />
         }
-        .into_view()
+        .into_any()
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -186,7 +186,7 @@ impl<T: FieldValueTrait> Field<T> {
 }
 
 impl<T: Debug + Clone + FieldValueTrait + 'static> FieldTrait for Field<T> {
-    fn render(&self, options: FieldOptions) -> View {
+    fn render(&self, options: FieldOptions) -> AnyView {
         self.value.render(options)
     }
 
@@ -263,10 +263,10 @@ pub fn DataTableModalForm(
     title: RwSignal<String>,
     show: ReadSignal<bool>,
     fields: RwSignal<Fields>,
-    on_save_click: Callback<()>,
-    on_cancel_click: Callback<()>,
+    #[prop(into)] on_save_click: Callback<()>,
+    #[prop(into)] on_cancel_click: Callback<()>,
 ) -> impl IntoView {
-    let valid = create_memo(move |_| fields.get().values().all(|field| field.valid().get()));
+    let valid = Memo::new(move |_| fields.get().values().all(|field| field.valid().get()));
 
     move || {
         if show.get() {
@@ -291,13 +291,15 @@ pub fn DataTableModalForm(
                             />
 
                             <div class="modal-action">
-                                <button class="btn" on:click=move |_| on_cancel_click(())>
+                                <button class="btn" on:click=move |_| on_cancel_click.run(())>
                                     "Cancel"
                                 </button>
                                 <button
                                     class="btn btn-primary"
                                     class:btn-disabled=move || !valid.get()
-                                    on:click=move |_| { on_save_click(()) }
+                                    on:click=move |_| {
+                                        on_save_click.run(());
+                                    }
                                 >
 
                                     "Save"
@@ -307,9 +309,9 @@ pub fn DataTableModalForm(
                     </div>
                 </div>
             }
-                    .into_view()
+                    .into_any()
         } else {
-            view! {}.into_view()
+            view! {}.into_any()
         }
     }
 }

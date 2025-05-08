@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE guardrail.api_tokens\n                SET is_active = false\n                WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4be371ef59be5077df24304c2d9f674e6936a41eb2562c4b1ac8e1adbbdea930"
+}

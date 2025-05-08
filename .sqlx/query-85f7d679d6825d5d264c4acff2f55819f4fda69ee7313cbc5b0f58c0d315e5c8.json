@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO guardrail.credentials\n                  (\n                    user_id,\n                    name,\n                    data,\n                    last_used\n                  )\n                VALUES ($1, 'fixme', $2, $3)\n                RETURNING\n                  id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Json",
+        "Timestamp"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "85f7d679d6825d5d264c4acff2f55819f4fda69ee7313cbc5b0f58c0d315e5c8"
+}

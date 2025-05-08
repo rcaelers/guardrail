@@ -1,0 +1,66 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+repos = { path = "../repos" }
+jobs = { path = "../jobs" }
+data = { path = "../data", default-features = false, features = ["ssr"] }
+common = { path = "../common", default-features = false, features = ["ssr"] }
+
+# Serde / json
+serde.workspace = true
+serde_json.workspace = true
+
+# SQLx
+sqlx.workspace = true
+
+# Tokio / Axum
+tokio.workspace = true
+tokio-util.workspace = true
+axum.workspace = true
+axum-extra.workspace = true
+axum-server.workspace = true
+rustls.workspace = true
+
+# Command line parsing
+clap.workspace = true
+
+# Tower
+tower.workspace = true
+tower-http.workspace = true
+tower-sessions.workspace = true
+
+# K8s
+k8s-openapi.workspace = true
+kube.workspace = true
+
+# Security
+argon2.workspace = true
+
+# Tracing
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true
+tracing-log.workspace = true
+
+# Misc
+async-trait.workspace = true
+chrono.workspace = true
+data-encoding.workspace = true
+futures.workspace = true
+rand.workspace = true
+thiserror.workspace = true
+time.workspace = true
+uuid.workspace = true
+webauthn-rs.workspace = true
+jsonwebtoken.workspace = true
+log.workspace = true
+object_store.workspace = true
+apalis.workspace = true
+apalis-sql.workspace = true
+
+[dev-dependencies]
+testware = { path = "../testware" }
+bytes.workspace = true

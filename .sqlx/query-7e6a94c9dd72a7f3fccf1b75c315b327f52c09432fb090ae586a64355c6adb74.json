@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO guardrail.versions\n                  (\n                    name,\n                    hash,\n                    tag,\n                    product_id\n                  )\n                VALUES ($1, $2, $3, $4)\n                RETURNING\n                  id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "7e6a94c9dd72a7f3fccf1b75c315b327f52c09432fb090ae586a64355c6adb74"
+}
