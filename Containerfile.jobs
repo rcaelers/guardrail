@@ -38,4 +38,4 @@ VOLUME ["/app/config"]
 
 EXPOSE 3002
 
-CMD ["/app/jobs"]
+CMD ["/app/jobs", "-C", "/config"]

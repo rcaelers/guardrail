@@ -38,4 +38,4 @@ VOLUME ["/app/config"]
 
 EXPOSE 3001
 
-CMD ["/app/api"]
+CMD ["/app/api", "-C", "/config"]
