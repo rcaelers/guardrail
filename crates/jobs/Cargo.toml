@@ -20,6 +20,9 @@ sqlx.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 
+# Command line parsing
+clap.workspace = true
+
 # Security
 argon2.workspace = true
 

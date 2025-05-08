@@ -45,7 +45,9 @@ pub struct Database {
 
 impl Default for Database {
     fn default() -> Self {
-        Self { db_uri: "xx".into() }
+        Self {
+            db_uri: "xx".into(),
+        }
     }
 }
 
@@ -71,7 +73,12 @@ pub struct Settings {
 
 impl Settings {
     pub fn new() -> Result<Self, ConfigError> {
-        let mut files: Vec<_> = glob("config/*.yaml")
+        Self::with_config_dir("config")
+    }
+
+    pub fn with_config_dir(config_dir: &str) -> Result<Self, ConfigError> {
+        let pattern = format!("{config_dir}/*.yaml");
+        let mut files: Vec<_> = glob(&pattern)
             .expect("Failed to read config files")
             .filter_map(|entry| entry.ok())
             .collect();

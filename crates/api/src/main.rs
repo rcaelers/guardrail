@@ -3,6 +3,7 @@ use apalis_sql::postgres::PostgresStorage;
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum_server::tls_rustls::RustlsConfig;
+use clap::Parser;
 use k8s_openapi::api::core::v1::Secret;
 use kube::{
     Api, Client,
@@ -26,22 +27,30 @@ use repos::Repo;
 
 const SECRET_NAME: &str = "guardrail-initial-admin-token";
 
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct CliArgs {
+    #[arg(short = 'C', long, default_value = "config")]
+    config_dir: String,
+}
+
 struct GuardrailApp {
     settings: Arc<Settings>,
 }
 
 impl GuardrailApp {
-    async fn new() -> Self {
+    async fn new(config_dir: &str) -> Self {
         Self {
-            settings: Arc::new(Settings::new().expect("Failed to load settings")),
+            settings: Arc::new(
+                Settings::with_config_dir(config_dir).expect("Failed to load settings"),
+            ),
         }
     }
 
     async fn run(&self) {
         init_logging().await;
 
-        let settings = Arc::new(Settings::new().expect("Failed to load settings"));
-        info!("Starting server on port {}", settings.clone().api_server.port);
+        info!("Starting server on port {}", self.settings.api_server.port);
 
         let guardrail_db = self.init_guardrail_db().await.unwrap();
         let worker_db = self.init_worker_db().await.unwrap();
@@ -62,7 +71,7 @@ impl GuardrailApp {
         let state = AppState {
             repo,
             webauthn,
-            settings: settings.clone(),
+            settings: self.settings.clone(),
             storage: store,
             worker,
         };
@@ -227,6 +236,7 @@ impl GuardrailApp {
 
 #[tokio::main]
 async fn main() {
-    let app = GuardrailApp::new();
-    app.await.run().await;
+    let args = CliArgs::parse();
+    let app = GuardrailApp::new(&args.config_dir).await;
+    app.run().await;
 }

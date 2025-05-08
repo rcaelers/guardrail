@@ -116,6 +116,7 @@ uuid = { version = "1.16.0", features = [
   "serde",
   "std",
 ] }
+clap = { version = "4.5.1", features = ["derive"] }
 jwt-authorizer = "0.15.0"
 jsonwebtoken = "9.3.1"
 indexmap = "2.9.0"
