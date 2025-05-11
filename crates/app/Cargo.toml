@@ -1,11 +1,12 @@
 [package]
 name = "app"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-macros = { path = "../macros" }
-migration = { path = "../migration", optional = true }
+common = { path = "../common" }
+repos = { path = "../repos", optional = true }
+data = { path = "../data" }
 
 # Leptos
 leptos = { workspace = true, features = ["tracing"] }
@@ -20,30 +21,22 @@ wasm-bindgen-futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde-wasm-bindgen.workspace = true
-rmp-serde.workspace = true
-
-# Tokio
-tokio = { workspace = true, optional = true }
 
 # Tower / Axum
 tower = { workspace = true, optional = true }
-tower-http = { workspace = true, optional = true }
 tower-sessions = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }
 
 # Tracing
 tracing.workspace = true
-tracing-subscriber-wasm.workspace = true
 
-# SeaORM
-sea-orm = { workspace = true, optional = true }
-sea-query = { workspace = true, optional = true }
+# SQLx
+sqlx = { workspace = true, optional = true }
 
 # Misc
 async-trait.workspace = true
 cfg-if.workspace = true
 chrono.workspace = true
-config.workspace = true
 enumflags2.workspace = true
 futures.workspace = true
 http.workspace = true
@@ -51,29 +44,24 @@ thiserror.workspace = true
 uuid.workspace = true
 webauthn-rs-proto.workspace = true
 indexmap.workspace = true
-trait-variant.workspace = true
-itertools.workspace = true
+# itertools.workspace = true
 dyn-clone.workspace = true
-
-[dev-dependencies]
-serial_test.workspace = true
+paste.workspace = true
 
 [features]
 default = []
-hydrate = ["leptos/hydrate", "leptos_meta/hydrate", "leptos_router/hydrate"]
+hydrate = ["leptos/hydrate"]
 ssr = [
   "leptos/ssr",
   "leptos_meta/ssr",
   "leptos_router/ssr",
   "leptos-use/ssr",
   "dep:leptos_axum",
-  "dep:sea-orm",
-  "dep:sea-query",
-  "dep:tokio",
+  "dep:sqlx",
   "dep:axum",
   "dep:tower",
   "dep:tower-sessions",
-  "dep:migration",
+  "dep:repos",
 ]
 
 [dependencies.web-sys]

@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT id, minidump, report, version_id, product_id, info, state as \"state: State\", created_at, updated_at\n                FROM guardrail.crashes\n                WHERE guardrail.crashes.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "minidump",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "report",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "version_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "product_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "info",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "state: State",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4f0bc3cfa86660fdd1906d965b1a20363c8a08e053fa2390fe1d4d323406293c"
+}

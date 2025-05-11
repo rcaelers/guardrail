@@ -1,0 +1,37 @@
+[package]
+name = "repos"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+data = { path = "../data", features = ["ssr"] }
+common = { path = "../common", features = ["ssr"] }
+
+# Serde / json
+serde.workspace = true
+serde_json.workspace = true
+
+# SQLx
+sqlx.workspace = true
+
+# Tracing
+tracing.workspace = true
+
+# Misc
+thiserror.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+argon2.workspace = true
+
+[features]
+default = []
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = [
+  'cfg(coverage,coverage_nightly)',
+] }
+
+[dev-dependencies]
+tokio.workspace = true
+testware = { path = "../testware" }

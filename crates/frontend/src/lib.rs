@@ -1,12 +1,10 @@
 use app::*;
-use leptos::*;
 use tracing::Level;
 use tracing_subscriber::fmt;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber_wasm::MakeConsoleWriter;
-use wasm_bindgen::prelude::wasm_bindgen;
 
-#[wasm_bindgen]
+#[wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {
     tracing::subscriber::set_global_default(
         fmt::Subscriber::builder()
@@ -25,5 +23,5 @@ pub fn hydrate() {
     .expect("Unable to configure tracing");
     console_error_panic_hook::set_once();
 
-    leptos::mount_to_body(App);
+    leptos::mount::hydrate_body(App);
 }

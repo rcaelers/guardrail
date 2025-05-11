@@ -1,0 +1,58 @@
+[package]
+name = "jobs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+repos = { path = "../repos" }
+data = { path = "../data", default-features = false, features = ["ssr"] }
+common = { path = "../common", default-features = false, features = ["ssr"] }
+testware = { path = "../testware" }
+
+# Serde / json
+serde.workspace = true
+serde_json.workspace = true
+
+# SQLx
+sqlx.workspace = true
+
+# Tokio / Axum
+tokio.workspace = true
+tokio-util.workspace = true
+
+# Command line parsing
+clap.workspace = true
+
+# Security
+argon2.workspace = true
+
+# Tracing
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-appender.workspace = true
+tracing-log.workspace = true
+
+# Minidump processing
+minidump.workspace = true
+minidump-processor.workspace = true
+minidump-unwind.workspace = true
+breakpad-symbols.workspace = true
+
+# Misc
+async-trait.workspace = true
+# cfg-if.workspace = true
+chrono.workspace = true
+data-encoding.workspace = true
+futures.workspace = true
+rand.workspace = true
+thiserror.workspace = true
+time.workspace = true
+uuid.workspace = true
+log.workspace = true
+object_store.workspace = true
+apalis.workspace = true
+apalis-sql.workspace = true
+bytes.workspace = true
+
+[dev-dependencies]
+testware = { path = "../testware" }

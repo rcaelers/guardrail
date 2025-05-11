@@ -1,24 +1,20 @@
-use leptos::*;
+use leptos::{html, prelude::*, task::spawn_local};
 use web_sys::SubmitEvent;
 
-use crate::{auth::passkeys::register_passkey, components::passkey_logo::PasskeyLogo};
+use crate::{
+    auth::{error::AuthError, passkeys::register_passkey},
+    components::passkey_logo::PasskeyLogo,
+};
 
-#[allow(non_snake_case)]
 #[component]
 pub fn RegisterPage() -> impl IntoView {
-    let input_element: NodeRef<html::Input> = create_node_ref();
+    let input_element: NodeRef<html::Input> = NodeRef::new();
 
-    let register_passkey_action = create_action(|user_name: &String| {
-        let user_name = user_name.to_owned();
-        async move { register_passkey(user_name).await }
-    });
-
-    let _submitted = register_passkey_action.input();
-    let pending = register_passkey_action.pending();
-    let value = register_passkey_action.value();
+    let pending = RwSignal::new(false);
+    let value = RwSignal::new(None);
 
     let result_message = move || {
-        value.get().map(|v| match v {
+        value.get().map(|v: Result<_, AuthError>| match v {
             Ok(()) => view! {
                 <div id="info-label" class="alert alert-success rounded-btn mt-4 p-3">
                     <svg
@@ -37,21 +33,28 @@ pub fn RegisterPage() -> impl IntoView {
                     <span class="font-semibold">Registation successful</span>
                 </div>
             }
-            .into_view(),
+            .into_any(),
             Err(e) => view! {
                 <div id="info-label" class="alert alert-failure rounded-btn mt-4 p-3">
                     <span class="font-semibold">Registation failed</span>
                     {e.to_string()}
                 </div>
             }
-            .into_view(),
+            .into_any(),
         })
     };
 
     let on_submit = move |ev: SubmitEvent| {
         ev.prevent_default();
-        let user_name = input_element.get().expect("no <input> element").value();
-        register_passkey_action.dispatch(user_name);
+        pending.set(true);
+        spawn_local(async move {
+            let user_name = input_element
+                .get_untracked()
+                .expect("no <input> element")
+                .value();
+            value.set(Some(register_passkey(user_name).await));
+            pending.set(false);
+        });
     };
 
     view! {
@@ -64,16 +67,16 @@ pub fn RegisterPage() -> impl IntoView {
                     <input
                         class="mt-1 input input-bordered"
                         type="text"
-                        d="username"
+                        // TODO: d="username"
                         name="username"
                         autocapitalize="none"
                         placeholder="user name"
                         node_ref=input_element
                     />
                     {result_message}
-                    <Show when=move || value().is_none()>
-                        <button id="register-button" class="btn btn-primary mt-4" type="submit">
-                            <PasskeyLogo/>
+                    <Show when=move || value.read().is_none()>
+                        <button id="register-button" class="btn btn-primary mt-4" type="submit" value="Submit">
+                            <PasskeyLogo />
                             <span id="register-button-text" class="ml-2 text-base">
                                 Register with Passkey
                             </span>

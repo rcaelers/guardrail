@@ -1,5 +1,5 @@
-use leptos::*;
-use leptos_router::*;
+use leptos::prelude::*;
+use leptos_router::hooks::use_query_map;
 
 use crate::components::datatable_form::Fields;
 
@@ -10,9 +10,9 @@ pub fn CrashPage() -> impl IntoView {
 
     let q = query_map.get_untracked();
     let q = q.get("crash").unwrap();
-    let _uuid = uuid::Uuid::parse_str(q).unwrap();
+    let _uuid = uuid::Uuid::parse_str(q.as_str()).unwrap();
 
-    let _fields: RwSignal<Fields> = create_rw_signal(Fields::new());
+    let _fields: RwSignal<Fields> = RwSignal::new(Fields::new());
 
     view! {
         // <Header

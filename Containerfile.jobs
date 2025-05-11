@@ -1,0 +1,41 @@
+##
+## Builder
+##
+
+FROM --platform=$BUILDPLATFORM rustlang/rust:nightly-alpine AS builder
+
+ENV RUSTUP_PERMIT_COPY_RENAME=true
+ENV SQLX_OFFLINE=1
+
+RUN apk add --no-cache \
+    clang \
+    openssl \
+    pkgconfig \
+    openssl-dev \
+    openssl-libs-static \
+    musl-dev \
+    build-base
+
+RUN mkdir -p /app
+WORKDIR /app
+COPY . .
+
+RUN cargo build --release -p jobs
+
+#
+# Runtime
+#
+
+FROM alpine:latest
+
+WORKDIR /app
+
+RUN apk add --no-cache openssl ca-certificates
+
+COPY --from=builder /app/target/release/jobs /app/
+
+VOLUME ["/app/config"]
+
+EXPOSE 3002
+
+CMD ["/app/jobs", "-C", "/config"]

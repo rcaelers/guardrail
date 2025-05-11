@@ -1,6 +1,5 @@
 use enumflags2::BitFlags;
-use ev::MouseEvent;
-use leptos::*;
+use leptos::prelude::*;
 
 use super::datatable::{Capabilities, Related};
 
@@ -9,12 +8,12 @@ use super::datatable::{Capabilities, Related};
 pub fn DataTableHeader(
     filter: RwSignal<String>,
     enabled: Memo<bool>,
-    capabilities: RwSignal<BitFlags<Capabilities, u8>>,
+    capabilities: Resource<BitFlags<Capabilities, u8>>,
     related: RwSignal<Vec<Related>>,
-    on_add_click: Callback<MouseEvent>,
-    on_edit_click: Callback<MouseEvent>,
-    on_delete_click: Callback<MouseEvent>,
-    on_related_click: Callback<usize>,
+    on_add_click: Callback<()>,
+    on_edit_click: Callback<()>,
+    on_delete_click: Callback<()>,
+    on_related_click: Callback<(usize,)>,
 ) -> impl IntoView {
     view! {
         <header class="sticky top-0 z-40 pb-1">
@@ -29,7 +28,8 @@ pub fn DataTableHeader(
                         >
                             <path
                                 d="M9.965 11.026a5 5 0 1 1 1.06-1.06l2.755 2.754a.75.75 0 1 1-1.06 1.06l-2.755-2.754ZM10.5 7a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Z"
-                                fill-rule="evenodd"
+                                fill-rule="even
+                                odd"
                                 clip-rule="evenodd"
                             ></path>
                         </svg>
@@ -43,27 +43,34 @@ pub fn DataTableHeader(
                     />
                 </div>
 
+                <Transition>
                 <div class="flex space-x-2">
                     <button
                         class="btn btn-primary"
-                        class:hidden=move || !capabilities.get().contains(Capabilities::CanAdd)
-                        on:click=on_add_click
+                        class:hidden=move || !capabilities.get().unwrap_or(BitFlags::empty()).contains(Capabilities::CanAdd)
+                        on:click=move |_| {
+                            on_add_click.run(());
+                        }
                     >
                         "Add"
                     </button>
                     <button
                         class="btn btn-primary"
                         class:btn-disabled=move || !enabled.get()
-                        class:hidden=move || !capabilities.get().contains(Capabilities::CanEdit)
-                        on:click=on_edit_click
+                        class:hidden=move || !capabilities.get().unwrap_or(BitFlags::empty()).contains(Capabilities::CanEdit)
+                        on:click=move |_| {
+                            on_edit_click.run(());
+                        }
                     >
                         "Edit"
                     </button>
                     <button
                         class="btn btn-primary"
                         class:btn-disabled=move || !enabled.get()
-                        class:hidden=move || !capabilities.get().contains(Capabilities::CanDelete)
-                        on:click=on_delete_click
+                        class:hidden=move || !capabilities.get().unwrap_or(BitFlags::empty()).contains(Capabilities::CanDelete)
+                        on:click=move |_| {
+                            on_delete_click.run(());
+                        }
                     >
                         "Delete"
                     </button>
@@ -76,7 +83,7 @@ pub fn DataTableHeader(
                                     class="btn btn-primary"
                                     class:btn-disabled=move || !enabled.get()
                                     on:click=move |_| {
-                                        on_related_click(index);
+                                        on_related_click.run((index,));
                                     }
                                 >
 
@@ -86,8 +93,8 @@ pub fn DataTableHeader(
                             }
                         }
                     />
-
                 </div>
+                </Transition>
             </div>
         </header>
     }

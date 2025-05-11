@@ -1,6 +1,6 @@
 use ::chrono::NaiveDateTime;
 use cfg_if::cfg_if;
-use leptos::*;
+use leptos::prelude::*;
 use leptos_struct_table::*;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
@@ -9,12 +9,6 @@ use std::vec;
 use uuid::Uuid;
 
 cfg_if! { if #[cfg(feature="ssr")] {
-    use sea_orm::*;
-    use sea_query::Expr;
-    use crate::entity;
-    use crate::data::{
-        add, count, delete_by_id, get_all, get_all_names, get_by_id, update, EntityInfo,
-    };
     use crate::auth::AuthenticatedUser;
 }}
 
@@ -22,7 +16,7 @@ use super::ExtraRowTrait;
 use crate::classes::ClassesPreset;
 use crate::data::QueryParams;
 
-#[derive(TableRow, Debug, Clone)]
+#[derive(TableRow, Clone, Debug)]
 #[table(sortable, classes_provider = ClassesPreset)]
 pub struct SymbolsRow {
     pub id: Uuid,
@@ -77,54 +71,6 @@ pub struct Symbols {
     pub version: String,
 }
 
-#[cfg(feature = "ssr")]
-impl EntityInfo for entity::symbols::Entity {
-    type View = Symbols;
-
-    fn filter_column() -> Self::Column {
-        entity::symbols::Column::BuildId
-    }
-
-    fn index_to_column(index: usize) -> Option<Self::Column> {
-        match index {
-            0 => Some(entity::symbols::Column::Id),
-            1 => Some(entity::symbols::Column::Os),
-            2 => Some(entity::symbols::Column::Arch),
-            3 => Some(entity::symbols::Column::BuildId),
-            4 => Some(entity::symbols::Column::ModuleId),
-            5 => Some(entity::symbols::Column::FileLocation),
-            6 => Some(entity::symbols::Column::CreatedAt),
-            7 => Some(entity::symbols::Column::UpdatedAt),
-            _ => None,
-        }
-    }
-
-    fn extend_query_for_view(query: Select<Self>) -> Select<Self> {
-        query
-            .join(JoinType::LeftJoin, entity::symbols::Relation::Product.def())
-            .join(JoinType::LeftJoin, entity::symbols::Relation::Version.def())
-            .column_as(entity::product::Column::Name, "product")
-            .column_as(entity::version::Column::Name, "version")
-    }
-
-    fn get_product_query(
-        _user: &AuthenticatedUser,
-        data: &Self::View,
-    ) -> Option<Select<entity::product::Entity>> {
-        let query = entity::product::Entity::find().filter(
-            Expr::col((entity::product::Entity, entity::product::Column::Id)).eq(data.product_id),
-        );
-        Some(query)
-    }
-
-    fn id_to_column(id_name: String) -> Option<Self::Column> {
-        match id_name.as_str() {
-            "product_id" => Some(entity::symbols::Column::ProductId),
-            "version_id" => Some(entity::symbols::Column::VersionId),
-            _ => None,
-        }
-    }
-}
 impl From<Symbols> for SymbolsRow {
     fn from(symbols: Symbols) -> Self {
         Self {
@@ -144,44 +90,6 @@ impl From<Symbols> for SymbolsRow {
     }
 }
 
-#[cfg(feature = "ssr")]
-impl From<entity::symbols::Model> for Symbols {
-    fn from(model: entity::symbols::Model) -> Self {
-        Self {
-            id: model.id,
-            os: model.os,
-            arch: model.arch,
-            build_id: model.build_id,
-            module_id: model.module_id,
-            file_location: model.file_location,
-            created_at: model.created_at,
-            updated_at: model.updated_at,
-            product_id: model.product_id,
-            version_id: model.version_id,
-            product: "".to_string(),
-            version: "".to_string(),
-        }
-    }
-}
-
-#[cfg(feature = "ssr")]
-impl From<Symbols> for entity::symbols::ActiveModel {
-    fn from(symbols: Symbols) -> Self {
-        Self {
-            id: Set(symbols.id),
-            os: Set(symbols.os),
-            arch: Set(symbols.arch),
-            build_id: Set(symbols.build_id),
-            module_id: Set(symbols.module_id),
-            file_location: Set(symbols.file_location),
-            created_at: sea_orm::NotSet,
-            updated_at: sea_orm::NotSet,
-            product_id: Set(symbols.product_id),
-            version_id: Set(symbols.version_id),
-        }
-    }
-}
-
 impl ExtraRowTrait for SymbolsRow {
     fn get_id(&self) -> Uuid {
         self.id
@@ -190,46 +98,4 @@ impl ExtraRowTrait for SymbolsRow {
     fn get_name(&self) -> String {
         self.build_id.clone()
     }
-}
-
-#[server]
-pub async fn symbols_get(id: Uuid) -> Result<Symbols, ServerFnError> {
-    get_by_id::<entity::symbols::Entity>(id).await
-}
-
-#[server]
-pub async fn symbols_list(
-    #[server(default)] parents: HashMap<String, Uuid>,
-    query_params: QueryParams,
-) -> Result<Vec<Symbols>, ServerFnError> {
-    get_all::<entity::symbols::Entity>(query_params, parents).await
-}
-
-#[server]
-pub async fn symbols_list_names(
-    #[server(default)] parents: HashMap<String, Uuid>,
-) -> Result<HashSet<String>, ServerFnError> {
-    get_all_names::<entity::symbols::Entity>(parents).await
-}
-
-#[server]
-pub async fn symbols_add(symbols: Symbols) -> Result<(), ServerFnError> {
-    add::<entity::symbols::Entity>(symbols).await
-}
-
-#[server]
-pub async fn symbols_update(symbols: Symbols) -> Result<(), ServerFnError> {
-    update::<entity::symbols::Entity>(symbols).await
-}
-
-#[server]
-pub async fn symbols_remove(id: Uuid) -> Result<(), ServerFnError> {
-    delete_by_id::<entity::symbols::Entity>(id).await
-}
-
-#[server]
-pub async fn symbols_count(
-    #[server(default)] parents: HashMap<String, Uuid>,
-) -> Result<usize, ServerFnError> {
-    count::<entity::symbols::Entity>(parents).await
 }

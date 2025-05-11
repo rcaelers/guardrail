@@ -1,6 +1,6 @@
 pub mod confirmation;
-pub mod crash;
-pub mod crashes;
+// pub mod crash;
+// pub mod crashes;
 pub mod datatable;
 pub mod datatable_form;
 pub mod datatable_header;
@@ -12,6 +12,6 @@ pub mod passkey_logo;
 pub mod products;
 pub mod profile;
 pub mod register;
-pub mod symbols;
-pub mod users;
-pub mod versions;
+// pub mod symbols;
+// pub mod users;
+// pub mod versions;

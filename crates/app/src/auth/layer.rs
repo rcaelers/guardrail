@@ -1,5 +1,5 @@
 use crate::auth::{AuthSession, AuthenticatedUser};
-use axum::{body::Body, http::Request, response::Response, Extension, RequestExt};
+use axum::{Extension, RequestExt, body::Body, http::Request, response::Response};
 use futures::future::BoxFuture;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};

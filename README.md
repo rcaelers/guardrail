@@ -1,36 +1,22 @@
-# guardrail
+# GUARDRAIL
+
+Gathering Unanticipated Anomaly Reports and Diagnostics for Retrospective Analysis, Insight, and Learnings.
+
+_Every failure tells a story. Guardrail collects the chapters._
 
 ## Todo
 
-- [ ] Database
-  - [X] Finish Database trait
-  - [ ] Finish tests
-  - [X] Add user table
-  - [X] Follow annotations/attachments when retrieving crashes
 - [ ] API
-  - [ ] Error Reporting
-  - [ ] Move minidump processing to a separate module
-  - [X] Authentication
-    - [X] Minidump upload
-    - [X] Symbol upload
-    - [X] CRUD
-  - [X] Implement remaining API endpoints
-    - [X] Symbols
-    - [X] Crashes (including annotations/attachments)
-    - [X] Users
+  - [ ] Swagger documentation
   - [ ] Tests
-- Minidump processing
+    - [ ] Token generation
+- [ ] Job execution
   - [ ] Remove minidump after processing
   - [ ] Periodically clean up left over minidumps
-- [ ] Web interface
+  - [ ] Tests
+- [ ] Web UI
   - [ ] Authentication
-- [ ] Authentication
-  - [X] Login
-  - [ ] Logout
-  - [ ] Roles
-- [ ] Misc
-  - [ ] Remove unwrap's
-- [ ] Infra
-  - [X] GitHub action
+    - [ ] Invitations
+    - [ ] User roles
+ [ ] Infra
   - [ ] K8S deployment
-  
