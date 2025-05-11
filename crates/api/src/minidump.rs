@@ -3,35 +3,31 @@ use axum::extract::{Multipart, Query, State};
 use axum::{Extension, Json};
 use axum_extra::extract::WithRejection;
 use data::api_token::ApiToken;
-use data::attachment::NewAttachment;
-use data::product::Product;
-use data::version::Version;
-use repos::attachment::AttachmentsRepo;
-use repos::crash::CrashRepo;
+use object_store::PutPayload;
+use object_store::path::Path;
 use serde::{Deserialize, Serialize};
-use sqlx::Postgres;
-use tracing::{error, info};
+use tracing::error;
 
 use super::error::ApiError;
 use crate::state::AppState;
-use crate::utils::{get_product, get_version, stream_to_s3, validate_api_token_for_product};
+use crate::utils::{get_product, get_product_by_id, stream_to_s3, validate_api_token_for_product};
 
 pub struct MinidumpApi;
 
 #[derive(Debug, Deserialize)]
 pub struct MinidumpRequestParams {
-    pub product: String,
-    pub version: String,
+    // pub product: String,
+    // pub version: String,
 }
 
 impl MinidumpRequestParams {
     pub fn validate(&self) -> Result<(), ApiError> {
-        if self.product.trim().is_empty() {
-            return Err(ApiError::Failure("product name cannot be empty".to_string()));
-        }
-        if self.version.trim().is_empty() {
-            return Err(ApiError::Failure("version cannot be empty".to_string()));
-        }
+        // if self.product.trim().is_empty() {
+        //     return Err(ApiError::Failure("product name cannot be empty".to_string()));
+        // }
+        // if self.version.trim().is_empty() {
+        //     return Err(ApiError::Failure("version cannot be empty".to_string()));
+        // }
         Ok(())
     }
 }
@@ -43,31 +39,8 @@ pub struct MinidumpResponse {
 }
 
 impl MinidumpApi {
-    fn audit_log(
-        event: &str,
-        details: &str,
-        product: Option<&str>,
-        version: Option<&str>,
-        crash_id: Option<uuid::Uuid>,
-    ) {
-        let product_info = product.map_or("unknown".to_string(), |p| p.to_string());
-        let version_info = version.map_or("unknown".to_string(), |v| v.to_string());
-        let crash_info = crash_id.map_or("none".to_string(), |id| id.to_string());
-
-        info!(
-            event = event,
-            product = product_info,
-            version = version_info,
-            crash_id = crash_info,
-            details = details,
-            "AUDIT: {}: {} (product: {}, version: {}, crash: {})",
-            event,
-            details,
-            product_info,
-            version_info,
-            crash_info
-        );
-    }
+    const REQUIRED_FIELDS: &'static [&'static str] =
+        &["product", "version", "channel", "commit", "buildid"];
 
     fn validate_content_type(
         content_type: &str,
@@ -75,17 +48,16 @@ impl MinidumpApi {
     ) -> Result<(), ApiError> {
         let is_valid = match content_type_category {
             "minidump" => {
-                matches!(
-                    content_type,
-                    "application/octet-stream"
-                        | "application/x-dmp"
-                        | "application/x-minidump"
-                        | "" // Accept empty content type for compatibility
-                )
+                matches!(content_type, "application/octet-stream")
             }
             "attachment" => {
                 !content_type.contains("text/html")
                     && !content_type.contains("application/javascript")
+            }
+            "annotation" => {
+                content_type == "text/plain"
+                    || content_type == "text/markdown"
+                    || content_type.is_empty()
             }
             _ => false,
         };
@@ -99,12 +71,14 @@ impl MinidumpApi {
         Ok(())
     }
 
-    fn validate_attachment_content_type(content_type: &str) -> Result<(), ApiError> {
-        Self::validate_content_type(content_type, "attachment")
-    }
-
-    fn validate_minidump_content_type(content_type: &str) -> Result<(), ApiError> {
-        Self::validate_content_type(content_type, "minidump")
+    fn validate_key(key: &str) -> Result<(), ApiError> {
+        if !key.chars().all(|c| c.is_ascii() && !c.is_ascii_control()) {
+            error!("Key contains non-printable ASCII characters: {}", key);
+            return Err(ApiError::Failure(
+                "key must contain only printable ASCII characters".to_string(),
+            ));
+        }
+        Ok(())
     }
 
     fn extract_filename(field: &Field<'_>) -> Result<String, ApiError> {
@@ -115,156 +89,131 @@ impl MinidumpApi {
         Ok(filename)
     }
 
-    async fn handle_minidump_upload<E>(
-        tx: &mut E,
-        product: &Product,
-        version: &Version,
+    async fn handle_minidump_upload(
         field: Field<'_>,
+        crash_info: &mut serde_json::Value,
         state: AppState,
-    ) -> Result<uuid::Uuid, ApiError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
-        Self::audit_log(
-            "minidump_upload_start",
-            "Processing minidump upload",
-            Some(&product.name),
-            Some(&version.name),
-            None,
-        );
+    ) -> Result<(), ApiError> {
+        let content_type = field.content_type().unwrap_or_default().to_owned();
+        Self::validate_content_type(&content_type, "minidump")?;
 
-        let content_type = field.content_type().unwrap_or_default();
-        Self::validate_minidump_content_type(content_type)?;
+        let filename = Self::extract_filename(&field)?;
+        let storage_filename = uuid::Uuid::new_v4();
+        let storage_path = format!("minidumps/{storage_filename}");
 
-        let _filename = Self::extract_filename(&field)?;
-
-        let minidump = uuid::Uuid::new_v4();
-        let path = format!("minidumps/{minidump}");
-
-        stream_to_s3(state.storage.clone(), &path, field)
+        let file_size = stream_to_s3(state.storage.clone(), &storage_path, field)
             .await
             .map_err(|e| {
                 error!("Failed to stream to S3: {:?}", e);
                 ApiError::InternalFailure()
             })?;
 
-        let crash = data::crash::NewCrash {
-            minidump,
-            info: None,
-            product_id: product.id,
-            version_id: version.id,
-        };
-        let id = CrashRepo::create(&mut *tx, crash).await?;
+        crash_info["minidump"] = serde_json::json!({
+            "filename": filename,
+            "mimetype": content_type,
+            "size": file_size,
+            "storage_path": storage_path,
+            "storage_filename": storage_filename,
+        });
 
-        Self::audit_log(
-            "minidump_file_saved",
-            &format!("Saved minidump file {path}"),
-            Some(&product.name),
-            Some(&version.name),
-            None,
-        );
-        Ok(id)
+        Ok(())
     }
 
-    async fn handle_attachment_upload<E>(
-        tx: &mut E,
-        crash_id: uuid::Uuid,
-        product: &Product,
-        _version: &Version,
+    async fn handle_attachment_upload(
         field: Field<'_>,
+        crash_info: &mut serde_json::Value,
         state: AppState,
-    ) -> Result<(), ApiError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
-        Self::audit_log(
-            "attachment_upload_start",
-            "Processing attachment upload",
-            Some(&product.name),
-            None,
-            Some(crash_id),
-        );
-
-        let content_type = field
-            .content_type()
-            .unwrap_or("application/octet-stream")
-            .to_owned();
-        Self::validate_attachment_content_type(&content_type)?;
+    ) -> Result<(), ApiError> {
+        let content_type = field.content_type().unwrap_or_default().to_owned();
+        Self::validate_content_type(&content_type, "attachment")?;
 
         let storage_filename = uuid::Uuid::new_v4().to_string();
-        let path = format!("attachments/{storage_filename}");
+        let storage_path = format!("attachments/{storage_filename}");
+
         let mimetype = content_type.clone();
         let original_filename = field
             .file_name()
             .map(|name| name.to_string())
             .unwrap_or_else(|| "unnamed_attachment".to_string());
 
-        Self::audit_log(
-            "attachment_details",
-            &format!("attachment: {original_filename} ({mimetype})"),
-            Some(&product.name),
-            None,
-            Some(crash_id),
-        );
-
-        stream_to_s3(state.storage.clone(), &path, field)
+        let file_size = stream_to_s3(state.storage.clone(), &storage_path, field)
             .await
             .map_err(|e| {
                 error!("Failed to stream to S3: {:?}", e);
                 ApiError::InternalFailure()
             })?;
 
-        let crash = CrashRepo::get_by_id(&mut *tx, crash_id)
-            .await?
-            .ok_or(ApiError::Failure("crash not found".to_string()))?;
+        crash_info["attachments"]
+            .as_array_mut()
+            .ok_or_else(|| {
+                error!("Crash info attachments is not an array");
+                ApiError::Failure("crash info attachments is not an array".to_string())
+            })?
+            .push(serde_json::json!({
+                "filename": original_filename,
+                "mimetype": mimetype,
+                "size": file_size,
+                "storage_path": storage_path,
+                "storage_filename": storage_filename,
 
-        let attachment = NewAttachment {
-            name: original_filename.clone(),
-            mime_type: content_type.to_owned(),
-            size: 0, // TODO: Add correct size
-            filename: storage_filename.clone(),
-            crash_id: crash.id,
-            product_id: product.id,
-        };
-        AttachmentsRepo::create(&mut *tx, attachment).await?;
-
-        Self::audit_log(
-            "attachment_file_saved",
-            &format!("Saved attachment file (storage name: {storage_filename})"),
-            Some(&product.name),
-            None,
-            Some(crash_id),
-        );
+            }));
 
         Ok(())
     }
 
-    async fn process_field<E>(
-        tx: &mut E,
+    async fn handle_annotation_upload(
         field: Field<'_>,
-        product: &Product,
-        version: &Version,
-        crash_id: &mut Option<uuid::Uuid>,
-        state: AppState,
-    ) -> Result<(), ApiError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
-        match field.name() {
-            Some("minidump_file") => {
-                let new_crash_id =
-                    Self::handle_minidump_upload(tx, product, version, field, state).await?;
-                *crash_id = Some(new_crash_id);
-                Ok(())
-            }
-            Some(_) => {
-                let crash_id_value = crash_id
-                    .ok_or(ApiError::Failure("expect crash as first document".to_string()))?;
+        crash_info: &mut serde_json::Value,
+    ) -> Result<(), ApiError> {
+        let key = field
+            .name()
+            .ok_or_else(|| {
+                error!("Field name is missing");
+                ApiError::Failure("field name is missing".to_string())
+            })?
+            .to_string();
+        Self::validate_key(&key)?;
 
-                Self::handle_attachment_upload(tx, crash_id_value, product, version, field, state)
-                    .await
+        let content_type = field.content_type().unwrap_or_default().to_owned();
+        Self::validate_content_type(&content_type, "annotation")?;
+
+        let value = field.text().await.map_err(|e| {
+            error!("Failed to read field text for field '{}': {:?}", key, e);
+            ApiError::Failure(format!("failed to read field text for field '{key}': {e:?}"))
+        })?;
+
+        match key.as_str() {
+            key if Self::REQUIRED_FIELDS.contains(&key) => {
+                crash_info[key] = serde_json::json!(value);
             }
-            _ => Ok(()),
+            _ => {
+                crash_info["annotations"]
+                    .as_object_mut()
+                    .ok_or_else(|| {
+                        error!("Crash info is not an object");
+                        ApiError::Failure("crash info is not an object".to_string())
+                    })?
+                    .insert(key.clone(), serde_json::json!(value));
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn process_field(
+        field: Field<'_>,
+        crash_info: &mut serde_json::Value,
+        state: AppState,
+    ) -> Result<(), ApiError> {
+        let content_type = field.content_type().unwrap_or_default().to_owned();
+        match content_type.as_str() {
+            "application/octet-stream" if field.name() == Some("upload_file_minidump") => {
+                Self::handle_minidump_upload(field, crash_info, state).await
+            }
+            "application/octet-stream" => {
+                Self::handle_attachment_upload(field, crash_info, state).await
+            }
+            _ => Self::handle_annotation_upload(field, crash_info).await,
         }
     }
 
@@ -274,59 +223,78 @@ impl MinidumpApi {
         WithRejection(Query(params), _): WithRejection<Query<MinidumpRequestParams>, ApiError>,
         mut multipart: Multipart,
     ) -> Result<Json<MinidumpResponse>, ApiError> {
-        Self::audit_log(
-            "upload_start",
-            &format!("Starting minidump upload process for {}/{}", params.product, params.version),
-            Some(&params.product),
-            Some(&params.version),
-            None,
-        );
-
+        let crash_id = uuid::Uuid::new_v4();
+        let mut crash_info = serde_json::json!({
+            "crash_id": crash_id,
+            "submission_timestamp": chrono::Utc::now().to_rfc3339(),
+            "attachments": [],
+            "annotations": {},
+        });
         params.validate()?;
 
         let mut tx = state.repo.begin_admin().await?;
 
-        let product = get_product(&mut *tx, &params.product).await?;
-        validate_api_token_for_product(&api_token, &product, &params.product)?;
-        let version = get_version(&mut *tx, &product, &params.version).await?;
+        let product_id = api_token.product_id.ok_or_else(|| {
+            error!("API token does not have a product ID");
+            ApiError::ProductAccessDenied(
+                "API token is not associated with any product".to_string(),
+            )
+        })?;
 
-        Self::audit_log(
-            "processing_multipart",
-            "Processing multipart form data",
-            Some(&product.name),
-            Some(&version.name),
-            None,
-        );
+        let authorized_product = get_product_by_id(&mut *tx, product_id).await?;
+        crash_info["authorized_product"] = serde_json::json!(authorized_product.name);
 
-        let mut crash_id: Option<uuid::Uuid> = None;
         while let Some(field) = multipart.next_field().await.map_err(|e| {
             error!("Failed to get next multipart field: {:?}", e);
             ApiError::Failure("failed to read multipart field from upload".to_string())
         })? {
-            Self::process_field(&mut *tx, field, &product, &version, &mut crash_id, state.clone())
-                .await?;
+            Self::process_field(field, &mut crash_info, state.clone()).await?;
         }
+
+        if crash_info.get("minidump").is_none_or(|v| v.is_null()) {
+            return Err(ApiError::Failure("no minidump found in submission".to_string()));
+        }
+
+        for &required_field in Self::REQUIRED_FIELDS {
+            if crash_info.get(required_field).is_none_or(|v| v.is_null()) {
+                return Err(ApiError::Failure(format!(
+                    "required annotation '{required_field}' is missing"
+                )));
+            } else if let Some(value) = crash_info.get(required_field) {
+                if value.is_string() && value.as_str().map(|s| s.trim().is_empty()).unwrap_or(false)
+                {
+                    return Err(ApiError::Failure(format!(
+                        "required annotation '{required_field}' cannot be empty"
+                    )));
+                }
+            }
+        }
+
+        let product_name = crash_info["product"].as_str().ok_or_else(|| {
+            error!("No product found");
+            ApiError::Failure("no product found".to_string())
+        })?;
+        let product = get_product(&mut *tx, product_name).await?;
+        validate_api_token_for_product(&api_token, &product, product_name)?;
 
         state.repo.end(tx).await?;
 
-        if let Some(crash_id) = crash_id {
-            state.worker.queue_minidump(crash_id).await.map_err(|e| {
-                error!("Failed to queue minidump job: {:?}", e);
-                ApiError::Failure("failed to queue minidump job".to_string())
-            })?;
-        }
+        let path = Path::from(format!("crashes/{crash_id}"));
+        let crash_json = crash_info.to_string();
+        let payload = PutPayload::from(crash_json.into_bytes());
+        state.storage.put(&path, payload).await.map_err(|e| {
+            error!("Failed to upload crash info to S3: {:?}", e);
+            ApiError::Failure("failed to upload crash info to S3".to_string())
+        })?;
 
-        Self::audit_log(
-            "upload_complete",
-            &format!("Upload process completed successfully for {}/{}", product.name, version.name),
-            Some(&product.name),
-            Some(&version.name),
-            crash_id,
-        );
+        state.worker.queue_minidump(crash_info).await.map_err(|e| {
+            error!("Failed to queue minidump job: {:?}", e);
+            ApiError::Failure("failed to queue minidump job".to_string())
+        })?;
 
         Ok(Json(MinidumpResponse {
             result: "ok".to_string(),
-            crash_id,
+            crash_id: Some(crash_id),
         }))
     }
 }

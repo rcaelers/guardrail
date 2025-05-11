@@ -52,15 +52,20 @@ impl CrashRepo {
             r#"
                 INSERT INTO guardrail.crashes
                   (
+                    id,
                     minidump,
                     info,
                     version_id,
                     product_id
                   )
-                VALUES ($1, $2, $3, $4)
+                VALUES ($1, $2, $3, $4, $5)
                 RETURNING
                   id
             "#,
+            match crash.id {
+                Some(id) => id,
+                None => uuid::Uuid::new_v4(),
+            },
             Some(crash.minidump),
             crash.info,
             crash.version_id,

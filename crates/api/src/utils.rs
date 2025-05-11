@@ -61,7 +61,7 @@ pub async fn stream_to_s3<S, E>(
     store: Arc<dyn ObjectStore>,
     key: &str,
     stream: S,
-) -> Result<(), ApiError>
+) -> Result<u64, ApiError>
 where
     S: Stream<Item = Result<Bytes, E>>,
     E: Into<BoxError>,
@@ -74,7 +74,7 @@ where
 
         let mut writer = object_store::buffered::BufWriter::new(store, path);
 
-        tokio::io::copy(&mut body_reader, &mut writer)
+        let bytes_copied = tokio::io::copy(&mut body_reader, &mut writer)
             .await
             .map_err(|e| {
                 error!("Failed to copy stream to S3: {:?}", e);
@@ -86,7 +86,7 @@ where
             ApiError::InternalFailure()
         })?;
 
-        Ok::<(), ApiError>(())
+        Ok::<u64, ApiError>(bytes_copied)
     }
     .await
     .map_err(|_err| (ApiError::InternalFailure()))
@@ -105,6 +105,22 @@ where
         .ok_or_else(|| {
             error!("No such product {}", product_name);
             ApiError::ProductNotFound(product_name.to_string())
+        })
+}
+
+pub async fn get_product_by_id<E>(tx: &mut E, product_id: uuid::Uuid) -> Result<Product, ApiError>
+where
+    for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
+{
+    ProductRepo::get_by_id(tx, product_id)
+        .await
+        .map_err(|_| {
+            error!("Failed to get product {}", product_id);
+            ApiError::Failure(format!("failed to get product {product_id}"))
+        })?
+        .ok_or_else(|| {
+            error!("No such product {}", product_id);
+            ApiError::ProductNotFound(product_id.to_string())
         })
 }
 

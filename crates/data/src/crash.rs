@@ -19,6 +19,7 @@ pub struct Crash {
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 #[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 pub struct NewCrash {
+    pub id: Option<uuid::Uuid>,
     pub minidump: uuid::Uuid,
     pub info: Option<String>,
     pub version_id: uuid::Uuid,

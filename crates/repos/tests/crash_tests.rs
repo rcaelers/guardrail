@@ -95,6 +95,7 @@ async fn test_create(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
     let new_crash = NewCrash {
+        id: None,
         info: Some("Calculation Error".to_string()),
         version_id,
         product_id,
@@ -183,6 +184,7 @@ async fn test_create_error(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
     let new_crash = NewCrash {
+        id: None,
         info: Some("Test crash with closed pool".to_string()),
         minidump: Uuid::new_v4(),
         product_id,

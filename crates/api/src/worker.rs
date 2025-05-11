@@ -5,13 +5,12 @@ use jobs::jobs::MinidumpJob;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use tracing::error;
-use uuid::Uuid;
 
 use crate::error::ApiError;
 
 #[async_trait]
 pub trait Worker: Send + Sync + Debug + 'static {
-    async fn queue_minidump(&self, crash_id: Uuid) -> Result<String, ApiError>;
+    async fn queue_minidump(&self, crash: serde_json::Value) -> Result<String, ApiError>;
 }
 
 #[derive(Debug, Clone)]
@@ -27,11 +26,11 @@ impl MinidumpProcessor {
 
 #[async_trait]
 impl Worker for MinidumpProcessor {
-    async fn queue_minidump(&self, crash_id: Uuid) -> Result<String, ApiError> {
+    async fn queue_minidump(&self, crash: serde_json::Value) -> Result<String, ApiError> {
         let job = self
             .worker
             .clone()
-            .push(MinidumpJob { crash_id })
+            .push(MinidumpJob { crash })
             .await
             .map_err(|e| {
                 error!("Failed to queue minidump job: {:?}", e);
@@ -61,10 +60,10 @@ impl Default for TestMinidumpProcessor {
 
 #[async_trait]
 impl Worker for TestMinidumpProcessor {
-    async fn queue_minidump(&self, crash_id: Uuid) -> Result<String, ApiError> {
+    async fn queue_minidump(&self, crash: serde_json::Value) -> Result<String, ApiError> {
         if let Ok(mut requests) = self.requests.lock() {
-            requests.push(crash_id.to_string());
+            requests.push(crash.to_string());
         }
-        Ok(crash_id.to_string())
+        Ok(crash["id"].to_string())
     }
 }

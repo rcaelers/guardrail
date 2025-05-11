@@ -66,6 +66,7 @@ async fn test_get_all(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
     let new_crash = NewCrash {
+        id: None,
         minidump: Uuid::new_v4(),
         info: Some("Test crash".to_string()),
         version_id,
@@ -126,6 +127,7 @@ async fn test_get_all_error(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
     let new_crash = NewCrash {
+        id: None,
         minidump: Uuid::new_v4(),
         info: Some("Test crash".to_string()),
         version_id,
@@ -161,6 +163,7 @@ async fn test_create(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
     let new_crash = NewCrash {
+        id: None,
         minidump: Uuid::new_v4(),
         info: Some("Test crash".to_string()),
         version_id,
@@ -334,6 +337,7 @@ async fn test_count(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
     let new_crash = NewCrash {
+        id: None,
         minidump: Uuid::new_v4(),
         info: Some("Test crash".to_string()),
         version_id,
@@ -375,6 +379,7 @@ async fn test_count_error(pool: PgPool) {
     let (product_id, version_id) = setup_test_dependencies(&pool).await;
 
     let new_crash = NewCrash {
+        id: None,
         minidump: Uuid::new_v4(),
         info: Some("Test crash".to_string()),
         version_id,

@@ -149,6 +149,7 @@ pub async fn create_test_crash(
     };
 
     let new_crash = NewCrash {
+        id: None,
         minidump: Uuid::new_v4(),
         info: info.map(|s| s.to_string()),
         product_id,
@@ -181,6 +182,7 @@ pub async fn create_test_attachment(
             let (product_id, version_id) = setup_test_dependencies(pool).await;
 
             let new_crash = NewCrash {
+                id: None,
                 minidump: Uuid::new_v4(),
                 info: None,
                 version_id,
