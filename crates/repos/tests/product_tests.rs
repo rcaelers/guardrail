@@ -265,6 +265,7 @@ async fn test_update_non_existent(pool: PgPool) {
         id: non_existent_id,
         name: "NonExistentProduct".to_string(),
         description: "This product does not exist".to_string(),
+        accepting_crashes: true,
         created_at: chrono::Utc::now().naive_utc(),
         updated_at: chrono::Utc::now().naive_utc(),
     };

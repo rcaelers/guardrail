@@ -27,6 +27,11 @@
         "ordinal": 4,
         "name": "description",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "accepting_crashes",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -35,6 +40,7 @@
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,

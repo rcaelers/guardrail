@@ -74,7 +74,14 @@ impl ProductRepo {
         Repo::build_query(
             &mut builder,
             &params,
-            &["id", "name", "description", "created_at", "updated_at"],
+            &[
+                "id",
+                "name",
+                "description",
+                "accepting_crashes",
+                "created_at",
+                "updated_at",
+            ],
             &["name", "description"],
         )?;
 
@@ -113,12 +120,13 @@ impl ProductRepo {
         sqlx::query_scalar!(
             r#"
                 UPDATE guardrail.products
-                SET name = $1, description = $2
-                WHERE id = $3
+                SET name = $1, description = $2, accepting_crashes = $3
+                WHERE id = $4
                 RETURNING id
             "#,
             product.name,
             product.description,
+            product.accepting_crashes,
             product.id,
         )
         .fetch_optional(executor)

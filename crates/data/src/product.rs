@@ -7,6 +7,7 @@ pub struct Product {
     pub id: uuid::Uuid,
     pub name: String,
     pub description: String,
+    pub accepting_crashes: bool,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }

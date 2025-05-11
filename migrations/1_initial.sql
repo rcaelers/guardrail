@@ -2,7 +2,7 @@
 -- ALTER SYSTEM SET log_min_messages = ...;
 -- SELECT pg_reload_conf();
 
-CREATE SCHEMA guardrail;
+CREATE SCHEMA IF NOT EXISTS guardrail;
 
 -- CREATE ROLE authenticator LOGIN PASSWORD '<password>' NOINHERIT NOCREATEDB NOCREATEROLE NOSUPERUSER;
 -- CREATE ROLE guardrail_webuser LOGIN PASSWORD '<password>' NOINHERIT NOCREATEDB NOCREATEROLE NOSUPERUSER;
@@ -26,7 +26,8 @@ CREATE TABLE guardrail.products (
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     name TEXT NOT NULL UNIQUE,
-    description TEXT NOT NULL
+    description TEXT NOT NULL,
+    accepting_crashes BOOLEAN NOT NULL DEFAULT TRUE
 );
 ALTER TABLE guardrail.products OWNER TO guardrail;
 
