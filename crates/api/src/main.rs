@@ -1,6 +1,6 @@
 use apalis_sql::Config;
 use apalis_sql::postgres::PostgresStorage;
-use axum::Router;
+use axum::{http::header::AUTHORIZATION, Router};
 use axum::extract::DefaultBodyLimit;
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
@@ -12,9 +12,10 @@ use kube::{
 use sqlx::ConnectOptions;
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use std::net::SocketAddr;
+use std::{iter::once, net::SocketAddr, time::Duration};
 use std::sync::Arc;
-use tower_http::trace::TraceLayer;
+use tower_http::{decompression::RequestDecompressionLayer, sensitive_headers::SetSensitiveRequestHeadersLayer, timeout::TimeoutLayer, trace::TraceLayer};
+use tower_http::{CompressionLevel, compression::CompressionLayer};
 use tracing::info;
 use webauthn_rs::prelude::*;
 
@@ -26,6 +27,7 @@ use common::{init_logging, settings::Settings};
 use repos::Repo;
 
 const SECRET_NAME: &str = "guardrail-initial-admin-token";
+const MAX_UPLOAD_BYTES: usize = 20 * 1024 * 1024;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -78,7 +80,11 @@ impl GuardrailApp {
 
         let routes_all = Router::new()
             .nest("/api", routes::routes(state.clone()).await)
-            .layer(DefaultBodyLimit::max(50 * 1024 * 1024))
+            .layer(SetSensitiveRequestHeadersLayer::new(once(AUTHORIZATION)))
+            .layer(RequestDecompressionLayer::new())
+            .layer(CompressionLayer::new().quality(CompressionLevel::Fastest))
+            .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
+            .layer(TimeoutLayer::new(Duration::from_secs(60)))
             .layer(TraceLayer::new_for_http())
             .with_state(state);
 
@@ -130,17 +136,24 @@ impl GuardrailApp {
     async fn init_guardrail_db(&self) -> Result<PgPool, sqlx::Error> {
         let database_url = &self.settings.database.db_uri;
         let mut opts: PgConnectOptions = database_url.parse()?;
-        opts = opts.log_statements(log::LevelFilter::Debug);
+        opts = opts
+            .log_statements(log::LevelFilter::Debug)
+            .options([("search_path", "guardrail")]);
 
         let pool = PgPoolOptions::new()
             .max_connections(5)
             .connect_with(opts)
             .await?;
 
+        sqlx::query("CREATE SCHEMA IF NOT EXISTS guardrail")
+            .execute(&pool)
+            .await?;
+
         sqlx::migrate!("../../migrations")
             .run(&pool)
             .await
             .expect("Failed to run migrations");
+
         Ok(pool)
     }
 
