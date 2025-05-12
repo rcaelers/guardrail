@@ -1,12 +1,13 @@
 use axum::{
     Json,
-    extract::Request,
+    extract::{Query, Request},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
 use common::token::{decode_api_token, verify_api_secret};
 use futures::future::BoxFuture;
 use repos::api_token::ApiTokenRepo;
+use serde::Deserialize;
 use serde_json::json;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
@@ -31,17 +32,31 @@ impl RequiredEntitlement {
     }
 }
 
-fn extract_api_token<B>(request: &Request<B>) -> Option<String> {
-    let auth_header = request.headers().get("Authorization")?;
-    let auth_value = auth_header.to_str().ok()?;
+#[derive(Deserialize)]
+struct ApiKeyQuery {
+    api_key: Option<String>,
+}
 
-    if let Some(token) = auth_value.strip_prefix("Bearer ") {
-        Some(token.to_string())
-    } else if let Some(token) = auth_value.strip_prefix("Token ") {
-        Some(token.to_string())
-    } else {
-        Some(auth_value.to_string())
+fn extract_api_token<B>(request: &Request<B>) -> Option<String> {
+    if let Some(auth_header) = request.headers().get("Authorization") {
+        if let Ok(auth_value) = auth_header.to_str() {
+            if let Some(token) = auth_value.strip_prefix("Bearer ") {
+                return Some(token.to_string());
+            } else if let Some(token) = auth_value.strip_prefix("Token ") {
+                return Some(token.to_string());
+            } else {
+                return Some(auth_value.to_string());
+            }
+        }
     }
+
+    if let Ok(query) = Query::<ApiKeyQuery>::try_from_uri(request.uri()) {
+        if let Some(api_key) = &query.api_key {
+            return Some(api_key.clone());
+        }
+    }
+
+    None
 }
 
 #[derive(Clone)]

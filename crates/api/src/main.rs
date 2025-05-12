@@ -1,7 +1,7 @@
 use apalis_sql::Config;
 use apalis_sql::postgres::PostgresStorage;
-use axum::{http::header::AUTHORIZATION, Router};
 use axum::extract::DefaultBodyLimit;
+use axum::{Router, http::header::AUTHORIZATION};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use k8s_openapi::api::core::v1::Secret;
@@ -12,10 +12,13 @@ use kube::{
 use sqlx::ConnectOptions;
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use std::{iter::once, net::SocketAddr, time::Duration};
 use std::sync::Arc;
-use tower_http::{decompression::RequestDecompressionLayer, sensitive_headers::SetSensitiveRequestHeadersLayer, timeout::TimeoutLayer, trace::TraceLayer};
+use std::{iter::once, net::SocketAddr, time::Duration};
 use tower_http::{CompressionLevel, compression::CompressionLayer};
+use tower_http::{
+    decompression::RequestDecompressionLayer, sensitive_headers::SetSensitiveRequestHeadersLayer,
+    timeout::TimeoutLayer, trace::TraceLayer,
+};
 use tracing::info;
 use webauthn_rs::prelude::*;
 
@@ -90,7 +93,38 @@ impl GuardrailApp {
 
         if self.settings.api_server.public_key.is_some()
             && self.settings.api_server.private_key.is_some()
+            && self
+                .settings
+                .api_server
+                .public_key
+                .clone()
+                .unwrap_or_default()
+                != ""
+            && self
+                .settings
+                .api_server
+                .private_key
+                .clone()
+                .unwrap_or_default()
+                != ""
         {
+            info!("Starting server with TLS");
+            info!(
+                "Public key: {}",
+                self.settings
+                    .api_server
+                    .public_key
+                    .clone()
+                    .unwrap_or_default()
+            );
+            info!(
+                "Private key: {}",
+                self.settings
+                    .api_server
+                    .private_key
+                    .clone()
+                    .unwrap_or_default()
+            );
             let config = RustlsConfig::from_pem(
                 self.settings
                     .api_server
@@ -109,14 +143,14 @@ impl GuardrailApp {
             .unwrap();
 
             let port = self.settings.clone().api_server.port;
-            let addr = SocketAddr::from(([127, 0, 0, 1], port));
+            let addr = SocketAddr::from(([0, 0, 0, 0], port));
             axum_server::bind_rustls(addr, config)
                 .serve(routes_all.into_make_service())
                 .await
                 .unwrap();
         } else {
             let port = self.settings.clone().api_server.port;
-            let addr = SocketAddr::from(([127, 0, 0, 1], port));
+            let addr = SocketAddr::from(([0, 0, 0, 0], port));
             axum_server::bind(addr)
                 .serve(routes_all.into_make_service())
                 .await

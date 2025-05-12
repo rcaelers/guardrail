@@ -1,10 +1,10 @@
 BASEDIR=$(dirname "$0")
-API_URI=https://guardrail.home.krandor.org:4433/
+API_URI=http://guardrail.home.krandor.org:80/
 DB_URI=http://guardrail.home.krandor.org:3000/
 
-TOKEN="eLRwoDQGlZNSVWQOOyrTV7f8i9C78iGjv9YB"
+TOKEN="Amve0SLuRJOiEVdJIFwkYHHhLHLfS1teEmBdFZPdJC8GGUJ8BUwRD0R3-yQ0RmCyDzt0vNlVooUYi40jcT13bw=="
 
-RESP=$(curl -s -X POST ${API_URI}api/auth/token --insecure -H 'Content-Type: text/plain' -H "Authorization: Bearer $TOKEN")
+RESP=$(curl -s -X POST ${API_URI}api/auth/jwt --insecure -H 'Content-Type: text/plain' -H "Authorization: Bearer $TOKEN")
 
 JWT=$(echo $RESP | jq -r '.token')
 if [ -z "$JWT" ]; then
@@ -18,6 +18,35 @@ hash_token() {
   echo -n "$1" | argon2 "$SALT" -id -v 13 -t 3 -m 16 -p 4 -e
 }
 
+create_token() {
+  local DESCRIPTION=$1
+  local ENTITLEMENTS=$2
+  local EXTRA=$3
+
+  local RESP=$(curl -s -X POST ${API_URI}api/auth/token --insecure \
+    -H 'Content-Type: application/json' \
+    -H "Prefer: return=representation")
+
+  GEN_TOKEN_ID=$(echo $RESP | jq -r '.token_id')
+  GEN_TOKEN=$(echo $RESP | jq -r '.token')
+  GEN_TOKEN_HASH=$(echo $RESP | jq -r '.token_hash')
+
+  local RESP=$(curl -s -X POST ${DB_URI}api_tokens --insecure \
+    -H 'Content-Type: application/json' \
+    -H "Authorization: Bearer $JWT" \
+    -H "Prefer: return=representation" \
+    -d '{
+      "description": "'"$DESCRIPTION"'",
+      "token_id": "'$GEN_TOKEN_ID'",
+      "token_hash": "'"$GEN_TOKEN_HASH"'",
+      "entitlements": '"$ENTITLEMENTS"',
+      "is_active": true,
+      '$EXTRA'
+    }')
+  local TOKEN_ID=$(echo $RESP | jq -r ".[0].id")
+  echo "$GEN_TOKEN"
+}
+
 RESP=$(curl -s -X POST ${DB_URI}users --insecure \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $JWT" \
@@ -25,35 +54,19 @@ RESP=$(curl -s -X POST ${DB_URI}users --insecure \
   -d '{ "username":"rob", "is_admin":"true" }')
 USER_ID=$(echo $RESP | jq -r ".[0].id")
 
-SYMBOL_TOKEN="symbol-upload-token"
-SYMBOL_TOKEN_HASH=$(hash_token "$SYMBOL_TOKEN")
-RESP=$(curl -s -X POST ${DB_URI}api_tokens --insecure \
+RESP=$(curl -s -X POST ${DB_URI}products --insecure \
   -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $JWT" \
   -H "Prefer: return=representation" \
-  -d '{
-    "description": "Symbols upload token",
-    "token_hash": "'$SYMBOL_TOKEN_HASH'",
-    "entitlements": ["symbol-upload"],
-    "is_active": true
-  }')
-TOKEN_ID=$(echo $RESP | jq -r ".[0].id")
-echo "Created symbol upload token with ID: $TOKEN_ID"
+  -d '{ "name":"Workrave", "description": "Workrave Application" }')
+echo $RESP
+WORKRAVE_ID=$(echo $RESP | jq -r ".[0].id")
 
-MINIDUMP_TOKEN="minidump-upload-token"
-MINIDUMP_TOKEN_HASH=$(hash_token "$MINIDUMP_TOKEN")
-RESP=$(curl -s -X POST ${DB_URI}api_tokens --insecure \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $JWT" \
-  -H "Prefer: return=representation" \
-  -d '{
-    "description": "Minidump upload token",
-    "token_hash": "'$MINIDUMP_TOKEN_HASH'",
-    "entitlements": ["minidump-upload"],
-    "is_active": true
-  }')
-TOKEN_ID=$(echo $RESP | jq -r ".[0].id")
-echo "Created minidump upload token with ID: $TOKEN_ID"
+MINIDUMP_TOKEN=$(create_token "Minidump upload" '["minidump-upload"]' '"product_id":"'$WORKRAVE_ID'"')
+SYMBOLS_TOKEN=$(create_token "Symbols upload" '["symbol-upload"]' '"product_id":"'$WORKRAVE_ID'"')
+
+echo "Minidump token: $MINIDUMP_TOKEN"
+echo "Symbols token: $SYMBOLS_TOKEN"
 
 for i in {1..20}; do
   RESP=$(curl -s -X POST ${DB_URI}products --insecure \
@@ -93,11 +106,19 @@ curl -X GET ${DB_URI}products --insecure \
 # for i in {1..20}; do
 #   for v in {1..20}; do
 #     for r in {1..5}; do
-#       curl -vv -X POST "${URI}api/symbols/upload?product=GuardrailTest${i}&version=1.${v}" --insecure -H "Authorization: Bearer $TOKEN" -Fupload_file_symbols=@dev/crash.sym
-#       curl -vv -X POST "${URI}api/minidump/upload?product=GuardrailTest${i}&version=1.${v}" --insecure -H "Authorization: Bearer $TOKEN" -Fupload_file_minidump=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp -Fattach=@dev/init.sh
+#       curl -vv -X POST "${URI}api/symbols/upload?product=GuardrailTest${i}&version=1.${v}" --insecure -H "Authorization: Bearer $TOKEN" -Fsymbols_file=@dev/crash.sym
+#       curl -vv -X POST "${URI}api/minidump/upload?product=GuardrailTest${i}&version=1.${v}" --insecure -H "Authorization: Bearer $TOKEN" -Fminidump_file=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp -Fattach=@dev/init.sh
 #     done
 #   done
 # done
 
-curl -vv -X POST "${API_URI}api/symbols/upload?product=Workrave&version=1.11" --insecure -H "Authorization: Bearer symbols-upload-token" -Fupload_file_symbols=@dev/crash.sym
-#curl -vv -X POST "${URI}api/minidump/upload?product=Workrave&version=1.11" --insecure -H "Authorization: Bearer $TOKEN" -Fupload_file_minidump=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp -Fattach=@dev/init.sh
+curl -vv -X POST "${API_URI}api/symbols/upload?product=App1&version=1.1" --insecure -H "Authorization: Bearer $SYMBOLS_TOKEN" -Fsymbols_file=@dev/crash.sym
+curl -vv -X POST "${API_URI}api/minidump/upload" --insecure -H "Authorization: Bearer $MINIDUMP_TOKEN" -Fminidump_file=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp -Fattach=@dev/init.sh
+
+curl -vv -X POST "{API_URI}api/minidump/upload?api_key=$MINIDUMP_TOKEN" --insecure \
+  -F"upload_file_minidump=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp;type=application/octet-stream" \
+  -F"product=Workrave;type=text/plain" \
+  -F"version=1.11;type=text/plain" \
+  -F"channel=rc;type=text/plain" \
+  -F"commit=x;type=text/plain" \
+  -F"buildid=x;type=text/plain"

@@ -94,3 +94,12 @@ pub async fn generate_jwt_token(
 
     Ok(axum::Json(serde_json::json!({ "token": token })))
 }
+
+pub async fn generate_token() -> Result<impl IntoResponse, ApiError> {
+    let (token_id, token, token_hash) =
+        common::token::generate_api_token().map_err(|_| ApiError::InternalFailure())?;
+    Ok(axum::Json(
+        serde_json::json!({ "token_id": token_id, "token": token, "token_hash": token_hash
+        }),
+    ))
+}
