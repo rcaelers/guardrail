@@ -99,10 +99,6 @@ impl DataTableTrait for ProductTable {
     fn get_related() -> Vec<super::datatable::Related> {
         vec![
             super::datatable::Related {
-                name: "Versions".to_string(),
-                url: "/admin/versions?product=".to_string(),
-            },
-            super::datatable::Related {
                 name: "Symbols".to_string(),
                 url: "/admin/symbols?product=".to_string(),
             },

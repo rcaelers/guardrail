@@ -201,6 +201,10 @@ impl GuardrailApp {
             .connect_with(opts)
             .await?;
 
+        PostgresStorage::setup(&pool)
+            .await
+            .expect("unable to run migrations for postgres");
+
         Ok(pool)
     }
 

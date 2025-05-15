@@ -58,9 +58,6 @@ pub fn Navbar(trigger: RwSignal<i64>) -> impl IntoView {
                                         <a href="/admin/products">Products</a>
                                     </li>
                                     <li>
-                                        <a href="/admin/versions">Versions</a>
-                                    </li>
-                                    <li>
                                         <a href="/admin/users">Users</a>
                                     </li>
                                 </ul>
@@ -84,9 +81,6 @@ pub fn Navbar(trigger: RwSignal<i64>) -> impl IntoView {
                             <ul class="menu mt-0 dropdown-content z-1 bg-base-200 rounded-box w-52">
                                 <li>
                                     <a href="/admin/products">Products</a>
-                                </li>
-                                <li>
-                                    <a href="/admin/versions">Versions</a>
                                 </li>
                                 <li>
                                     <a href="/admin/users">Users</a>

@@ -5,7 +5,7 @@ use crate::{
     error::{RepoError, handle_sql_error},
 };
 use common::QueryParams;
-use data::crash::{Crash, NewCrash, State};
+use data::crash::{Crash, NewCrash};
 pub struct CrashRepo {}
 
 impl CrashRepo {
@@ -16,7 +16,7 @@ impl CrashRepo {
         sqlx::query_as!(
             Crash,
             r#"
-                SELECT id, minidump, report, version_id, product_id, info, state as "state: State", created_at, updated_at
+                SELECT *
                 FROM guardrail.crashes
                 WHERE guardrail.crashes.id = $1
             "#,
@@ -53,12 +53,16 @@ impl CrashRepo {
                 INSERT INTO guardrail.crashes
                   (
                     id,
+                    product_id,
                     minidump,
                     info,
-                    version_id,
-                    product_id
+                    report,
+                    version,
+                    channel,
+                    build_id,
+                    commit
                   )
-                VALUES ($1, $2, $3, $4, $5)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 RETURNING
                   id
             "#,
@@ -66,10 +70,14 @@ impl CrashRepo {
                 Some(id) => id,
                 None => uuid::Uuid::new_v4(),
             },
-            Some(crash.minidump),
-            crash.info,
-            crash.version_id,
             crash.product_id,
+            crash.minidump,
+            crash.info,
+            crash.report,
+            crash.version,
+            crash.channel,
+            crash.build_id,
+            crash.commit,
         )
         .fetch_one(executor)
         .await
@@ -83,16 +91,17 @@ impl CrashRepo {
         sqlx::query_scalar!(
             r#"
             UPDATE guardrail.crashes
-                SET minidump = $1, report = $2, version_id = $3, product_id = $4, info = $5, state = $6
-                WHERE id = $7
+                SET minidump = $1, info = $2, report = $3, version = $4, channel = $5, build_id = $6, commit = $7
+                WHERE id = $8
                 RETURNING id
             "#,
             crash.minidump,
-            crash.report,
-            crash.version_id,
-            crash.product_id,
             crash.info,
-            crash.state as _,
+            crash.report,
+            crash.version,
+            crash.channel,
+            crash.build_id,
+            crash.commit,
             crash.id,
         )
         .fetch_optional(executor)

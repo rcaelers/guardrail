@@ -22,8 +22,11 @@ pub enum ApiError {
     #[error("Product {0} not found")]
     ProductNotFound(String),
 
-    #[error("Version {1} for product {0} not found")]
-    VersionNotFound(String, String),
+    #[error("Product {0} not accepting crashes")]
+    ProductNotAcceptingCrashes(String),
+
+    #[error("version {0} product {1} is too old")]
+    TooOld(String, String),
 
     #[error("User {0} not found")]
     UserNotFound(String),
@@ -62,9 +65,13 @@ impl IntoResponse for ApiError {
             ApiError::ProductNotFound(product) => {
                 (StatusCode::BAD_REQUEST, format!("product {product} not found"))
             }
-            ApiError::VersionNotFound(product, version) => (
+            ApiError::ProductNotAcceptingCrashes(product) => (
                 StatusCode::BAD_REQUEST,
-                format!("version {version} of product {product} not found"),
+                format!("product {product} not accepting crashes"),
+            ),
+            ApiError::TooOld(version, product) => (
+                StatusCode::BAD_REQUEST,
+                format!("version {version} of product {product} is too old"),
             ),
             ApiError::UserNotFound(user) => {
                 (StatusCode::BAD_REQUEST, format!("user {user} not found"))

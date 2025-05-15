@@ -113,7 +113,6 @@ curl -X GET ${DB_URI}products --insecure \
 # done
 
 curl -vv -X POST "${API_URI}api/symbols/upload?product=App1&version=1.1" --insecure -H "Authorization: Bearer $SYMBOLS_TOKEN" -Fsymbols_file=@dev/crash.sym
-curl -vv -X POST "${API_URI}api/minidump/upload" --insecure -H "Authorization: Bearer $MINIDUMP_TOKEN" -Fminidump_file=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp -Fattach=@dev/init.sh
 
 curl -vv -X POST "{API_URI}api/minidump/upload?api_key=$MINIDUMP_TOKEN" --insecure \
   -F"upload_file_minidump=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp;type=application/octet-stream" \
@@ -121,4 +120,4 @@ curl -vv -X POST "{API_URI}api/minidump/upload?api_key=$MINIDUMP_TOKEN" --insecu
   -F"version=1.11;type=text/plain" \
   -F"channel=rc;type=text/plain" \
   -F"commit=x;type=text/plain" \
-  -F"buildid=x;type=text/plain"
+  -F"build_id=x;type=text/plain"

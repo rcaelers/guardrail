@@ -1,6 +1,5 @@
 pub mod crash;
 pub mod user;
-pub mod version;
 
 use leptos::prelude::*;
 

@@ -22,7 +22,6 @@ use components::{
     register::RegisterPage,
     // symbols::SymbolsPage,
     // users::UsersPage,
-    // versions::VersionsPage,
 };
 
 #[server(GetUser)]
@@ -88,7 +87,6 @@ pub fn App() -> impl IntoView {
                         <Route path=path!("auth/profile") view=ProfilePage/>
                         //<Route path=path!("admin/users") view=UsersPage/>
                         <Route path=path!("admin/products") view=ProductsPage/>
-                        //<Route path=path!("admin/versions") view=VersionsPage/>
                         //<Route path=path!("admin/symbols") view=SymbolsPage/>
                         //<Route path=path!("crashes") view=CrashesPage/>
                     </FlatRoutes>

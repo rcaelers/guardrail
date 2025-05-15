@@ -7,7 +7,6 @@ pub mod error;
 pub mod product;
 pub mod symbols;
 pub mod user;
-pub mod version;
 
 use sqlx::{Executor, pool::PoolConnection};
 use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};

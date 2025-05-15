@@ -6,4 +6,3 @@ pub mod credentials;
 pub mod product;
 pub mod symbols;
 pub mod user;
-pub mod version;

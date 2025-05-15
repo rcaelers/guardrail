@@ -12,8 +12,8 @@ use tokio_util::io::StreamReader;
 use tracing::error;
 
 use crate::error::ApiError;
-use data::{api_token::ApiToken, product::Product, version::Version};
-use repos::{product::ProductRepo, version::VersionRepo};
+use data::{api_token::ApiToken, product::Product};
+use repos::product::ProductRepo;
 
 pub async fn peek_line<'a>(
     field: Field<'a>,
@@ -121,29 +121,6 @@ where
         .ok_or_else(|| {
             error!("No such product {}", product_id);
             ApiError::ProductNotFound(product_id.to_string())
-        })
-}
-
-pub async fn get_version<E>(
-    tx: &mut E,
-    product: &Product,
-    version_name: &str,
-) -> Result<Version, ApiError>
-where
-    for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-{
-    VersionRepo::get_by_product_and_name(tx, product.id, version_name)
-        .await
-        .map_err(|_| {
-            error!("Failed to get version for {}/{}", product.name, version_name);
-            ApiError::Failure(format!(
-                "failed to get version for {}/{}",
-                product.name, version_name
-            ))
-        })?
-        .ok_or_else(|| {
-            error!("No such version for {}/{}", product.name, version_name);
-            ApiError::VersionNotFound(product.name.clone(), version_name.to_string())
         })
 }
 

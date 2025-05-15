@@ -5,11 +5,9 @@ use uuid::Uuid;
 
 use common::QueryParams;
 use data::attachment::*;
-use data::crash::NewCrash;
 use repos::attachment::*;
-use repos::crash::CrashRepo;
 
-use testware::{create_test_attachment, setup_test_dependencies};
+use testware::{create_test_attachment, create_test_crash, create_test_product};
 
 // get_by_id tests
 
@@ -63,19 +61,8 @@ async fn test_get_by_id_not_found(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_all(pool: PgPool) {
-    let (product_id, version_id) = setup_test_dependencies(&pool).await;
-
-    let new_crash = NewCrash {
-        id: None,
-        minidump: Uuid::new_v4(),
-        info: Some("Test crash".to_string()),
-        version_id,
-        product_id,
-    };
-
-    let crash_id = CrashRepo::create(&pool, new_crash)
-        .await
-        .expect("Failed to insert test crash");
+    let product = create_test_product(&pool).await;
+    let crash = create_test_crash(&pool, None, Some(product.id)).await;
 
     let test_attachment_data = vec![
         ("screenshot.png", "image/png", 20480, "crash_screenshot.png"),
@@ -90,8 +77,8 @@ async fn test_get_all(pool: PgPool) {
             mime_type,
             *size,
             filename,
-            Some(product_id),
-            Some(crash_id),
+            Some(product.id),
+            Some(crash.id),
         )
         .await;
     }
@@ -124,19 +111,8 @@ async fn test_get_all(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_all_error(pool: PgPool) {
-    let (product_id, version_id) = setup_test_dependencies(&pool).await;
-
-    let new_crash = NewCrash {
-        id: None,
-        minidump: Uuid::new_v4(),
-        info: Some("Test crash".to_string()),
-        version_id,
-        product_id,
-    };
-
-    let crash_id = CrashRepo::create(&pool, new_crash)
-        .await
-        .expect("Failed to insert test crash");
+    let product = create_test_product(&pool).await;
+    let crash = create_test_crash(&pool, None, Some(product.id)).await;
 
     create_test_attachment(
         &pool,
@@ -144,8 +120,8 @@ async fn test_get_all_error(pool: PgPool) {
         "image/png",
         20480,
         "crash_screenshot.png",
-        Some(product_id),
-        Some(crash_id),
+        Some(product.id),
+        Some(crash.id),
     )
     .await;
 
@@ -160,27 +136,17 @@ async fn test_get_all_error(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_create(pool: PgPool) {
-    let (product_id, version_id) = setup_test_dependencies(&pool).await;
-
-    let new_crash = NewCrash {
-        id: None,
-        minidump: Uuid::new_v4(),
-        info: Some("Test crash".to_string()),
-        version_id,
-        product_id,
-    };
-
-    let crash_id = CrashRepo::create(&pool, new_crash)
-        .await
-        .expect("Failed to insert test crash");
+    let product = create_test_product(&pool).await;
+    let crash = create_test_crash(&pool, None, Some(product.id)).await;
 
     let new_attachment = NewAttachment {
         name: "stacktrace.txt".to_string(),
         mime_type: "text/plain".to_string(),
         size: 5120,
         filename: "stack_trace_full.txt".to_string(),
-        crash_id,
-        product_id,
+        crash_id: crash.id,
+        product_id: product.id,
+        storage_location: "s3://bucket/path/to/stack_trace_full.txt".to_string(),
     };
 
     let attachment_id = AttachmentsRepo::create(&pool, new_attachment.clone())
@@ -202,15 +168,16 @@ async fn test_create(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_create_error(pool: PgPool) {
-    let (product_id, crash_id) = setup_test_dependencies(&pool).await;
+    let product = create_test_product(&pool).await;
 
     let new_attachment = NewAttachment {
         filename: "test_file.txt".to_string(),
         mime_type: "text/plain".to_string(),
         size: 123,
         name: "/path/to/file.txt".to_string(),
-        crash_id,
-        product_id,
+        storage_location: "s3://bucket/path/to/file.txt".to_string(),
+        crash_id: product.id,
+        product_id: product.id,
     };
 
     pool.close().await;
@@ -334,19 +301,8 @@ async fn test_count(pool: PgPool) {
         .await
         .expect("Failed to count initial attachments");
 
-    let (product_id, version_id) = setup_test_dependencies(&pool).await;
-
-    let new_crash = NewCrash {
-        id: None,
-        minidump: Uuid::new_v4(),
-        info: Some("Test crash".to_string()),
-        version_id,
-        product_id,
-    };
-
-    let crash_id = CrashRepo::create(&pool, new_crash)
-        .await
-        .expect("Failed to insert test crash");
+    let product = create_test_product(&pool).await;
+    let crash = create_test_crash(&pool, None, Some(product.id)).await;
 
     let test_attachments = vec![
         ("count1.txt", "text/plain", 100, "count_file1.txt"),
@@ -361,8 +317,8 @@ async fn test_count(pool: PgPool) {
             mime_type,
             *size,
             filename,
-            Some(product_id),
-            Some(crash_id),
+            Some(product.id),
+            Some(crash.id),
         )
         .await;
     }
@@ -376,19 +332,8 @@ async fn test_count(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_count_error(pool: PgPool) {
-    let (product_id, version_id) = setup_test_dependencies(&pool).await;
-
-    let new_crash = NewCrash {
-        id: None,
-        minidump: Uuid::new_v4(),
-        info: Some("Test crash".to_string()),
-        version_id,
-        product_id,
-    };
-
-    let crash_id = CrashRepo::create(&pool, new_crash)
-        .await
-        .expect("Failed to insert test crash");
+    let product = create_test_product(&pool).await;
+    let crash = create_test_crash(&pool, None, Some(product.id)).await;
 
     create_test_attachment(
         &pool,
@@ -396,8 +341,8 @@ async fn test_count_error(pool: PgPool) {
         "text/plain",
         1024,
         "count_test_file.txt",
-        Some(product_id),
-        Some(crash_id),
+        Some(product.id),
+        Some(crash.id),
     )
     .await;
 

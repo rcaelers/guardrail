@@ -24,8 +24,7 @@ use repos::product::ProductRepo;
 use repos::symbols::SymbolsRepo;
 
 use testware::{
-    create_settings, create_test_product_with_details, create_test_token, create_test_version,
-    create_webauthn,
+    create_settings, create_test_product_with_details, create_test_token, create_webauthn,
 };
 
 async fn setup(pool: &PgPool) -> (Router, Arc<dyn ObjectStore>, String, String, String, String) {
@@ -65,8 +64,6 @@ async fn setup(pool: &PgPool) -> (Router, Arc<dyn ObjectStore>, String, String, 
 
     let product =
         create_test_product_with_details(pool, "TestProduct", "Test product description").await;
-    let _version =
-        create_test_version(pool, "1.0.0", "test_hash", "v1_0_0", Some(product.id)).await;
 
     (app, store, boundary.to_owned(), content.to_owned(), body, token)
 }
@@ -124,7 +121,7 @@ async fn test_symbol_upload_ok(pool: PgPool) {
     assert_eq!(symbols.build_id, "EE9E2672A6863B084C4C44205044422E1");
 
     let file = store
-        .get(&Path::from(symbols.file_location.clone()))
+        .get(&Path::from(symbols.storage_location.clone()))
         .await
         .unwrap();
     let content_bytes = file.bytes().await.unwrap();
@@ -158,32 +155,6 @@ async fn test_symbol_upload_no_such_product(pool: PgPool) {
         .await
         .expect("Failed to fetch symbol entry from database");
 
-    assert_eq!(allsymbols.len(), 0);
-}
-
-#[sqlx::test(migrations = "../../migrations")]
-async fn test_symbol_upload_no_such_version(pool: PgPool) {
-    let (app, _store, boundary, _content, body, token) = setup(&pool).await;
-
-    let request = Request::builder()
-        .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=2.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
-        .body(Body::from(body))
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("version 2.0.0 of product TestProduct not found"),
-    )
-    .await;
-
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
-        .await
-        .expect("Failed to fetch symbol entry from database");
     assert_eq!(allsymbols.len(), 0);
 }
 
@@ -306,7 +277,7 @@ async fn test_symbol_upload_invalid_header(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
-async fn test_symbol_upload_invalid_buildid_1(pool: PgPool) {
+async fn test_symbol_upload_invalid_build_id_1(pool: PgPool) {
     let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1EE9E2672A6863B084C4C44205044422E1EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
@@ -341,7 +312,7 @@ async fn test_symbol_upload_invalid_buildid_1(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
-async fn test_symbol_upload_invalid_buildid_2(pool: PgPool) {
+async fn test_symbol_upload_invalid_build_id_2(pool: PgPool) {
     let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084@4C44205044422E1 crash.pdb\r\n\
@@ -821,7 +792,8 @@ async fn test_symbol_upload_empty(pool: PgPool) {
         response,
         StatusCode::BAD_REQUEST,
         Some("general failure: failed to read multipart field from upload"),
-    ).await;
+    )
+    .await;
 
     let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
         .await

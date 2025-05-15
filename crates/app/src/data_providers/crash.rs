@@ -20,8 +20,6 @@ pub struct CrashRow {
     pub updated_at: NaiveDateTime,
     #[table(skip)]
     pub product_id: Option<Uuid>,
-    #[table(skip)]
-    pub version_id: Option<Uuid>,
 }
 
 impl From<Crash> for CrashRow {
@@ -32,7 +30,6 @@ impl From<Crash> for CrashRow {
             created_at: crash.created_at,
             updated_at: crash.updated_at,
             product_id: Some(crash.product_id),
-            version_id: Some(crash.version_id),
             product: "TODO:".to_string(), // crash.product,
             version: "TODO:".to_string(), // crash.version,
         }

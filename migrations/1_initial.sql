@@ -22,7 +22,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- Products
 --
 CREATE TABLE guardrail.products (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     name TEXT NOT NULL UNIQUE,
@@ -46,7 +46,7 @@ ALTER FUNCTION guardrail.get_product_id OWNER TO guardrail;
 -- Users
 --
 CREATE TABLE guardrail.users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     username TEXT NOT NULL UNIQUE,
@@ -141,48 +141,18 @@ $$ LANGUAGE 'plpgsql';
 ALTER FUNCTION guardrail.update_updated_timestamp OWNER TO guardrail;
 
 --
--- versions
---
-CREATE TABLE guardrail.versions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP NOT NULL DEFAULT now(),
-    name TEXT NOT NULL,
-    hash TEXT NOT NULL,
-    tag TEXT NOT NULL,
-    product_id UUID NOT NULL REFERENCES guardrail.products (id),
-
-    UNIQUE (name, product_id),
-    UNIQUE (hash, product_id),
-    UNIQUE (tag, product_id)
-);
-ALTER TABLE guardrail.versions OWNER TO guardrail;
-
-CREATE OR REPLACE FUNCTION guardrail.get_version_id(product_name TEXT, version_name TEXT) RETURNS UUID AS $$
-BEGIN
-    RETURN (
-	SELECT guardrail.versions.id
-	FROM guardrail.versions
-	JOIN guardrail.products ON guardrail.products.id = guardrail.versions.product_id
-	WHERE guardrail.products.name = product_name AND guardrail.versions.name = version_name
-    );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-ALTER FUNCTION guardrail.get_version_id OWNER TO guardrail;
---
 -- Symbols
 --
 CREATE TABLE guardrail.symbols (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     os TEXT NOT NULL,
     arch TEXT NOT NULL,
     build_id TEXT NOT NULL,
     module_id TEXT NOT NULL,
-    file_location TEXT NOT NULL,
-    product_id UUID NOT NULL REFERENCES guardrail.products (id),
-    version_id UUID NOT NULL REFERENCES guardrail.versions (id)
+    storage_location TEXT NOT NULL,
+    product_id UUID NOT NULL REFERENCES guardrail.products (id)
 );
 ALTER TABLE guardrail.symbols OWNER TO guardrail;
 
@@ -190,16 +160,16 @@ ALTER TABLE guardrail.symbols OWNER TO guardrail;
 -- Crashes
 --
 CREATE TABLE guardrail.crashes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
-    state TEXT NOT NULL CHECK (
-        state IN ('pending', 'failed', 'complete')
-    ) DEFAULT 'pending',
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     info TEXT,
     report JSONB,
     minidump UUID,
-    version_id UUID NOT NULL REFERENCES guardrail.versions (id),
+    version TEXT,
+    channel TEXT,
+    commit TEXT,
+    build_id TEXT,
     product_id UUID NOT NULL REFERENCES guardrail.products (id)
 );
 ALTER TABLE guardrail.crashes OWNER TO guardrail;
@@ -208,7 +178,7 @@ ALTER TABLE guardrail.crashes OWNER TO guardrail;
 -- Annotations
 --
 CREATE TABLE guardrail.annotations (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     key TEXT NOT NULL,
@@ -226,13 +196,14 @@ ALTER TABLE guardrail.annotations OWNER TO guardrail;
 -- Attachments
 --
 CREATE TABLE guardrail.attachments (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     name TEXT NOT NULL,
     mime_type TEXT NOT NULL,
     size bigint NOT NULL,
     filename TEXT NOT NULL,
+    storage_location TEXT NOT NULL,
     crash_id UUID NOT NULL REFERENCES guardrail.crashes (id),
     product_id UUID NOT NULL REFERENCES guardrail.products (id),
     UNIQUE (name, crash_id)
@@ -243,7 +214,7 @@ ALTER TABLE guardrail.attachments OWNER TO guardrail;
 -- API Tokens
 --
 CREATE TABLE guardrail.api_tokens (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     description TEXT NOT NULL,
@@ -269,7 +240,7 @@ CREATE INDEX idx_api_tokens_user ON guardrail.api_tokens (user_id) WHERE user_id
 -- Credentials
 --
 CREATE TABLE guardrail.credentials (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4 (),
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID NOT NULL REFERENCES guardrail.users (id),
     name TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT now(),
@@ -296,7 +267,7 @@ ALTER TABLE guardrail.sessions OWNER TO guardrail;
 DO $$
 DECLARE tbl TEXT;
 schema_name TEXT := 'guardrail';
-tables_to_apply TEXT [ ] := ARRAY [ 'versions', 'symbols', 'crashes', 'annotations', 'attachments' ];
+tables_to_apply TEXT [ ] := ARRAY [ 'symbols', 'crashes', 'annotations', 'attachments' ];
 BEGIN FOREACH tbl IN ARRAY tables_to_apply
 LOOP EXECUTE format(
         'ALTER TABLE guardrail.%I ENABLE ROW LEVEL SECURITY;
@@ -313,7 +284,7 @@ END $$;
 DO $$
 DECLARE tbl TEXT;
 schema_name TEXT := 'guardrail';
-tables_to_apply TEXT [ ] := ARRAY [ 'users', 'user_access', 'products', 'versions', 'symbols', 'crashes', 'annotations', 'attachments', 'api_tokens' ];
+tables_to_apply TEXT [ ] := ARRAY [ 'users', 'user_access', 'products', 'symbols', 'crashes', 'annotations', 'attachments', 'api_tokens' ];
 BEGIN FOREACH tbl IN ARRAY tables_to_apply
 LOOP EXECUTE format(
         'GRANT SELECT, INSERT, UPDATE, DELETE ON guardrail.%I TO guardrail_apiuser;

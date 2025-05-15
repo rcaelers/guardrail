@@ -1,6 +1,6 @@
 use super::error::ApiError;
 use crate::state::AppState;
-use crate::utils::{get_product, get_version, validate_api_token_for_product};
+use crate::utils::{get_product, validate_api_token_for_product};
 use crate::utils::{peek_line, stream_to_s3};
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Query, State};
@@ -9,11 +9,10 @@ use axum_extra::extract::WithRejection;
 use data::api_token::ApiToken;
 use data::product::Product;
 use data::symbols::NewSymbols;
-use data::version::Version;
 use repos::symbols::SymbolsRepo;
 use serde::{Deserialize, Serialize};
 use sqlx::Postgres;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 #[derive(Debug, Deserialize)]
 pub struct SymbolsRequestParams {
@@ -41,30 +40,11 @@ pub struct SymbolsResponse {
 pub struct SymbolsApi;
 
 impl SymbolsApi {
-    fn audit_log(event: &str, details: &str, product: Option<&str>, version: Option<&str>) {
-        let product_info = product.map_or("unknown".to_string(), |p| p.to_string());
-        let version_info = version.map_or("unknown".to_string(), |v| v.to_string());
-
-        info!(
-            event = event,
-            product = product_info,
-            version = version_info,
-            details = details,
-            "AUDIT: {}: {} (product: {}, version: {})",
-            event,
-            details,
-            product_info,
-            version_info,
-        );
-    }
-
     fn validate_symbols_content_type(content_type: &str) -> Result<(), ApiError> {
         let is_valid = content_type == "application/octet-stream";
         if !is_valid {
             error!("Invalid symbols content type: {}", content_type);
-            return Err(ApiError::Failure(format!(
-                "invalid symbols content type: {content_type}"
-            )));
+            return Err(ApiError::Failure(format!("invalid symbols content type: {content_type}")));
         }
         Ok(())
     }
@@ -108,7 +88,6 @@ impl SymbolsApi {
     async fn process_header(
         first_line: String,
         product: data::product::Product,
-        version: data::version::Version,
     ) -> Result<NewSymbols, ApiError> {
         let collection: Vec<&str> = first_line.split_whitespace().collect();
         if collection.len() < 5 {
@@ -129,29 +108,20 @@ impl SymbolsApi {
             arch,
             build_id,
             module_id,
-            file_location: path,
+            storage_location: path,
             product_id: product.id,
-            version_id: version.id,
         })
     }
 
     async fn handle_symbol_upload<E>(
         tx: &mut E,
         product: &Product,
-        version: &Version,
         field: Field<'_>,
         state: AppState,
     ) -> Result<(), ApiError>
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
     {
-        Self::audit_log(
-            "symbol_upload_start",
-            "Starting symbol file processing",
-            Some(&product.name),
-            Some(&version.name),
-        );
-
         let content_type = field.content_type().unwrap_or_default();
         Self::validate_symbols_content_type(content_type)?;
 
@@ -160,21 +130,14 @@ impl SymbolsApi {
             ApiError::Failure("failed to read symbols file".to_string())
         })?;
 
-        let data = Self::process_header(line, product.clone(), version.clone()).await?;
+        let data = Self::process_header(line, product.clone()).await?;
 
         SymbolsRepo::create(tx, data.clone()).await?;
 
-        if let Err(e) = stream_to_s3(state.storage.clone(), &data.file_location, stream).await {
+        if let Err(e) = stream_to_s3(state.storage.clone(), &data.storage_location, stream).await {
             error!("Failed to stream to S3: {:?}", e);
             return Err(ApiError::InternalFailure());
         }
-
-        Self::audit_log(
-            "symbol_upload_complete",
-            &format!("Symbol file successfully processed and stored. Build ID: {}", data.build_id),
-            Some(&product.name),
-            Some(&version.name),
-        );
 
         Ok(())
     }
@@ -183,7 +146,6 @@ impl SymbolsApi {
         tx: &mut E,
         field: Field<'_>,
         product: &Product,
-        version: &Version,
         state: AppState,
     ) -> Result<(), ApiError>
     where
@@ -191,7 +153,7 @@ impl SymbolsApi {
     {
         match field.name() {
             Some("symbols_file") => {
-                Self::handle_symbol_upload(&mut *tx, product, version, field, state).await?;
+                Self::handle_symbol_upload(&mut *tx, product, field, state).await?;
                 Ok(())
             }
             _ => Ok(()),
@@ -204,47 +166,24 @@ impl SymbolsApi {
         WithRejection(Query(params), _): WithRejection<Query<SymbolsRequestParams>, ApiError>,
         mut multipart: Multipart,
     ) -> Result<Json<SymbolsResponse>, ApiError> {
-        debug!("SymbolsApi::upload called with params: {:?}", params);
-        tracing::info!("Logging initialized");
-
-        Self::audit_log(
-            "symbols_upload_start",
-            &format!("Starting symbols upload process for {}/{}", params.product, params.version),
-            Some(&params.product),
-            Some(&params.version),
-        );
-
         params.validate()?;
+
+        info!("Starting symbols upload process for {} {}", params.product, params.version);
 
         let mut tx = state.repo.begin_admin().await?;
 
         let product = get_product(&mut *tx, &params.product).await?;
         validate_api_token_for_product(&api_token, &product, &params.product)?;
-        let version = get_version(&mut *tx, &product, &params.version).await?;
-
-        Self::audit_log(
-            "processing_multipart",
-            "Processing multipart form data",
-            Some(&product.name),
-            Some(&version.name),
-        );
 
         while let Some(field) = multipart.next_field().await.map_err(|e| {
             error!("Failed to get next multipart field: {:?}", e);
             ApiError::Failure("failed to read multipart field from upload".to_string())
         })? {
-            Self::process_field(&mut *tx, field, &product, &version, state.clone()).await?;
+            Self::process_field(&mut *tx, field, &product, state.clone()).await?;
         }
         state.repo.end(tx).await?;
 
-        //TODO: remove from storage if commit fails
-
-        Self::audit_log(
-            "upload_complete",
-            &format!("Upload process completed successfully for {}/{}", product.name, version.name),
-            Some(&product.name),
-            Some(&version.name),
-        );
+        info!("Upload process completed successfully for {} {}", params.product, params.version);
 
         Ok(Json(SymbolsResponse {
             result: "ok".to_string(),

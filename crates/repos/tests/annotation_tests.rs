@@ -5,7 +5,6 @@ use repos::{annotation::AnnotationsRepo, error::RepoError};
 use sqlx::{Pool, Postgres};
 use testware::create_test_crash;
 use testware::create_test_product;
-use testware::create_test_version;
 use uuid::Uuid;
 
 // AnnotationKind tests
@@ -43,9 +42,7 @@ fn test_annotation_kind_try_from_invalid_str() {
 
 async fn create_test_annotation(pool: &Pool<Postgres>) -> (NewAnnotation, Uuid, Uuid) {
     let product = create_test_product(pool).await;
-    let version =
-        create_test_version(pool, "1.0.0", "Test Version", "test-platform", Some(product.id)).await;
-    let crash = create_test_crash(pool, None, Some(product.id), Some(version.id)).await;
+    let crash = create_test_crash(pool, None, Some(product.id)).await;
 
     let new_annotation = NewAnnotation {
         key: format!("test_key_{}", Uuid::new_v4()),
@@ -107,10 +104,7 @@ async fn test_get_by_id_error(pool: Pool<Postgres>) {
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_crash_id(pool: Pool<Postgres>) {
     let product = create_test_product(&pool).await;
-    let version =
-        create_test_version(&pool, "1.0.0", "Test Version", "test-platform", Some(product.id))
-            .await;
-    let crash = create_test_crash(&pool, None, Some(product.id), Some(version.id)).await;
+    let crash = create_test_crash(&pool, None, Some(product.id)).await;
 
     let new_annotation1 = NewAnnotation {
         key: "key1".to_string(),
@@ -128,7 +122,7 @@ async fn test_get_by_crash_id(pool: Pool<Postgres>) {
         product_id: product.id,
     };
 
-    let different_crash = create_test_crash(&pool, None, Some(product.id), Some(version.id)).await;
+    let different_crash = create_test_crash(&pool, None, Some(product.id)).await;
 
     let new_annotation3 = NewAnnotation {
         key: "key3".to_string(),
@@ -164,10 +158,7 @@ async fn test_get_by_crash_id(pool: Pool<Postgres>) {
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_crash_id_error(pool: Pool<Postgres>) {
     let product = create_test_product(&pool).await;
-    let version =
-        create_test_version(&pool, "1.0.0", "Test Version", "test-platform", Some(product.id))
-            .await;
-    let crash = create_test_crash(&pool, None, Some(product.id), Some(version.id)).await;
+    let crash = create_test_crash(&pool, None, Some(product.id)).await;
 
     let new_annotation = NewAnnotation {
         key: "key1".to_string(),

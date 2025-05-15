@@ -21,20 +21,17 @@ use crate::data::QueryParams;
 pub struct SymbolsRow {
     pub id: Uuid,
     pub product: String,
-    pub version: String,
     pub os: String,
     pub arch: String,
     pub build_id: String,
     pub module_id: String,
-    pub file_location: String,
+    pub storage_location: String,
     #[table(format(string = "%d/%m/%Y - %H:%M"))]
     pub created_at: NaiveDateTime,
     #[table(format(string = "%d/%m/%Y - %H:%M"))]
     pub updated_at: NaiveDateTime,
     #[table(skip)]
     pub product_id: Option<Uuid>,
-    #[table(skip)]
-    pub version_id: Option<Uuid>,
 }
 
 #[cfg(feature = "ssr")]
@@ -47,11 +44,9 @@ pub struct Symbols {
     pub arch: String,
     pub build_id: String,
     pub module_id: String,
-    pub file_location: String,
+    pub storage_location: String,
     pub product_id: Uuid,
-    pub version_id: Uuid,
     pub product: String,
-    pub version: String,
 }
 
 #[cfg(not(feature = "ssr"))]
@@ -64,11 +59,9 @@ pub struct Symbols {
     pub arch: String,
     pub build_id: String,
     pub module_id: String,
-    pub file_location: String,
+    pub storage_location: String,
     pub product_id: Uuid,
-    pub version_id: Uuid,
     pub product: String,
-    pub version: String,
 }
 
 impl From<Symbols> for SymbolsRow {
@@ -79,13 +72,11 @@ impl From<Symbols> for SymbolsRow {
             arch: symbols.arch,
             build_id: symbols.build_id,
             module_id: symbols.module_id,
-            file_location: symbols.file_location,
+            storage_location: symbols.storage_location,
             created_at: symbols.created_at,
             updated_at: symbols.updated_at,
             product_id: Some(symbols.product_id),
-            version_id: Some(symbols.version_id),
             product: symbols.product,
-            version: symbols.version,
         }
     }
 }

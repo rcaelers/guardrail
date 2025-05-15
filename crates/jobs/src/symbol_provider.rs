@@ -100,7 +100,7 @@ impl SymbolSupplier for S3SymbolSupplier {
         let symbols = self
             .get_symbols_by_module_and_build_id(&module_id, &build_id)
             .await?;
-        let data = self.get_symbols_object(&symbols.file_location).await?;
+        let data = self.get_symbols_object(&symbols.storage_location).await?;
         let symbols = self.parse_symbols(&data).await?;
 
         info!("S3SymbolSupplier parsed file!");
@@ -136,7 +136,7 @@ mod test {
 
     use super::*;
     use repos::{Repo, symbols::SymbolsRepo};
-    use testware::{create_test_product_with_details, create_test_version, setup::TestSetup};
+    use testware::{create_test_product_with_details, setup::TestSetup};
 
     #[sqlx::test(migrations = "../../migrations")]
     async fn test_s3_symbol_supplier(pool: PgPool) {
@@ -147,8 +147,6 @@ mod test {
         let product =
             create_test_product_with_details(&pool, "TestProduct", "Test product description")
                 .await;
-        let version =
-            create_test_version(&pool, "1.0.0", "test_hash", "v1_0_0", Some(product.id)).await;
 
         let workspace_dir = std::env::var("CARGO_MANIFEST_DIR")
             .map(PathBuf::from)
@@ -168,9 +166,8 @@ mod test {
         let data = NewSymbols {
             build_id,
             module_id,
-            file_location: symbols_path.clone(),
+            storage_location: symbols_path.clone(),
             product_id: product.id,
-            version_id: version.id,
             os: "windows".to_string(),
             arch: "x86_64".to_string(),
         };

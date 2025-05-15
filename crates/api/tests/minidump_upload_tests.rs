@@ -5,6 +5,7 @@ use axum::http::{Request, StatusCode};
 use axum::{Router, body::Body};
 use bytes::Bytes;
 use chrono::Utc;
+use futures::TryStreamExt;
 use object_store::ObjectStore;
 use object_store::path::Path;
 use serde_json::json;
@@ -12,6 +13,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 use tower::ServiceExt;
 use tower_http::trace::TraceLayer;
+use tracing::info;
 
 use api::routes::routes;
 use api::state::AppState;
@@ -23,8 +25,7 @@ use repos::api_token::ApiTokenRepo;
 use repos::product::ProductRepo;
 
 use testware::{
-    create_settings, create_test_product_with_details, create_test_token, create_test_version,
-    create_webauthn,
+    create_settings, create_test_product_with_details, create_test_token, create_webauthn,
 };
 
 async fn setup(pool: &PgPool) -> (Router, Arc<dyn ObjectStore>, String, String, String, String) {
@@ -55,8 +56,6 @@ async fn setup(pool: &PgPool) -> (Router, Arc<dyn ObjectStore>, String, String, 
 
     let product =
         create_test_product_with_details(pool, "TestProduct", "Test product description").await;
-    let _version =
-        create_test_version(pool, "1.0.0", "test_hash", "v1_0_0", Some(product.id)).await;
 
     let (token, _) =
         create_test_token(pool, "Test Token", Some(product.id), None, &["minidump-upload"]).await;
@@ -95,7 +94,7 @@ pub fn create_body(
         "{body}--{boundary}\r\nContent-Disposition: form-data; name=\"commit\"\r\nContent-Type: text/plain\r\n\r\ntest-commit\r\n"
     );
     body = format!(
-        "{body}--{boundary}\r\nContent-Disposition: form-data; name=\"buildid\"\r\nContent-Type: text/plain\r\n\r\ntest-buildid\r\n"
+        "{body}--{boundary}\r\nContent-Disposition: form-data; name=\"build_id\"\r\nContent-Type: text/plain\r\n\r\n2025-05-15T20:26:15+02:00\r\n"
     );
 
     if let Some(extra) = extra {
@@ -148,7 +147,7 @@ async fn assert_response_error(
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_ok(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+    let (app, store, boundary, _content, _body, token) = setup(&pool).await;
 
     let body = create_body(&boundary, Some("TestProduct"), Some("1.0.0"), None);
     let request = Request::builder()
@@ -160,25 +159,45 @@ async fn test_minidump_upload_ok(pool: PgPool) {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_response_ok(response).await;
+    let result = assert_response_ok(response).await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
+    let crash_id = result["crash_id"].as_str().unwrap();
+    info!("Crash ID: {}", crash_id);
 
-    // assert_eq!(crashes.len(), 1);
-    // let crash = &crashes[0];
-    // assert!(crash.minidump.is_some());
-    // assert_eq!(crash.state, data::crash::State::Pending);
+    let crash_info = store
+        .get(&Path::from(format!("crashes/{crash_id}.json")))
+        .await
+        .expect("Failed to get minidump object")
+        .bytes()
+        .await
+        .expect("Failed to read minidump object");
+    let crash_info: serde_json::Value =
+        serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
-    // let path = format!("minidumps/{}", crashes[0].minidump.unwrap());
-    // let object = get_object(store, &path).await;
-    // assert_eq!(object, Bytes::from(content));
+    assert_eq!(crash_info["product"].as_str().unwrap(), "TestProduct");
+    assert_eq!(crash_info["version"].as_str().unwrap(), "1.0.0");
+    assert_eq!(crash_info["channel"].as_str().unwrap(), "test-channel");
+    assert_eq!(crash_info["commit"].as_str().unwrap(), "test-commit");
+    assert_eq!(crash_info["build_id"].as_str().unwrap(), "2025-05-15T20:26:15+02:00");
+    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 0);
+    assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 0);
+
+    let minidump = crash_info["minidump"]["storage_path"]
+        .as_str()
+        .expect("minidump_id is missing");
+    let minidump = store
+        .get(&Path::from(minidump))
+        .await
+        .expect("Failed to get minidump object")
+        .bytes()
+        .await
+        .expect("Failed to read minidump object");
+    assert_eq!(minidump, Bytes::from("MINIDUMP DATA"));
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_with_attachments_ok(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+    let (app, store, boundary, _content, _body, token) = setup(&pool).await;
 
     let attachment1_content = "LOG DATA 1";
     let attachment2_content = "LOG DATA 2";
@@ -187,8 +206,8 @@ async fn test_minidump_upload_with_attachments_ok(pool: PgPool) {
         Some("TestProduct"),
         Some("1.0.0"),
         Some(format!(
-            "--{boundary}\r\nContent-Disposition: form-data; name=\"attachment1\"; filename=\"log.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n{attachment1_content}\r\n\
-             --{boundary}\r\nContent-Disposition: form-data; name=\"attachment2\"; filename=\"trace.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n{attachment2_content}\r\n"
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"attachment1\"; filename=\"log1.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n{attachment1_content}\r\n\
+             --{boundary}\r\nContent-Disposition: form-data; name=\"attachment2\"; filename=\"log2.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n{attachment2_content}\r\n"
         )),
     );
 
@@ -202,43 +221,128 @@ async fn test_minidump_upload_with_attachments_ok(pool: PgPool) {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_response_ok(response).await;
+    let result = assert_response_ok(response).await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
+    let crash_id = result["crash_id"].as_str().unwrap();
+    info!("Crash ID: {}", crash_id);
 
-    // assert_eq!(crashes.len(), 1);
-    // let crash = &crashes[0];
-    // assert!(crash.minidump.is_some());
-    // assert_eq!(crash.state, data::crash::State::Pending);
+    let crash_info = store
+        .get(&Path::from(format!("crashes/{crash_id}.json")))
+        .await
+        .expect("Failed to get minidump object")
+        .bytes()
+        .await
+        .expect("Failed to read minidump object");
+    let crash_info: serde_json::Value =
+        serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
-    // let attachments = AttachmentsRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch attachments from database");
+    assert_eq!(crash_info["product"].as_str().unwrap(), "TestProduct");
+    assert_eq!(crash_info["version"].as_str().unwrap(), "1.0.0");
+    assert_eq!(crash_info["channel"].as_str().unwrap(), "test-channel");
+    assert_eq!(crash_info["commit"].as_str().unwrap(), "test-commit");
+    assert_eq!(crash_info["build_id"].as_str().unwrap(), "2025-05-15T20:26:15+02:00");
+    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 0);
+    assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 2);
 
-    // assert_eq!(attachments.len(), 2);
-    // let attachment1 = &attachments[0];
-    // let attachment2 = &attachments[1];
-    // assert_eq!(attachment1.name, "log.txt");
-    // assert_eq!(attachment2.name, "trace.txt");
+    let minidump = crash_info["minidump"]["storage_path"]
+        .as_str()
+        .expect("minidump_id is missing");
+    let minidump = store
+        .get(&Path::from(minidump))
+        .await
+        .expect("Failed to get minidump object")
+        .bytes()
+        .await
+        .expect("Failed to read minidump object");
+    assert_eq!(minidump, Bytes::from("MINIDUMP DATA"));
 
-    // let path = format!("attachments/{}", attachments[0].filename);
-    // let object = get_object(store.clone(), &path).await;
-    // assert_eq!(object, Bytes::from(attachment1_content));
+    let attachment = crash_info["attachments"].as_array().unwrap();
+    for (i, att) in attachment.iter().enumerate() {
+        let storage_path = att["storage_path"]
+            .as_str()
+            .expect("storage_path is missing");
+        let filename = att["filename"].as_str().expect("filename is missing");
+        assert_eq!(filename, format!("log{}.txt", i + 1));
+        let name = att["name"].as_str().expect("name is missing");
+        assert_eq!(name, format!("attachment{}", i + 1));
+        let object = store
+            .get(&Path::from(storage_path))
+            .await
+            .expect("Failed to get attachment object")
+            .bytes()
+            .await
+            .expect("Failed to read attachment object");
+        assert_eq!(object, Bytes::from(format!("LOG DATA {}", i + 1)));
+    }
+}
 
-    // let path = format!("attachments/{}", attachments[1].filename);
-    // let object = get_object(store.clone(), &path).await;
-    // assert_eq!(object, Bytes::from(attachment2_content));
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_minidump_upload_with_annotations_ok(pool: PgPool) {
+    let (app, store, boundary, _content, _body, token) = setup(&pool).await;
 
-    // let path = format!("minidumps/{}", crashes[0].minidump.unwrap());
-    // let object = get_object(store, &path).await;
-    // assert_eq!(object, Bytes::from(content));
+    let body = create_body(
+        &boundary,
+        Some("TestProduct"),
+        Some("1.0.0"),
+        Some(format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"features\"; \r\nContent-Type: text/plain\r\n\r\ntracing\r\n\
+             --{boundary}\r\nContent-Disposition: form-data; name=\"ui\"; \r\nContent-Type: text/plain\r\n\r\nQt\r\n"
+        )),
+    );
+
+    log::info!("Body: {body}");
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/minidump/upload")
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    let result = assert_response_ok(response).await;
+
+    let crash_id = result["crash_id"].as_str().unwrap();
+    info!("Crash ID: {}", crash_id);
+
+    let crash_info = store
+        .get(&Path::from(format!("crashes/{crash_id}.json")))
+        .await
+        .expect("Failed to get minidump object")
+        .bytes()
+        .await
+        .expect("Failed to read minidump object");
+    let crash_info: serde_json::Value =
+        serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
+
+    assert_eq!(crash_info["product"].as_str().unwrap(), "TestProduct");
+    assert_eq!(crash_info["version"].as_str().unwrap(), "1.0.0");
+    assert_eq!(crash_info["channel"].as_str().unwrap(), "test-channel");
+    assert_eq!(crash_info["commit"].as_str().unwrap(), "test-commit");
+    assert_eq!(crash_info["build_id"].as_str().unwrap(), "2025-05-15T20:26:15+02:00");
+    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 2);
+    assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 0);
+
+    let minidump = crash_info["minidump"]["storage_path"]
+        .as_str()
+        .expect("minidump_id is missing");
+    let minidump = store
+        .get(&Path::from(minidump))
+        .await
+        .expect("Failed to get minidump object")
+        .bytes()
+        .await
+        .expect("Failed to read minidump object");
+    assert_eq!(minidump, Bytes::from("MINIDUMP DATA"));
+
+    let annotations = crash_info["annotations"].as_object().unwrap();
+    assert_eq!(annotations["features"].as_str().unwrap(), "tracing");
+    assert_eq!(annotations["ui"].as_str().unwrap(), "Qt");
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_no_such_product(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+    let (app, store, boundary, _content, _body, token) = setup(&pool).await;
 
     let body = create_body(&boundary, Some("TestProductxx"), Some("1.0.0"), None);
 
@@ -259,45 +363,17 @@ async fn test_minidump_upload_no_such_product(pool: PgPool) {
     )
     .await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-
-    // assert_eq!(crashes.len(), 0);
-}
-
-#[sqlx::test(migrations = "../../migrations")]
-#[ignore]
-async fn test_minidump_upload_no_such_version(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
-
-    let body = create_body(&boundary, Some("TestProduct"), Some("2.0.0"), None);
-
-    let request = Request::builder()
-        .method("POST")
-        .uri("/api/minidump/upload")
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
-        .body(Body::from(body))
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("version 2.0.0 of product TestProduct not found"),
-    )
-    .await;
-
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_empty_version(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+    let (app, store, boundary, _content, _body, token) = setup(&pool).await;
 
     let body = create_body(&boundary, Some("TestProduct"), Some(""), None);
 
@@ -317,15 +393,17 @@ async fn test_minidump_upload_empty_version(pool: PgPool) {
     )
     .await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_empty_product(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+    let (app, store, boundary, _content, _body, token) = setup(&pool).await;
 
     let body = create_body(&boundary, Some(""), Some("1.0.0"), None);
     let request = Request::builder()
@@ -344,15 +422,17 @@ async fn test_minidump_upload_empty_product(pool: PgPool) {
     )
     .await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_invalid_content_type(pool: PgPool) {
-    let (app, _store, boundary, _content, body, token) = setup(&pool).await;
+    let (app, store, boundary, _content, body, token) = setup(&pool).await;
 
     let body = body.replace("application/octet-stream", "text/octet-stream");
 
@@ -372,16 +452,17 @@ async fn test_minidump_upload_invalid_content_type(pool: PgPool) {
     )
     .await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_invalid_multipart(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+    let (app, store, boundary, _content, _body, token) = setup(&pool).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
                    Hello world\r\n\
@@ -408,16 +489,17 @@ async fn test_minidump_upload_invalid_multipart(pool: PgPool) {
     )
     .await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_invalid_boundary(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+    let (app, store, boundary, _content, _body, token) = setup(&pool).await;
 
     let boundary2 = "----WebKitFormBoundaryX7MA4YWxkTrZu0gW";
     let body = create_body(boundary2, Some("TestProduct"), Some("1.0.0"), None);
@@ -438,16 +520,17 @@ async fn test_minidump_upload_invalid_boundary(pool: PgPool) {
     )
     .await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_wrong_entitlement(pool: PgPool) {
-    let (app, _store, boundary, _content, body, _token) = setup(&pool).await;
+    let (app, store, boundary, _content, body, _token) = setup(&pool).await;
 
     let (token, _) = create_test_token(&pool, "Wrong", None, None, &["token"]).await;
 
@@ -462,15 +545,17 @@ async fn test_minidump_upload_wrong_entitlement(pool: PgPool) {
     let response = app.oneshot(request).await.unwrap();
     assert_response_error(response, StatusCode::FORBIDDEN, Some("insufficient permissions")).await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_expired_entitlement(pool: PgPool) {
-    let (app, _store, boundary, _content, body, _token) = setup(&pool).await;
+    let (app, store, boundary, _content, body, _token) = setup(&pool).await;
 
     let product = ProductRepo::get_by_name(&pool, "TestProduct")
         .await
@@ -509,15 +594,17 @@ async fn test_minidump_upload_expired_entitlement(pool: PgPool) {
     )
     .await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_inactive_entitlement(pool: PgPool) {
-    let (app, _store, boundary, _content, body, _token) = setup(&pool).await;
+    let (app, store, boundary, _content, body, _token) = setup(&pool).await;
 
     let product = ProductRepo::get_by_name(&pool, "TestProduct")
         .await
@@ -555,15 +642,17 @@ async fn test_minidump_upload_inactive_entitlement(pool: PgPool) {
     )
     .await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_other_product(pool: PgPool) {
-    let (app, _store, boundary, _content, body, _token) = setup(&pool).await;
+    let (app, store, boundary, _content, body, _token) = setup(&pool).await;
 
     let product = create_test_product_with_details(&pool, "AnotherProduct", "description").await;
 
@@ -598,15 +687,17 @@ async fn test_minidump_upload_other_product(pool: PgPool) {
     )
     .await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_unknown_token(pool: PgPool) {
-    let (app, _store, boundary, _content, body, _token) = setup(&pool).await;
+    let (app, store, boundary, _content, body, _token) = setup(&pool).await;
 
     let request = Request::builder()
         .method("POST")
@@ -619,15 +710,17 @@ async fn test_minidump_upload_unknown_token(pool: PgPool) {
     let response = app.oneshot(request).await.unwrap();
     assert_response_error(response, StatusCode::UNAUTHORIZED, Some("invalid API token")).await;
 
-    // let crashes = SymbolsRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("failed to fetch symbol entry from database");
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_no_token(pool: PgPool) {
-    let (app, _store, boundary, _content, body, _token) = setup(&pool).await;
+    let (app, store, boundary, _content, body, _token) = setup(&pool).await;
 
     let request = Request::builder()
         .method("POST")
@@ -639,16 +732,17 @@ async fn test_minidump_upload_no_token(pool: PgPool) {
     let response = app.oneshot(request).await.unwrap();
     assert_response_error(response, StatusCode::UNAUTHORIZED, Some("missing API token")).await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_no_version(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+    let (app, store, boundary, _content, _body, token) = setup(&pool).await;
 
     let body = create_body(&boundary, Some("TestProduct"), None, None);
     let request = Request::builder()
@@ -667,21 +761,23 @@ async fn test_symbol_no_version(pool: PgPool) {
     )
     .await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_no_product(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+    let (app, store, boundary, _content, _body, token) = setup(&pool).await;
 
     let body = create_body(&boundary, None, Some("1.0.0"), None);
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload?version=1.0.0")
+        .uri("/api/minidump/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -695,16 +791,17 @@ async fn test_symbol_no_product(pool: PgPool) {
     )
     .await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_empty(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+    let (app, store, boundary, _content, _body, token) = setup(&pool).await;
 
     let request = Request::builder()
         .method("POST")
@@ -722,16 +819,17 @@ async fn test_minidump_upload_empty(pool: PgPool) {
     )
     .await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_wrong_name(pool: PgPool) {
-    let (app, _store, boundary, _content, body, token) = setup(&pool).await;
+    let (app, store, boundary, _content, body, token) = setup(&pool).await;
 
     let body = body.replace("upload_file_minidump", "xupload_file_minidump");
 
@@ -751,9 +849,10 @@ async fn test_minidump_upload_wrong_name(pool: PgPool) {
     )
     .await;
 
-    // let crashes = CrashRepo::get_all(&pool, QueryParams::default())
-    //     .await
-    //     .expect("Failed to fetch crash entry from database");
-
-    // assert_eq!(crashes.len(), 0);
+    let prefix = &Path::from("crashes/");
+    let crashes = store
+        .list(Some(prefix))
+        .map_ok(|meta| meta.location)
+        .try_collect::<Vec<Path>>();
+    assert_eq!(crashes.await.unwrap().len(), 0);
 }

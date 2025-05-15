@@ -56,7 +56,14 @@ impl SymbolsRepo {
         Repo::build_query(
             &mut builder,
             &params,
-            &["id", "os", "arch", "build_id", "module_id", "file_location"],
+            &[
+                "id",
+                "os",
+                "arch",
+                "build_id",
+                "module_id",
+                "storage_location",
+            ],
             &["os", "arch", "build_id", "module_id"],
         )?;
 
@@ -77,11 +84,10 @@ impl SymbolsRepo {
                     arch,
                     build_id,
                     module_id,
-                    file_location,
-                    product_id,
-                    version_id
+                    storage_location,
+                    product_id
                   )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                VALUES ($1, $2, $3, $4, $5, $6)
                 RETURNING
                   id
             "#,
@@ -89,9 +95,8 @@ impl SymbolsRepo {
             symbols.arch,
             symbols.build_id,
             symbols.module_id,
-            symbols.file_location,
+            symbols.storage_location,
             symbols.product_id,
-            symbols.version_id
         )
         .fetch_one(executor)
         .await
@@ -105,7 +110,7 @@ impl SymbolsRepo {
         sqlx::query_scalar!(
             r#"
                 UPDATE guardrail.symbols
-                SET os = $1, arch = $2, build_id = $3, module_id = $4, file_location = $5
+                SET os = $1, arch = $2, build_id = $3, module_id = $4, storage_location = $5
                 WHERE id = $6
                 RETURNING id
             "#,
@@ -113,7 +118,7 @@ impl SymbolsRepo {
             symbols.arch,
             symbols.build_id,
             symbols.module_id,
-            symbols.file_location,
+            symbols.storage_location,
             symbols.id
         )
         .fetch_optional(executor)

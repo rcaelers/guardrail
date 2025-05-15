@@ -9,6 +9,7 @@ pub struct Attachment {
     pub mime_type: String,
     pub size: i64,
     pub filename: String,
+    pub storage_location: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
     pub crash_id: uuid::Uuid,
@@ -22,7 +23,7 @@ pub struct NewAttachment {
     pub mime_type: String,
     pub size: i64,
     pub filename: String,
+    pub storage_location: String,
     pub crash_id: uuid::Uuid,
     pub product_id: uuid::Uuid,
 }
-

@@ -1,36 +1,19 @@
 use axum::extract::multipart::Field;
-use axum::extract::{Multipart, Query, State};
+use axum::extract::{Multipart, State};
 use axum::{Extension, Json};
-use axum_extra::extract::WithRejection;
-use data::api_token::ApiToken;
-use object_store::PutPayload;
 use object_store::path::Path;
-use serde::{Deserialize, Serialize};
+use object_store::{ObjectStore, PutPayload};
+use serde::Serialize;
+use sqlx::Postgres;
+use std::sync::Arc;
 use tracing::error;
 
 use super::error::ApiError;
 use crate::state::AppState;
 use crate::utils::{get_product, get_product_by_id, stream_to_s3, validate_api_token_for_product};
+use data::api_token::ApiToken;
 
 pub struct MinidumpApi;
-
-#[derive(Debug, Deserialize)]
-pub struct MinidumpRequestParams {
-    // pub product: String,
-    // pub version: String,
-}
-
-impl MinidumpRequestParams {
-    pub fn validate(&self) -> Result<(), ApiError> {
-        // if self.product.trim().is_empty() {
-        //     return Err(ApiError::Failure("product name cannot be empty".to_string()));
-        // }
-        // if self.version.trim().is_empty() {
-        //     return Err(ApiError::Failure("version cannot be empty".to_string()));
-        // }
-        Ok(())
-    }
-}
 
 #[derive(Debug, Serialize)]
 pub struct MinidumpResponse {
@@ -40,7 +23,7 @@ pub struct MinidumpResponse {
 
 impl MinidumpApi {
     const REQUIRED_FIELDS: &'static [&'static str] =
-        &["product", "version", "channel", "commit", "buildid"];
+        &["product", "version", "channel", "commit", "build_id"];
 
     fn validate_content_type(
         content_type: &str,
@@ -135,6 +118,13 @@ impl MinidumpApi {
             .file_name()
             .map(|name| name.to_string())
             .unwrap_or_else(|| "unnamed_attachment".to_string());
+        let name = field
+            .name()
+            .ok_or_else(|| {
+                error!("Field name is missing");
+                ApiError::Failure("field name is missing".to_string())
+            })?
+            .to_string();
 
         let file_size = stream_to_s3(state.storage.clone(), &storage_path, field)
             .await
@@ -150,6 +140,7 @@ impl MinidumpApi {
                 ApiError::Failure("crash info attachments is not an array".to_string())
             })?
             .push(serde_json::json!({
+                "name": name,
                 "filename": original_filename,
                 "mimetype": mimetype,
                 "size": file_size,
@@ -217,40 +208,14 @@ impl MinidumpApi {
         }
     }
 
-    pub async fn upload(
-        State(state): State<AppState>,
-        Extension(api_token): Extension<ApiToken>,
-        WithRejection(Query(params), _): WithRejection<Query<MinidumpRequestParams>, ApiError>,
-        mut multipart: Multipart,
-    ) -> Result<Json<MinidumpResponse>, ApiError> {
-        let crash_id = uuid::Uuid::new_v4();
-        let mut crash_info = serde_json::json!({
-            "crash_id": crash_id,
-            "submission_timestamp": chrono::Utc::now().to_rfc3339(),
-            "attachments": [],
-            "annotations": {},
-        });
-        params.validate()?;
-
-        let mut tx = state.repo.begin_admin().await?;
-
-        let product_id = api_token.product_id.ok_or_else(|| {
-            error!("API token does not have a product ID");
-            ApiError::ProductAccessDenied(
-                "API token is not associated with any product".to_string(),
-            )
-        })?;
-
-        let authorized_product = get_product_by_id(&mut *tx, product_id).await?;
-        crash_info["authorized_product"] = serde_json::json!(authorized_product.name);
-
-        while let Some(field) = multipart.next_field().await.map_err(|e| {
-            error!("Failed to get next multipart field: {:?}", e);
-            ApiError::Failure("failed to read multipart field from upload".to_string())
-        })? {
-            Self::process_field(field, &mut crash_info, state.clone()).await?;
-        }
-
+    async fn validate_crash<E>(
+        tx: &mut E,
+        api_token: &ApiToken,
+        crash_info: &serde_json::Value,
+    ) -> Result<(), ApiError>
+    where
+        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
+    {
         if crash_info.get("minidump").is_none_or(|v| v.is_null()) {
             return Err(ApiError::Failure("no minidump found in submission".to_string()));
         }
@@ -271,21 +236,99 @@ impl MinidumpApi {
         }
 
         let product_name = crash_info["product"].as_str().ok_or_else(|| {
-            error!("No product found");
-            ApiError::Failure("no product found".to_string())
+            error!("No product specified");
+            ApiError::Failure("no product specified".to_string())
         })?;
         let product = get_product(&mut *tx, product_name).await?;
-        validate_api_token_for_product(&api_token, &product, product_name)?;
+        validate_api_token_for_product(api_token, &product, product_name)?;
 
-        state.repo.end(tx).await?;
+        if !product.accepting_crashes {
+            return Err(ApiError::ProductNotAcceptingCrashes(product_name.to_string()));
+        }
 
-        let path = Path::from(format!("crashes/{crash_id}"));
+        let build_timestamp = crash_info["build_id"]
+            .as_str()
+            .ok_or_else(|| {
+                error!("No build timestamp found");
+                ApiError::Failure("no build timestamp found".to_string())
+            })?
+            .parse::<chrono::DateTime<chrono::Utc>>()
+            .map_err(|e| {
+                error!("Invalid build timestamp: {:?}", e);
+                ApiError::Failure("invalid build timestamp".to_string())
+            })?;
+
+        if crash_info["channel"].as_str().ok_or_else(|| {
+            error!("No channel found");
+            ApiError::Failure("no channel found".to_string())
+        })? != "release"
+            && build_timestamp < chrono::Utc::now() - chrono::Duration::days(365 * 2)
+        {
+            return Err(ApiError::TooOld(
+                crash_info["version"]
+                    .as_str()
+                    .unwrap_or_default()
+                    .to_string(),
+                product_name.to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    pub async fn upload_crash(
+        storage: Arc<dyn ObjectStore>,
+        crash_info: &mut serde_json::Value,
+    ) -> Result<(), ApiError> {
+        let path = Path::from(format!(
+            "crashes/{}.json",
+            crash_info["crash_id"].as_str().unwrap_or_default()
+        ));
         let crash_json = crash_info.to_string();
         let payload = PutPayload::from(crash_json.into_bytes());
-        state.storage.put(&path, payload).await.map_err(|e| {
+        storage.put(&path, payload).await.map_err(|e| {
             error!("Failed to upload crash info to S3: {:?}", e);
             ApiError::Failure("failed to upload crash info to S3".to_string())
         })?;
+        Ok(())
+    }
+
+    pub async fn upload(
+        State(state): State<AppState>,
+        Extension(api_token): Extension<ApiToken>,
+        mut multipart: Multipart,
+    ) -> Result<Json<MinidumpResponse>, ApiError> {
+        let crash_id = uuid::Uuid::new_v4();
+        let mut crash_info = serde_json::json!({
+            "crash_id": crash_id,
+            "submission_timestamp": chrono::Utc::now().to_rfc3339(),
+            "attachments": [],
+            "annotations": {},
+        });
+
+        let mut tx = state.repo.begin_admin().await?;
+
+        let product_id = api_token.product_id.ok_or_else(|| {
+            error!("API token does not have a product ID");
+            ApiError::ProductAccessDenied(
+                "API token is not associated with any product".to_string(),
+            )
+        })?;
+
+        let authorized_product = get_product_by_id(&mut *tx, product_id).await?;
+        crash_info["authorized_product"] = serde_json::json!(authorized_product.name);
+
+        while let Some(field) = multipart.next_field().await.map_err(|e| {
+            error!("Failed to get next multipart field: {:?}", e);
+            ApiError::Failure("failed to read multipart field from upload".to_string())
+        })? {
+            Self::process_field(field, &mut crash_info, state.clone()).await?;
+        }
+
+        Self::validate_crash(&mut *tx, &api_token, &crash_info).await?;
+
+        state.repo.end(tx).await?;
+
+        Self::upload_crash(state.storage.clone(), &mut crash_info).await?;
 
         state.worker.queue_minidump(crash_info).await.map_err(|e| {
             error!("Failed to queue minidump job: {:?}", e);
