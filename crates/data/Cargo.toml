@@ -16,15 +16,10 @@ sqlx = { workspace = true, optional = true }
 tracing.workspace = true
 
 # Misc
-#thiserror.workspace = true
 uuid.workspace = true
 chrono.workspace = true
 strum.workspace = true
 strum_macros.workspace = true
-#argon2 = { version = "0.5", optional = true }
 
 [features]
 ssr = ["dep:sqlx"]
-
-#[lints.rust]
-#unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage,coverage_nightly)'] }
