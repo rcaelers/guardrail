@@ -62,7 +62,7 @@ CREATE INDEX idx_users_is_admin ON guardrail.users (id, is_admin);
 --
 
 CREATE TABLE guardrail.user_access (
-    user_id UUID NOT NULL REFERENCES guardrail.users (id),
+    user_id UUID NOT NULL REFERENCES guardrail.users (id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES guardrail.products (id),
     role TEXT CHECK (
         role IN ('read', 'write', 'admin')
@@ -186,7 +186,7 @@ CREATE TABLE guardrail.annotations (
         kind IN ('system', 'user')
     ),
     value TEXT NOT NULL,
-    crash_id UUID NOT NULL REFERENCES guardrail.crashes (id),
+    crash_id UUID NOT NULL REFERENCES guardrail.crashes (id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES guardrail.products (id),
     UNIQUE (key, crash_id)
 );
@@ -204,7 +204,7 @@ CREATE TABLE guardrail.attachments (
     size bigint NOT NULL,
     filename TEXT NOT NULL,
     storage_location TEXT NOT NULL,
-    crash_id UUID NOT NULL REFERENCES guardrail.crashes (id),
+    crash_id UUID NOT NULL REFERENCES guardrail.crashes (id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES guardrail.products (id),
     UNIQUE (name, crash_id)
 );
@@ -221,7 +221,7 @@ CREATE TABLE guardrail.api_tokens (
     token_id UUID NOT NULL UNIQUE,
     token_hash TEXT NOT NULL UNIQUE,
     product_id UUID REFERENCES guardrail.products (id),
-    user_id UUID REFERENCES guardrail.users (id),
+    user_id UUID REFERENCES guardrail.users (id) ON DELETE CASCADE,
     entitlements TEXT[] NOT NULL CHECK (
         array_length(entitlements, 1) > 0 AND
         entitlements <@ ARRAY['symbol-upload', 'minidump-upload', 'token']::TEXT[]
@@ -241,7 +241,7 @@ CREATE INDEX idx_api_tokens_user ON guardrail.api_tokens (user_id) WHERE user_id
 --
 CREATE TABLE guardrail.credentials (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    user_id UUID NOT NULL REFERENCES guardrail.users (id),
+    user_id UUID NOT NULL REFERENCES guardrail.users (id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
