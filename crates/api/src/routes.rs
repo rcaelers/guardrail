@@ -33,10 +33,10 @@ pub async fn routes(app_state: AppState) -> Router<AppState> {
         )
         .route("/auth/token", post(generate_token))
         // WebAuthn authentication endpoints
-        .route("/auth/register_start/{username}", post(super::webauthn::start_register))
-        .route("/auth/register_finish", post(super::webauthn::finish_register))
-        .route("/auth/authenticate_start/{username}", post(super::webauthn::start_authentication))
-        .route("/auth/authenticate_finish", post(super::webauthn::finish_authentication))
+        //.route("/auth/register_start/{username}", post(super::webauthn::start_register))
+        //.route("/auth/register_finish", post(super::webauthn::finish_register))
+        //.route("/auth/authenticate_start/{username}", post(super::webauthn::start_authentication))
+        //.route("/auth/authenticate_finish", post(super::webauthn::finish_authentication))
         .route("/live", get(super::health::live))
         .route("/ready", get(super::health::ready))
 }
