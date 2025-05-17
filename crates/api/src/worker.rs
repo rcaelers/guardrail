@@ -39,6 +39,7 @@ impl Worker for MinidumpProcessor {
         Ok(job.task_id.to_string())
     }
 }
+
 #[derive(Debug, Clone)]
 pub struct TestMinidumpProcessor {
     requests: Arc<Mutex<Vec<String>>>,

@@ -189,5 +189,11 @@ auth:
   name: Guardrail
   jwk:
     token_validity_in_minutes: 30
-    public_key: "dev/ed25519-public.pem"
-    private_key: "dev/ed25519-private.pem"
+    public_key: |
+      -----BEGIN PUBLIC KEY-----
+      MCowBQYDK2VwAyEAJuN0TiFkCg0HnTjpisG1gfVY7XjKsFGuRm1JVmqkt74=
+      -----END PUBLIC KEY-----"
+    private_key: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VwBCIEILRksnzl63UUib+nmLsATtXc/EjOHMaMgJu+nbpiX068
+      -----END PRIVATE KEY-----

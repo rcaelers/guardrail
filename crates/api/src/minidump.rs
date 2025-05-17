@@ -289,17 +289,14 @@ impl MinidumpApi {
         Ok(())
     }
 
-    #[instrument(skip(storage, crash_info), fields(crash_id = %crash_info.crash_id))]
+    #[instrument(skip(storage, crash_info), fields(crash_id = %crash_id))]
     async fn upload_crash(
         storage: Arc<dyn ObjectStore>,
-        crash_info: &mut CrashInfo,
+        crash_id: uuid::Uuid,
+        crash_info: serde_json::Value,
     ) -> Result<(), ApiError> {
-        let crash_id = crash_info.crash_id;
         let path = Path::from(format!("crashes/{crash_id}.json"));
-        let crash_info_json = serde_json::to_string(crash_info).map_err(|e| {
-            error!(error = ?e, "Failed to serialize crash info");
-            ApiError::Failure("failed to serialize crash info".to_string())
-        })?;
+        let crash_info_json = crash_info.to_string();
         let payload = PutPayload::from(crash_info_json.into_bytes());
         storage.put(&path, payload).await.map_err(|e| {
             error!(error = ?e, "Failed to upload crash info to S3");
@@ -340,12 +337,13 @@ impl MinidumpApi {
 
         state.repo.end(tx).await?;
 
-        Self::upload_crash(state.storage.clone(), crash_info).await?;
-
         let crash_info_json = serde_json::to_value(&crash_info).map_err(|e| {
             error!(error = ?e, "Failed to serialize crash info");
             ApiError::Failure("failed to serialize crash info".to_string())
         })?;
+
+        Self::upload_crash(state.storage.clone(), crash_info.crash_id, crash_info_json.clone()).await?;
+
 
         state
             .worker

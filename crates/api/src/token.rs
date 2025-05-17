@@ -5,7 +5,6 @@ use axum::{
 use chrono::{Duration, Utc};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
-use std::fs;
 use tracing::{error, info};
 
 use crate::{error::ApiError, state::AppState};
@@ -60,16 +59,9 @@ pub async fn generate_jwt_token(
         iat: Utc::now().timestamp(),
     };
 
-    let private_key_path = &settings.clone().auth.jwk.private_key;
-    let private_key = match fs::read(private_key_path) {
-        Ok(key) => key,
-        Err(err) => {
-            error!("Failed to read private key: {}", err);
-            return Err(ApiError::InternalFailure());
-        }
-    };
+    let private_key = &settings.clone().auth.jwk.private_key;
 
-    let encoding_key = match EncodingKey::from_ed_pem(&private_key) {
+    let encoding_key = match EncodingKey::from_ed_pem(private_key.as_bytes()) {
         Ok(key) => key,
         Err(err) => {
             error!("Failed to create encoding key: {}", err);

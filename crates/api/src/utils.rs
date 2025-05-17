@@ -4,7 +4,6 @@ use axum::extract::multipart::Field;
 use futures::{Stream, StreamExt, TryStreamExt};
 use object_store::{ObjectStore, path::Path};
 use sqlx::Postgres;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::io::{self};
@@ -141,27 +140,3 @@ pub fn validate_api_token_for_product(
     Ok(())
 }
 
-pub async fn validate_file_size(
-    file_path: &PathBuf,
-    max_size: u64,
-    file_type: &str,
-) -> Result<u64, ApiError> {
-    let file_metadata = tokio::fs::metadata(file_path).await.map_err(|e| {
-        error!("Failed to get metadata for {} file: {:?}", file_type, e);
-        ApiError::Failure(format!("failed to verify {file_type} file"))
-    })?;
-
-    if file_metadata.len() > max_size {
-        let _ = tokio::fs::remove_file(file_path).await;
-        error!("{} too large: {} bytes (max: {} bytes)", file_type, file_metadata.len(), max_size);
-        return Err(ApiError::Failure(format!("{file_type} file too large")));
-    }
-
-    if file_metadata.len() == 0 {
-        let _ = tokio::fs::remove_file(file_path).await;
-        error!("Empty {} file", file_type);
-        return Err(ApiError::Failure(format!("empty {file_type} file")));
-    }
-
-    Ok(file_metadata.len())
-}

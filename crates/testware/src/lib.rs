@@ -7,8 +7,8 @@ use sqlx::PgPool;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
-pub mod setup;
 pub mod mockall_object_store;
+pub mod setup;
 
 // Data models
 use data::api_token::NewApiToken;
@@ -344,6 +344,15 @@ pub fn create_settings() -> Arc<Settings> {
     settings.auth.id = "localhost".to_string();
     settings.auth.origin = "http://localhost:3000".to_string();
     settings.auth.name = "TestApp".to_string();
+
+    settings.auth.jwk.public_key = "-----BEGIN PUBLIC KEY-----\
+                                    MCowBQYDK2VwAyEAJuN0TiFkCg0HnTjpisG1gfVY7XjKsFGuRm1JVmqkt74=\
+                                    -----END PUBLIC KEY-----"
+        .to_string();
+    settings.auth.jwk.private_key = "-----BEGIN PRIVATE KEY-----\
+                                    MC4CAQAwBQYDK2VwBCIEILRksnzl63UUib+nmLsATtXc/EjOHMaMgJu+nbpiX068\
+                                    -----END PRIVATE KEY-----"
+        .to_string();
 
     Arc::new(settings)
 }
