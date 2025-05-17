@@ -58,9 +58,10 @@ impl AttachmentsRepo {
                     size,
                     filename,
                     crash_id,
+                    storage_location,
                     product_id
                   )
-                VALUES ($1, $2, $3, $4, $5, $6)
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 RETURNING
                   id
             "#,
@@ -69,6 +70,7 @@ impl AttachmentsRepo {
             attachment.size,
             attachment.filename,
             attachment.crash_id,
+            attachment.storage_location,
             attachment.product_id
         )
         .fetch_one(executor)

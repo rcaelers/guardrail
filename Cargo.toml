@@ -139,6 +139,8 @@ natord = "1.0.9"
 #     "accept-string-booleans",
 # ] }
 
+#[dev-dependencies]
+mockall = { version = "0.13.1" }
 
 [[workspace.metadata.leptos]]
 # this name is used for the wasm, js and css file names

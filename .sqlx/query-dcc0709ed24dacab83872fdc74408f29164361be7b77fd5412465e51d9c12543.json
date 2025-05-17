@@ -40,11 +40,16 @@
       },
       {
         "ordinal": 7,
+        "name": "storage_location",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
         "name": "crash_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "product_id",
         "type_info": "Uuid"
       }
@@ -55,6 +60,7 @@
       ]
     },
     "nullable": [
+      false,
       false,
       false,
       false,

@@ -7,14 +7,14 @@ use common::{QueryParams, SortOrder};
 use data::crash::*;
 use repos::crash::*;
 
-use testware::{create_test_crash, setup_test_dependencies};
+use testware::{create_test_crash, create_test_product};
 
 // get_by_id tests
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id(pool: PgPool) {
     let info = "Test Crash";
-    let inserted_crash = create_test_crash(&pool, Some(info), None, None).await;
+    let inserted_crash = create_test_crash(&pool, Some(info), None).await;
 
     let found_crash = CrashRepo::get_by_id(&pool, inserted_crash.id)
         .await
@@ -37,12 +37,12 @@ async fn test_get_by_id(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_all(pool: PgPool) {
-    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+    let product = create_test_product(&pool).await;
 
     let test_crash_data = vec![("Crash A"), ("Crash B"), ("Crash C")];
 
     for info in &test_crash_data {
-        create_test_crash(&pool, Some(info), Some(product_id), Some(version_id)).await;
+        create_test_crash(&pool, Some(info), Some(product.id)).await;
     }
 
     let query_params = QueryParams::default();
@@ -92,14 +92,21 @@ async fn test_get_all(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_create(pool: PgPool) {
-    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+    let product = create_test_product(&pool).await;
 
     let new_crash = NewCrash {
         id: None,
         info: Some("Calculation Error".to_string()),
-        version_id,
-        product_id,
-        minidump: Uuid::new_v4(),
+        product_id: product.id,
+        minidump: Some(Uuid::new_v4()),
+        report: Some(serde_json::json!({
+            "error": "Division by zero",
+            "stack_trace": "at main",
+        })),
+        version: Some("1.0.0".to_string()),
+        channel: Some("test_channel".to_string()),
+        build_id: Some("test_build_id".to_string()),
+        commit: Some("test_commit".to_string()),
     };
 
     let crash_id = CrashRepo::create(&pool, new_crash.clone())
@@ -112,7 +119,6 @@ async fn test_create(pool: PgPool) {
         .expect("Created crash not found");
 
     assert_eq!(created_crash.info, new_crash.info);
-    assert_eq!(created_crash.version_id, new_crash.version_id);
     assert_eq!(created_crash.product_id, new_crash.product_id);
 }
 
@@ -120,7 +126,7 @@ async fn test_create(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_update(pool: PgPool) {
-    let mut crash = create_test_crash(&pool, Some("Original Crash"), None, None).await;
+    let mut crash = create_test_crash(&pool, Some("Original Crash"), None).await;
 
     crash.info = Some("Updated Crash".to_string());
 
@@ -143,7 +149,7 @@ async fn test_update(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_remove(pool: PgPool) {
-    let crash = create_test_crash(&pool, Some("Crash to Delete"), None, None).await;
+    let crash = create_test_crash(&pool, Some("Crash to Delete"), None).await;
 
     CrashRepo::remove(&pool, crash.id)
         .await
@@ -164,12 +170,12 @@ async fn test_count(pool: PgPool) {
         .await
         .expect("Failed to count initial crashes");
 
-    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+    let product = create_test_product(&pool).await;
 
     let test_crashes = vec![("Count Crash 1"), ("Count Crash 2"), ("Count Crash 3")];
 
     for info in &test_crashes {
-        create_test_crash(&pool, Some(info), Some(product_id), Some(version_id)).await;
+        create_test_crash(&pool, Some(info), Some(product.id)).await;
     }
 
     let new_count = CrashRepo::count(&pool)
@@ -181,16 +187,22 @@ async fn test_count(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_create_error(pool: PgPool) {
-    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+    let product = create_test_product(&pool).await;
 
     let new_crash = NewCrash {
         id: None,
         info: Some("Test crash with closed pool".to_string()),
-        minidump: Uuid::new_v4(),
-        product_id,
-        version_id,
+        minidump: Some(Uuid::new_v4()),
+        product_id: product.id,
+        report: Some(serde_json::json!({
+        "error": "Test error",
+        "stack_trace": "at test"
+                })),
+        version: Some("1.0.0".to_string()),
+        channel: Some("test_channel".to_string()),
+        build_id: Some("test_build_id".to_string()),
+        commit: Some("test_commit".to_string()),
     };
-
     pool.close().await;
 
     let result = CrashRepo::create(&pool, new_crash).await;
@@ -199,7 +211,7 @@ async fn test_create_error(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id_error(pool: PgPool) {
-    let crash = create_test_crash(&pool, Some("Test crash for closed pool"), None, None).await;
+    let crash = create_test_crash(&pool, Some("Test crash for closed pool"), None).await;
 
     pool.close().await;
 
@@ -209,15 +221,10 @@ async fn test_get_by_id_error(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_all_error(pool: PgPool) {
-    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+    let product = create_test_product(&pool).await;
 
-    create_test_crash(
-        &pool,
-        Some("Test crash for get_all with closed pool"),
-        Some(product_id),
-        Some(version_id),
-    )
-    .await;
+    create_test_crash(&pool, Some("Test crash for get_all with closed pool"), Some(product.id))
+        .await;
 
     pool.close().await;
 
@@ -228,8 +235,7 @@ async fn test_get_all_error(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_update_error(pool: PgPool) {
-    let mut crash =
-        create_test_crash(&pool, Some("Original Crash for Update Test"), None, None).await;
+    let mut crash = create_test_crash(&pool, Some("Original Crash for Update Test"), None).await;
 
     crash.info = Some("Updated Crash With Closed Pool".to_string());
 
@@ -241,7 +247,7 @@ async fn test_update_error(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_remove_error(pool: PgPool) {
-    let crash = create_test_crash(&pool, Some("Crash to Delete with Error"), None, None).await;
+    let crash = create_test_crash(&pool, Some("Crash to Delete with Error"), None).await;
 
     pool.close().await;
 
@@ -251,15 +257,9 @@ async fn test_remove_error(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_count_error(pool: PgPool) {
-    let (product_id, version_id) = setup_test_dependencies(&pool).await;
+    let product = create_test_product(&pool).await;
 
-    create_test_crash(
-        &pool,
-        Some("Test crash for count with closed pool"),
-        Some(product_id),
-        Some(version_id),
-    )
-    .await;
+    create_test_crash(&pool, Some("Test crash for count with closed pool"), Some(product.id)).await;
 
     pool.close().await;
 

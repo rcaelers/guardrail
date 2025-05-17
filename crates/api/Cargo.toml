@@ -60,7 +60,8 @@ log.workspace = true
 object_store.workspace = true
 apalis.workspace = true
 apalis-sql.workspace = true
+bytes.workspace = true
 
 [dev-dependencies]
 testware = { path = "../testware" }
-bytes.workspace = true
+mockall.workspace = true

@@ -40,17 +40,12 @@
       },
       {
         "ordinal": 7,
-        "name": "file_location",
+        "name": "storage_location",
         "type_info": "Text"
       },
       {
         "ordinal": 8,
         "name": "product_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 9,
-        "name": "version_id",
         "type_info": "Uuid"
       }
     ],
@@ -60,7 +55,6 @@
       ]
     },
     "nullable": [
-      false,
       false,
       false,
       false,

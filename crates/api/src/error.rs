@@ -16,6 +16,9 @@ pub enum ApiError {
     #[error("general failure: {0}")]
     Failure(String),
 
+    #[error("invalid token: {0}")]
+    InvalidToken(String),
+
     #[error("access denied for product {0}")]
     ProductAccessDenied(String),
 
@@ -56,8 +59,9 @@ impl IntoResponse for ApiError {
             ApiError::InternalFailure() => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal failure".to_string())
             }
-            ApiError::Failure(err) => {
-                (StatusCode::BAD_REQUEST, format!("general failure: {err}"))
+            ApiError::Failure(err) => (StatusCode::BAD_REQUEST, format!("general failure: {err}")),
+            ApiError::InvalidToken(token) => {
+                (StatusCode::FORBIDDEN, format!("invalid token: {token}"))
             }
             ApiError::ProductAccessDenied(product) => {
                 (StatusCode::FORBIDDEN, format!("access denied for product {product}"))
@@ -65,10 +69,9 @@ impl IntoResponse for ApiError {
             ApiError::ProductNotFound(product) => {
                 (StatusCode::BAD_REQUEST, format!("product {product} not found"))
             }
-            ApiError::ProductNotAcceptingCrashes(product) => (
-                StatusCode::BAD_REQUEST,
-                format!("product {product} not accepting crashes"),
-            ),
+            ApiError::ProductNotAcceptingCrashes(product) => {
+                (StatusCode::BAD_REQUEST, format!("product {product} not accepting crashes"))
+            }
             ApiError::TooOld(version, product) => (
                 StatusCode::BAD_REQUEST,
                 format!("version {version} of product {product} is too old"),

@@ -37,3 +37,6 @@ time.workspace = true
 uuid.workspace = true
 webauthn-rs.workspace = true
 log.workspace = true
+mockall.workspace = true
+object_store.workspace = true
+futures.workspace = true

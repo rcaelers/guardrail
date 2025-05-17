@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                UPDATE guardrail.symbols\n                SET os = $1, arch = $2, build_id = $3, module_id = $4, file_location = $5\n                WHERE id = $6\n                RETURNING id\n            ",
+  "query": "\n                UPDATE guardrail.symbols\n                SET os = $1, arch = $2, build_id = $3, module_id = $4, storage_location = $5\n                WHERE id = $6\n                RETURNING id\n            ",
   "describe": {
     "columns": [
       {
@@ -23,5 +23,5 @@
       false
     ]
   },
-  "hash": "93311a68d9f1531a21e6998c3bb5e7756c3cd6e208e20dc9c63a354b2d967b9d"
+  "hash": "6a2d933825fac77113ff3056142d648301335668fd5a5f52e359fe112c20ce55"
 }

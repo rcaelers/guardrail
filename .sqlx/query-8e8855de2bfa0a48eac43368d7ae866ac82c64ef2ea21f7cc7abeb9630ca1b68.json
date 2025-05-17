@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT *\n                FROM guardrail.symbols\n                WHERE guardrail.symbols.build_id = $1 AND guardrail.symbols.module_id = $2\n            ",
+  "query": "\n                SELECT *\n                FROM guardrail.crashes\n                WHERE guardrail.crashes.id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -20,52 +20,63 @@
       },
       {
         "ordinal": 3,
-        "name": "os",
+        "name": "info",
         "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "arch",
-        "type_info": "Text"
+        "name": "report",
+        "type_info": "Jsonb"
       },
       {
         "ordinal": 5,
-        "name": "build_id",
-        "type_info": "Text"
+        "name": "minidump",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 6,
-        "name": "module_id",
+        "name": "version",
         "type_info": "Text"
       },
       {
         "ordinal": 7,
-        "name": "storage_location",
+        "name": "channel",
         "type_info": "Text"
       },
       {
         "ordinal": 8,
+        "name": "commit",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "build_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
         "name": "product_id",
         "type_info": "Uuid"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
       false,
       false,
       false,
-      false,
-      false,
-      false,
-      false,
-      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
       false
     ]
   },
-  "hash": "9b2b4da04003636ae46ca0a59a3be94f07740367599e32b64748cac5ab477148"
+  "hash": "8e8855de2bfa0a48eac43368d7ae866ac82c64ef2ea21f7cc7abeb9630ca1b68"
 }

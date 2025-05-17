@@ -62,7 +62,7 @@ async fn setup(pool: &PgPool) -> (Router, Arc<dyn ObjectStore>, String, String, 
 
     let (token, _) = create_test_token(pool, "Test Token", None, None, &["symbol-upload"]).await;
 
-    let product =
+    let _product =
         create_test_product_with_details(pool, "TestProduct", "Test product description").await;
 
     (app, store, boundary.to_owned(), content.to_owned(), body, token)

@@ -8,6 +8,7 @@ use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 
 pub mod setup;
+pub mod mockall_object_store;
 
 // Data models
 use data::api_token::NewApiToken;
@@ -17,7 +18,6 @@ use data::credentials::NewCredential;
 use data::product::NewProduct;
 use data::symbols::NewSymbols;
 use data::user::NewUser;
-use data::version::NewVersion;
 
 // Repos
 use repos::api_token::ApiTokenRepo;
@@ -27,7 +27,6 @@ use repos::credentials::CredentialsRepo;
 use repos::product::ProductRepo;
 use repos::symbols::SymbolsRepo;
 use repos::user::UserRepo;
-use repos::version::VersionRepo;
 
 // Entity types
 use data::api_token::ApiToken;
@@ -37,7 +36,7 @@ use data::credentials::Credential;
 use data::product::Product;
 use data::symbols::Symbols;
 use data::user::User;
-use data::version::Version;
+
 use webauthn_rs::prelude::Url;
 use webauthn_rs::{Webauthn, WebauthnBuilder};
 
@@ -79,81 +78,30 @@ pub async fn create_test_product_with_details(
         .expect("Created product not found")
 }
 
-/// Create a test version and its associated product if needed
-pub async fn create_test_version(
-    pool: &PgPool,
-    name: &str,
-    hash: &str,
-    tag: &str,
-    product_id: Option<Uuid>,
-) -> Version {
-    let product_id = match product_id {
-        Some(id) => id,
-        None => create_test_product(pool).await.id,
-    };
-
-    let new_version = NewVersion {
-        name: name.to_string(),
-        hash: hash.to_string(),
-        tag: tag.to_string(),
-        product_id,
-    };
-
-    let version_id = VersionRepo::create(pool, new_version)
-        .await
-        .expect("Failed to insert test version");
-
-    VersionRepo::get_by_id(pool, version_id)
-        .await
-        .expect("Failed to retrieve created version")
-        .expect("Created version not found")
-}
-
-/// Set up common test dependencies - create a product and version
-pub async fn setup_test_dependencies(pool: &PgPool) -> (Uuid, Uuid) {
-    // Create product first
-    let new_product = NewProduct {
-        name: format!("TestProduct_{}", Uuid::new_v4()),
-        description: "Test Product Description".to_string(),
-    };
-
-    let product_id = ProductRepo::create(pool, new_product)
-        .await
-        .expect("Failed to insert test product");
-
-    // Then create version
-    let new_version = NewVersion {
-        name: format!("Version_{}", Uuid::new_v4()),
-        hash: format!("Hash_{}", Uuid::new_v4()),
-        tag: format!("Tag_{}", Uuid::new_v4()),
-        product_id,
-    };
-
-    let version_id = VersionRepo::create(pool, new_version)
-        .await
-        .expect("Failed to insert test version");
-
-    (product_id, version_id)
-}
-
-/// Create a test crash and its associated product and version if needed
+/// Create a test crash and its associated product if needed
 pub async fn create_test_crash(
     pool: &PgPool,
     info: Option<&str>,
     product_id: Option<Uuid>,
-    version_id: Option<Uuid>,
 ) -> Crash {
-    let (product_id, version_id) = match (product_id, version_id) {
-        (Some(pid), Some(vid)) => (pid, vid),
-        _ => setup_test_dependencies(pool).await,
+    let product_id = match product_id {
+        Some(pid) => pid,
+        None => create_test_product(pool).await.id,
     };
 
     let new_crash = NewCrash {
         id: None,
-        minidump: Uuid::new_v4(),
+        minidump: None,
         info: info.map(|s| s.to_string()),
         product_id,
-        version_id,
+        report: Some(serde_json::json!({
+            "error": "Test error",
+            "stacktrace": "Test stack trace"
+        })),
+        version: Some("1.0.0".to_string()),
+        channel: Some("test_channel".to_string()),
+        build_id: Some("test_build_id".to_string()),
+        commit: Some("test_commit".to_string()),
     };
 
     let crash_id = CrashRepo::create(pool, new_crash)
@@ -179,14 +127,21 @@ pub async fn create_test_attachment(
     let crash_id = match crash_id {
         Some(id) => id,
         None => {
-            let (product_id, version_id) = setup_test_dependencies(pool).await;
+            let product = create_test_product(pool).await;
 
             let new_crash = NewCrash {
                 id: None,
-                minidump: Uuid::new_v4(),
+                minidump: None,
                 info: None,
-                version_id,
-                product_id,
+                product_id: product.id,
+                report: Some(serde_json::json!({
+                    "error": "Test error",
+                    "stacktrace": "Test stack trace"
+                })),
+                version: Some("1.0.0".to_string()),
+                channel: Some("test_channel".to_string()),
+                build_id: Some("test_build_id".to_string()),
+                commit: Some("test_commit".to_string()),
             };
 
             CrashRepo::create(pool, new_crash)
@@ -212,6 +167,7 @@ pub async fn create_test_attachment(
         mime_type: mime_type.to_string(),
         size: file_size,
         filename: filename.to_string(),
+        storage_location: format!("test_storage/{}.{}", Uuid::new_v4(), filename),
         crash_id,
         product_id,
     };
@@ -233,13 +189,12 @@ pub async fn create_test_symbols(
     arch: &str,
     build_id: &str,
     module_id: &str,
-    file_location: &str,
+    storage_location: &str,
     product_id: Option<Uuid>,
-    version_id: Option<Uuid>,
 ) -> Symbols {
-    let (product_id, version_id) = match (product_id, version_id) {
-        (Some(p), Some(v)) => (p, v),
-        _ => setup_test_dependencies(pool).await,
+    let product_id = match product_id {
+        Some(p) => p,
+        _ => create_test_product(pool).await.id,
     };
 
     let new_symbols = NewSymbols {
@@ -247,9 +202,8 @@ pub async fn create_test_symbols(
         arch: arch.to_string(),
         build_id: build_id.to_string(),
         module_id: module_id.to_string(),
-        file_location: file_location.to_string(),
+        storage_location: storage_location.to_string(),
         product_id,
-        version_id,
     };
 
     let symbols_id = SymbolsRepo::create(pool, new_symbols)
