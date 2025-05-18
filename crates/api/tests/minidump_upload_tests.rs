@@ -44,7 +44,6 @@ async fn setup_with_storage(
     let settings = create_settings();
 
     let repo = Repo::new(pool.clone());
-    //let store = Arc::new(object_store::memory::InMemory::new());
     let worker = Arc::new(TestMinidumpProcessor::new());
 
     let state = AppState {

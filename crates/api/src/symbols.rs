@@ -1,35 +1,50 @@
 use super::error::ApiError;
 use crate::state::AppState;
-use crate::utils::{get_product, validate_api_token_for_product};
+use crate::utils::{get_product, get_product_by_id, validate_api_token_for_product};
 use crate::utils::{peek_line, stream_to_s3};
 use axum::extract::multipart::Field;
-use axum::extract::{Multipart, Query, State};
+use axum::extract::{Multipart, State};
 use axum::{Extension, Json};
-use axum_extra::extract::WithRejection;
 use data::api_token::ApiToken;
-use data::product::Product;
 use data::symbols::NewSymbols;
+use object_store::path::Path;
 use repos::symbols::SymbolsRepo;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sqlx::Postgres;
-use tracing::{error, info};
+use tracing::{error, info, instrument};
 
-#[derive(Debug, Deserialize)]
-pub struct SymbolsRequestParams {
-    pub product: String,
-    pub version: String,
+#[derive(Default, Debug, Serialize)]
+struct SymbolsHeader {
+    os: String,
+    arch: String,
+    build_id: String,
+    module_id: String,
 }
 
-impl SymbolsRequestParams {
-    pub fn validate(&self) -> Result<(), ApiError> {
-        if self.product.trim().is_empty() {
-            return Err(ApiError::Failure("product name cannot be empty".to_string()));
-        }
-        if self.version.trim().is_empty() {
-            return Err(ApiError::Failure("version cannot be empty".to_string()));
-        }
-        Ok(())
-    }
+#[derive(Default, Debug, Serialize)]
+struct Symbols {
+    filename: String,
+    size: u64,
+    storage_path: String,
+    storage_filename: String,
+    header: SymbolsHeader,
+}
+
+#[derive(Default, Debug, Serialize)]
+struct SymbolsInfo {
+    submission_timestamp: String,
+    authorized_product: Option<String>,
+    annotations: std::collections::HashMap<String, String>,
+    symbols: Option<Symbols>,
+}
+
+#[derive(Default, Debug, Serialize)]
+struct SymbolsContext {
+    product_id: uuid::Uuid,
+    version: String,
+    channel: String,
+    commit: String,
+    build_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -40,14 +55,8 @@ pub struct SymbolsResponse {
 pub struct SymbolsApi;
 
 impl SymbolsApi {
-    fn validate_symbols_content_type(content_type: &str) -> Result<(), ApiError> {
-        let is_valid = content_type == "application/octet-stream";
-        if !is_valid {
-            error!("Invalid symbols content type: {}", content_type);
-            return Err(ApiError::Failure(format!("invalid symbols content type: {content_type}")));
-        }
-        Ok(())
-    }
+    const REQUIRED_FIELDS: &'static [&'static str] =
+        &["product", "version", "channel", "commit", "build_id"];
 
     fn validate_build_id(build_id: &str) -> Result<(), ApiError> {
         if build_id.is_empty() || build_id.len() > 64 {
@@ -85,10 +94,72 @@ impl SymbolsApi {
         Ok(())
     }
 
-    async fn process_header(
-        first_line: String,
-        product: data::product::Product,
-    ) -> Result<NewSymbols, ApiError> {
+    #[instrument(skip(tx, api_token, symbols_info))]
+    async fn validate_symbols<E>(
+        tx: &mut E,
+        api_token: &ApiToken,
+        symbols_info: &mut SymbolsInfo,
+    ) -> Result<SymbolsContext, ApiError>
+    where
+        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
+    {
+        if symbols_info.symbols.is_none() {
+            error!("No symbols found in submission");
+            return Err(ApiError::Failure("no symbols found in submission".to_string()));
+        }
+
+        let mut product_name = String::new();
+        let mut version = String::new();
+        let mut channel = String::new();
+        let mut commit = String::new();
+        let mut build_id = String::new();
+
+        for &field_name in Self::REQUIRED_FIELDS {
+            let value = symbols_info.annotations.remove(field_name);
+
+            let value = match value {
+                Some(v) if !v.trim().is_empty() => v,
+                Some(_) => {
+                    error!("Required annotation '{}' is empty", field_name);
+                    return Err(ApiError::Failure(format!(
+                        "required annotation '{field_name}' cannot be empty"
+                    )));
+                }
+                None => {
+                    error!("Required annotation '{}' is missing", field_name);
+                    return Err(ApiError::Failure(format!(
+                        "required annotation '{field_name}' is missing"
+                    )));
+                }
+            };
+
+            // Assign to the appropriate variable
+            match field_name {
+                "product" => product_name = value,
+                "version" => version = value,
+                "channel" => channel = value,
+                "commit" => commit = value,
+                "build_id" => build_id = value,
+                _ => {}
+            }
+        }
+
+        let product = get_product(tx, &product_name).await?;
+        validate_api_token_for_product(api_token, &product, &product_name)?;
+        if !product.accepting_crashes {
+            return Err(ApiError::ProductNotAcceptingCrashes(product_name));
+        }
+
+        Ok(SymbolsContext {
+            product_id: product.id,
+            version,
+            channel,
+            commit,
+            build_id,
+        })
+    }
+
+    async fn process_header(first_line: String) -> Result<SymbolsHeader, ApiError> {
         let collection: Vec<&str> = first_line.split_whitespace().collect();
         if collection.len() < 5 {
             error!("invalid symbols file header: {:?}", first_line);
@@ -98,92 +169,235 @@ impl SymbolsApi {
         let arch = String::from(collection[2]);
         let build_id = String::from(collection[3]);
         let module_id = String::from(collection[4]);
-        let path = format!("symbols/{module_id}-{build_id}");
 
         Self::validate_build_id(&build_id)?;
         Self::validate_module_id(&module_id)?;
 
-        Ok(NewSymbols {
+        Ok(SymbolsHeader {
             os,
             arch,
             build_id,
             module_id,
-            storage_location: path,
-            product_id: product.id,
         })
     }
 
-    async fn handle_symbol_upload<E>(
+    fn validate_key(key: &str) -> Result<(), ApiError> {
+        if !key.chars().all(|c| c.is_ascii() && !c.is_ascii_control()) {
+            error!(key, "Annotation key contains non-printable ASCII characters");
+            return Err(ApiError::Failure(
+                "annotation key must contain only printable ASCII characters".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
+    fn validate_annotation_content_type(content_type: &str) -> Result<(), ApiError> {
+        let is_valid = content_type == "text/plain"
+            || content_type == "text/markdown"
+            || content_type.is_empty();
+
+        if !is_valid {
+            error!(content_type, "Invalid annotation content type");
+            return Err(ApiError::Failure(format!(
+                "invalid annotation content type: {content_type}"
+            )));
+        }
+        Ok(())
+    }
+
+    fn validate_symbols_content_type(content_type: &str) -> Result<(), ApiError> {
+        let is_valid = content_type == "application/octet-stream";
+
+        if !is_valid {
+            error!(content_type, "Invalid symbols content type");
+            return Err(ApiError::Failure(format!("invalid symbols content type: {content_type}")));
+        }
+        Ok(())
+    }
+
+    #[instrument(skip(tx, symbols_info, symbols_context))]
+    async fn store_symbols<E>(
         tx: &mut E,
-        product: &Product,
-        field: Field<'_>,
-        state: AppState,
+        symbols_info: &SymbolsInfo,
+        symbols_context: &SymbolsContext,
     ) -> Result<(), ApiError>
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
     {
-        let content_type = field.content_type().unwrap_or_default();
-        Self::validate_symbols_content_type(content_type)?;
+        if let Some(symbols) = &symbols_info.symbols {
+            info!(storage_path = %symbols.storage_path, "Storing symbols in database");
+
+            let new_symbols = NewSymbols {
+                os: symbols.header.os.clone(),
+                arch: symbols.header.arch.clone(),
+                build_id: symbols.header.build_id.clone(),
+                module_id: symbols.header.module_id.clone(),
+                product_id: symbols_context.product_id,
+                storage_location: symbols.storage_path.clone(),
+            };
+
+            let result = SymbolsRepo::create(tx, new_symbols).await?;
+            info!(symbol_id = %result, "Symbols stored in database");
+        } else {
+            error!("No symbols found to store");
+            return Err(ApiError::Failure("no symbols found to store".to_string()));
+        }
+        Ok(())
+    }
+
+    #[instrument(skip(field, symbols_info))]
+    async fn handle_annotation_upload(
+        field: Field<'_>,
+        symbols_info: &mut SymbolsInfo,
+    ) -> Result<(), ApiError> {
+        info!("Processing symbols annotation");
+        let key = field
+            .name()
+            .ok_or_else(|| {
+                error!("Name field is missing for annotation");
+                ApiError::Failure("name field is missing for annotation".to_string())
+            })?
+            .to_string();
+        Self::validate_key(&key)?;
+
+        let content_type = field.content_type().unwrap_or_default().to_owned();
+        Self::validate_annotation_content_type(&content_type)?;
+
+        let value = field.text().await.map_err(|e| {
+            error!(error = ?e, key, "Failed to read field text for annotation");
+            ApiError::Failure(format!("failed to read field text for annotation '{key}'"))
+        })?;
+
+        symbols_info.annotations.insert(key, value);
+        Ok(())
+    }
+
+    #[instrument(skip(field, symbols_info, state))]
+    async fn handle_symbols_upload(
+        field: Field<'_>,
+        symbols_info: &mut SymbolsInfo,
+        state: AppState,
+    ) -> Result<(), ApiError> {
+        info!("Processing symbols");
+
+        if symbols_info.symbols.is_some() {
+            error!("Symbols file already processed");
+            return Err(ApiError::Failure("symbols file already processed".to_string()));
+        }
+
+        let content_type = field.content_type().unwrap_or_default().to_owned();
+        Self::validate_symbols_content_type(&content_type)?;
+
+        let filename = field
+            .file_name()
+            .map(|name| name.to_string())
+            .unwrap_or_else(|| "unnamed_symbols".to_string());
 
         let (line, stream) = peek_line(field).await.map_err(|e| {
             error!("failed to read symbols file: {:?}", e);
             ApiError::Failure("failed to read symbols file".to_string())
         })?;
 
-        let data = Self::process_header(line, product.clone()).await?;
+        let header = Self::process_header(line).await?;
 
-        SymbolsRepo::create(tx, data.clone()).await?;
+        let storage_filename = format!("{}-{}", header.module_id, header.build_id);
+        let storage_path = format!("symbols/{storage_filename}");
 
-        if let Err(e) = stream_to_s3(state.storage.clone(), &data.storage_location, stream).await {
-            error!("Failed to stream to S3: {:?}", e);
-            return Err(ApiError::InternalFailure());
-        }
+        let size = stream_to_s3(state.storage.clone(), &storage_path, stream)
+            .await
+            .map_err(|e| {
+                error!(error = ?e, "Failed to stream symbols to S3");
+                ApiError::Failure("failed to store symbols".to_string())
+            })?;
+
+        symbols_info.symbols = Some(Symbols {
+            filename,
+            size,
+            storage_path,
+            storage_filename,
+            header,
+        });
 
         Ok(())
     }
 
-    async fn process_field<E>(
-        tx: &mut E,
+    #[instrument(skip(field, symbols_info, state))]
+    async fn process_field(
         field: Field<'_>,
-        product: &Product,
+        symbols_info: &mut SymbolsInfo,
         state: AppState,
-    ) -> Result<(), ApiError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
-        match field.name() {
-            Some("symbols_file") => {
-                Self::handle_symbol_upload(&mut *tx, product, field, state).await?;
-                Ok(())
-            }
-            _ => Ok(()),
+    ) -> Result<(), ApiError> {
+        let field_name = field.name().unwrap_or_default();
+
+        match field_name {
+            "upload_file_symbols" => Self::handle_symbols_upload(field, symbols_info, state).await,
+            _ => Self::handle_annotation_upload(field, symbols_info).await,
         }
     }
 
+    #[instrument(skip(state, api_token, multipart))]
+    pub async fn handle_upload(
+        state: AppState,
+        api_token: ApiToken,
+        mut multipart: Multipart,
+        symbols_info: &mut SymbolsInfo,
+    ) -> Result<(), ApiError> {
+        let mut tx = state.repo.begin_admin().await?;
+
+        let product_id = api_token.product_id.ok_or_else(|| {
+            error!("API token does not have a product ID");
+            ApiError::ProductAccessDenied(
+                "API token is not associated with any product".to_string(),
+            )
+        })?;
+
+        let authorized_product = get_product_by_id(&mut *tx, product_id).await?;
+        symbols_info.authorized_product = Some(authorized_product.name.clone());
+
+        info!(product = %authorized_product.name, "Processing symbol for product");
+
+        while let Some(field) = multipart.next_field().await.map_err(|e| {
+            error!(error = ?e, "Failed to get next multipart field");
+            ApiError::Failure("failed to read multipart field from upload".to_string())
+        })? {
+            Self::process_field(field, symbols_info, state.clone()).await?;
+        }
+
+        let symbol_context = Self::validate_symbols(&mut *tx, &api_token, symbols_info).await?;
+
+        Self::store_symbols(&mut *tx, symbols_info, &symbol_context).await?;
+
+        state.repo.end(tx).await?;
+
+        Ok(())
+    }
+
+    #[instrument(skip(state, api_token, multipart), fields(crash_id))]
     pub async fn upload(
         State(state): State<AppState>,
         Extension(api_token): Extension<ApiToken>,
-        WithRejection(Query(params), _): WithRejection<Query<SymbolsRequestParams>, ApiError>,
-        mut multipart: Multipart,
+        multipart: Multipart,
     ) -> Result<Json<SymbolsResponse>, ApiError> {
-        params.validate()?;
+        let mut symbols_info = SymbolsInfo {
+            submission_timestamp: chrono::Utc::now().to_rfc3339(),
+            authorized_product: None,
+            annotations: std::collections::HashMap::new(),
+            ..Default::default()
+        };
 
-        info!("Starting symbols upload process for {} {}", params.product, params.version);
+        let r = Self::handle_upload(state.clone(), api_token, multipart, &mut symbols_info).await;
+        if let Err(e) = r {
+            error!(error = ?e, "Failed to handle symbols upload");
 
-        let mut tx = state.repo.begin_admin().await?;
-
-        let product = get_product(&mut *tx, &params.product).await?;
-        validate_api_token_for_product(&api_token, &product, &params.product)?;
-
-        while let Some(field) = multipart.next_field().await.map_err(|e| {
-            error!("Failed to get next multipart field: {:?}", e);
-            ApiError::Failure("failed to read multipart field from upload".to_string())
-        })? {
-            Self::process_field(&mut *tx, field, &product, state.clone()).await?;
+            if let Some(symbol) = &symbols_info.symbols {
+                info!(storage_path = %symbol.storage_path, "Deleting symbol from storage");
+                let _ = state
+                    .storage
+                    .delete(&Path::from(symbol.storage_path.as_str()))
+                    .await;
+            }
+            return Err(e);
         }
-        state.repo.end(tx).await?;
-
-        info!("Upload process completed successfully for {} {}", params.product, params.version);
 
         Ok(Json(SymbolsResponse {
             result: "ok".to_string(),

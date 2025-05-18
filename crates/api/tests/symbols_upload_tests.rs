@@ -48,24 +48,133 @@ async fn setup(pool: &PgPool) -> (Router, Arc<dyn ObjectStore>, String, String, 
         .with_state(state);
 
     let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
-    let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
-                   Hello world\r\n\
-                   Hello world\r\n\
-                   Hello world\r\n\
-                   Hello world\r\n\
-                   Hello world\r\n\
-                   Hello world\r\n";
 
-    let body = format!(
-        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
-    );
+    let config = &SymbolsBodyConfig {
+        boundary,
+        ..Default::default()
+    };
+    let body = create_body_from_config(config);
 
-    let (token, _) = create_test_token(pool, "Test Token", None, None, &["symbol-upload"]).await;
-
-    let _product =
+    let product =
         create_test_product_with_details(pool, "TestProduct", "Test product description").await;
 
-    (app, store, boundary.to_owned(), content.to_owned(), body, token)
+    let (token, _) =
+        create_test_token(pool, "Test Token", Some(product.id), None, &["symbol-upload"]).await;
+
+    (app, store, boundary.to_owned(), config.content.to_owned(), body, token)
+}
+
+#[derive(Debug, Clone)]
+pub struct SymbolsBodyConfig<'a> {
+    pub boundary: &'a str,
+    pub product: Option<&'a str>,
+    pub version: Option<&'a str>,
+    pub build_id: Option<&'a str>,
+    pub extra: Option<String>,
+    pub content: &'a str,
+    pub channel: Option<&'a str>,
+    pub commit: Option<&'a str>,
+    pub symbols_field_name: &'a str,
+    pub symbols_filename: Option<&'a str>,
+    pub symbols_content_type: &'a str,
+    pub annotation_content_type: &'a str,
+}
+
+impl<'a> Default for SymbolsBodyConfig<'a> {
+    fn default() -> Self {
+        Self {
+            boundary: "----WebKitFormBoundary7MA4YWxkTrZu0gW",
+            product: Some("TestProduct"),
+            version: Some("1.0.0"),
+            build_id: Some("EE9E2672A6863B084C4C44205044422E1"),
+            extra: None,
+            content: "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
+                      Hello world\r\n\
+                      Hello world\r\n\
+                      Hello world\r\n\
+                      Hello world\r\n\
+                      Hello world\r\n\
+                      Hello world\r\n",
+            channel: Some("test-channel"),
+            commit: Some("test-commit"),
+            symbols_field_name: "upload_file_symbols",
+            symbols_filename: Some("crash.pdb"),
+            symbols_content_type: "application/octet-stream",
+            annotation_content_type: "text/plain",
+        }
+    }
+}
+
+pub fn create_body_from_config(config: &SymbolsBodyConfig) -> String {
+    let mut body = if let Some(filename) = config.symbols_filename {
+        format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"{symbols_field_name}\"; filename=\"{symbols_filename}\"\r\nContent-Type: {symbols_content_type}\r\n\r\n{content}\r\n",
+            boundary = config.boundary,
+            symbols_field_name = config.symbols_field_name,
+            symbols_filename = filename,
+            symbols_content_type = config.symbols_content_type,
+            content = config.content
+        )
+    } else {
+        format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"{symbols_field_name}\"\r\nContent-Type: {symbols_content_type}\r\n\r\n{content}\r\n",
+            boundary = config.boundary,
+            symbols_field_name = config.symbols_field_name,
+            symbols_content_type = config.symbols_content_type,
+            content = config.content
+        )
+    };
+
+    if let Some(product) = config.product {
+        body = format!(
+            "{body}--{boundary}\r\nContent-Disposition: form-data; name=\"product\"\r\nContent-Type: {annotation_content_type}\r\n\r\n{product}\r\n",
+            boundary = config.boundary,
+            annotation_content_type = config.annotation_content_type
+        );
+    }
+
+    if let Some(version) = config.version {
+        body = format!(
+            "{body}--{boundary}\r\nContent-Disposition: form-data; name=\"version\"\r\nContent-Type: {annotation_content_type}\r\n\r\n{version}\r\n",
+            boundary = config.boundary,
+            annotation_content_type = config.annotation_content_type
+        );
+    }
+
+    if let Some(channel) = config.channel {
+        body = format!(
+            "{body}--{boundary}\r\nContent-Disposition: form-data; name=\"channel\"\r\nContent-Type: {annotation_content_type}\r\n\r\n{channel}\r\n",
+            boundary = config.boundary,
+            channel = channel,
+            annotation_content_type = config.annotation_content_type
+        );
+    }
+
+    if let Some(commit) = config.commit {
+        body = format!(
+            "{body}--{boundary}\r\nContent-Disposition: form-data; name=\"commit\"\r\nContent-Type: {annotation_content_type}\r\n\r\n{commit}\r\n",
+            boundary = config.boundary,
+            commit = commit,
+            annotation_content_type = config.annotation_content_type
+        );
+    }
+
+    if let Some(build_id) = config.build_id {
+        body = format!(
+            "{body}--{boundary}\r\nContent-Disposition: form-data; name=\"build_id\"\r\nContent-Type: {annotation_content_type}\r\n\r\n{build_id}\r\n",
+            boundary = config.boundary,
+            build_id = build_id,
+            annotation_content_type = config.annotation_content_type
+        );
+    }
+
+    if let Some(extra) = &config.extra {
+        body = format!("{body}{extra}");
+    }
+
+    body = format!("{body}--{boundary}--\r\n", boundary = config.boundary);
+
+    body
 }
 
 async fn assert_response_ok(response: axum::http::Response<Body>) -> serde_json::Value {
@@ -102,7 +211,7 @@ async fn test_symbol_upload_ok(pool: PgPool) {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -132,11 +241,17 @@ async fn test_symbol_upload_ok(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_upload_no_such_product(pool: PgPool) {
-    let (app, _store, boundary, _content, body, token) = setup(&pool).await;
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: &boundary,
+        product: Some("TestProductxx"),
+        ..Default::default()
+    });
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProductxx&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -160,11 +275,17 @@ async fn test_symbol_upload_no_such_product(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_upload_empty_version(pool: PgPool) {
-    let (app, _store, boundary, _content, body, token) = setup(&pool).await;
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: &boundary,
+        version: Some(""),
+        ..Default::default()
+    });
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -174,7 +295,7 @@ async fn test_symbol_upload_empty_version(pool: PgPool) {
     assert_response_error(
         response,
         StatusCode::BAD_REQUEST,
-        Some("general failure: version cannot be empty"),
+        Some("general failure: required annotation 'version' cannot be empty"),
     )
     .await;
 
@@ -186,11 +307,17 @@ async fn test_symbol_upload_empty_version(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_upload_empty_product(pool: PgPool) {
-    let (app, _store, boundary, _content, body, token) = setup(&pool).await;
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: &boundary,
+        product: Some(""),
+        ..Default::default()
+    });
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -200,7 +327,7 @@ async fn test_symbol_upload_empty_product(pool: PgPool) {
     assert_response_error(
         response,
         StatusCode::BAD_REQUEST,
-        Some("general failure: product name cannot be empty"),
+        Some("general failure: required annotation 'product' cannot be empty"),
     )
     .await;
 
@@ -212,15 +339,17 @@ async fn test_symbol_upload_empty_product(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_upload_invalid_content_type(pool: PgPool) {
-    let (app, _store, boundary, content, _body, token) = setup(&pool).await;
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
 
-    let body = format!(
-        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: text/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
-    );
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: &boundary,
+        symbols_content_type: "text/octet-stream",
+        ..Default::default()
+    });
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -249,13 +378,15 @@ async fn test_symbol_upload_invalid_header(pool: PgPool) {
                    Hello world\r\n\
                    Hello world\r\n";
 
-    let body = format!(
-        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
-    );
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: &boundary,
+        content,
+        ..Default::default()
+    });
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -284,13 +415,15 @@ async fn test_symbol_upload_invalid_build_id_1(pool: PgPool) {
                    Hello world\r\n\
                    Hello world\r\n";
 
-    let body = format!(
-        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
-    );
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: &boundary,
+        content,
+        ..Default::default()
+    });
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -319,13 +452,15 @@ async fn test_symbol_upload_invalid_build_id_2(pool: PgPool) {
                    Hello world\r\n\
                    Hello world\r\n";
 
-    let body = format!(
-        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
-    );
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: &boundary,
+        content,
+        ..Default::default()
+    });
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -354,13 +489,15 @@ async fn test_symbol_upload_invalid_module_id1(pool: PgPool) {
                    Hello world\r\n\
                    Hello world\r\n";
 
-    let body = format!(
-        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
-    );
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: &boundary,
+        content,
+        ..Default::default()
+    });
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -389,13 +526,15 @@ async fn test_symbol_upload_invalid_module_id2(pool: PgPool) {
                    Hello world\r\n\
                    Hello world\r\n";
 
-    let body = format!(
-        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
-    );
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: &boundary,
+        content,
+        ..Default::default()
+    });
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -424,13 +563,15 @@ async fn test_symbol_upload_invalid_module_id3(pool: PgPool) {
                    Hello world\r\n\
                    Hello world\r\n";
 
-    let body = format!(
-        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
-    );
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: &boundary,
+        content,
+        ..Default::default()
+    });
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -460,13 +601,15 @@ async fn test_symbol_upload_invalid_multipart(pool: PgPool) {
                    Hello world\r\n";
     let boundary2 = "----WebKitFormBoundaryX7MA4YWxkTrZu0gW";
 
-    let body = format!(
-        "--{boundary2}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary2}--\r\n"
-    );
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: boundary2,
+        content,
+        ..Default::default()
+    });
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -496,13 +639,15 @@ async fn test_symbol_upload_invalid_boundary(pool: PgPool) {
                    Hello world\r\n";
     let boundary2 = "----WebKitFormBoundaryX7MA4YWxkTrZu0gW";
 
-    let body = format!(
-        "--{boundary}\r\nContent-Disposition: form-data; name=\"symbols_file\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary2}--\r\n"
-    );
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: boundary2,
+        content,
+        ..Default::default()
+    });
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -512,7 +657,7 @@ async fn test_symbol_upload_invalid_boundary(pool: PgPool) {
     assert_response_error(
         response,
         StatusCode::BAD_REQUEST,
-        Some("general failure: failed to read symbols file"),
+        Some("general failure: failed to read multipart field from upload"),
     )
     .await;
 
@@ -531,7 +676,7 @@ async fn test_symbol_upload_wrong_entitlement(pool: PgPool) {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -573,7 +718,7 @@ async fn test_symbol_upload_expired_entitlement(pool: PgPool) {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -619,7 +764,7 @@ async fn test_symbol_upload_inactive_entitlement(pool: PgPool) {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -662,7 +807,7 @@ async fn test_symbol_upload_other_product(pool: PgPool) {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -688,7 +833,7 @@ async fn test_symbol_upload_unknown_token(pool: PgPool) {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {}", "test_tokenx"))
         .body(Body::from(body))
@@ -709,7 +854,7 @@ async fn test_symbol_upload_no_token(pool: PgPool) {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -726,10 +871,17 @@ async fn test_symbol_upload_no_token(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_no_version(pool: PgPool) {
-    let (app, _store, boundary, _content, body, token) = setup(&pool).await;
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: &boundary,
+        version: None,
+        ..Default::default()
+    });
+
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -739,7 +891,7 @@ async fn test_symbol_no_version(pool: PgPool) {
     assert_response_error(
         response,
         StatusCode::BAD_REQUEST,
-        Some("Failed to deserialize query string: missing field `version`"),
+        Some("general failure: required annotation 'version' is missing"),
     )
     .await;
 
@@ -751,7 +903,14 @@ async fn test_symbol_no_version(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_symbol_no_product(pool: PgPool) {
-    let (app, _store, boundary, _content, body, token) = setup(&pool).await;
+    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+
+    let body = create_body_from_config(&SymbolsBodyConfig {
+        boundary: &boundary,
+        product: None,
+        ..Default::default()
+    });
+
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload?version=1.0.0")
@@ -764,7 +923,7 @@ async fn test_symbol_no_product(pool: PgPool) {
     assert_response_error(
         response,
         StatusCode::BAD_REQUEST,
-        Some("Failed to deserialize query string: missing field `product`"),
+        Some("general failure: required annotation 'product' is missing"),
     )
     .await;
 
@@ -781,7 +940,7 @@ async fn test_symbol_upload_empty(pool: PgPool) {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
+        .uri("/api/symbols/upload")
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(""))
@@ -794,31 +953,6 @@ async fn test_symbol_upload_empty(pool: PgPool) {
         Some("general failure: failed to read multipart field from upload"),
     )
     .await;
-
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
-        .await
-        .expect("Failed to fetch symbol entry from database");
-
-    assert_eq!(allsymbols.len(), 0);
-}
-
-#[sqlx::test(migrations = "../../migrations")]
-async fn test_symbol_upload_wrong_name(pool: PgPool) {
-    let (app, _store, boundary, content, _body, token) = setup(&pool).await;
-
-    let body = format!(
-        "--{boundary}\r\nContent-Disposition: form-data; name=\"foo\"; filename=\"test.sym\"\r\nContent-Type: application/octet-stream\r\n\r\n{content}\r\n--{boundary}--\r\n"
-    );
-    let request = Request::builder()
-        .method("POST")
-        .uri("/api/symbols/upload?product=TestProduct&version=1.0.0")
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
-        .body(Body::from(body))
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-    assert_response_ok(response).await;
 
     let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
         .await
