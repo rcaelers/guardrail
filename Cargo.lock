@@ -2643,6 +2643,7 @@ dependencies = [
  "minidump",
  "minidump-processor",
  "minidump-unwind",
+ "mockall",
  "object_store",
  "rand 0.9.1",
  "repos",

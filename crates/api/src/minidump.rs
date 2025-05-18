@@ -27,7 +27,7 @@ struct Minidump {
     content_type: String,
     size: u64,
     storage_path: String,
-    storage_filename: String,
+    storage_id: uuid::Uuid,
 }
 
 #[derive(Default, Debug, Serialize)]
@@ -37,7 +37,7 @@ struct Attachment {
     content_type: String,
     size: u64,
     storage_path: String,
-    storage_filename: String,
+    storage_id: uuid::Uuid,
 }
 
 #[derive(Default, Debug, Serialize)]
@@ -45,6 +45,7 @@ struct CrashInfo {
     crash_id: uuid::Uuid,
     submission_timestamp: String,
     authorized_product: Option<String>,
+    product_id: Option<uuid::Uuid>,
     product: Option<String>,
     version: Option<String>,
     channel: Option<String>,
@@ -92,8 +93,8 @@ impl MinidumpApi {
         info!("Processing minidump");
         let content_type = field.content_type().unwrap_or_default().to_owned();
 
-        let storage_filename = uuid::Uuid::new_v4().to_string();
-        let storage_path = format!("minidumps/{storage_filename}");
+        let storage_id = uuid::Uuid::new_v4();
+        let storage_path = format!("minidumps/{storage_id}");
 
         let filename = field
             .file_name()
@@ -112,7 +113,7 @@ impl MinidumpApi {
             content_type,
             size,
             storage_path,
-            storage_filename,
+            storage_id,
         });
 
         Ok(())
@@ -127,8 +128,8 @@ impl MinidumpApi {
         info!("Processing attachment");
         let content_type = field.content_type().unwrap_or_default().to_owned();
 
-        let storage_filename = uuid::Uuid::new_v4().to_string();
-        let storage_path = format!("attachments/{storage_filename}");
+        let storage_id = uuid::Uuid::new_v4();
+        let storage_path = format!("attachments/{storage_id}");
 
         let filename = field
             .file_name()
@@ -156,7 +157,7 @@ impl MinidumpApi {
             content_type,
             size,
             storage_path,
-            storage_filename,
+            storage_id,
         });
         Ok(())
     }
@@ -254,6 +255,7 @@ impl MinidumpApi {
                         }
                         product_name = product.name;
                         crash_info.product = Some(product_name.clone());
+                        crash_info.product_id = Some(product.id);
                     }
                     "build_id" => {
                         build_timestamp =
@@ -342,8 +344,8 @@ impl MinidumpApi {
             ApiError::Failure("failed to serialize crash info".to_string())
         })?;
 
-        Self::upload_crash(state.storage.clone(), crash_info.crash_id, crash_info_json.clone()).await?;
-
+        Self::upload_crash(state.storage.clone(), crash_info.crash_id, crash_info_json.clone())
+            .await?;
 
         state
             .worker
@@ -382,16 +384,25 @@ impl MinidumpApi {
 
             if let Some(minidump) = &crash_info.minidump {
                 info!(storage_path = %minidump.storage_path, "Deleting minidump from storage");
-                let _ = state.storage.delete(&Path::from(minidump.storage_path.as_str())).await;
+                let _ = state
+                    .storage
+                    .delete(&Path::from(minidump.storage_path.as_str()))
+                    .await;
             }
 
             for attachment in &crash_info.attachments {
                 info!(storage_path = %attachment.storage_path, "Deleting attachment from storage");
-                let _ = state.storage.delete(&Path::from(attachment.storage_path.as_str())).await;
+                let _ = state
+                    .storage
+                    .delete(&Path::from(attachment.storage_path.as_str()))
+                    .await;
             }
 
             info!(crash_id = %crash_info.crash_id, "Deleting crash info from storage");
-            let _ = state.storage.delete(&Path::from(format!("crashes/{}.json", crash_info.crash_id))).await;
+            let _ = state
+                .storage
+                .delete(&Path::from(format!("crashes/{}.json", crash_info.crash_id)))
+                .await;
             return Err(e);
         }
 

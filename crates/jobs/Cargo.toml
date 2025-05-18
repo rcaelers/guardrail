@@ -56,3 +56,5 @@ bytes.workspace = true
 
 [dev-dependencies]
 testware = { path = "../testware" }
+mockall.workspace = true
+async-trait.workspace = true
