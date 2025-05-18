@@ -60,7 +60,7 @@ async fn setup(pool: &PgPool, store: Arc<dyn ObjectStore>) -> (uuid::Uuid, uuid:
     let data = NewSymbols {
         build_id,
         module_id,
-        storage_location: symbols_path.clone(),
+        storage_path: symbols_path.clone(),
         product_id: product.id,
         os: "windows".to_string(),
         arch: "x86_64".to_string(),
@@ -188,7 +188,7 @@ async fn test_full_minidump_processing_flow(pool: PgPool) {
         .expect("Crash not found");
     assert_eq!(attachments.len(), 1);
     assert_eq!(attachments[0].filename, "init.sh");
-    assert_eq!(attachments[0].storage_location, format!("attachments/{attachment_id}"));
+    assert_eq!(attachments[0].storage_path, format!("attachments/{attachment_id}"));
     assert_eq!(attachments[0].mime_type, "application/octet-stream");
     assert_eq!(attachments[0].size, 1234);
     assert_eq!(attachments[0].crash_id, crash_id);

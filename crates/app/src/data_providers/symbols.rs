@@ -25,7 +25,7 @@ pub struct SymbolsRow {
     pub arch: String,
     pub build_id: String,
     pub module_id: String,
-    pub storage_location: String,
+    pub storage_path: String,
     #[table(format(string = "%d/%m/%Y - %H:%M"))]
     pub created_at: NaiveDateTime,
     #[table(format(string = "%d/%m/%Y - %H:%M"))]
@@ -44,7 +44,7 @@ pub struct Symbols {
     pub arch: String,
     pub build_id: String,
     pub module_id: String,
-    pub storage_location: String,
+    pub storage_path: String,
     pub product_id: Uuid,
     pub product: String,
 }
@@ -59,7 +59,7 @@ pub struct Symbols {
     pub arch: String,
     pub build_id: String,
     pub module_id: String,
-    pub storage_location: String,
+    pub storage_path: String,
     pub product_id: Uuid,
     pub product: String,
 }
@@ -72,7 +72,7 @@ impl From<Symbols> for SymbolsRow {
             arch: symbols.arch,
             build_id: symbols.build_id,
             module_id: symbols.module_id,
-            storage_location: symbols.storage_location,
+            storage_path: symbols.storage_path,
             created_at: symbols.created_at,
             updated_at: symbols.updated_at,
             product_id: Some(symbols.product_id),

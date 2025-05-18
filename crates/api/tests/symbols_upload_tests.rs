@@ -230,7 +230,7 @@ async fn test_symbol_upload_ok(pool: PgPool) {
     assert_eq!(symbols.build_id, "EE9E2672A6863B084C4C44205044422E1");
 
     let file = store
-        .get(&Path::from(symbols.storage_location.clone()))
+        .get(&Path::from(symbols.storage_path.clone()))
         .await
         .unwrap();
     let content_bytes = file.bytes().await.unwrap();

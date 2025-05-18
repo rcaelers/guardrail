@@ -9,7 +9,7 @@ pub struct Symbols {
     pub arch: String,
     pub build_id: String,
     pub module_id: String,
-    pub storage_location: String,
+    pub storage_path: String,
     pub product_id: uuid::Uuid,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -22,6 +22,6 @@ pub struct NewSymbols {
     pub arch: String,
     pub build_id: String,
     pub module_id: String,
-    pub storage_location: String,
+    pub storage_path: String,
     pub product_id: uuid::Uuid,
 }

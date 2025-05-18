@@ -233,7 +233,7 @@ impl SymbolsApi {
                 build_id: symbols.header.build_id.clone(),
                 module_id: symbols.header.module_id.clone(),
                 product_id: symbols_context.product_id,
-                storage_location: symbols.storage_path.clone(),
+                storage_path: symbols.storage_path.clone(),
             };
 
             let result = SymbolsRepo::create(tx, new_symbols).await?;

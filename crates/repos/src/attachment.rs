@@ -58,7 +58,7 @@ impl AttachmentsRepo {
                     size,
                     filename,
                     crash_id,
-                    storage_location,
+                    storage_path,
                     product_id
                   )
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -70,7 +70,7 @@ impl AttachmentsRepo {
             attachment.size,
             attachment.filename,
             attachment.crash_id,
-            attachment.storage_location,
+            attachment.storage_path,
             attachment.product_id
         )
         .fetch_one(executor)

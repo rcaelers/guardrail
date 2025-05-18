@@ -203,7 +203,7 @@ impl MinidumpProcessor {
                 error!("Attachment size is missing");
                 JobError::Failure("attachment size is missing".to_string())
             })?;
-            let storage_location = attachment["storage_path"].as_str().ok_or_else(|| {
+            let storage_path = attachment["storage_path"].as_str().ok_or_else(|| {
                 error!("Attachment storage path is missing");
                 JobError::Failure("attachment storage path is missing".to_string())
             })?;
@@ -214,7 +214,7 @@ impl MinidumpProcessor {
                 product_id,
                 filename: filename.to_string(),
                 mime_type: content_type.to_string(),
-                storage_location: storage_location.to_string(),
+                storage_path: storage_path.to_string(),
                 size: size as i64,
             };
 

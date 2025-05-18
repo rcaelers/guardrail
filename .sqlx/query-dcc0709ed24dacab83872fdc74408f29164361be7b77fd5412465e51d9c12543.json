@@ -40,7 +40,7 @@
       },
       {
         "ordinal": 7,
-        "name": "storage_location",
+        "name": "storage_path",
         "type_info": "Text"
       },
       {

@@ -15,10 +15,10 @@ async fn test_get_by_id(pool: PgPool) {
     let arch = "x86_64";
     let build_id = "build123";
     let module_id = "module123";
-    let storage_location = "/path/to/symbols";
+    let storage_path = "/path/to/symbols";
 
     let inserted_symbols =
-        create_test_symbols(&pool, os, arch, build_id, module_id, storage_location, None).await;
+        create_test_symbols(&pool, os, arch, build_id, module_id, storage_path, None).await;
 
     let found_symbols = SymbolsRepo::get_by_id(&pool, inserted_symbols.id)
         .await
@@ -31,7 +31,7 @@ async fn test_get_by_id(pool: PgPool) {
     assert_eq!(found_symbols.arch, arch);
     assert_eq!(found_symbols.build_id, build_id);
     assert_eq!(found_symbols.module_id, module_id);
-    assert_eq!(found_symbols.storage_location, storage_location);
+    assert_eq!(found_symbols.storage_path, storage_path);
 }
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id_not_found(pool: PgPool) {
@@ -49,10 +49,10 @@ async fn test_get_by_id_error(pool: PgPool) {
     let arch = "x86_64";
     let build_id = "build123error";
     let module_id = "module123error";
-    let storage_location = "/path/to/symbols_error";
+    let storage_path = "/path/to/symbols_error";
 
     let inserted_symbols =
-        create_test_symbols(&pool, os, arch, build_id, module_id, storage_location, None).await;
+        create_test_symbols(&pool, os, arch, build_id, module_id, storage_path, None).await;
 
     pool.close().await;
 
@@ -92,17 +92,9 @@ async fn test_get_all(pool: PgPool) {
         ("macOS", "arm64", "build-mac-1", "module-3", "/path/to/macos/symbol"),
     ];
 
-    for (os, arch, build_id, module_id, storage_location) in &test_symbol_data {
-        create_test_symbols(
-            &pool,
-            os,
-            arch,
-            build_id,
-            module_id,
-            storage_location,
-            Some(product.id),
-        )
-        .await;
+    for (os, arch, build_id, module_id, storage_path) in &test_symbol_data {
+        create_test_symbols(&pool, os, arch, build_id, module_id, storage_path, Some(product.id))
+            .await;
     }
 
     let query_params = QueryParams::default();
@@ -128,7 +120,7 @@ async fn test_get_all(pool: PgPool) {
                 || symbol.arch.contains("Windows")
                 || symbol.build_id.contains("Windows")
                 || symbol.module_id.contains("Windows")
-                || symbol.storage_location.contains("Windows")
+                || symbol.storage_path.contains("Windows")
         );
     }
 }
@@ -142,7 +134,7 @@ async fn test_create(pool: PgPool) {
         arch: "arm64".to_string(),
         build_id: "build_apple".to_string(),
         module_id: "module_apple".to_string(),
-        storage_location: "/path/to/apple_symbols".to_string(),
+        storage_path: "/path/to/apple_symbols".to_string(),
         product_id: product.id,
     };
 
@@ -159,7 +151,7 @@ async fn test_create(pool: PgPool) {
     assert_eq!(created_symbols.arch, new_symbols.arch);
     assert_eq!(created_symbols.build_id, new_symbols.build_id);
     assert_eq!(created_symbols.module_id, new_symbols.module_id);
-    assert_eq!(created_symbols.storage_location, new_symbols.storage_location);
+    assert_eq!(created_symbols.storage_path, new_symbols.storage_path);
     assert_eq!(created_symbols.product_id, new_symbols.product_id);
 }
 
@@ -172,7 +164,7 @@ async fn test_create_error(pool: PgPool) {
         arch: "x86_64".to_string(),
         build_id: "build123error".to_string(),
         module_id: "module123error".to_string(),
-        storage_location: "/path/to/symbols_error".to_string(),
+        storage_path: "/path/to/symbols_error".to_string(),
         product_id: product.id,
     };
 
@@ -192,7 +184,7 @@ async fn test_update(pool: PgPool) {
     symbols.arch = "arm64e".to_string();
     symbols.build_id = "build_new".to_string();
     symbols.module_id = "module_new".to_string();
-    symbols.storage_location = "/path/new".to_string();
+    symbols.storage_path = "/path/new".to_string();
 
     let updated_id = SymbolsRepo::update(&pool, symbols.clone())
         .await
@@ -210,7 +202,7 @@ async fn test_update(pool: PgPool) {
     assert_eq!(updated_symbols.arch, "arm64e");
     assert_eq!(updated_symbols.build_id, "build_new");
     assert_eq!(updated_symbols.module_id, "module_new");
-    assert_eq!(updated_symbols.storage_location, "/path/new");
+    assert_eq!(updated_symbols.storage_path, "/path/new");
 }
 
 #[sqlx::test(migrations = "../../migrations")]
@@ -228,7 +220,7 @@ async fn test_update_error(pool: PgPool) {
 
     symbols.os = "ios-err".to_string();
     symbols.arch = "arm64e-err".to_string();
-    symbols.storage_location = "/path/new_err".to_string();
+    symbols.storage_path = "/path/new_err".to_string();
 
     pool.close().await;
 
@@ -293,17 +285,9 @@ async fn test_count(pool: PgPool) {
         ("netbsd", "x86", "build_n1", "module_n1", "/path/n1"),
     ];
 
-    for (os, arch, build_id, module_id, storage_location) in &test_symbols_data {
-        create_test_symbols(
-            &pool,
-            os,
-            arch,
-            build_id,
-            module_id,
-            storage_location,
-            Some(product.id),
-        )
-        .await;
+    for (os, arch, build_id, module_id, storage_path) in &test_symbols_data {
+        create_test_symbols(&pool, os, arch, build_id, module_id, storage_path, Some(product.id))
+            .await;
     }
 
     let new_count = SymbolsRepo::count(&pool)

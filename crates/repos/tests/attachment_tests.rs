@@ -146,7 +146,7 @@ async fn test_create(pool: PgPool) {
         filename: "stack_trace_full.txt".to_string(),
         crash_id: crash.id,
         product_id: product.id,
-        storage_location: "s3://bucket/path/to/stack_trace_full.txt".to_string(),
+        storage_path: "s3://bucket/path/to/stack_trace_full.txt".to_string(),
     };
 
     let attachment_id = AttachmentsRepo::create(&pool, new_attachment.clone())
@@ -175,7 +175,7 @@ async fn test_create_error(pool: PgPool) {
         mime_type: "text/plain".to_string(),
         size: 123,
         name: "/path/to/file.txt".to_string(),
-        storage_location: "s3://bucket/path/to/file.txt".to_string(),
+        storage_path: "s3://bucket/path/to/file.txt".to_string(),
         crash_id: product.id,
         product_id: product.id,
     };

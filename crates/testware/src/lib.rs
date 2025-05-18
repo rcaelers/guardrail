@@ -167,7 +167,7 @@ pub async fn create_test_attachment(
         mime_type: mime_type.to_string(),
         size: file_size,
         filename: filename.to_string(),
-        storage_location: format!("test_storage/{}.{}", Uuid::new_v4(), filename),
+        storage_path: format!("test_storage/{}.{}", Uuid::new_v4(), filename),
         crash_id,
         product_id,
     };
@@ -189,7 +189,7 @@ pub async fn create_test_symbols(
     arch: &str,
     build_id: &str,
     module_id: &str,
-    storage_location: &str,
+    storage_path: &str,
     product_id: Option<Uuid>,
 ) -> Symbols {
     let product_id = match product_id {
@@ -202,7 +202,7 @@ pub async fn create_test_symbols(
         arch: arch.to_string(),
         build_id: build_id.to_string(),
         module_id: module_id.to_string(),
-        storage_location: storage_location.to_string(),
+        storage_path: storage_path.to_string(),
         product_id,
     };
 

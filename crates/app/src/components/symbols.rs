@@ -100,7 +100,7 @@ impl DataTableTrait for SymbolsTable {
         fields.update(|field| {
             field.insert(
                 "FileLocation".to_string(),
-                Field::new(FieldString::new(symbols.storage_location, HashSet::new())),
+                Field::new(FieldString::new(symbols.storage_path, HashSet::new())),
             );
         });
     }
@@ -117,13 +117,13 @@ impl DataTableTrait for SymbolsTable {
         let arch = fields.get().get::<FieldString>("Arch");
         let build_id = fields.get().get::<FieldString>("BuildId");
         let module_id = fields.get().get::<FieldString>("ModuleId");
-        let storage_location = fields.get().get::<FieldString>("FileLocation");
+        let storage_path = fields.get().get::<FieldString>("FileLocation");
 
         symbols.os = os.value.get();
         symbols.arch = arch.value.get();
         symbols.build_id = build_id.value.get();
         symbols.module_id = module_id.value.get();
-        symbols.storage_location = storage_location.value.get();
+        symbols.storage_path = storage_path.value.get();
         match product_id {
             None => error!("Product ID is missing"),
             Some(product_id) => {

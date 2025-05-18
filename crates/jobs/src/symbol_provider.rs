@@ -100,7 +100,7 @@ impl SymbolSupplier for S3SymbolSupplier {
         let symbols = self
             .get_symbols_by_module_and_build_id(&module_id, &build_id)
             .await?;
-        let data = self.get_symbols_object(&symbols.storage_location).await?;
+        let data = self.get_symbols_object(&symbols.storage_path).await?;
         let symbols = self.parse_symbols(&data).await?;
 
         info!("S3SymbolSupplier parsed file!");
@@ -166,7 +166,7 @@ mod test {
         let data = NewSymbols {
             build_id,
             module_id,
-            storage_location: symbols_path.clone(),
+            storage_path: symbols_path.clone(),
             product_id: product.id,
             os: "windows".to_string(),
             arch: "x86_64".to_string(),

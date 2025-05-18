@@ -151,7 +151,7 @@ CREATE TABLE guardrail.symbols (
     arch TEXT NOT NULL,
     build_id TEXT NOT NULL,
     module_id TEXT NOT NULL,
-    storage_location TEXT NOT NULL,
+    storage_path TEXT NOT NULL,
     product_id UUID NOT NULL REFERENCES guardrail.products (id)
 );
 ALTER TABLE guardrail.symbols OWNER TO guardrail;
@@ -203,7 +203,7 @@ CREATE TABLE guardrail.attachments (
     mime_type TEXT NOT NULL,
     size bigint NOT NULL,
     filename TEXT NOT NULL,
-    storage_location TEXT NOT NULL,
+    storage_path TEXT NOT NULL,
     crash_id UUID NOT NULL REFERENCES guardrail.crashes (id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES guardrail.products (id),
     UNIQUE (name, crash_id)
