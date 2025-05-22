@@ -19,6 +19,7 @@ pub struct WebServer {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct JobServer {
+    pub port: u16,
     pub db_uri: String,
 }
 

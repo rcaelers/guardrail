@@ -173,6 +173,7 @@ api_server:
     kH89+JqlOvmRo8PEP2GF/hiNjlwfzwg=
     -----END PRIVATE KEY-----
 job_server:
+  port: 88
   db_uri: postgres://guardrail:wezei4Joozooz8To@localhost/apalis
 database:
   db_uri: postgres://guardrail:wezei4Joozooz8To@localhost/guardrail
