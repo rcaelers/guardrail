@@ -38,22 +38,22 @@ struct ApiKeyQuery {
 }
 
 fn extract_api_token<B>(request: &Request<B>) -> Option<String> {
-    if let Some(auth_header) = request.headers().get("Authorization") {
-        if let Ok(auth_value) = auth_header.to_str() {
-            if let Some(token) = auth_value.strip_prefix("Bearer ") {
-                return Some(token.to_string());
-            } else if let Some(token) = auth_value.strip_prefix("Token ") {
-                return Some(token.to_string());
-            } else {
-                return Some(auth_value.to_string());
-            }
+    if let Some(auth_header) = request.headers().get("Authorization")
+        && let Ok(auth_value) = auth_header.to_str()
+    {
+        if let Some(token) = auth_value.strip_prefix("Bearer ") {
+            return Some(token.to_string());
+        } else if let Some(token) = auth_value.strip_prefix("Token ") {
+            return Some(token.to_string());
+        } else {
+            return Some(auth_value.to_string());
         }
     }
 
-    if let Ok(query) = Query::<ApiKeyQuery>::try_from_uri(request.uri()) {
-        if let Some(api_key) = &query.api_key {
-            return Some(api_key.clone());
-        }
+    if let Ok(query) = Query::<ApiKeyQuery>::try_from_uri(request.uri())
+        && let Some(api_key) = &query.api_key
+    {
+        return Some(api_key.clone());
     }
 
     None

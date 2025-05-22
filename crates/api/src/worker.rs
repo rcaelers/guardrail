@@ -69,11 +69,10 @@ impl Default for TestMinidumpProcessor {
 #[async_trait]
 impl Worker for TestMinidumpProcessor {
     async fn queue_minidump(&self, crash: serde_json::Value) -> Result<String, ApiError> {
-        if let Ok(failure) = self.failure.lock() {
-            if *failure {
+        if let Ok(failure) = self.failure.lock()
+            && *failure {
                 return Err(ApiError::Failure("failed to queue minidump job".to_string()));
             }
-        }
         if let Ok(mut requests) = self.requests.lock() {
             requests.push(crash.to_string());
         }

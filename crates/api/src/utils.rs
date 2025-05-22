@@ -128,15 +128,14 @@ pub fn validate_api_token_for_product(
     product: &Product,
     product_name: &str,
 ) -> Result<(), ApiError> {
-    if let Some(token_product_id) = api_token.product_id {
-        if token_product_id != product.id {
+    if let Some(token_product_id) = api_token.product_id
+        && token_product_id != product.id {
             error!(
                 "API token not authorized for product {}, token is for product_id: {}",
                 product_name, token_product_id
             );
             return Err(ApiError::ProductAccessDenied(product_name.to_owned()));
         }
-    }
     Ok(())
 }
 

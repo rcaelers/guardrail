@@ -203,10 +203,10 @@ async fn get_user_unique_id(
         let authenticated_user = session
             .get::<AuthenticatedUser>("authenticated_user")
             .await?;
-        if let Some(current_user) = authenticated_user {
-            if current_user.id == user.id {
-                return Ok(user.id);
-            }
+        if let Some(current_user) = authenticated_user
+            && current_user.id == user.id
+        {
+            return Ok(user.id);
         }
         return Err(ApiError::UserAlreadyExists(user.username));
     }
@@ -228,8 +228,8 @@ where
             ApiError::InternalFailure()
         })?;
         let updated = passkey.update_credential(&auth_result);
-        if let Some(updated) = updated {
-            if updated {
+        if let Some(updated) = updated
+            && updated {
                 CredentialsRepo::update_data(
                     &mut *tx,
                     cred.id,
@@ -240,7 +240,6 @@ where
                 )
                 .await?;
             }
-        }
     }
     Ok(())
 }
