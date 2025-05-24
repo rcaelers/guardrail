@@ -28,14 +28,22 @@ RUN cargo build --release -p jobs
 
 FROM alpine:latest
 
+RUN addgroup -g 1000 -S guardrail && adduser -u 1000 -S guardrail -G guardrail
+
 WORKDIR /app
 
-RUN apk add --no-cache openssl ca-certificates
+RUN apk add --no-cache openssl ca-certificates tzdata tini && \
+    rm -rf /var/cache/apk/*
 
 COPY --from=builder /app/target/release/jobs /app/
 
-VOLUME ["/app/config"]
+RUN mkdir -p /app/config /tmp/guardrail && \
+    chown -R guardrail:guardrail /app /tmp/guardrail
 
-EXPOSE 3002
+VOLUME ["/app/config", "/tmp/guardrail"]
+
+USER guardrail
+
+ENTRYPOINT ["/sbin/tini", "--"]
 
 CMD ["/app/jobs", "-C", "/config"]
