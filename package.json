@@ -1,13 +1,13 @@
 {
   "devDependencies": {
     "@tailwindcss/typography": "^0.5.16",
-    "daisyui": "^5.0.35",
-    "tailwindcss": "^4.1.7"
+    "daisyui": "^5.0.43",
+    "tailwindcss": "^4.1.8"
   },
   "optionalDependencies": {
     "fsevents": "^2.3.3"
   },
   "dependencies": {
-    "@tailwindcss/cli": "^4.1.7"
+    "@tailwindcss/cli": "^4.1.8"
   }
 }
