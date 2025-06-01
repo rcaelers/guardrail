@@ -44,20 +44,20 @@ minidump-unwind.workspace = true
 breakpad-symbols.workspace = true
 
 # Misc
+apalis-sql.workspace = true
+apalis.workspace = true
 async-trait.workspace = true
-# cfg-if.workspace = true
+bytes.workspace = true
 chrono.workspace = true
 data-encoding.workspace = true
+fancy-regex.workspace = true
 futures.workspace = true
+log.workspace = true
+object_store.workspace = true
 rand.workspace = true
 thiserror.workspace = true
 time.workspace = true
 uuid.workspace = true
-log.workspace = true
-object_store.workspace = true
-apalis.workspace = true
-apalis-sql.workspace = true
-bytes.workspace = true
 
 [dev-dependencies]
 testware = { path = "../testware" }

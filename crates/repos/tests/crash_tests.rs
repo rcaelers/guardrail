@@ -103,6 +103,7 @@ async fn test_create(pool: PgPool) {
             "error": "Division by zero",
             "stack_trace": "at main",
         })),
+        signature: Some("calc_error_signature".to_string()),
         version: Some("1.0.0".to_string()),
         channel: Some("test_channel".to_string()),
         build_id: Some("test_build_id".to_string()),
@@ -198,6 +199,7 @@ async fn test_create_error(pool: PgPool) {
         "error": "Test error",
         "stack_trace": "at test"
                 })),
+        signature: Some("test_signature".to_string()),
         version: Some("1.0.0".to_string()),
         channel: Some("test_channel".to_string()),
         build_id: Some("test_build_id".to_string()),

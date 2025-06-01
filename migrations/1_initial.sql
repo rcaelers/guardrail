@@ -165,6 +165,7 @@ CREATE TABLE guardrail.crashes (
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     info TEXT,
     report JSONB,
+    signature TEXT,
     minidump UUID,
     version TEXT,
     channel TEXT,

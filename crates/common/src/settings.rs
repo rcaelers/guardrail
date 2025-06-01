@@ -21,6 +21,10 @@ pub struct WebServer {
 pub struct JobServer {
     pub port: u16,
     pub db_uri: String,
+    pub skip_patterns: Option<Vec<String>>,
+    pub end_patterns: Option<Vec<String>>,
+    pub delimiter: Option<String>,
+    pub maximum_frame_count: Option<usize>,
 }
 
 #[derive(Debug, Deserialize, Default)]

@@ -175,6 +175,13 @@ api_server:
 job_server:
   port: 88
   db_uri: postgres://guardrail:wezei4Joozooz8To@localhost/apalis
+  maximum_frame_count: 10
+  delimiter: "|"
+  skip_patterns:
+  end_patterns:
+    - "WinMainCRTStartup"
+    - "mainCRTStartup"
+    - "main()"
 database:
   db_uri: postgres://guardrail:wezei4Joozooz8To@localhost/guardrail
 object_storage:

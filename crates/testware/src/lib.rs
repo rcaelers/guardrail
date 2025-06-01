@@ -98,6 +98,7 @@ pub async fn create_test_crash(
             "error": "Test error",
             "stacktrace": "Test stack trace"
         })),
+        signature: Some("test_signature".to_string()),
         version: Some("1.0.0".to_string()),
         channel: Some("test_channel".to_string()),
         build_id: Some("test_build_id".to_string()),
@@ -138,6 +139,7 @@ pub async fn create_test_attachment(
                     "error": "Test error",
                     "stacktrace": "Test stack trace"
                 })),
+                signature: Some("test_signature".to_string()),
                 version: Some("1.0.0".to_string()),
                 channel: Some("test_channel".to_string()),
                 build_id: Some("test_build_id".to_string()),

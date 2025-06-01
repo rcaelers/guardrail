@@ -7,7 +7,10 @@ use apalis_sql::{
 use axum::{Router, extract::State, http::StatusCode, routing::get};
 use clap::Parser;
 use common::{init_logging, settings::Settings};
-use jobs::{minidump::MinidumpProcessor, state::AppState};
+use jobs::{
+    minidump::MinidumpProcessor,
+    state::AppState,
+};
 use repos::Repo;
 use sqlx::ConnectOptions;
 use sqlx::PgPool;

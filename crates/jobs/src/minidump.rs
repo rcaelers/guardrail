@@ -10,7 +10,11 @@ use std::sync::Arc;
 use tracing::{error, info};
 
 use crate::{
-    error::JobError, jobs::MinidumpJob, state::AppState, symbol_provider::s3_symbol_supplier,
+    error::JobError,
+    jobs::MinidumpJob,
+    signature_generator::{SignatureGenerator, SignatureGeneratorConfig},
+    state::AppState,
+    symbol_provider::s3_symbol_supplier,
 };
 use data::{annotation::NewAnnotation, attachment::NewAttachment, crash::NewCrash};
 use repos::{
@@ -21,6 +25,7 @@ use repos::{
 pub struct MinidumpProcessor {
     storage: Arc<dyn ObjectStore>,
     repo: Repo,
+    signature_generator: SignatureGenerator,
 }
 
 impl MinidumpProcessor {
@@ -28,13 +33,54 @@ impl MinidumpProcessor {
         let storage = s.storage.clone();
         let repo = s.repo.clone();
 
-        MinidumpProcessor { storage, repo }
+        let config = SignatureGeneratorConfig {
+            end_patterns: s
+                .settings
+                .job_server
+                .end_patterns
+                .clone()
+                .unwrap_or_default(),
+            skip_patterns: s
+                .settings
+                .job_server
+                .skip_patterns
+                .clone()
+                .unwrap_or_default(),
+            delimiter: s
+                .settings
+                .job_server
+                .delimiter
+                .clone()
+                .unwrap_or("|".to_string()),
+            maximum_frame_count: s.settings.job_server.maximum_frame_count.unwrap_or(20),
+        };
+
+        let signature_generator = SignatureGenerator::new(config).unwrap();
+
+        MinidumpProcessor {
+            storage,
+            repo,
+            signature_generator,
+        }
+    }
+
+    async fn generate_signature(&self, crash_info: &serde_json::Value) -> Result<String, JobError> {
+        let crashing_thread = crash_info
+            .get("crashing_thread")
+            .ok_or_else(|| JobError::Failure("Failed to get crashing thread".to_string()))?;
+
+        let signature = self
+            .signature_generator
+            .generate(crashing_thread)
+            .map_err(|e| JobError::Failure(format!("Failed to generate signature: {e}")))?;
+
+        Ok(signature)
     }
 
     async fn handle_job(
         &self,
         crash_id: uuid::Uuid,
-        crash_info: serde_json::Value,
+        mut crash_info: serde_json::Value,
     ) -> Result<(), JobError> {
         let mut tx = self.repo.begin_admin().await?;
 
@@ -66,6 +112,9 @@ impl MinidumpProcessor {
             error!("Failed to parse minidump json: {:?}", e);
             JobError::Failure("failed to parse minidump json".to_string())
         })?;
+
+        let signature = self.generate_signature(&report).await?;
+        crash_info["signature"] = Value::String(signature);
 
         Self::create_crash(&mut *tx, crash_id, crash_info, report).await?;
         info!("Updated crash report with ID: {:?}", crash_id);
@@ -124,6 +173,7 @@ impl MinidumpProcessor {
             channel: crash_info["channel"].as_str().map(|s| s.to_string()),
             build_id: crash_info["build_id"].as_str().map(|s| s.to_string()),
             commit: crash_info["commit"].as_str().map(|s| s.to_string()),
+            signature: crash_info["signature"].as_str().map(|s| s.to_string()),
             product_id,
             report: Some(report),
             ..Default::default()
