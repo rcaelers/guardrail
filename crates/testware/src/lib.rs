@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -81,7 +82,7 @@ pub async fn create_test_product_with_details(
 /// Create a test crash and its associated product if needed
 pub async fn create_test_crash(
     pool: &PgPool,
-    info: Option<&str>,
+    signature: Option<&str>,
     product_id: Option<Uuid>,
 ) -> Crash {
     let product_id = match product_id {
@@ -92,17 +93,12 @@ pub async fn create_test_crash(
     let new_crash = NewCrash {
         id: None,
         minidump: None,
-        info: info.map(|s| s.to_string()),
         product_id,
         report: Some(serde_json::json!({
             "error": "Test error",
             "stacktrace": "Test stack trace"
         })),
-        signature: Some("test_signature".to_string()),
-        version: Some("1.0.0".to_string()),
-        channel: Some("test_channel".to_string()),
-        build_id: Some("test_build_id".to_string()),
-        commit: Some("test_commit".to_string()),
+        signature: signature.map(|s| s.to_string()),
     };
 
     let crash_id = CrashRepo::create(pool, new_crash)
@@ -133,17 +129,12 @@ pub async fn create_test_attachment(
             let new_crash = NewCrash {
                 id: None,
                 minidump: None,
-                info: None,
                 product_id: product.id,
                 report: Some(serde_json::json!({
                     "error": "Test error",
                     "stacktrace": "Test stack trace"
                 })),
                 signature: Some("test_signature".to_string()),
-                version: Some("1.0.0".to_string()),
-                channel: Some("test_channel".to_string()),
-                build_id: Some("test_build_id".to_string()),
-                commit: Some("test_commit".to_string()),
             };
 
             CrashRepo::create(pool, new_crash)
@@ -340,8 +331,20 @@ pub async fn create_test_token(
 }
 
 pub fn create_settings() -> Arc<Settings> {
-    let mut settings = Settings::default();
     tracing::info!("Logging initialized");
+
+    let workspace_dir = std::env::var("CARGO_MANIFEST_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| std::env::current_dir().expect("Failed to get current directory"))
+        .ancestors()
+        .nth(2)
+        .expect("Failed to find workspace root")
+        .to_string_lossy().to_string();
+
+    let mut settings = Settings {
+        config_dir: format!("{workspace_dir}/config"),
+        ..Settings::default()
+    };
 
     settings.auth.id = "localhost".to_string();
     settings.auth.origin = "http://localhost:3000".to_string();
@@ -356,5 +359,11 @@ pub fn create_settings() -> Arc<Settings> {
                                     -----END PRIVATE KEY-----"
         .to_string();
 
+    settings.minidumps.mandatory_annotations =
+        Some(vec!["product".to_string(), "version".to_string()]);
+    settings.minidumps.validation_scripts = Some(vec![
+        "scripts/product_validation.rhai".to_string(),
+        "scripts/build_age_validation.rhai".to_string(),
+    ]);
     Arc::new(settings)
 }

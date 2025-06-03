@@ -149,10 +149,6 @@ async fn test_full_minidump_processing_flow(pool: PgPool) {
         Some(Uuid::parse_str("6fda4029-be94-43ea-90b6-32fe2a78074a").unwrap())
     );
     assert_eq!(crash.product_id, product_id);
-    assert_eq!(crash.version, Some("1.0.0".to_string()));
-    assert_eq!(crash.channel, Some("stable".to_string()));
-    assert_eq!(crash.commit, Some("abcdef1234567890".to_string()));
-    assert_eq!(crash.build_id, Some("EE9E2672A6863B084C4C44205044422E1".to_string()));
 
     let report = crash.report.expect("Report should be present");
     assert!(report.is_object());

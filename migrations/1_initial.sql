@@ -3,6 +3,7 @@
 -- SELECT pg_reload_conf();
 
 CREATE SCHEMA IF NOT EXISTS guardrail;
+ALTER SCHEMA guardrail OWNER TO guardrail;
 
 -- CREATE ROLE authenticator LOGIN PASSWORD '<password>' NOINHERIT NOCREATEDB NOCREATEROLE NOSUPERUSER;
 -- CREATE ROLE guardrail_webuser LOGIN PASSWORD '<password>' NOINHERIT NOCREATEDB NOCREATEROLE NOSUPERUSER;
@@ -163,14 +164,9 @@ CREATE TABLE guardrail.crashes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
-    info TEXT,
     report JSONB,
     signature TEXT,
     minidump UUID,
-    version TEXT,
-    channel TEXT,
-    commit TEXT,
-    build_id TEXT,
     product_id UUID NOT NULL REFERENCES guardrail.products (id)
 );
 ALTER TABLE guardrail.crashes OWNER TO guardrail;

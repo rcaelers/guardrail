@@ -13,7 +13,6 @@ pub struct CrashRow {
     pub id: Uuid,
     pub product: String,
     pub version: String,
-    pub info: String,
     #[table(format(string = "%d/%m/%Y - %H:%M"))]
     pub created_at: NaiveDateTime,
     #[table(format(string = "%d/%m/%Y - %H:%M"))]
@@ -26,7 +25,6 @@ impl From<Crash> for CrashRow {
     fn from(crash: Crash) -> Self {
         Self {
             id: crash.id,
-            info: crash.info.unwrap_or_default(),
             created_at: crash.created_at,
             updated_at: crash.updated_at,
             product_id: Some(crash.product_id),
@@ -42,6 +40,6 @@ impl ExtraRowTrait for CrashRow {
     }
 
     fn get_name(&self) -> String {
-        self.info.clone()
+        self.product.clone()
     }
 }

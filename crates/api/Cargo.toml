@@ -51,6 +51,7 @@ chrono.workspace = true
 data-encoding.workspace = true
 futures.workspace = true
 rand.workspace = true
+rhai.workspace = true
 thiserror.workspace = true
 time.workspace = true
 uuid.workspace = true

@@ -28,8 +28,8 @@ pub enum ApiError {
     #[error("Product {0} not accepting crashes")]
     ProductNotAcceptingCrashes(String),
 
-    #[error("version {0} product {1} is too old")]
-    TooOld(String, String),
+    #[error("Upload validation for product {0} failed: {1}")]
+    ValidationError(String, String),
 
     #[error("User {0} not found")]
     UserNotFound(String),
@@ -72,9 +72,9 @@ impl IntoResponse for ApiError {
             ApiError::ProductNotAcceptingCrashes(product) => {
                 (StatusCode::BAD_REQUEST, format!("product {product} not accepting crashes"))
             }
-            ApiError::TooOld(version, product) => (
+            ApiError::ValidationError(product, error_message) => (
                 StatusCode::BAD_REQUEST,
-                format!("version {version} of product {product} is too old"),
+                format!("validation of product {product} failed: {error_message}"),
             ),
             ApiError::UserNotFound(user) => {
                 (StatusCode::BAD_REQUEST, format!("user {user} not found"))

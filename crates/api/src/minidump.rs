@@ -3,14 +3,15 @@ use axum::extract::{Multipart, State};
 use axum::{Extension, Json};
 use object_store::path::Path;
 use object_store::{ObjectStore, PutPayload};
+use rhai::Engine;
 use serde::Serialize;
 use sqlx::Postgres;
 use std::sync::Arc;
-use tracing::{error, info, instrument};
+use tracing::{debug, error, info, instrument};
 
 use super::error::ApiError;
 use crate::state::AppState;
-use crate::utils::{get_product, get_product_by_id, stream_to_s3, validate_api_token_for_product};
+use crate::utils::{get_product_by_id, stream_to_s3};
 use data::api_token::ApiToken;
 
 pub struct MinidumpApi;
@@ -47,19 +48,12 @@ struct CrashInfo {
     authorized_product: Option<String>,
     product_id: Option<uuid::Uuid>,
     product: Option<String>,
-    version: Option<String>,
-    channel: Option<String>,
-    commit: Option<String>,
-    build_id: Option<String>,
     minidump: Option<Minidump>,
     attachments: Vec<Attachment>,
     annotations: std::collections::HashMap<String, String>,
 }
 
 impl MinidumpApi {
-    const REQUIRED_FIELDS: &'static [&'static str] =
-        &["product", "version", "channel", "commit", "build_id"];
-
     fn validate_annotation_content_type(content_type: &str) -> Result<(), ApiError> {
         let is_valid = content_type == "text/plain"
             || content_type == "text/markdown"
@@ -69,6 +63,18 @@ impl MinidumpApi {
             error!(content_type, "Invalid annotation content type");
             return Err(ApiError::Failure(format!(
                 "invalid annotation content type: {content_type}"
+            )));
+        }
+        Ok(())
+    }
+
+    fn validate_minidump_content_type(content_type: &str) -> Result<(), ApiError> {
+        let is_valid = content_type == "application/octet-stream" || content_type.is_empty();
+
+        if !is_valid {
+            error!(content_type, "Invalid minidump content type");
+            return Err(ApiError::Failure(format!(
+                "invalid minidump content type: {content_type}"
             )));
         }
         Ok(())
@@ -90,8 +96,10 @@ impl MinidumpApi {
         crash_info: &mut CrashInfo,
         state: AppState,
     ) -> Result<(), ApiError> {
-        info!("Processing minidump");
+        debug!("Processing minidump");
         let content_type = field.content_type().unwrap_or_default().to_owned();
+
+        Self::validate_minidump_content_type(&content_type)?;
 
         let storage_id = uuid::Uuid::new_v4();
         let storage_path = format!("minidumps/{storage_id}");
@@ -101,12 +109,23 @@ impl MinidumpApi {
             .map(|name| name.to_string())
             .unwrap_or_else(|| "unnamed_minidump".to_string());
 
+        debug!(
+            filename = %filename,
+            content_type = %content_type,
+            "Uploading minidump"
+        );
         let size = stream_to_s3(state.storage.clone(), &storage_path, field)
             .await
             .map_err(|e| {
                 error!(error = ?e, "Failed to stream minidump to S3");
                 ApiError::Failure("failed to store minidump".to_string())
             })?;
+
+        info!(filename = %filename,
+              size = %size,
+              storage_path = %storage_path,
+              storage_id = %storage_id,
+              "Adding minidump");
 
         crash_info.minidump = Some(Minidump {
             filename,
@@ -144,12 +163,16 @@ impl MinidumpApi {
             })?
             .to_string();
 
+        info!(name = %name, filename = %filename, content_type = %content_type, "Uploading attachment");
+
         let size = stream_to_s3(state.storage.clone(), &storage_path, field)
             .await
             .map_err(|e| {
                 error!(error = ?e, attachment_name = name, "Failed to stream attachment to S3");
                 ApiError::Failure("failed to store attachment".to_string())
             })?;
+
+        info!(name = %name, filename = %filename, content_type = %content_type, "Adding attachment");
 
         crash_info.attachments.push(Attachment {
             name,
@@ -167,7 +190,7 @@ impl MinidumpApi {
         field: Field<'_>,
         crash_info: &mut CrashInfo,
     ) -> Result<(), ApiError> {
-        info!("Processing annotation");
+        debug!("Processing annotation");
         let key = field
             .name()
             .ok_or_else(|| {
@@ -185,6 +208,7 @@ impl MinidumpApi {
             ApiError::Failure(format!("failed to read field text for annotation '{key}'"))
         })?;
 
+        info!(key = %key, content_type = %content_type, "Adding annotation");
         crash_info.annotations.insert(key, value);
         Ok(())
     }
@@ -197,39 +221,46 @@ impl MinidumpApi {
     ) -> Result<(), ApiError> {
         let content_type = field.content_type().unwrap_or_default().to_owned();
         let field_name = field.name().unwrap_or_default();
+        let file_name = field.file_name().unwrap_or_default();
 
-        match content_type.as_str() {
-            "application/octet-stream" if field_name == "upload_file_minidump" => {
-                Self::handle_minidump_upload(field, crash_info, state).await
+        debug!(field_name = %field_name, file_name = %file_name, content_type = %content_type, "Processing multipart field");
+        match field_name {
+            "upload_file_minidump" => Self::handle_minidump_upload(field, crash_info, state).await,
+            _ => {
+                if file_name.is_empty() {
+                    Self::handle_annotation_upload(field, crash_info).await
+                } else {
+                    Self::handle_attachment_upload(field, crash_info, state).await
+                }
             }
-            "application/octet-stream" => {
-                Self::handle_attachment_upload(field, crash_info, state).await
-            }
-            _ => Self::handle_annotation_upload(field, crash_info).await,
         }
     }
 
-    #[instrument(skip(tx, api_token, crash_info), fields(crash_id = %crash_info.crash_id))]
+    #[instrument(skip(_tx, _api_token, state, crash_info), fields(crash_id = %crash_info.crash_id))]
     async fn validate_crash<E>(
-        tx: &mut E,
-        api_token: &ApiToken,
+        _tx: &mut E,
+        _api_token: &ApiToken,
+        state: &AppState,
         crash_info: &mut CrashInfo,
     ) -> Result<(), ApiError>
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
     {
+        debug!(crash_id = %crash_info.crash_id, "Validating crash info");
         if crash_info.minidump.is_none() {
             error!("No minidump found in submission");
             return Err(ApiError::Failure("no minidump found in submission".to_string()));
         }
 
-        let mut build_timestamp = chrono::Utc::now();
-        let mut channel = String::new();
-        let mut product_name = String::new();
-        let mut version = String::new();
-        for &required_field in Self::REQUIRED_FIELDS {
+        let mandatory: Vec<String> = state
+            .settings
+            .minidumps
+            .mandatory_annotations
+            .clone()
+            .unwrap_or_default();
+
+        for required_field in mandatory.iter() {
             let value = crash_info.annotations.get(required_field).cloned();
-            crash_info.annotations.remove(required_field);
 
             if value.is_none() {
                 error!(required_field, "Required annotation is missing");
@@ -238,56 +269,23 @@ impl MinidumpApi {
                 )));
             }
 
-            if let Some(value) = value {
-                if value.trim().is_empty() {
-                    error!(required_field, "Required annotation is empty");
-                    return Err(ApiError::Failure(format!(
-                        "required annotation '{required_field}' cannot be empty"
-                    )));
-                }
-
-                match required_field {
-                    "product" => {
-                        let product = get_product(tx, &value).await?;
-                        validate_api_token_for_product(api_token, &product, &value)?;
-                        if !product.accepting_crashes {
-                            return Err(ApiError::ProductNotAcceptingCrashes(value));
-                        }
-                        product_name = product.name;
-                        crash_info.product = Some(product_name.clone());
-                        crash_info.product_id = Some(product.id);
-                    }
-                    "build_id" => {
-                        build_timestamp =
-                            value
-                                .parse::<chrono::DateTime<chrono::Utc>>()
-                                .map_err(|e| {
-                                    error!(error = ?e, "Invalid build timestamp");
-                                    ApiError::Failure("invalid build timestamp".to_string())
-                                })?;
-                        crash_info.build_id = Some(value);
-                    }
-                    "channel" => {
-                        channel = value;
-                        crash_info.channel = Some(channel.clone());
-                    }
-                    "version" => {
-                        version = value;
-                        crash_info.version = Some(version.clone());
-                    }
-                    "commit" => {
-                        crash_info.commit = Some(value);
-                    }
-                    _ => {}
-                }
+            if let Some(value) = value
+                && value.trim().is_empty()
+            {
+                error!(required_field, "Required annotation is empty");
+                return Err(ApiError::Failure(format!(
+                    "required annotation '{required_field}' cannot be empty"
+                )));
             }
         }
 
-        if channel != "release"
-            && build_timestamp < chrono::Utc::now() - chrono::Duration::days(365 * 2)
-        {
-            return Err(ApiError::TooOld(version, product_name));
+        for script_file in state.settings.minidumps.validation_scripts.iter().flatten() {
+            debug!(script_file = %script_file, "Running validation script");
+            let script_content =
+                Self::load_validation_script(script_file, &state.settings.config_dir)?;
+            Self::validate_with_rhai_script(&script_content, crash_info)?;
         }
+
         Ok(())
     }
 
@@ -297,6 +295,7 @@ impl MinidumpApi {
         crash_id: uuid::Uuid,
         crash_info: serde_json::Value,
     ) -> Result<(), ApiError> {
+        debug!(crash_id = %crash_id, "Uploading crash info to S3");
         let path = Path::from(format!("crashes/{crash_id}.json"));
         let crash_info_json = crash_info.to_string();
         let payload = PutPayload::from(crash_info_json.into_bytes());
@@ -307,7 +306,7 @@ impl MinidumpApi {
         Ok(())
     }
 
-    #[instrument(skip(state, api_token, multipart), fields(crash_id))]
+    #[instrument(skip(state, api_token, crash_info, multipart), fields(crash_id))]
     pub async fn handle_upload(
         state: AppState,
         api_token: ApiToken,
@@ -328,6 +327,10 @@ impl MinidumpApi {
 
         info!(product = %authorized_product.name, "Processing crash for product");
 
+        if !authorized_product.accepting_crashes {
+            return Err(ApiError::ProductNotAcceptingCrashes(authorized_product.name));
+        }
+
         while let Some(field) = multipart.next_field().await.map_err(|e| {
             error!(error = ?e, "Failed to get next multipart field");
             ApiError::Failure("failed to read multipart field from upload".to_string())
@@ -335,7 +338,7 @@ impl MinidumpApi {
             Self::process_field(field, crash_info, state.clone()).await?;
         }
 
-        Self::validate_crash(&mut *tx, &api_token, crash_info).await?;
+        Self::validate_crash(&mut *tx, &api_token, &state, crash_info).await?;
 
         state.repo.end(tx).await?;
 
@@ -367,6 +370,7 @@ impl MinidumpApi {
     ) -> Result<Json<MinidumpResponse>, ApiError> {
         let crash_id = uuid::Uuid::new_v4();
         tracing::Span::current().record("crash_id", format!("{crash_id}"));
+        info!(crash_id = %crash_id, "Received minidump upload request");
 
         let mut crash_info = CrashInfo {
             crash_id,
@@ -410,5 +414,154 @@ impl MinidumpApi {
             result: "ok".to_string(),
             crash_id: Some(crash_id),
         }))
+    }
+
+    fn convert_crash_info_to_rhai_map(crash_info: &CrashInfo) -> rhai::Map {
+        let mut map = rhai::Map::new();
+
+        map.insert("crash_id".into(), crash_info.crash_id.to_string().into());
+        map.insert("submission_timestamp".into(), crash_info.submission_timestamp.clone().into());
+
+        if let Some(ref product) = crash_info.authorized_product {
+            map.insert("authorized_product".into(), product.clone().into());
+        }
+
+        if let Some(ref product_id) = crash_info.product_id {
+            map.insert("product_id".into(), product_id.to_string().into());
+        }
+
+        if let Some(ref product) = crash_info.product {
+            map.insert("product".into(), product.clone().into());
+        }
+
+        let mut annotations = rhai::Map::new();
+        for (key, value) in &crash_info.annotations {
+            annotations.insert(key.clone().into(), value.clone().into());
+        }
+        map.insert("annotations".into(), annotations.into());
+
+        if let Some(ref minidump) = crash_info.minidump {
+            let mut minidump_map = rhai::Map::new();
+            minidump_map.insert("filename".into(), minidump.filename.clone().into());
+            minidump_map.insert("content_type".into(), minidump.content_type.clone().into());
+            minidump_map.insert("size".into(), (minidump.size as i64).into());
+            minidump_map.insert("storage_path".into(), minidump.storage_path.clone().into());
+            minidump_map.insert("storage_id".into(), minidump.storage_id.to_string().into());
+            map.insert("minidump".into(), minidump_map.into());
+        }
+
+        let mut attachments: Vec<rhai::Dynamic> = Vec::new();
+        for attachment in &crash_info.attachments {
+            let mut attachment_map = rhai::Map::new();
+            attachment_map.insert("name".into(), attachment.name.clone().into());
+            attachment_map.insert("filename".into(), attachment.filename.clone().into());
+            attachment_map.insert("content_type".into(), attachment.content_type.clone().into());
+            attachment_map.insert("size".into(), (attachment.size as i64).into());
+            attachment_map.insert("storage_path".into(), attachment.storage_path.clone().into());
+            attachment_map.insert("storage_id".into(), attachment.storage_id.to_string().into());
+            attachments.push(attachment_map.into());
+        }
+        map.insert("attachments".into(), attachments.into());
+
+        map
+    }
+
+    fn validate_with_rhai_script(script: &str, crash_info: &CrashInfo) -> Result<(), ApiError> {
+        debug!(crash_id = %crash_info.crash_id, "Running Rhai validation script");
+
+        let mut engine = Engine::new();
+
+        let crash_id = crash_info.crash_id;
+        engine.on_print(move |message| {
+            info!(crash_id = %crash_id, rhai_log = true, "{}", message);
+        });
+
+        engine.on_debug(move |message, source, pos| {
+            if let Some(source) = source {
+                debug!(crash_id = %crash_id, rhai_log = true, script = %source, line = pos.line().unwrap_or(0), "{}", message);
+            } else {
+                debug!(crash_id = %crash_id, rhai_log = true, "{}", message);
+            }
+        });
+
+        engine.register_fn("timestamp", || chrono::Utc::now().timestamp());
+        engine.register_fn("parse_iso8601", |s: &str| -> rhai::Dynamic {
+            match chrono::DateTime::parse_from_rfc3339(s) {
+                Ok(dt) => dt.timestamp().into(),
+                Err(_) => rhai::Dynamic::UNIT,
+            }
+        });
+
+        engine.register_fn("validation_error", |message: &str| -> rhai::Map {
+            let mut result = rhai::Map::new();
+            result.insert("valid".into(), false.into());
+            result.insert("error".into(), message.to_string().into());
+            result
+        });
+        engine.register_fn("validation_success", || -> rhai::Map {
+            let mut result = rhai::Map::new();
+            result.insert("valid".into(), true.into());
+            result
+        });
+
+        let mut scope = rhai::Scope::new();
+        let crash_info_map = Self::convert_crash_info_to_rhai_map(crash_info);
+        scope.push("crash_info", crash_info_map);
+
+        match engine.eval_with_scope::<rhai::Dynamic>(&mut scope, script) {
+            Ok(result) => {
+                debug!(crash_id = %crash_info.crash_id, "Rhai validation script executed successfully");
+
+                let map = result.try_cast::<rhai::Map>().ok_or_else(|| {
+                    error!(crash_id = %crash_info.crash_id, "Validation script must return a validation result");
+                    ApiError::ValidationError(
+                        crash_info.authorized_product.clone().unwrap_or_default(),
+                        "Validation script failed".to_string(),
+                    )
+                })?;
+
+                let valid = map.get("valid")
+                    .and_then(|v| v.as_bool().ok())
+                    .ok_or_else(|| {
+                        error!(crash_id = %crash_info.crash_id, "Validation result missing 'valid' field");
+                        ApiError::ValidationError(
+                            crash_info.authorized_product.clone().unwrap_or_default(),
+                            "Invalid validation result".to_string(),
+                        )
+                    })?;
+
+                if valid {
+                    debug!(crash_id = %crash_info.crash_id, "Validation script returned success");
+                    Ok(())
+                } else {
+                    let error_message = map
+                        .get("error")
+                        .and_then(|v| v.clone().into_string().ok())
+                        .unwrap_or_else(|| "Validation failed".to_string());
+
+                    error!(crash_id = %crash_info.crash_id, error = %error_message, "Validation script returned failure");
+                    Err(ApiError::ValidationError(
+                        crash_info.authorized_product.clone().unwrap_or_default(),
+                        error_message,
+                    ))
+                }
+            }
+            Err(e) => {
+                error!(crash_id = %crash_info.crash_id, error = %e, "Rhai validation script execution failed");
+                Err(ApiError::ValidationError(
+                    crash_info.authorized_product.clone().unwrap_or_default(),
+                    "Validation script failed".to_string(),
+                ))
+            }
+        }
+    }
+
+    fn load_validation_script(script_path: &str, config_dir: &str) -> Result<String, ApiError> {
+        let full_path = format!("{config_dir}/{script_path}");
+        debug!(script_path = %full_path, "Loading Rhai validation script");
+        std::fs::read_to_string(&full_path).map_err(|e| {
+            error!(script_path = %full_path, error = ?e, "Failed to load validation script");
+            ApiError::Failure(format!("Failed to load validation script '{full_path}': {e}"))
+        })
     }
 }

@@ -169,14 +169,9 @@ impl MinidumpProcessor {
         let crash = NewCrash {
             id: Some(crash_id),
             minidump: Some(minidump_id),
-            version: crash_info["version"].as_str().map(|s| s.to_string()),
-            channel: crash_info["channel"].as_str().map(|s| s.to_string()),
-            build_id: crash_info["build_id"].as_str().map(|s| s.to_string()),
-            commit: crash_info["commit"].as_str().map(|s| s.to_string()),
             signature: crash_info["signature"].as_str().map(|s| s.to_string()),
             product_id,
             report: Some(report),
-            ..Default::default()
         };
 
         let product = ProductRepo::get_by_id(&mut *tx, product_id)

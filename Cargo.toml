@@ -45,7 +45,7 @@ tokio-util = { version = "0.7.15", features = ["tracing", "io"] }
 
 # Tower / Axum
 tower = { version = "0.5.2", features = ["full"] }
-tower-http = { version = "0.6.4", features = ["full"] }
+tower-http = { version = "0.6.6", features = ["full"] }
 tower-sessions = "0.14.0"
 axum = { version = "0.8.4", features = [
   "form",
@@ -120,6 +120,7 @@ natord = "1.0.9"
 object_store = { version = "0.12.1", features = ["aws"] }
 paste = "1.0.15"
 rand = { version = "0.9.1", features = ["small_rng", "serde"] }
+rhai = { version = "1.22.2", features = ["serde"] }
 strum = "0.27"
 strum_macros = "0.27"
 thiserror = "2.0.12"

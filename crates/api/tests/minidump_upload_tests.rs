@@ -80,7 +80,7 @@ pub struct MinidumpBodyConfig<'a> {
     pub boundary: &'a str,
     pub product: Option<&'a str>,
     pub version: Option<&'a str>,
-    pub build_id: Option<&'a str>,
+    pub build_date: Option<&'a str>,
     pub extra: Option<String>,
     pub content: &'a str,
     pub channel: Option<&'a str>,
@@ -97,7 +97,7 @@ impl<'a> Default for MinidumpBodyConfig<'a> {
             boundary: "----WebKitFormBoundary7MA4YWxkTrZu0gW",
             product: Some("TestProduct"),
             version: Some("1.0.0"),
-            build_id: Some("2025-05-15T20:26:15+02:00"),
+            build_date: Some("2025-05-15T20:26:15+02:00"),
             extra: None,
             content: "MINIDUMP DATA",
             channel: Some("test-channel"),
@@ -164,11 +164,11 @@ pub fn create_body_from_config(config: &MinidumpBodyConfig) -> String {
         );
     }
 
-    if let Some(build_id) = config.build_id {
+    if let Some(build_date) = config.build_date {
         body = format!(
-            "{body}--{boundary}\r\nContent-Disposition: form-data; name=\"build_id\"\r\nContent-Type: {annotation_content_type}\r\n\r\n{build_id}\r\n",
+            "{body}--{boundary}\r\nContent-Disposition: form-data; name=\"build_date\"\r\nContent-Type: {annotation_content_type}\r\n\r\n{build_date}\r\n",
             boundary = config.boundary,
-            build_id = build_id,
+            build_date = build_date,
             annotation_content_type = config.annotation_content_type
         );
     }
@@ -278,12 +278,15 @@ async fn test_minidump_upload_ok(pool: PgPool) {
     let crash_info: serde_json::Value =
         serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
-    assert_eq!(crash_info["product"].as_str().unwrap(), "TestProduct");
-    assert_eq!(crash_info["version"].as_str().unwrap(), "1.0.0");
-    assert_eq!(crash_info["channel"].as_str().unwrap(), "test-channel");
-    assert_eq!(crash_info["commit"].as_str().unwrap(), "test-commit");
-    assert_eq!(crash_info["build_id"].as_str().unwrap(), "2025-05-15T20:26:15+02:00");
-    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 0);
+    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 5);
+    assert_eq!(crash_info["annotations"]["product"].as_str().unwrap(), "TestProduct");
+    assert_eq!(crash_info["annotations"]["version"].as_str().unwrap(), "1.0.0");
+    assert_eq!(crash_info["annotations"]["channel"].as_str().unwrap(), "test-channel");
+    assert_eq!(crash_info["annotations"]["commit"].as_str().unwrap(), "test-commit");
+    assert_eq!(
+        crash_info["annotations"]["build_date"].as_str().unwrap(),
+        "2025-05-15T20:26:15+02:00"
+    );
     assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 0);
     assert_eq!(crash_info["minidump"]["filename"].as_str().unwrap(), "test.dmp");
 
@@ -331,12 +334,15 @@ async fn test_minidump_upload_ok_without_filename(pool: PgPool) {
     let crash_info: serde_json::Value =
         serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
-    assert_eq!(crash_info["product"].as_str().unwrap(), "TestProduct");
-    assert_eq!(crash_info["version"].as_str().unwrap(), "1.0.0");
-    assert_eq!(crash_info["channel"].as_str().unwrap(), "test-channel");
-    assert_eq!(crash_info["commit"].as_str().unwrap(), "test-commit");
-    assert_eq!(crash_info["build_id"].as_str().unwrap(), "2025-05-15T20:26:15+02:00");
-    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 0);
+    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 5);
+    assert_eq!(crash_info["annotations"]["product"].as_str().unwrap(), "TestProduct");
+    assert_eq!(crash_info["annotations"]["version"].as_str().unwrap(), "1.0.0");
+    assert_eq!(crash_info["annotations"]["channel"].as_str().unwrap(), "test-channel");
+    assert_eq!(crash_info["annotations"]["commit"].as_str().unwrap(), "test-commit");
+    assert_eq!(
+        crash_info["annotations"]["build_date"].as_str().unwrap(),
+        "2025-05-15T20:26:15+02:00"
+    );
     assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 0);
     assert_eq!(crash_info["minidump"]["filename"].as_str().unwrap(), "unnamed_minidump");
 
@@ -367,7 +373,7 @@ async fn test_minidump_upload_with_attachments_ok(pool: PgPool) {
         boundary: &boundary,
         extra: Some(format!(
             "--{boundary}\r\nContent-Disposition: form-data; name=\"attachment1\"; filename=\"log.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n{attachment1_content}\r\n\
-             --{boundary}\r\nContent-Disposition: form-data; name=\"attachment2\"\r\nContent-Type: application/octet-stream\r\n\r\n{attachment2_content}\r\n"
+             --{boundary}\r\nContent-Disposition: form-data; name=\"attachment2\"; filename=\"log2.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n{attachment2_content}\r\n"
         )),
         ..Default::default()
     });
@@ -397,12 +403,15 @@ async fn test_minidump_upload_with_attachments_ok(pool: PgPool) {
     let crash_info: serde_json::Value =
         serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
-    assert_eq!(crash_info["product"].as_str().unwrap(), "TestProduct");
-    assert_eq!(crash_info["version"].as_str().unwrap(), "1.0.0");
-    assert_eq!(crash_info["channel"].as_str().unwrap(), "test-channel");
-    assert_eq!(crash_info["commit"].as_str().unwrap(), "test-commit");
-    assert_eq!(crash_info["build_id"].as_str().unwrap(), "2025-05-15T20:26:15+02:00");
-    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 0);
+    assert_eq!(crash_info["annotations"]["product"].as_str().unwrap(), "TestProduct");
+    assert_eq!(crash_info["annotations"]["version"].as_str().unwrap(), "1.0.0");
+    assert_eq!(crash_info["annotations"]["channel"].as_str().unwrap(), "test-channel");
+    assert_eq!(crash_info["annotations"]["commit"].as_str().unwrap(), "test-commit");
+    assert_eq!(
+        crash_info["annotations"]["build_date"].as_str().unwrap(),
+        "2025-05-15T20:26:15+02:00"
+    );
+    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 5);
     assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 2);
 
     let minidump = crash_info["minidump"]["storage_path"]
@@ -423,7 +432,7 @@ async fn test_minidump_upload_with_attachments_ok(pool: PgPool) {
             .as_str()
             .expect("storage_path is missing");
         let filename = att["filename"].as_str().expect("filename is missing");
-        assert_eq!(filename, vec! { "log.txt", "unnamed_attachment" }[i]);
+        assert_eq!(filename, vec! { "log.txt", "log2.txt" }[i]);
         let name = att["name"].as_str().expect("name is missing");
         assert_eq!(name, format!("attachment{}", i + 1));
         let object = store
@@ -518,12 +527,17 @@ async fn test_minidump_upload_with_annotations_ok(pool: PgPool) {
     let crash_info: serde_json::Value =
         serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
-    assert_eq!(crash_info["product"].as_str().unwrap(), "TestProduct");
-    assert_eq!(crash_info["version"].as_str().unwrap(), "1.0.0");
-    assert_eq!(crash_info["channel"].as_str().unwrap(), "test-channel");
-    assert_eq!(crash_info["commit"].as_str().unwrap(), "test-commit");
-    assert_eq!(crash_info["build_id"].as_str().unwrap(), "2025-05-15T20:26:15+02:00");
-    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 2);
+    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 7);
+    assert_eq!(crash_info["annotations"]["product"].as_str().unwrap(), "TestProduct");
+    assert_eq!(crash_info["annotations"]["version"].as_str().unwrap(), "1.0.0");
+    assert_eq!(crash_info["annotations"]["channel"].as_str().unwrap(), "test-channel");
+    assert_eq!(crash_info["annotations"]["commit"].as_str().unwrap(), "test-commit");
+    assert_eq!(crash_info["annotations"]["features"].as_str().unwrap(), "tracing");
+    assert_eq!(crash_info["annotations"]["ui"].as_str().unwrap(), "Qt");
+    assert_eq!(
+        crash_info["annotations"]["build_date"].as_str().unwrap(),
+        "2025-05-15T20:26:15+02:00"
+    );
     assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 0);
 
     let minidump = crash_info["minidump"]["storage_path"]
@@ -544,38 +558,6 @@ async fn test_minidump_upload_with_annotations_ok(pool: PgPool) {
 
     assert_count_crashes(store.clone(), 1).await;
     assert_count_minidumps(store.clone(), 1).await;
-    assert_count_attachments(store.clone(), 0).await;
-}
-
-#[sqlx::test(migrations = "../../migrations")]
-async fn test_minidump_upload_no_such_product(pool: PgPool) {
-    let (app, store, boundary, _worker, _body, token) = setup(&pool).await;
-
-    let body = create_body_from_config(&MinidumpBodyConfig {
-        boundary: &boundary,
-        product: Some("TestProductxx"),
-        ..Default::default()
-    });
-
-    let request = Request::builder()
-        .method("POST")
-        .uri("/api/minidump/upload")
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
-        .body(Body::from(body))
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("product TestProductxx not found"),
-    )
-    .await;
-
-    assert_count_crashes(store.clone(), 0).await;
-    assert_count_minidumps(store.clone(), 0).await;
     assert_count_attachments(store.clone(), 0).await;
 }
 
@@ -632,36 +614,6 @@ async fn test_minidump_upload_empty_product(pool: PgPool) {
         response,
         StatusCode::BAD_REQUEST,
         Some("general failure: required annotation 'product' cannot be empty"),
-    )
-    .await;
-
-    assert_count_crashes(store.clone(), 0).await;
-    assert_count_minidumps(store.clone(), 0).await;
-    assert_count_attachments(store.clone(), 0).await;
-}
-
-#[sqlx::test(migrations = "../../migrations")]
-async fn test_minidump_upload_no_channel(pool: PgPool) {
-    let (app, store, boundary, _worker, _body, token) = setup(&pool).await;
-
-    let body = create_body_from_config(&MinidumpBodyConfig {
-        boundary: &boundary,
-        channel: Some(""),
-        ..Default::default()
-    });
-    let request = Request::builder()
-        .method("POST")
-        .uri("/api/minidump/upload")
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
-        .body(Body::from(body))
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("general failure: required annotation 'channel' cannot be empty"),
     )
     .await;
 
@@ -752,7 +704,7 @@ async fn test_minidump_upload_invalid_content_type(pool: PgPool) {
     assert_response_error(
         response,
         StatusCode::BAD_REQUEST,
-        Some("general failure: invalid annotation content type: text/octet-stream"),
+        Some("general failure: invalid minidump content type: text/octet-stream"),
     )
     .await;
 
@@ -971,8 +923,10 @@ async fn test_minidump_upload_token_for_other_product(pool: PgPool) {
     let response = app.oneshot(request).await.unwrap();
     assert_response_error(
         response,
-        StatusCode::FORBIDDEN,
-        Some("access denied for product TestProduct"),
+        StatusCode::BAD_REQUEST,
+        Some(
+            "validation of product AnotherProduct failed: access denied for product AnotherProduct",
+        ),
     )
     .await;
 
@@ -1182,7 +1136,7 @@ async fn test_minidump_upload_product_too_old(pool: PgPool) {
 
     let body = create_body_from_config(&MinidumpBodyConfig {
         boundary: &boundary,
-        build_id: Some("2015-05-15T20:26:15+02:00"),
+        build_date: Some("2015-05-15T20:26:15+02:00"),
         ..Default::default()
     });
 
@@ -1199,7 +1153,7 @@ async fn test_minidump_upload_product_too_old(pool: PgPool) {
     assert_response_error(
         response,
         StatusCode::BAD_REQUEST,
-        Some("version 1.0.0 of product TestProduct is too old"),
+        Some("validation of product TestProduct failed: Build is older than 6 months"),
     )
     .await;
 
@@ -1250,73 +1204,6 @@ async fn test_minidump_upload_product_not_accepting(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
-async fn test_minidump_upload_invalid_build_id(pool: PgPool) {
-    let (app, store, boundary, _worker, _body, token) = setup(&pool).await;
-
-    let body = create_body_from_config(&MinidumpBodyConfig {
-        boundary: &boundary,
-        product: Some("TestProduct"),
-        build_id: Some("20a5-05-15T20:26:15+02:00"),
-        ..Default::default()
-    });
-    info!("Body: {body}");
-
-    let request = Request::builder()
-        .method("POST")
-        .uri("/api/minidump/upload")
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
-        .body(Body::from(body))
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("general failure: invalid build timestamp"),
-    )
-    .await;
-
-    assert_count_crashes(store.clone(), 0).await;
-    assert_count_minidumps(store.clone(), 0).await;
-    assert_count_attachments(store.clone(), 0).await;
-}
-
-#[sqlx::test(migrations = "../../migrations")]
-async fn test_minidump_upload_no_build_id(pool: PgPool) {
-    let (app, store, boundary, _worker, _body, token) = setup(&pool).await;
-
-    let body = create_body_from_config(&MinidumpBodyConfig {
-        boundary: &boundary,
-        product: Some("TestProductxx"),
-        build_id: Some(""),
-        ..Default::default()
-    });
-
-    let request = Request::builder()
-        .method("POST")
-        .uri("/api/minidump/upload")
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
-        .body(Body::from(body))
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("product TestProductxx not found"),
-    )
-    .await;
-
-    assert_count_crashes(store.clone(), 0).await;
-    assert_count_minidumps(store.clone(), 0).await;
-    assert_count_attachments(store.clone(), 0).await;
-}
-
-#[sqlx::test(migrations = "../../migrations")]
 async fn test_minidump_upload_with_annotations_invalid_key(pool: PgPool) {
     let (app, store, boundary, _worker, _body, token) = setup(&pool).await;
 
@@ -1353,7 +1240,7 @@ async fn test_minidump_upload_with_annotations_invalid_key(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
-async fn test_minidump_upload_custom_content_types(pool: PgPool) {
+async fn test_minidump_upload_invalid_minidump_content_type(pool: PgPool) {
     let (app, store, boundary, _worker, _body, token) = setup(&pool).await;
 
     let config = MinidumpBodyConfig {
@@ -1361,6 +1248,43 @@ async fn test_minidump_upload_custom_content_types(pool: PgPool) {
         product: Some("TestProduct"),
         version: Some("1.0.0"),
         minidump_content_type: "application/binary",
+        minidump_filename: Some("test.minidump"),
+        ..Default::default()
+    };
+
+    let body = create_body_from_config(&config);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/minidump/upload")
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {token}"))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_response_error(
+        response,
+        StatusCode::BAD_REQUEST,
+        Some("general failure: invalid minidump content type: application/binary"),
+    )
+    .await;
+
+    assert_count_crashes(store.clone(), 0).await;
+    assert_count_minidumps(store.clone(), 0).await;
+    assert_count_attachments(store.clone(), 0).await;
+}
+
+#[sqlx::test(migrations = "../../migrations")]
+async fn test_minidump_upload_invalid_annotation_content_type(pool: PgPool) {
+    let (app, store, boundary, _worker, _body, token) = setup(&pool).await;
+
+    let config = MinidumpBodyConfig {
+        boundary: &boundary,
+        product: Some("TestProduct"),
+        version: Some("1.0.0"),
+        minidump_filename: Some("test.minidump"),
         annotation_content_type: "application/json",
         channel: Some("test-channel"),
         commit: Some("test-commit"),
@@ -1382,7 +1306,7 @@ async fn test_minidump_upload_custom_content_types(pool: PgPool) {
     assert_response_error(
         response,
         StatusCode::BAD_REQUEST,
-        Some("general failure: invalid annotation content type: application/binary"),
+        Some("general failure: invalid annotation content type: application/json"),
     )
     .await;
 

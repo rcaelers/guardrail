@@ -13,8 +13,8 @@ use testware::{create_test_crash, create_test_product};
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn test_get_by_id(pool: PgPool) {
-    let info = "Test Crash";
-    let inserted_crash = create_test_crash(&pool, Some(info), None).await;
+    let signature = "Test Crash";
+    let inserted_crash = create_test_crash(&pool, Some(signature), None).await;
 
     let found_crash = CrashRepo::get_by_id(&pool, inserted_crash.id)
         .await
@@ -23,7 +23,7 @@ async fn test_get_by_id(pool: PgPool) {
     assert!(found_crash.is_some());
     let found_crash = found_crash.unwrap();
     assert_eq!(found_crash.id, inserted_crash.id);
-    assert_eq!(found_crash.info, Some(info.to_string()));
+    assert_eq!(found_crash.signature, Some(signature.to_string()));
 
     let non_existent_id = Uuid::new_v4();
     let not_found = CrashRepo::get_by_id(&pool, non_existent_id)
@@ -41,8 +41,8 @@ async fn test_get_all(pool: PgPool) {
 
     let test_crash_data = vec![("Crash A"), ("Crash B"), ("Crash C")];
 
-    for info in &test_crash_data {
-        create_test_crash(&pool, Some(info), Some(product.id)).await;
+    for signature in &test_crash_data {
+        create_test_crash(&pool, Some(signature), Some(product.id)).await;
     }
 
     let query_params = QueryParams::default();
@@ -55,17 +55,17 @@ async fn test_get_all(pool: PgPool) {
     let mut query_params = QueryParams::default();
     query_params
         .sorting
-        .push_back(("info".to_string(), SortOrder::Ascending));
+        .push_back(("signature".to_string(), SortOrder::Ascending));
 
     let sorted_crashes = CrashRepo::get_all(&pool, query_params)
         .await
         .expect("Failed to get sorted crashes");
 
     for i in 1..sorted_crashes.len() {
-        if sorted_crashes[i - 1].info == sorted_crashes[i].info {
+        if sorted_crashes[i - 1].signature == sorted_crashes[i].signature {
             continue;
         }
-        assert!(sorted_crashes[i - 1].info <= sorted_crashes[i].info);
+        assert!(sorted_crashes[i - 1].signature <= sorted_crashes[i].signature);
     }
 
     let query_params = QueryParams {
@@ -80,7 +80,7 @@ async fn test_get_all(pool: PgPool) {
     for crash in filtered_crashes {
         assert!(
             crash
-                .info
+                .signature
                 .as_ref()
                 .unwrap_or(&String::new())
                 .contains("Crash B")
@@ -96,18 +96,13 @@ async fn test_create(pool: PgPool) {
 
     let new_crash = NewCrash {
         id: None,
-        info: Some("Calculation Error".to_string()),
+        signature: Some("Test Crash Signature".to_string()),
         product_id: product.id,
         minidump: Some(Uuid::new_v4()),
         report: Some(serde_json::json!({
             "error": "Division by zero",
             "stack_trace": "at main",
         })),
-        signature: Some("calc_error_signature".to_string()),
-        version: Some("1.0.0".to_string()),
-        channel: Some("test_channel".to_string()),
-        build_id: Some("test_build_id".to_string()),
-        commit: Some("test_commit".to_string()),
     };
 
     let crash_id = CrashRepo::create(&pool, new_crash.clone())
@@ -119,7 +114,7 @@ async fn test_create(pool: PgPool) {
         .expect("Failed to get created crash")
         .expect("Created crash not found");
 
-    assert_eq!(created_crash.info, new_crash.info);
+    assert_eq!(created_crash.signature, new_crash.signature);
     assert_eq!(created_crash.product_id, new_crash.product_id);
 }
 
@@ -129,7 +124,7 @@ async fn test_create(pool: PgPool) {
 async fn test_update(pool: PgPool) {
     let mut crash = create_test_crash(&pool, Some("Original Crash"), None).await;
 
-    crash.info = Some("Updated Crash".to_string());
+    crash.signature = Some("Updated Crash".to_string());
 
     let updated_id = CrashRepo::update(&pool, crash.clone())
         .await
@@ -143,7 +138,7 @@ async fn test_update(pool: PgPool) {
         .expect("Failed to get updated crash")
         .expect("Updated crash not found");
 
-    assert_eq!(updated_crash.info, Some("Updated Crash".to_string()));
+    assert_eq!(updated_crash.signature, Some("Updated Crash".to_string()));
 }
 
 // remove tests
@@ -175,8 +170,8 @@ async fn test_count(pool: PgPool) {
 
     let test_crashes = vec![("Count Crash 1"), ("Count Crash 2"), ("Count Crash 3")];
 
-    for info in &test_crashes {
-        create_test_crash(&pool, Some(info), Some(product.id)).await;
+    for signature in &test_crashes {
+        create_test_crash(&pool, Some(signature), Some(product.id)).await;
     }
 
     let new_count = CrashRepo::count(&pool)
@@ -192,18 +187,13 @@ async fn test_create_error(pool: PgPool) {
 
     let new_crash = NewCrash {
         id: None,
-        info: Some("Test crash with closed pool".to_string()),
+        signature: Some("Test Crash Signature".to_string()),
         minidump: Some(Uuid::new_v4()),
         product_id: product.id,
         report: Some(serde_json::json!({
         "error": "Test error",
         "stack_trace": "at test"
                 })),
-        signature: Some("test_signature".to_string()),
-        version: Some("1.0.0".to_string()),
-        channel: Some("test_channel".to_string()),
-        build_id: Some("test_build_id".to_string()),
-        commit: Some("test_commit".to_string()),
     };
     pool.close().await;
 
@@ -239,7 +229,7 @@ async fn test_get_all_error(pool: PgPool) {
 async fn test_update_error(pool: PgPool) {
     let mut crash = create_test_crash(&pool, Some("Original Crash for Update Test"), None).await;
 
-    crash.info = Some("Updated Crash With Closed Pool".to_string());
+    crash.signature = Some("Updated Crash With Closed Pool".to_string());
 
     pool.close().await;
 

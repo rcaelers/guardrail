@@ -205,3 +205,11 @@ auth:
       -----BEGIN PRIVATE KEY-----
       MC4CAQAwBQYDK2VwBCIEILRksnzl63UUib+nmLsATtXc/EjOHMaMgJu+nbpiX068
       -----END PRIVATE KEY-----
+minidumps:
+  mandatory_annotations:
+    - "product"
+    - "version"
+    - "build_date"
+  validation_script_files:
+    - "scripts/product_validation.rhai"
+    - "scripts/build_age_validation.rhai"

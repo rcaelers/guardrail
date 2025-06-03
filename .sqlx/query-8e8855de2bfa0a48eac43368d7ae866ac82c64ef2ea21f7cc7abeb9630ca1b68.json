@@ -20,46 +20,21 @@
       },
       {
         "ordinal": 3,
-        "name": "info",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 4,
         "name": "report",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "signature",
         "type_info": "Text"
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "name": "minidump",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 7,
-        "name": "version",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 8,
-        "name": "channel",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 9,
-        "name": "commit",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 10,
-        "name": "build_id",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 11,
+        "ordinal": 6,
         "name": "product_id",
         "type_info": "Uuid"
       }
@@ -73,11 +48,6 @@
       false,
       false,
       false,
-      true,
-      true,
-      true,
-      true,
-      true,
       true,
       true,
       true,

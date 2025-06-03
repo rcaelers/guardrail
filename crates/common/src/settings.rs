@@ -11,6 +11,12 @@ pub struct ApiServer {
 }
 
 #[derive(Debug, Deserialize, Default)]
+pub struct Minidumps {
+    pub mandatory_annotations: Option<Vec<String>>,
+    pub validation_scripts: Option<Vec<String>>,
+}
+
+#[derive(Debug, Deserialize, Default)]
 pub struct WebServer {
     pub port: u16,
     pub public_key: Option<String>,
@@ -74,6 +80,9 @@ pub struct Settings {
     pub database: Database,
     pub object_storage: ObjectStorage,
     pub auth: Auth,
+    pub minidumps: Minidumps,
+    #[serde(skip)]
+    pub config_dir: String,
 }
 
 impl Settings {
@@ -105,6 +114,8 @@ impl Settings {
                     .ignore_empty(true),
             );
 
-        builder.build()?.try_deserialize()
+        let mut settings: Self = builder.build()?.try_deserialize()?;
+        settings.config_dir = config_dir.to_string();
+        Ok(settings)
     }
 }

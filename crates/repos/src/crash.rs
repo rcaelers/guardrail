@@ -35,8 +35,8 @@ impl CrashRepo {
         Repo::build_query(
             &mut builder,
             &params,
-            &["id", "info", "state", "created_at", "updated_at"],
-            &["info"],
+            &["id", "signature", "state", "created_at", "updated_at"],
+            &["signature"],
         )?;
 
         let query = builder.build_query_as();
@@ -55,14 +55,10 @@ impl CrashRepo {
                     id,
                     product_id,
                     minidump,
-                    info,
                     report,
-                    version,
-                    channel,
-                    build_id,
-                    commit
+                    signature
                   )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                VALUES ($1, $2, $3, $4, $5)
                 RETURNING
                   id
             "#,
@@ -72,12 +68,8 @@ impl CrashRepo {
             },
             crash.product_id,
             crash.minidump,
-            crash.info,
             crash.report,
-            crash.version,
-            crash.channel,
-            crash.build_id,
-            crash.commit,
+            crash.signature
         )
         .fetch_one(executor)
         .await
@@ -91,17 +83,13 @@ impl CrashRepo {
         sqlx::query_scalar!(
             r#"
             UPDATE guardrail.crashes
-                SET minidump = $1, info = $2, report = $3, version = $4, channel = $5, build_id = $6, commit = $7
-                WHERE id = $8
+                SET minidump = $1, report = $2, signature = $3
+                WHERE id = $4
                 RETURNING id
             "#,
             crash.minidump,
-            crash.info,
             crash.report,
-            crash.version,
-            crash.channel,
-            crash.build_id,
-            crash.commit,
+            crash.signature,
             crash.id,
         )
         .fetch_optional(executor)

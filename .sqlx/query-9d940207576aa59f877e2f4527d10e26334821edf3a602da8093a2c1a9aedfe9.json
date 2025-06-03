@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO guardrail.crashes\n                  (\n                    id,\n                    product_id,\n                    minidump,\n                    report,\n                    signature\n                  )\n                VALUES ($1, $2, $3, $4, $5)\n                RETURNING\n                  id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9d940207576aa59f877e2f4527d10e26334821edf3a602da8093a2c1a9aedfe9"
+}
