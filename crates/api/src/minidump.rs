@@ -445,8 +445,6 @@ impl MinidumpApi {
             minidump_map.insert("filename".into(), minidump.filename.clone().into());
             minidump_map.insert("content_type".into(), minidump.content_type.clone().into());
             minidump_map.insert("size".into(), (minidump.size as i64).into());
-            minidump_map.insert("storage_path".into(), minidump.storage_path.clone().into());
-            minidump_map.insert("storage_id".into(), minidump.storage_id.to_string().into());
             map.insert("minidump".into(), minidump_map.into());
         }
 
@@ -457,8 +455,6 @@ impl MinidumpApi {
             attachment_map.insert("filename".into(), attachment.filename.clone().into());
             attachment_map.insert("content_type".into(), attachment.content_type.clone().into());
             attachment_map.insert("size".into(), (attachment.size as i64).into());
-            attachment_map.insert("storage_path".into(), attachment.storage_path.clone().into());
-            attachment_map.insert("storage_id".into(), attachment.storage_id.to_string().into());
             attachments.push(attachment_map.into());
         }
         map.insert("attachments".into(), attachments.into());
