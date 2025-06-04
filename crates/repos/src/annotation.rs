@@ -36,8 +36,8 @@ impl AnnotationsRepo {
         Repo::build_query(
             &mut builder,
             &params,
-            &["id", "key", "kind", "value"],
-            &["key", "kind", "value"],
+            &["id", "key", "source", "value"],
+            &["key", "source", "value"],
         )?;
 
         let query = builder.build_query_as();
@@ -49,10 +49,10 @@ impl AnnotationsRepo {
         executor: impl sqlx::Executor<'_, Database = Postgres>,
         annotation: NewAnnotation,
     ) -> Result<uuid::Uuid, RepoError> {
-        if !["system", "user"].contains(&annotation.kind.as_str()) {
+        if !["submission", "user", "script"].contains(&annotation.source.as_str()) {
             return Err(RepoError::InvalidColumn(format!(
-                "Invalid annotation kind: {}",
-                annotation.kind
+                "Invalid annotation source: {}",
+                annotation.source
             )));
         }
 
@@ -61,7 +61,7 @@ impl AnnotationsRepo {
                 INSERT INTO guardrail.annotations
                   (
                     key,
-                    kind,
+                    source,
                     value,
                     crash_id,
                     product_id
@@ -71,7 +71,7 @@ impl AnnotationsRepo {
                   id
             "#,
             annotation.key,
-            annotation.kind,
+            annotation.source,
             annotation.value,
             annotation.crash_id,
             annotation.product_id
@@ -85,22 +85,22 @@ impl AnnotationsRepo {
         executor: impl sqlx::Executor<'_, Database = Postgres>,
         annotation: Annotation,
     ) -> Result<Option<uuid::Uuid>, RepoError> {
-        if !["system", "user"].contains(&annotation.kind.as_str()) {
+        if !["submission", "user", "script"].contains(&annotation.source.as_str()) {
             return Err(RepoError::InvalidColumn(format!(
-                "Invalid annotation kind: {}",
-                annotation.kind
+                "Invalid annotation source: {}",
+                annotation.source
             )));
         }
 
         sqlx::query_scalar!(
             r#"
                 UPDATE guardrail.annotations
-                SET key = $1, kind = $2, value = $3
+                SET key = $1, source = $2, value = $3
                 WHERE id = $4
                 RETURNING id
             "#,
             annotation.key,
-            annotation.kind,
+            annotation.source,
             annotation.value,
             annotation.id,
         )
@@ -154,7 +154,7 @@ impl AnnotationsRepo {
             Repo::build_query(
                 &mut builder,
                 &params,
-                &["id", "key", "kind", "value", "created_at"],
+                &["id", "key", "source", "value", "created_at"],
                 &[],
             )?;
         }

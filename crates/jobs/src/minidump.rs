@@ -211,7 +211,7 @@ impl MinidumpProcessor {
             let annotation = NewAnnotation {
                 crash_id,
                 product_id,
-                kind: "system".to_string(),
+                source: "submission".to_string(),
                 key: key.to_string(),
                 value: value.to_string(),
             };

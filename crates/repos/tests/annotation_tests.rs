@@ -1,5 +1,5 @@
 use common::QueryParams;
-use data::annotation::AnnotationKind;
+use data::annotation::AnnotationSource;
 use data::annotation::NewAnnotation;
 use repos::{annotation::AnnotationsRepo, error::RepoError};
 use sqlx::{Pool, Postgres};
@@ -10,34 +10,40 @@ use uuid::Uuid;
 // AnnotationKind tests
 
 #[test]
-fn test_annotation_kind_as_str() {
-    assert_eq!(AnnotationKind::System.as_str(), "system");
-    assert_eq!(AnnotationKind::User.as_str(), "user");
+fn test_annotation_source_as_str() {
+    assert_eq!(AnnotationSource::Submission.as_str(), "submission");
+    assert_eq!(AnnotationSource::User.as_str(), "user");
+    assert_eq!(AnnotationSource::Script.as_str(), "script");
 }
 
 #[test]
-fn test_annotation_kind_try_from_valid_str() {
-    let system_kind = AnnotationKind::try_from("system").expect("Failed to parse 'system'");
-    let user_kind = AnnotationKind::try_from("user").expect("Failed to parse 'user'");
+fn test_annotation_source_try_from_valid_str() {
+    let submission_source =
+        AnnotationSource::try_from("submission").expect("Failed to parse 'submission'");
+    let user_source = AnnotationSource::try_from("user").expect("Failed to parse 'user'");
+    let script_source = AnnotationSource::try_from("script").expect("Failed to parse 'script'");
 
-    assert!(matches!(system_kind, AnnotationKind::System));
-    assert!(matches!(user_kind, AnnotationKind::User));
+    assert!(matches!(submission_source, AnnotationSource::Submission));
+    assert!(matches!(user_source, AnnotationSource::User));
+    assert!(matches!(script_source, AnnotationSource::Script));
 }
 
 #[test]
-fn test_annotation_kind_try_from_with_casing() {
-    let system_kind = AnnotationKind::try_from("SYSTEM").expect("Failed to parse 'SYSTEM'");
-    let user_kind = AnnotationKind::try_from("User").expect("Failed to parse 'User'");
+fn test_annotation_source_try_from_with_casing() {
+    let system_source = AnnotationSource::try_from("SUBMISSION").expect("Failed to parse 'SUBMISSION'");
+    let user_source = AnnotationSource::try_from("User").expect("Failed to parse 'User'");
+    let script_source = AnnotationSource::try_from("SCRIPT").expect("Failed to parse 'SCRIPT'");
 
-    assert!(matches!(system_kind, AnnotationKind::System));
-    assert!(matches!(user_kind, AnnotationKind::User));
+    assert!(matches!(system_source, AnnotationSource::Submission));
+    assert!(matches!(user_source, AnnotationSource::User));
+    assert!(matches!(script_source, AnnotationSource::Script));
 }
 
 #[test]
-fn test_annotation_kind_try_from_invalid_str() {
-    let result = AnnotationKind::try_from("invalid");
+fn test_annotation_source_try_from_invalid_str() {
+    let result = AnnotationSource::try_from("invalid");
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err(), "Invalid annotation kind: invalid");
+    assert_eq!(result.unwrap_err(), "Invalid annotation source: invalid");
 }
 
 async fn create_test_annotation(pool: &Pool<Postgres>) -> (NewAnnotation, Uuid, Uuid) {
@@ -46,7 +52,7 @@ async fn create_test_annotation(pool: &Pool<Postgres>) -> (NewAnnotation, Uuid, 
 
     let new_annotation = NewAnnotation {
         key: format!("test_key_{}", Uuid::new_v4()),
-        kind: "system".to_string(),
+        source: "submission".to_string(),
         value: "test_value".to_string(),
         crash_id: crash.id,
         product_id: product.id,
@@ -73,7 +79,7 @@ async fn test_get_by_id(pool: Pool<Postgres>) {
     assert_eq!(found_annotation.id, annotation_id);
     assert_eq!(found_annotation.key, new_annotation.key);
     assert_eq!(found_annotation.value, new_annotation.value);
-    assert_eq!(found_annotation.kind, new_annotation.kind);
+    assert_eq!(found_annotation.source, new_annotation.source);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
@@ -108,7 +114,7 @@ async fn test_get_by_crash_id(pool: Pool<Postgres>) {
 
     let new_annotation1 = NewAnnotation {
         key: "key1".to_string(),
-        kind: "system".to_string(),
+        source: "submission".to_string(),
         value: "test_value1".to_string(),
         crash_id: crash.id,
         product_id: product.id,
@@ -116,7 +122,7 @@ async fn test_get_by_crash_id(pool: Pool<Postgres>) {
 
     let new_annotation2 = NewAnnotation {
         key: "key2".to_string(),
-        kind: "system".to_string(),
+        source: "submission".to_string(),
         value: "test_value2".to_string(),
         crash_id: crash.id,
         product_id: product.id,
@@ -126,7 +132,7 @@ async fn test_get_by_crash_id(pool: Pool<Postgres>) {
 
     let new_annotation3 = NewAnnotation {
         key: "key3".to_string(),
-        kind: "system".to_string(),
+        source: "submission".to_string(),
         value: "test_value3".to_string(),
         crash_id: different_crash.id,
         product_id: product.id,
@@ -162,7 +168,7 @@ async fn test_get_by_crash_id_error(pool: Pool<Postgres>) {
 
     let new_annotation = NewAnnotation {
         key: "key1".to_string(),
-        kind: "system".to_string(),
+        source: "submission".to_string(),
         value: "test_value1".to_string(),
         crash_id: crash.id,
         product_id: product.id,
@@ -234,16 +240,16 @@ async fn test_create(pool: Pool<Postgres>) {
         .expect("Annotation not found");
 
     assert_eq!(annotation.key, new_annotation.key);
-    assert_eq!(annotation.kind, new_annotation.kind);
+    assert_eq!(annotation.source, new_annotation.source);
     assert_eq!(annotation.value, new_annotation.value);
     assert_eq!(annotation.crash_id, new_annotation.crash_id);
     assert_eq!(annotation.product_id, new_annotation.product_id);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
-async fn test_create_with_invalid_kind(pool: Pool<Postgres>) {
+async fn test_create_with_invalid_source(pool: Pool<Postgres>) {
     let (mut new_annotation, _, _) = create_test_annotation(&pool).await;
-    new_annotation.kind = "invalid".to_string();
+    new_annotation.source = "invalid".to_string();
 
     let result = AnnotationsRepo::create(&pool, new_annotation).await;
 
@@ -298,7 +304,7 @@ async fn test_update(pool: Pool<Postgres>) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
-async fn test_update_with_invalid_kind(pool: Pool<Postgres>) {
+async fn test_update_with_invalid_source(pool: Pool<Postgres>) {
     let (new_annotation, _, _) = create_test_annotation(&pool).await;
     let annotation_id = AnnotationsRepo::create(&pool, new_annotation)
         .await
@@ -309,7 +315,7 @@ async fn test_update_with_invalid_kind(pool: Pool<Postgres>) {
         .expect("Failed to get annotation")
         .expect("Annotation not found");
 
-    annotation.kind = "invalid".to_string();
+    annotation.source = "invalid".to_string();
 
     let result = AnnotationsRepo::update(&pool, annotation).await;
 

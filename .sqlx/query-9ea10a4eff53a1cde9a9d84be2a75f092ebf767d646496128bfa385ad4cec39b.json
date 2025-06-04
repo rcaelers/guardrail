@@ -25,7 +25,7 @@
       },
       {
         "ordinal": 4,
-        "name": "kind",
+        "name": "source",
         "type_info": "Text"
       },
       {

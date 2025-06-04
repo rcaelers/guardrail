@@ -179,8 +179,8 @@ CREATE TABLE guardrail.annotations (
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     key TEXT NOT NULL,
-    kind TEXT NOT NULL CHECK (
-        kind IN ('system', 'user')
+    source TEXT NOT NULL CHECK (
+        source IN ('submission', 'script', 'user')
     ),
     value TEXT NOT NULL,
     crash_id UUID NOT NULL REFERENCES guardrail.crashes (id) ON DELETE CASCADE,
