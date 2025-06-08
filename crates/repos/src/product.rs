@@ -19,8 +19,8 @@ impl ProductRepo {
             Product,
             r#"
                 SELECT *
-                FROM guardrail.products
-                WHERE guardrail.products.id = $1
+                FROM core.products
+                WHERE core.products.id = $1
             "#,
             id
         )
@@ -37,8 +37,8 @@ impl ProductRepo {
             Product,
             r#"
                 SELECT *
-                FROM guardrail.products
-                WHERE guardrail.products.name = $1
+                FROM core.products
+                WHERE core.products.name = $1
             "#,
             name.to_string()
         )
@@ -53,7 +53,7 @@ impl ProductRepo {
         sqlx::query!(
             r#"
                 SELECT name
-                FROM guardrail.products
+                FROM core.products
             "#
         )
         .fetch_all(executor)
@@ -70,7 +70,7 @@ impl ProductRepo {
         executor: impl sqlx::Executor<'_, Database = Postgres>,
         params: QueryParams,
     ) -> Result<Vec<Product>, RepoError> {
-        let mut builder = QueryBuilder::new("SELECT * from guardrail.products");
+        let mut builder = QueryBuilder::new("SELECT * from core.products");
         Repo::build_query(
             &mut builder,
             &params,
@@ -96,7 +96,7 @@ impl ProductRepo {
     ) -> Result<uuid::Uuid, RepoError> {
         sqlx::query_scalar!(
             r#"
-                INSERT INTO guardrail.products
+                INSERT INTO core.products
                   (
                     name,
                     description
@@ -119,7 +119,7 @@ impl ProductRepo {
     ) -> Result<Option<uuid::Uuid>, RepoError> {
         sqlx::query_scalar!(
             r#"
-                UPDATE guardrail.products
+                UPDATE core.products
                 SET name = $1, description = $2, accepting_crashes = $3
                 WHERE id = $4
                 RETURNING id
@@ -140,7 +140,7 @@ impl ProductRepo {
     ) -> Result<(), RepoError> {
         sqlx::query!(
             r#"
-                DELETE FROM guardrail.products
+                DELETE FROM core.products
                 WHERE id = $1
             "#,
             id
@@ -157,7 +157,7 @@ impl ProductRepo {
         sqlx::query_scalar!(
             r#"
                 SELECT COUNT(*)
-                FROM guardrail.products
+                FROM core.products
             "#
         )
         .fetch_one(executor)

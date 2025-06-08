@@ -18,8 +18,8 @@ impl AttachmentsRepo {
             Attachment,
             r#"
                 SELECT *
-                FROM guardrail.attachments
-                WHERE guardrail.attachments.id = $1
+                FROM core.attachments
+                WHERE core.attachments.id = $1
             "#,
             id
         )
@@ -32,7 +32,7 @@ impl AttachmentsRepo {
         executor: impl sqlx::Executor<'_, Database = Postgres>,
         params: QueryParams,
     ) -> Result<Vec<Attachment>, RepoError> {
-        let mut builder = QueryBuilder::new("SELECT * from guardrail.attachments");
+        let mut builder = QueryBuilder::new("SELECT * from core.attachments");
         Repo::build_query(
             &mut builder,
             &params,
@@ -51,7 +51,7 @@ impl AttachmentsRepo {
     ) -> Result<uuid::Uuid, RepoError> {
         sqlx::query_scalar!(
             r#"
-                INSERT INTO guardrail.attachments
+                INSERT INTO core.attachments
                   (
                     name,
                     mime_type,
@@ -84,7 +84,7 @@ impl AttachmentsRepo {
     ) -> Result<Option<uuid::Uuid>, RepoError> {
         sqlx::query_scalar!(
             r#"
-                UPDATE guardrail.attachments
+                UPDATE core.attachments
                 SET name = $1, mime_type = $2, size = $3, filename = $4
                 WHERE id = $5
                 RETURNING id
@@ -106,7 +106,7 @@ impl AttachmentsRepo {
     ) -> Result<(), RepoError> {
         sqlx::query!(
             r#"
-                DELETE FROM guardrail.attachments
+                DELETE FROM core.attachments
                 WHERE id = $1
             "#,
             id
@@ -123,7 +123,7 @@ impl AttachmentsRepo {
         sqlx::query_scalar!(
             r#"
                 SELECT COUNT(*)
-                FROM guardrail.attachments
+                FROM core.attachments
             "#
         )
         .fetch_one(executor)

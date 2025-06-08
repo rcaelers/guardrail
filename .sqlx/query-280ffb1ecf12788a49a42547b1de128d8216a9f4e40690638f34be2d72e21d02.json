@@ -1,0 +1,71 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT *\n                FROM core.symbols\n                WHERE core.symbols.build_id = $1 AND core.symbols.module_id = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 3,
+        "name": "os",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "arch",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "build_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "module_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "storage_path",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "product_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "280ffb1ecf12788a49a42547b1de128d8216a9f4e40690638f34be2d72e21d02"
+}

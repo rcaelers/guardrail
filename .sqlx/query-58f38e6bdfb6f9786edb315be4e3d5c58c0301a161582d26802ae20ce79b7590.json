@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO core.crashes\n                  (\n                    id,\n                    product_id,\n                    minidump,\n                    report,\n                    signature\n                  )\n                VALUES ($1, $2, $3, $4, $5)\n                RETURNING\n                  id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "58f38e6bdfb6f9786edb315be4e3d5c58c0301a161582d26802ae20ce79b7590"
+}

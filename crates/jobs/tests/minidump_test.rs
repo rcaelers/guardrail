@@ -1195,7 +1195,7 @@ async fn test_minidump_attachment_db_failure(pool: PgPool) {
     let store = Arc::new(object_store::memory::InMemory::new());
     let (product_id, attachment_id) = setup(&pool, store.clone()).await;
 
-    sqlx::query("ALTER TABLE guardrail.attachments ADD COLUMN foo TEXT NOT NULL")
+    sqlx::query("ALTER TABLE core.attachments ADD COLUMN foo TEXT NOT NULL")
         .execute(&pool)
         .await
         .expect("Failed to add column");
@@ -1265,7 +1265,7 @@ async fn test_minidump_annotation_db_failure(pool: PgPool) {
     let store = Arc::new(object_store::memory::InMemory::new());
     let (product_id, attachment_id) = setup(&pool, store.clone()).await;
 
-    sqlx::query("ALTER TABLE guardrail.annotations ADD COLUMN foo TEXT NOT NULL")
+    sqlx::query("ALTER TABLE core.annotations ADD COLUMN foo TEXT NOT NULL")
         .execute(&pool)
         .await
         .expect("Failed to add column");
@@ -1335,7 +1335,7 @@ async fn test_minidump_crash_db_failure(pool: PgPool) {
     let store = Arc::new(object_store::memory::InMemory::new());
     let (product_id, attachment_id) = setup(&pool, store.clone()).await;
 
-    sqlx::query("ALTER TABLE guardrail.crashes ADD COLUMN foo TEXT NOT NULL")
+    sqlx::query("ALTER TABLE core.crashes ADD COLUMN foo TEXT NOT NULL")
         .execute(&pool)
         .await
         .expect("Failed to add column");

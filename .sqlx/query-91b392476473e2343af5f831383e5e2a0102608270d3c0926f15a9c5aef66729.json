@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO core.credentials\n                  (\n                    user_id,\n                    name,\n                    data,\n                    last_used\n                  )\n                VALUES ($1, 'fixme', $2, $3)\n                RETURNING\n                  id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Json",
+        "Timestamp"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "91b392476473e2343af5f831383e5e2a0102608270d3c0926f15a9c5aef66729"
+}

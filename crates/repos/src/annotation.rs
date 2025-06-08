@@ -18,8 +18,8 @@ impl AnnotationsRepo {
             Annotation,
             r#"
                 SELECT *
-                FROM guardrail.annotations
-                WHERE guardrail.annotations.id = $1
+                FROM core.annotations
+                WHERE core.annotations.id = $1
             "#,
             id
         )
@@ -32,7 +32,7 @@ impl AnnotationsRepo {
         executor: impl sqlx::Executor<'_, Database = Postgres>,
         params: QueryParams,
     ) -> Result<Vec<Annotation>, RepoError> {
-        let mut builder = QueryBuilder::new("SELECT * FROM guardrail.annotations");
+        let mut builder = QueryBuilder::new("SELECT * FROM core.annotations");
         Repo::build_query(
             &mut builder,
             &params,
@@ -58,7 +58,7 @@ impl AnnotationsRepo {
 
         sqlx::query_scalar!(
             r#"
-                INSERT INTO guardrail.annotations
+                INSERT INTO core.annotations
                   (
                     key,
                     source,
@@ -94,7 +94,7 @@ impl AnnotationsRepo {
 
         sqlx::query_scalar!(
             r#"
-                UPDATE guardrail.annotations
+                UPDATE core.annotations
                 SET key = $1, source = $2, value = $3
                 WHERE id = $4
                 RETURNING id
@@ -115,7 +115,7 @@ impl AnnotationsRepo {
     ) -> Result<(), RepoError> {
         sqlx::query!(
             r#"
-                DELETE FROM guardrail.annotations
+                DELETE FROM core.annotations
                 WHERE id = $1
             "#,
             id
@@ -132,7 +132,7 @@ impl AnnotationsRepo {
         sqlx::query_scalar!(
             r#"
                 SELECT COUNT(*)
-                FROM guardrail.annotations
+                FROM core.annotations
             "#
         )
         .fetch_one(executor)
@@ -146,8 +146,7 @@ impl AnnotationsRepo {
         crash_id: uuid::Uuid,
         params: QueryParams,
     ) -> Result<Vec<Annotation>, RepoError> {
-        let mut builder =
-            QueryBuilder::new("SELECT * FROM guardrail.annotations WHERE crash_id = ");
+        let mut builder = QueryBuilder::new("SELECT * FROM core.annotations WHERE crash_id = ");
         builder.push_bind(crash_id);
 
         if !params.sorting.is_empty() || params.range.is_some() {

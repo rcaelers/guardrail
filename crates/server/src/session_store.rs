@@ -40,7 +40,7 @@ impl PostgresStore {
     }
 
     async fn id_exists(&self, conn: &mut PgConnection, id: &Id) -> session_store::Result<bool> {
-        Ok(sqlx::query_scalar(r#"select exists(select 1 from guardrail.sessions where id = $1)"#)
+        Ok(sqlx::query_scalar(r#"select exists(select 1 from core.sessions where id = $1)"#)
             .bind(id.to_string())
             .fetch_one(conn)
             .await
@@ -54,7 +54,7 @@ impl PostgresStore {
     ) -> session_store::Result<()> {
         sqlx::query(
             r#"
-            insert into guardrail.sessions (id, data, expires_at)
+            insert into core.sessions (id, data, expires_at)
             values ($1, $2, $3)
             on conflict (id) do update
             set
@@ -81,7 +81,7 @@ impl ExpiredDeletion for PostgresStore {
     async fn delete_expired(&self) -> session_store::Result<()> {
         sqlx::query(
             r#"
-            delete from guardrail.sessions
+            delete from core.sessions
             where expires_at < (now() at time zone 'utc')
             "#,
         )
@@ -112,7 +112,7 @@ impl SessionStore for PostgresStore {
 
     async fn load(&self, session_id: &Id) -> session_store::Result<Option<Record>> {
         let record_value: Option<(Vec<u8>,)> = sqlx::query_as(
-            r#"select data from guardrail.sessions
+            r#"select data from core.sessions
                where id = $1 and expires_at > $2
                "#,
         )
@@ -130,7 +130,7 @@ impl SessionStore for PostgresStore {
     }
 
     async fn delete(&self, session_id: &Id) -> session_store::Result<()> {
-        sqlx::query(r#"delete from guardrail.sessions where id = $1"#)
+        sqlx::query(r#"delete from core.sessions where id = $1"#)
             .bind(session_id.to_string())
             .execute(&self.pool)
             .await

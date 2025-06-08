@@ -170,17 +170,11 @@ impl GuardrailApp {
     async fn init_guardrail_db(&self) -> Result<PgPool, sqlx::Error> {
         let database_url = &self.settings.database.db_uri;
         let mut opts: PgConnectOptions = database_url.parse()?;
-        opts = opts
-            .log_statements(log::LevelFilter::Debug)
-            .options([("search_path", "guardrail")]);
+        opts = opts.log_statements(log::LevelFilter::Debug);
 
         let pool = PgPoolOptions::new()
             .max_connections(5)
             .connect_with(opts)
-            .await?;
-
-        sqlx::query("CREATE SCHEMA IF NOT EXISTS guardrail")
-            .execute(&pool)
             .await?;
 
         sqlx::migrate!("../../migrations")

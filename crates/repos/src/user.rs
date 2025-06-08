@@ -19,8 +19,8 @@ impl UserRepo {
             User,
             r#"
                 SELECT *
-                FROM guardrail.users
-                WHERE guardrail.users.id = $1
+                FROM core.users
+                WHERE core.users.id = $1
             "#,
             id
         )
@@ -37,8 +37,8 @@ impl UserRepo {
             User,
             r#"
                 SELECT *
-                FROM guardrail.users
-                WHERE guardrail.users.username = $1
+                FROM core.users
+                WHERE core.users.username = $1
             "#,
             username.to_string()
         )
@@ -53,7 +53,7 @@ impl UserRepo {
         sqlx::query!(
             r#"
                 SELECT username
-                FROM guardrail.users
+                FROM core.users
             "#
         )
         .fetch_all(executor)
@@ -70,7 +70,7 @@ impl UserRepo {
         executor: impl sqlx::Executor<'_, Database = Postgres>,
         params: QueryParams,
     ) -> Result<Vec<User>, RepoError> {
-        let mut builder = QueryBuilder::new("SELECT * from guardrail.users");
+        let mut builder = QueryBuilder::new("SELECT * from core.users");
         Repo::build_query(
             &mut builder,
             &params,
@@ -90,7 +90,7 @@ impl UserRepo {
     ) -> Result<uuid::Uuid, RepoError> {
         sqlx::query_scalar!(
             r#"
-                INSERT INTO guardrail.users
+                INSERT INTO core.users
                   (
                     id,
                     username,
@@ -114,7 +114,7 @@ impl UserRepo {
     ) -> Result<uuid::Uuid, RepoError> {
         sqlx::query_scalar!(
             r#"
-                INSERT INTO guardrail.users
+                INSERT INTO core.users
                   (
                     username,
                     is_admin
@@ -137,7 +137,7 @@ impl UserRepo {
     ) -> Result<Option<uuid::Uuid>, RepoError> {
         sqlx::query_scalar!(
             r#"
-                UPDATE guardrail.users
+                UPDATE core.users
                 SET username = $1, is_admin = $2
                 WHERE id = $3
                 RETURNING id
@@ -157,7 +157,7 @@ impl UserRepo {
     ) -> Result<(), RepoError> {
         sqlx::query!(
             r#"
-                DELETE FROM guardrail.users
+                DELETE FROM core.users
                 WHERE id = $1
             "#,
             id
@@ -174,7 +174,7 @@ impl UserRepo {
         sqlx::query_scalar!(
             r#"
                 SELECT COUNT(*)
-                FROM guardrail.users
+                FROM core.users
             "#
         )
         .fetch_one(executor)

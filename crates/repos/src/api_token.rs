@@ -15,8 +15,8 @@ impl ApiTokenRepo {
             ApiToken,
             r#"
                 SELECT *
-                FROM guardrail.api_tokens
-                WHERE guardrail.api_tokens.id = $1
+                FROM core.api_tokens
+                WHERE core.api_tokens.id = $1
             "#,
             id
         )
@@ -33,8 +33,8 @@ impl ApiTokenRepo {
             ApiToken,
             r#"
                 SELECT *
-                FROM guardrail.api_tokens
-                WHERE guardrail.api_tokens.token_id = $1
+                FROM core.api_tokens
+                WHERE core.api_tokens.token_id = $1
             "#,
             token_id
         )
@@ -49,7 +49,7 @@ impl ApiTokenRepo {
     ) -> Result<(), RepoError> {
         sqlx::query!(
             r#"
-                UPDATE guardrail.api_tokens
+                UPDATE core.api_tokens
                 SET last_used_at = now()
                 WHERE id = $1
             "#,
@@ -69,8 +69,8 @@ impl ApiTokenRepo {
             ApiToken,
             r#"
                 SELECT *
-                FROM guardrail.api_tokens
-                WHERE guardrail.api_tokens.product_id = $1
+                FROM core.api_tokens
+                WHERE core.api_tokens.product_id = $1
                 ORDER BY created_at DESC
             "#,
             product_id
@@ -88,8 +88,8 @@ impl ApiTokenRepo {
             ApiToken,
             r#"
                 SELECT *
-                FROM guardrail.api_tokens
-                WHERE guardrail.api_tokens.user_id = $1
+                FROM core.api_tokens
+                WHERE core.api_tokens.user_id = $1
                 ORDER BY created_at DESC
             "#,
             user_id
@@ -105,7 +105,7 @@ impl ApiTokenRepo {
     ) -> Result<Uuid, RepoError> {
         sqlx::query_scalar!(
             r#"
-                INSERT INTO guardrail.api_tokens
+                INSERT INTO core.api_tokens
                   (
                     description,
                     token_id,
@@ -140,7 +140,7 @@ impl ApiTokenRepo {
     ) -> Result<(), RepoError> {
         sqlx::query!(
             r#"
-                UPDATE guardrail.api_tokens
+                UPDATE core.api_tokens
                 SET
                     description = $1,
                     entitlements = $2,
@@ -166,7 +166,7 @@ impl ApiTokenRepo {
     ) -> Result<(), RepoError> {
         sqlx::query!(
             r#"
-                UPDATE guardrail.api_tokens
+                UPDATE core.api_tokens
                 SET is_active = false
                 WHERE id = $1
             "#,
@@ -184,7 +184,7 @@ impl ApiTokenRepo {
     ) -> Result<(), RepoError> {
         sqlx::query!(
             r#"
-                DELETE FROM guardrail.api_tokens
+                DELETE FROM core.api_tokens
                 WHERE id = $1
             "#,
             token_id
@@ -203,7 +203,7 @@ impl ApiTokenRepo {
             ApiToken,
             r#"
                 SELECT *
-                FROM guardrail.api_tokens
+                FROM core.api_tokens
             "#
         )
         .fetch_all(executor)

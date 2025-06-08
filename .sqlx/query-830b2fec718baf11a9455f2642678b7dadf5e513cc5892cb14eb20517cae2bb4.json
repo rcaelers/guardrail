@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE core.attachments\n                SET name = $1, mime_type = $2, size = $3, filename = $4\n                WHERE id = $5\n                RETURNING id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "830b2fec718baf11a9455f2642678b7dadf5e513cc5892cb14eb20517cae2bb4"
+}

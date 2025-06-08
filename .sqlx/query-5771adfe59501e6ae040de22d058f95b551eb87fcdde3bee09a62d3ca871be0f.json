@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE core.api_tokens\n                SET is_active = false\n                WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5771adfe59501e6ae040de22d058f95b551eb87fcdde3bee09a62d3ca871be0f"
+}

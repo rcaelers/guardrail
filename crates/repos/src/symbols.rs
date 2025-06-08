@@ -18,8 +18,8 @@ impl SymbolsRepo {
             Symbols,
             r#"
                 SELECT *
-                FROM guardrail.symbols
-                WHERE guardrail.symbols.id = $1
+                FROM core.symbols
+                WHERE core.symbols.id = $1
             "#,
             id
         )
@@ -37,8 +37,8 @@ impl SymbolsRepo {
             Symbols,
             r#"
                 SELECT *
-                FROM guardrail.symbols
-                WHERE guardrail.symbols.build_id = $1 AND guardrail.symbols.module_id = $2
+                FROM core.symbols
+                WHERE core.symbols.build_id = $1 AND core.symbols.module_id = $2
             "#,
             build_id,
             module_id
@@ -52,7 +52,7 @@ impl SymbolsRepo {
         executor: impl sqlx::Executor<'_, Database = Postgres>,
         params: QueryParams,
     ) -> Result<Vec<Symbols>, RepoError> {
-        let mut builder = QueryBuilder::new("SELECT * from guardrail.symbols");
+        let mut builder = QueryBuilder::new("SELECT * from core.symbols");
         Repo::build_query(
             &mut builder,
             &params,
@@ -71,7 +71,7 @@ impl SymbolsRepo {
     ) -> Result<uuid::Uuid, RepoError> {
         sqlx::query_scalar!(
             r#"
-                INSERT INTO guardrail.symbols
+                INSERT INTO core.symbols
                   (
                     os,
                     arch,
@@ -102,7 +102,7 @@ impl SymbolsRepo {
     ) -> Result<Option<uuid::Uuid>, RepoError> {
         sqlx::query_scalar!(
             r#"
-                UPDATE guardrail.symbols
+                UPDATE core.symbols
                 SET os = $1, arch = $2, build_id = $3, module_id = $4, storage_path = $5
                 WHERE id = $6
                 RETURNING id
@@ -125,7 +125,7 @@ impl SymbolsRepo {
     ) -> Result<(), RepoError> {
         sqlx::query!(
             r#"
-                DELETE FROM guardrail.symbols
+                DELETE FROM core.symbols
                 WHERE id = $1
             "#,
             id
@@ -142,7 +142,7 @@ impl SymbolsRepo {
         sqlx::query_scalar!(
             r#"
                 SELECT COUNT(*)
-                FROM guardrail.symbols
+                FROM core.symbols
             "#
         )
         .fetch_one(executor)

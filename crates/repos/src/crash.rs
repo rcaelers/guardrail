@@ -17,8 +17,8 @@ impl CrashRepo {
             Crash,
             r#"
                 SELECT *
-                FROM guardrail.crashes
-                WHERE guardrail.crashes.id = $1
+                FROM core.crashes
+                WHERE core.crashes.id = $1
             "#,
             id
         )
@@ -31,7 +31,7 @@ impl CrashRepo {
         executor: impl sqlx::Executor<'_, Database = Postgres>,
         params: QueryParams,
     ) -> Result<Vec<Crash>, RepoError> {
-        let mut builder = QueryBuilder::new("SELECT * from guardrail.crashes");
+        let mut builder = QueryBuilder::new("SELECT * from core.crashes");
         Repo::build_query(
             &mut builder,
             &params,
@@ -50,7 +50,7 @@ impl CrashRepo {
     ) -> Result<uuid::Uuid, RepoError> {
         sqlx::query_scalar!(
             r#"
-                INSERT INTO guardrail.crashes
+                INSERT INTO core.crashes
                   (
                     id,
                     product_id,
@@ -82,7 +82,7 @@ impl CrashRepo {
     ) -> Result<Option<uuid::Uuid>, RepoError> {
         sqlx::query_scalar!(
             r#"
-            UPDATE guardrail.crashes
+            UPDATE core.crashes
                 SET minidump = $1, report = $2, signature = $3
                 WHERE id = $4
                 RETURNING id
@@ -103,7 +103,7 @@ impl CrashRepo {
     ) -> Result<(), RepoError> {
         sqlx::query!(
             r#"
-                DELETE FROM guardrail.crashes
+                DELETE FROM core.crashes
                 WHERE id = $1
             "#,
             id
@@ -120,7 +120,7 @@ impl CrashRepo {
         sqlx::query_scalar!(
             r#"
                 SELECT COUNT(*)
-                FROM guardrail.crashes
+                FROM core.crashes
             "#
         )
         .fetch_one(executor)

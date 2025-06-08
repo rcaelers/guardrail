@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE core.api_tokens\n                SET\n                    description = $1,\n                    entitlements = $2,\n                    expires_at = $3,\n                    is_active = $4\n                WHERE id = $5\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Timestamp",
+        "Bool",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "62cb8cc74cde34438f7242a6d1d903ee4c1d8c4d67fbc7c5c130290c78569095"
+}

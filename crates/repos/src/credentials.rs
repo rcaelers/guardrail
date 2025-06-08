@@ -14,8 +14,8 @@ impl CredentialsRepo {
             Credential,
             r#"
                 SELECT *
-                FROM guardrail.credentials
-                WHERE guardrail.credentials.id = $1
+                FROM core.credentials
+                WHERE core.credentials.id = $1
             "#,
             id
         )
@@ -32,8 +32,8 @@ impl CredentialsRepo {
             Credential,
             r#"
                 SELECT *
-                FROM guardrail.credentials
-                WHERE guardrail.credentials.user_id = $1
+                FROM core.credentials
+                WHERE core.credentials.user_id = $1
             "#,
             user_id
         )
@@ -48,7 +48,7 @@ impl CredentialsRepo {
     ) -> Result<uuid::Uuid, RepoError> {
         sqlx::query_scalar!(
             r#"
-                INSERT INTO guardrail.credentials
+                INSERT INTO core.credentials
                   (
                     user_id,
                     name,
@@ -75,7 +75,7 @@ impl CredentialsRepo {
     ) -> Result<Option<uuid::Uuid>, RepoError> {
         sqlx::query_scalar!(
             r#"
-                UPDATE guardrail.credentials
+                UPDATE core.credentials
                 SET data = $1, last_used = $2
                 WHERE id = $3
                 RETURNING id
