@@ -115,8 +115,8 @@ async fn test_full_minidump_processing_flow(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": { "value": "12345", "source": "submission" },
+          "session_id": { "value": "67890", "source": "submission" }
         },
     });
 
@@ -250,8 +250,8 @@ async fn test_missing_crash_id(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": { "value": "12345", "source": "submission" },
+          "session_id": { "value": "67890", "source": "submission" }
         },
     });
 
@@ -315,8 +315,8 @@ async fn test_invalid_crash_id(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": { "value": "12345", "source": "submission" },
+          "session_id": { "value": "67890", "source": "submission" }
         },
     });
 
@@ -380,8 +380,8 @@ async fn test_minidump_not_found(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": { "value": "12345", "source": "submission" },
+          "session_id": { "value": "67890", "source": "submission" }
         },
     });
 
@@ -445,8 +445,8 @@ async fn test_invalid_product_id(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": { "value": "12345", "source": "submission" },
+          "session_id": { "value": "67890", "source": "submission" }
         },
     });
 
@@ -510,8 +510,8 @@ async fn test_product_id_not_found(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": { "value": "12345", "source": "submission" },
+          "session_id": { "value": "67890", "source": "submission" }
         },
     });
 
@@ -574,8 +574,8 @@ async fn test_minidump_storage_id_missing(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": { "value": "12345", "source": "submission" },
+          "session_id": { "value": "67890", "source": "submission" }
         },
     });
 
@@ -639,8 +639,8 @@ async fn test_minidump_storage_path_missing(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": { "value": "12345", "source": "submission" },
+          "session_id": { "value": "67890", "source": "submission" }
         },
     });
 
@@ -698,8 +698,8 @@ async fn test_minidump_missing(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": { "value": "12345", "source": "submission" },
+          "session_id": { "value": "67890", "source": "submission" }
         },
     });
 
@@ -764,8 +764,8 @@ async fn test_minidump_storage_id_invald(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": { "value": "12345", "source": "submission" },
+          "session_id": { "value": "67890", "source": "submission" }
         },
     });
 
@@ -829,8 +829,8 @@ async fn test_atachment_missing_filename(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": {"value": "12345", "source": "submission"},
+          "session_id": {"value": "67890", "source": "submission"}
         },
     });
 
@@ -894,8 +894,8 @@ async fn test_attachment_missing_content_type(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": {"value": "12345", "source": "submission"},
+          "session_id": {"value": "67890", "source": "submission"}
         },
     });
 
@@ -959,8 +959,8 @@ async fn test_attachment_missing_size(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": {"value": "12345", "source": "submission"},
+          "session_id": {"value": "67890", "source": "submission"}
         },
     });
 
@@ -1023,8 +1023,8 @@ async fn test_attachment_missing_storage_path(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": {"value": "12345", "source": "submission"},
+          "session_id": {"value": "67890", "source": "submission"}
         },
     });
 
@@ -1088,8 +1088,8 @@ async fn test_annotation_value_wrong_type(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": 12345,
-          "session_id": "67890"
+          "user_id": {"value": 12345, "source": "submission"},
+          "session_id": {"value": "67890", "source": "submission"}
         },
     });
 
@@ -1159,8 +1159,8 @@ async fn test_minidump_invalid(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": {"value": "12345", "source": "submission"},
+          "session_id": {"value": "67890", "source": "submission"}
         },
     });
 
@@ -1229,8 +1229,8 @@ async fn test_minidump_attachment_db_failure(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": {"value": "12345", "source": "submission"},
+          "session_id": {"value": "67890", "source": "submission"}
         },
     });
 
@@ -1299,8 +1299,8 @@ async fn test_minidump_annotation_db_failure(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": {"value": "12345", "source": "submission"},
+          "session_id": {"value": "67890", "source": "submission"}
         },
     });
 
@@ -1369,8 +1369,8 @@ async fn test_minidump_crash_db_failure(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": "12345",
-          "session_id": "67890"
+          "user_id": {"value": "12345", "source": "submission"},
+          "session_id": {"value": "67890", "source": "submission"}
         },
     });
 

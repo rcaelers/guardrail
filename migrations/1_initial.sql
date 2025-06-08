@@ -185,7 +185,7 @@ CREATE TABLE guardrail.annotations (
     value TEXT NOT NULL,
     crash_id UUID NOT NULL REFERENCES guardrail.crashes (id) ON DELETE CASCADE,
     product_id UUID NOT NULL REFERENCES guardrail.products (id),
-    UNIQUE (key, crash_id)
+    UNIQUE (key, crash_id, source)
 );
 ALTER TABLE guardrail.annotations OWNER TO guardrail;
 

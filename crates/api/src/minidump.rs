@@ -6,9 +6,11 @@ use object_store::{ObjectStore, PutPayload};
 use rhai::Engine;
 use serde::Serialize;
 use sqlx::Postgres;
+use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, error, info, instrument};
 
+use super::annotations::{AnnotationEntry, TrackedAnnotations};
 use super::error::ApiError;
 use crate::state::AppState;
 use crate::utils::{get_product_by_id, stream_to_s3};
@@ -47,10 +49,9 @@ struct CrashInfo {
     submission_timestamp: String,
     authorized_product: Option<String>,
     product_id: Option<uuid::Uuid>,
-    product: Option<String>,
     minidump: Option<Minidump>,
     attachments: Vec<Attachment>,
-    annotations: std::collections::HashMap<String, String>,
+    annotations: HashMap<String, AnnotationEntry>,
 }
 
 impl MinidumpApi {
@@ -209,7 +210,13 @@ impl MinidumpApi {
         })?;
 
         info!(key = %key, content_type = %content_type, "Adding annotation");
-        crash_info.annotations.insert(key, value);
+        crash_info.annotations.insert(
+            key,
+            AnnotationEntry {
+                value,
+                source: "submission".to_string(),
+            },
+        );
         Ok(())
     }
 
@@ -270,7 +277,7 @@ impl MinidumpApi {
             }
 
             if let Some(value) = value
-                && value.trim().is_empty()
+                && value.value.trim().is_empty()
             {
                 error!(required_field, "Required annotation is empty");
                 return Err(ApiError::Failure(format!(
@@ -279,11 +286,74 @@ impl MinidumpApi {
             }
         }
 
-        for script_file in state.settings.minidumps.validation_scripts.iter().flatten() {
-            debug!(script_file = %script_file, "Running validation script");
-            let script_content =
-                Self::load_validation_script(script_file, &state.settings.config_dir)?;
-            Self::validate_with_rhai_script(&script_content, crash_info)?;
+        if let Some(validation_scripts) = &state.settings.minidumps.validation_scripts {
+            for validation_script in validation_scripts {
+                match validation_script {
+                    common::settings::ValidationScript::Global(script_file) => {
+                        let script_file = format!("{}/{}", &state.settings.config_dir, script_file);
+                        debug!(script_file = %script_file, "Running global validation script");
+                        Self::validate_with_rhai_script(&script_file, crash_info)?;
+                    }
+                    common::settings::ValidationScript::ProductSpecific { product, script } => {
+                        if let Some(authorized_product) = &crash_info.authorized_product {
+                            match fancy_regex::Regex::new(product) {
+                                Ok(product_regex) => {
+                                    match product_regex.is_match(authorized_product) {
+                                        Ok(true) => {
+                                            let script_file = format!(
+                                                "{}/{}",
+                                                &state.settings.config_dir, script
+                                            );
+                                            debug!(
+                                                script_file = %script_file,
+                                                product_pattern = %product,
+                                                authorized_product = %authorized_product,
+                                                "Running product-specific validation script"
+                                            );
+                                            Self::validate_with_rhai_script(
+                                                &script_file,
+                                                crash_info,
+                                            )?;
+                                        }
+                                        Ok(false) => {
+                                            debug!(
+                                                product_pattern = %product,
+                                                authorized_product = %authorized_product,
+                                                "Product pattern does not match authorized product, skipping script"
+                                            );
+                                        }
+                                        Err(e) => {
+                                            error!(
+                                                error = %e,
+                                                product_pattern = %product,
+                                                "Failed to execute regex match for product pattern"
+                                            );
+                                            return Err(ApiError::Failure(format!(
+                                                "Invalid regex execution for product pattern '{product}': {e}"
+                                            )));
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    error!(
+                                        product_pattern = %product,
+                                        error = %e,
+                                        "Invalid regex pattern in product validation script configuration"
+                                    );
+                                    return Err(ApiError::Failure(format!(
+                                        "Invalid regex pattern '{product}' in validation script configuration: {e}"
+                                    )));
+                                }
+                            }
+                        } else {
+                            debug!(
+                                product_pattern = %product,
+                                "No authorized product found, skipping product-specific validation script"
+                            );
+                        }
+                    }
+                }
+            }
         }
 
         Ok(())
@@ -378,7 +448,7 @@ impl MinidumpApi {
             authorized_product: None,
             minidump: None,
             attachments: Vec::new(),
-            annotations: std::collections::HashMap::new(),
+            annotations: HashMap::new(),
             ..Default::default()
         };
 
@@ -416,6 +486,76 @@ impl MinidumpApi {
         }))
     }
 
+    fn handle_validation_success(
+        scope: &mut rhai::Scope,
+        crash_info: &mut CrashInfo,
+    ) -> Result<(), ApiError> {
+        debug!(crash_id = %crash_info.crash_id, "Validation script returned success");
+
+        if let Some(crash_info_map) = scope.get_value::<rhai::Map>("crash_info")
+            && let Some(annotations_dynamic) = crash_info_map.get("annotations")
+            && let Some(modified_annotations) =
+                annotations_dynamic.clone().try_cast::<TrackedAnnotations>()
+            && modified_annotations.was_modified()
+        {
+            debug!(crash_id = %crash_info.crash_id, "Script modified annotations");
+            crash_info.annotations = modified_annotations.finalize();
+        }
+        Ok(())
+    }
+
+    fn handle_validation_failure(map: &rhai::Map, crash_info: &CrashInfo) -> Result<(), ApiError> {
+        let error_message = map
+            .get("error")
+            .and_then(|v| v.clone().into_string().ok())
+            .unwrap_or_else(|| "Validation failed".to_string());
+
+        error!(crash_id = %crash_info.crash_id, error = %error_message, "Validation script returned failure");
+        Err(ApiError::ValidationError(
+            crash_info.authorized_product.clone().unwrap_or_default(),
+            error_message,
+        ))
+    }
+
+    fn extract_validation_result(
+        map: &rhai::Map,
+        crash_info: &CrashInfo,
+    ) -> Result<bool, ApiError> {
+        map.get("valid")
+            .and_then(|v| v.as_bool().ok())
+            .ok_or_else(|| {
+                error!(crash_id = %crash_info.crash_id, "Validation result missing 'valid' field");
+                ApiError::ValidationError(
+                    crash_info.authorized_product.clone().unwrap_or_default(),
+                    "Invalid validation result".to_string(),
+                )
+            })
+    }
+
+    fn handle_validation_result(
+        result: rhai::Dynamic,
+        scope: &mut rhai::Scope,
+        crash_info: &mut CrashInfo,
+    ) -> Result<(), ApiError> {
+        debug!(crash_id = %crash_info.crash_id, "Rhai validation script executed successfully");
+
+        let map = result.try_cast::<rhai::Map>().ok_or_else(|| {
+            error!(crash_id = %crash_info.crash_id, "Validation script must return a validation result");
+            ApiError::ValidationError(
+                crash_info.authorized_product.clone().unwrap_or_default(),
+                "Validation script failed".to_string(),
+            )
+        })?;
+
+        let valid = Self::extract_validation_result(&map, crash_info)?;
+
+        if valid {
+            Self::handle_validation_success(scope, crash_info)
+        } else {
+            Self::handle_validation_failure(&map, crash_info)
+        }
+    }
+
     fn convert_crash_info_to_rhai_map(crash_info: &CrashInfo) -> rhai::Map {
         let mut map = rhai::Map::new();
 
@@ -430,15 +570,8 @@ impl MinidumpApi {
             map.insert("product_id".into(), product_id.to_string().into());
         }
 
-        if let Some(ref product) = crash_info.product {
-            map.insert("product".into(), product.clone().into());
-        }
-
-        let mut annotations = rhai::Map::new();
-        for (key, value) in &crash_info.annotations {
-            annotations.insert(key.clone().into(), value.clone().into());
-        }
-        map.insert("annotations".into(), annotations.into());
+        let tracked_annotations = TrackedAnnotations::from_map(crash_info.annotations.clone());
+        map.insert("annotations".into(), rhai::Dynamic::from(tracked_annotations));
 
         if let Some(ref minidump) = crash_info.minidump {
             let mut minidump_map = rhai::Map::new();
@@ -462,12 +595,10 @@ impl MinidumpApi {
         map
     }
 
-    fn validate_with_rhai_script(script: &str, crash_info: &CrashInfo) -> Result<(), ApiError> {
-        debug!(crash_id = %crash_info.crash_id, "Running Rhai validation script");
-
+    fn create_rhai_engine(crash_id: uuid::Uuid) -> Engine {
         let mut engine = Engine::new();
+        engine.build_type::<TrackedAnnotations>();
 
-        let crash_id = crash_info.crash_id;
         engine.on_print(move |message| {
             info!(crash_id = %crash_id, rhai_log = true, "{}", message);
         });
@@ -500,48 +631,27 @@ impl MinidumpApi {
             result
         });
 
-        let mut scope = rhai::Scope::new();
+        engine
+    }
+
+    fn validate_with_rhai_script(
+        script_path: &str,
+        crash_info: &mut CrashInfo,
+    ) -> Result<(), ApiError> {
+        debug!(crash_id = %crash_info.crash_id, script_path = %script_path, "Running Rhai validation script");
+
+        let script = std::fs::read_to_string(script_path).map_err(|e| {
+            error!(script_path = %script_path, error = ?e, "Failed to load validation script");
+            ApiError::Failure(format!("Failed to load validation script '{script_path}': {e}"))
+        })?;
+
+        let engine = Self::create_rhai_engine(crash_info.crash_id);
         let crash_info_map = Self::convert_crash_info_to_rhai_map(crash_info);
+        let mut scope = rhai::Scope::new();
         scope.push("crash_info", crash_info_map);
 
-        match engine.eval_with_scope::<rhai::Dynamic>(&mut scope, script) {
-            Ok(result) => {
-                debug!(crash_id = %crash_info.crash_id, "Rhai validation script executed successfully");
-
-                let map = result.try_cast::<rhai::Map>().ok_or_else(|| {
-                    error!(crash_id = %crash_info.crash_id, "Validation script must return a validation result");
-                    ApiError::ValidationError(
-                        crash_info.authorized_product.clone().unwrap_or_default(),
-                        "Validation script failed".to_string(),
-                    )
-                })?;
-
-                let valid = map.get("valid")
-                    .and_then(|v| v.as_bool().ok())
-                    .ok_or_else(|| {
-                        error!(crash_id = %crash_info.crash_id, "Validation result missing 'valid' field");
-                        ApiError::ValidationError(
-                            crash_info.authorized_product.clone().unwrap_or_default(),
-                            "Invalid validation result".to_string(),
-                        )
-                    })?;
-
-                if valid {
-                    debug!(crash_id = %crash_info.crash_id, "Validation script returned success");
-                    Ok(())
-                } else {
-                    let error_message = map
-                        .get("error")
-                        .and_then(|v| v.clone().into_string().ok())
-                        .unwrap_or_else(|| "Validation failed".to_string());
-
-                    error!(crash_id = %crash_info.crash_id, error = %error_message, "Validation script returned failure");
-                    Err(ApiError::ValidationError(
-                        crash_info.authorized_product.clone().unwrap_or_default(),
-                        error_message,
-                    ))
-                }
-            }
+        match engine.eval_with_scope::<rhai::Dynamic>(&mut scope, &script) {
+            Ok(result) => Self::handle_validation_result(result, &mut scope, crash_info),
             Err(e) => {
                 error!(crash_id = %crash_info.crash_id, error = %e, "Rhai validation script execution failed");
                 Err(ApiError::ValidationError(
@@ -551,13 +661,98 @@ impl MinidumpApi {
             }
         }
     }
+}
 
-    fn load_validation_script(script_path: &str, config_dir: &str) -> Result<String, ApiError> {
-        let full_path = format!("{config_dir}/{script_path}");
-        debug!(script_path = %full_path, "Loading Rhai validation script");
-        std::fs::read_to_string(&full_path).map_err(|e| {
-            error!(script_path = %full_path, error = ?e, "Failed to load validation script");
-            ApiError::Failure(format!("Failed to load validation script '{full_path}': {e}"))
-        })
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::annotations::TrackedAnnotations;
+    use rhai::{Engine, Scope};
+
+    #[test]
+    fn test_crash_info_annotations_is_tracked_annotations_in_rhai() {
+        // Create a test CrashInfo with some annotations
+        let mut crash_info = CrashInfo {
+            crash_id: uuid::Uuid::new_v4(),
+            submission_timestamp: "2023-01-01T00:00:00Z".to_string(),
+            authorized_product: Some("TestProduct".to_string()),
+            product_id: Some(uuid::Uuid::new_v4()),
+            minidump: None,
+            attachments: vec![],
+            annotations: HashMap::new(),
+        };
+
+        crash_info.annotations.insert(
+            "existing_key".to_string(),
+            AnnotationEntry {
+                value: "existing_value".to_string(),
+                source: "test".to_string(),
+            },
+        );
+
+        // Create a Rhai engine and convert crash_info to map
+        let mut engine = Engine::new();
+        engine.build_type::<TrackedAnnotations>();
+
+        let mut scope = Scope::new();
+        let crash_info_map = MinidumpApi::convert_crash_info_to_rhai_map(&crash_info);
+        scope.push("crash_info", crash_info_map);
+
+        // Test script that uses crash_info.annotations as TrackedAnnotations
+        let script = r#"
+            // Test that we can read existing annotations with bracket notation
+            let existing = crash_info.annotations["existing_key"];
+
+            // Test that we can write to annotations with bracket notation
+            crash_info.annotations["script_key"] = "script_value";
+
+            // Test that we can read the value we just wrote
+            let script_val = crash_info.annotations["script_key"];
+
+            // Return the values to verify they work
+            #{
+                existing: existing,
+                script_val: script_val
+            }
+        "#;
+
+        let result = engine
+            .eval_with_scope::<rhai::Map>(&mut scope, script)
+            .unwrap();
+
+        // Verify the script could read and write annotations
+        assert_eq!(
+            result
+                .get("existing")
+                .unwrap()
+                .clone()
+                .into_string()
+                .unwrap(),
+            "existing_value"
+        );
+        assert_eq!(
+            result
+                .get("script_val")
+                .unwrap()
+                .clone()
+                .into_string()
+                .unwrap(),
+            "script_value"
+        );
+
+        // Verify that the modifications are tracked in the scope
+        let updated_crash_info = scope.get_value::<rhai::Map>("crash_info").unwrap();
+        let annotations = updated_crash_info
+            .get("annotations")
+            .unwrap()
+            .clone()
+            .try_cast::<TrackedAnnotations>()
+            .unwrap();
+        assert!(annotations.was_modified());
+
+        let finalized = annotations.finalize();
+        assert_eq!(finalized.get("existing_key").unwrap().value, "existing_value");
+        assert_eq!(finalized.get("script_key").unwrap().value, "script_value");
+        assert_eq!(finalized.get("script_key").unwrap().source, "script");
     }
 }

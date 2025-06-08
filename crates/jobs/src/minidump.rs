@@ -199,19 +199,36 @@ impl MinidumpProcessor {
     where
         for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
     {
-        for (key, value) in crash_info["annotations"]
+        for (key, annotation_data) in crash_info["annotations"]
             .as_object()
             .unwrap_or(&serde_json::Map::new())
         {
-            let value = value.as_str().ok_or_else(|| {
-                error!("Annotation value is missing");
-                JobError::Failure("annotation value is missing".to_string())
-            })?;
+            let (value, source) = match annotation_data {
+                serde_json::Value::Object(obj) => {
+                    let value = obj.get("value").and_then(|v| v.as_str()).ok_or_else(|| {
+                        error!("Annotation value is missing for key: {}", key);
+                        JobError::Failure("annotation value is missing".to_string())
+                    })?;
+
+                    let source = obj
+                        .get("source")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("submission");
+
+                    (value, source)
+                }
+                _ => {
+                    error!("Annotation data is not in expected format for key: {}", key);
+                    return Err(JobError::Failure(
+                        "annotation data must be string or structured object".to_string(),
+                    ));
+                }
+            };
 
             let annotation = NewAnnotation {
                 crash_id,
                 product_id,
-                source: "submission".to_string(),
+                source: source.to_string(),
                 key: key.to_string(),
                 value: value.to_string(),
             };
@@ -223,6 +240,7 @@ impl MinidumpProcessor {
                     JobError::Failure("failed to create annotation".to_string())
                 })?;
         }
+
         Ok(())
     }
 
@@ -295,5 +313,129 @@ impl MinidumpProcessor {
         processor.handle_job(crash_id, job.crash).await?;
         info!("Successfully processed minidump for crash ID: {}", crash_id);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    #[test]
+    fn test_annotation_processing() {
+        // Test data with both submission annotations and script annotations
+        let crash_info = json!({
+            "annotations": {
+                "product_version": "1.0.0",
+                "user_email": "test@example.com",
+                "submission_notes": "App crashed on startup"
+            },
+            "script_annotations": {
+                "script_classification": "access_violation",
+                "script_known_issue": "ISSUE-123",
+                "product_version": "1.0.0-debug"  // Same key as submission, different value
+            }
+        });
+
+        // Verify that we can extract both annotation types
+        let submission_annotations = crash_info["annotations"].as_object().unwrap();
+        let script_annotations = crash_info["script_annotations"].as_object().unwrap();
+
+        // Verify submission annotations
+        assert_eq!(
+            submission_annotations
+                .get("product_version")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "1.0.0"
+        );
+        assert_eq!(
+            submission_annotations
+                .get("user_email")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "test@example.com"
+        );
+        assert_eq!(
+            submission_annotations
+                .get("submission_notes")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "App crashed on startup"
+        );
+
+        // Verify script annotations
+        assert_eq!(
+            script_annotations
+                .get("script_classification")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "access_violation"
+        );
+        assert_eq!(
+            script_annotations
+                .get("script_known_issue")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "ISSUE-123"
+        );
+        assert_eq!(
+            script_annotations
+                .get("product_version")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "1.0.0-debug"
+        );
+
+        // Verify that the same key can have different values in different sources
+        assert_ne!(
+            submission_annotations
+                .get("product_version")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            script_annotations
+                .get("product_version")
+                .unwrap()
+                .as_str()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_missing_annotations() {
+        // Test with missing annotation fields
+        let crash_info = json!({
+            "annotations": {
+                "product_version": "1.0.0"
+            }
+            // No script_annotations field
+        });
+
+        let submission_annotations = crash_info["annotations"].as_object().unwrap();
+        let script_annotations = crash_info["script_annotations"].as_object();
+
+        assert!(submission_annotations.contains_key("product_version"));
+        assert!(script_annotations.is_none()); // Should handle missing script_annotations gracefully
+    }
+
+    #[test]
+    fn test_empty_annotations() {
+        // Test with empty annotation objects
+        let crash_info = json!({
+            "annotations": {},
+            "script_annotations": {}
+        });
+
+        let submission_annotations = crash_info["annotations"].as_object().unwrap();
+        let script_annotations = crash_info["script_annotations"].as_object().unwrap();
+
+        assert!(submission_annotations.is_empty());
+        assert!(script_annotations.is_empty());
     }
 }

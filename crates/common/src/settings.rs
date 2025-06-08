@@ -3,6 +3,13 @@ use glob::glob;
 use natord::compare as natord_compare;
 use serde::Deserialize;
 
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+pub enum ValidationScript {
+    Global(String),
+    ProductSpecific { product: String, script: String },
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub struct ApiServer {
     pub port: u16,
@@ -13,7 +20,7 @@ pub struct ApiServer {
 #[derive(Debug, Deserialize, Default)]
 pub struct Minidumps {
     pub mandatory_annotations: Option<Vec<String>>,
-    pub validation_scripts: Option<Vec<String>>,
+    pub validation_scripts: Option<Vec<ValidationScript>>,
 }
 
 #[derive(Debug, Deserialize, Default)]

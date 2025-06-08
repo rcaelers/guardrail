@@ -330,7 +330,7 @@ pub async fn create_test_token(
     (token, api_token)
 }
 
-pub fn create_settings() -> Arc<Settings> {
+pub fn create_settings() -> Settings {
     tracing::info!("Logging initialized");
 
     let workspace_dir = std::env::var("CARGO_MANIFEST_DIR")
@@ -339,7 +339,8 @@ pub fn create_settings() -> Arc<Settings> {
         .ancestors()
         .nth(2)
         .expect("Failed to find workspace root")
-        .to_string_lossy().to_string();
+        .to_string_lossy()
+        .to_string();
 
     let mut settings = Settings {
         config_dir: format!("{workspace_dir}/config"),
@@ -362,8 +363,8 @@ pub fn create_settings() -> Arc<Settings> {
     settings.minidumps.mandatory_annotations =
         Some(vec!["product".to_string(), "version".to_string()]);
     settings.minidumps.validation_scripts = Some(vec![
-        "scripts/product_validation.rhai".to_string(),
-        "scripts/build_age_validation.rhai".to_string(),
+        common::settings::ValidationScript::Global("scripts/product_validation.rhai".to_string()),
+        common::settings::ValidationScript::Global("scripts/build_age_validation.rhai".to_string()),
     ]);
-    Arc::new(settings)
+    settings
 }

@@ -223,6 +223,7 @@ dependencies = [
  "common",
  "data",
  "data-encoding",
+ "fancy-regex",
  "futures",
  "jobs",
  "jsonwebtoken",

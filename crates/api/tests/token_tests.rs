@@ -28,6 +28,7 @@ async fn setup(pool: &PgPool) -> (Router, AppState) {
     let store = Arc::new(object_store::memory::InMemory::new());
     let worker = Arc::new(TestMinidumpProcessor::new());
 
+    let settings = Arc::new(settings);
     let state = AppState {
         repo,
         webauthn: create_webauthn(settings.clone()),

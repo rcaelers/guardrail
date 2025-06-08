@@ -1,3 +1,4 @@
+pub mod annotations;
 pub mod api_token;
 pub mod error;
 pub mod health;

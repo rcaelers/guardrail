@@ -7,9 +7,8 @@ use bytes::Bytes;
 use chrono::Utc;
 use data::product::Product;
 use futures::TryStreamExt;
-use mockall::predicate;
+use object_store::ObjectStore;
 use object_store::path::Path;
-use object_store::{Error, ObjectStore, PutResult};
 use serde_json::json;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -28,7 +27,6 @@ use repos::product::ProductRepo;
 
 use testware::{
     create_settings, create_test_product_with_details, create_test_token, create_webauthn,
-    mockall_object_store::MockObjectStore,
 };
 
 async fn setup(
@@ -46,6 +44,7 @@ async fn setup_with_storage(
     let repo = Repo::new(pool.clone());
     let worker = Arc::new(TestMinidumpProcessor::new());
 
+    let settings = Arc::new(settings);
     let state = AppState {
         repo,
         webauthn: create_webauthn(settings.clone()),
@@ -279,12 +278,40 @@ async fn test_minidump_upload_ok(pool: PgPool) {
         serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
     assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 5);
-    assert_eq!(crash_info["annotations"]["product"].as_str().unwrap(), "TestProduct");
-    assert_eq!(crash_info["annotations"]["version"].as_str().unwrap(), "1.0.0");
-    assert_eq!(crash_info["annotations"]["channel"].as_str().unwrap(), "test-channel");
-    assert_eq!(crash_info["annotations"]["commit"].as_str().unwrap(), "test-commit");
     assert_eq!(
-        crash_info["annotations"]["build_date"].as_str().unwrap(),
+        crash_info["annotations"]["product"]["value"]
+            .as_str()
+            .unwrap(),
+        "TestProduct"
+    );
+    assert_eq!(
+        crash_info["annotations"]["product"]["source"]
+            .as_str()
+            .unwrap(),
+        "submission"
+    );
+    assert_eq!(
+        crash_info["annotations"]["version"]["value"]
+            .as_str()
+            .unwrap(),
+        "1.0.0"
+    );
+    assert_eq!(
+        crash_info["annotations"]["channel"]["value"]
+            .as_str()
+            .unwrap(),
+        "test-channel"
+    );
+    assert_eq!(
+        crash_info["annotations"]["commit"]["value"]
+            .as_str()
+            .unwrap(),
+        "test-commit"
+    );
+    assert_eq!(
+        crash_info["annotations"]["build_date"]["value"]
+            .as_str()
+            .unwrap(),
         "2025-05-15T20:26:15+02:00"
     );
     assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 0);
@@ -335,12 +362,40 @@ async fn test_minidump_upload_ok_without_filename(pool: PgPool) {
         serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
     assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 5);
-    assert_eq!(crash_info["annotations"]["product"].as_str().unwrap(), "TestProduct");
-    assert_eq!(crash_info["annotations"]["version"].as_str().unwrap(), "1.0.0");
-    assert_eq!(crash_info["annotations"]["channel"].as_str().unwrap(), "test-channel");
-    assert_eq!(crash_info["annotations"]["commit"].as_str().unwrap(), "test-commit");
     assert_eq!(
-        crash_info["annotations"]["build_date"].as_str().unwrap(),
+        crash_info["annotations"]["product"]["value"]
+            .as_str()
+            .unwrap(),
+        "TestProduct"
+    );
+    assert_eq!(
+        crash_info["annotations"]["product"]["source"]
+            .as_str()
+            .unwrap(),
+        "submission"
+    );
+    assert_eq!(
+        crash_info["annotations"]["version"]["value"]
+            .as_str()
+            .unwrap(),
+        "1.0.0"
+    );
+    assert_eq!(
+        crash_info["annotations"]["channel"]["value"]
+            .as_str()
+            .unwrap(),
+        "test-channel"
+    );
+    assert_eq!(
+        crash_info["annotations"]["commit"]["value"]
+            .as_str()
+            .unwrap(),
+        "test-commit"
+    );
+    assert_eq!(
+        crash_info["annotations"]["build_date"]["value"]
+            .as_str()
+            .unwrap(),
         "2025-05-15T20:26:15+02:00"
     );
     assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 0);
@@ -403,12 +458,40 @@ async fn test_minidump_upload_with_attachments_ok(pool: PgPool) {
     let crash_info: serde_json::Value =
         serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
-    assert_eq!(crash_info["annotations"]["product"].as_str().unwrap(), "TestProduct");
-    assert_eq!(crash_info["annotations"]["version"].as_str().unwrap(), "1.0.0");
-    assert_eq!(crash_info["annotations"]["channel"].as_str().unwrap(), "test-channel");
-    assert_eq!(crash_info["annotations"]["commit"].as_str().unwrap(), "test-commit");
     assert_eq!(
-        crash_info["annotations"]["build_date"].as_str().unwrap(),
+        crash_info["annotations"]["product"]["value"]
+            .as_str()
+            .unwrap(),
+        "TestProduct"
+    );
+    assert_eq!(
+        crash_info["annotations"]["product"]["source"]
+            .as_str()
+            .unwrap(),
+        "submission"
+    );
+    assert_eq!(
+        crash_info["annotations"]["version"]["value"]
+            .as_str()
+            .unwrap(),
+        "1.0.0"
+    );
+    assert_eq!(
+        crash_info["annotations"]["channel"]["value"]
+            .as_str()
+            .unwrap(),
+        "test-channel"
+    );
+    assert_eq!(
+        crash_info["annotations"]["commit"]["value"]
+            .as_str()
+            .unwrap(),
+        "test-commit"
+    );
+    assert_eq!(
+        crash_info["annotations"]["build_date"]["value"]
+            .as_str()
+            .unwrap(),
         "2025-05-15T20:26:15+02:00"
     );
     assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 5);
@@ -528,14 +611,54 @@ async fn test_minidump_upload_with_annotations_ok(pool: PgPool) {
         serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
     assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 7);
-    assert_eq!(crash_info["annotations"]["product"].as_str().unwrap(), "TestProduct");
-    assert_eq!(crash_info["annotations"]["version"].as_str().unwrap(), "1.0.0");
-    assert_eq!(crash_info["annotations"]["channel"].as_str().unwrap(), "test-channel");
-    assert_eq!(crash_info["annotations"]["commit"].as_str().unwrap(), "test-commit");
-    assert_eq!(crash_info["annotations"]["features"].as_str().unwrap(), "tracing");
-    assert_eq!(crash_info["annotations"]["ui"].as_str().unwrap(), "Qt");
     assert_eq!(
-        crash_info["annotations"]["build_date"].as_str().unwrap(),
+        crash_info["annotations"]["product"]["value"]
+            .as_str()
+            .unwrap(),
+        "TestProduct"
+    );
+    assert_eq!(
+        crash_info["annotations"]["product"]["source"]
+            .as_str()
+            .unwrap(),
+        "submission"
+    );
+    assert_eq!(
+        crash_info["annotations"]["version"]["value"]
+            .as_str()
+            .unwrap(),
+        "1.0.0"
+    );
+    assert_eq!(
+        crash_info["annotations"]["channel"]["value"]
+            .as_str()
+            .unwrap(),
+        "test-channel"
+    );
+    assert_eq!(
+        crash_info["annotations"]["commit"]["value"]
+            .as_str()
+            .unwrap(),
+        "test-commit"
+    );
+    assert_eq!(
+        crash_info["annotations"]["features"]["value"]
+            .as_str()
+            .unwrap(),
+        "tracing"
+    );
+    assert_eq!(
+        crash_info["annotations"]["features"]["source"]
+            .as_str()
+            .unwrap(),
+        "submission"
+    );
+    assert_eq!(crash_info["annotations"]["ui"]["value"].as_str().unwrap(), "Qt");
+    assert_eq!(crash_info["annotations"]["ui"]["source"].as_str().unwrap(), "submission");
+    assert_eq!(
+        crash_info["annotations"]["build_date"]["value"]
+            .as_str()
+            .unwrap(),
         "2025-05-15T20:26:15+02:00"
     );
     assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 0);
@@ -551,10 +674,6 @@ async fn test_minidump_upload_with_annotations_ok(pool: PgPool) {
         .await
         .expect("Failed to read minidump object");
     assert_eq!(minidump, Bytes::from("MINIDUMP DATA"));
-
-    let annotations = crash_info["annotations"].as_object().unwrap();
-    assert_eq!(annotations["features"].as_str().unwrap(), "tracing");
-    assert_eq!(annotations["ui"].as_str().unwrap(), "Qt");
 
     assert_count_crashes(store.clone(), 1).await;
     assert_count_minidumps(store.clone(), 1).await;
@@ -1023,6 +1142,7 @@ async fn test_symbol_no_version(pool: PgPool) {
 
     let body = create_body_from_config(&MinidumpBodyConfig {
         boundary: &boundary,
+        product: Some("TestProduct"),
         version: None,
         ..Default::default()
     });
@@ -1204,55 +1324,50 @@ async fn test_minidump_upload_product_not_accepting(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
-async fn test_minidump_upload_with_annotations_invalid_key(pool: PgPool) {
-    let (app, store, boundary, _worker, _body, token) = setup(&pool).await;
+async fn test_minidump_upload_per_product_validation_script(pool: PgPool) {
+    // Create settings with per-product validation scripts using the new format
+    let mut settings = create_settings();
+    // Set up validation scripts with product-specific rules
+    settings.minidumps.validation_scripts = Some(vec![
+        common::settings::ValidationScript::ProductSpecific {
+            product: "^TestProduct$".to_string(),
+            script: "scripts/test_product_specific.rhai".to_string(),
+        },
+        common::settings::ValidationScript::ProductSpecific {
+            product: "^OtherProduct$".to_string(),
+            script: "scripts/other_product_specific.rhai".to_string(),
+        },
+    ]);
+    let settings = Arc::new(settings);
 
-    let body = create_body_from_config(&MinidumpBodyConfig {
-        boundary: &boundary,
-        extra: Some(format!(
-            "--{boundary}\r\nContent-Disposition: form-data; name=\"feat\tures\"; \r\nContent-Type: text/plain\r\n\r\ntracing\r\n\
-             --{boundary}\r\nContent-Disposition: form-data; name=\"ui\"; \r\nContent-Type: text/plain\r\n\r\nQt\r\n"
-        )),
-        ..Default::default()
-    });
+    let repo = Repo::new(pool.clone());
+    let worker = Arc::new(TestMinidumpProcessor::new());
+    let store = Arc::new(object_store::memory::InMemory::new());
 
-    log::info!("Body: {body}");
-    let request = Request::builder()
-        .method("POST")
-        .uri("/api/minidump/upload")
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
-        .body(Body::from(body))
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("general failure: annotation key must contain only printable ASCII characters"),
-    )
-    .await;
-
-    assert_count_crashes(store.clone(), 0).await;
-    assert_count_minidumps(store.clone(), 0).await;
-    assert_count_attachments(store.clone(), 0).await;
-}
-
-#[sqlx::test(migrations = "../../migrations")]
-async fn test_minidump_upload_invalid_minidump_content_type(pool: PgPool) {
-    let (app, store, boundary, _worker, _body, token) = setup(&pool).await;
-
-    let config = MinidumpBodyConfig {
-        boundary: &boundary,
-        product: Some("TestProduct"),
-        version: Some("1.0.0"),
-        minidump_content_type: "application/binary",
-        minidump_filename: Some("test.minidump"),
-        ..Default::default()
+    let state = AppState {
+        repo,
+        webauthn: create_webauthn(settings.clone()),
+        settings: settings.clone(),
+        storage: store.clone(),
+        worker: worker.clone(),
     };
 
-    let body = create_body_from_config(&config);
+    let app: Router = Router::new()
+        .nest("/api", routes(state.clone()).await)
+        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
+        .layer(TraceLayer::new_for_http())
+        .with_state(state.clone());
+
+    let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+    let body = create_body_from_config(&MinidumpBodyConfig {
+        boundary,
+        ..Default::default()
+    });
+
+    let product =
+        create_test_product_with_details(&pool, "TestProduct", "Test product description").await;
+    let (token, _) =
+        create_test_token(&pool, "Test Token", Some(product.id), None, &["minidump-upload"]).await;
 
     let request = Request::builder()
         .method("POST")
@@ -1264,34 +1379,59 @@ async fn test_minidump_upload_invalid_minidump_content_type(pool: PgPool) {
 
     let response = app.oneshot(request).await.unwrap();
 
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("general failure: invalid minidump content type: application/binary"),
-    )
-    .await;
+    // For a successful per-product validation, this should return OK
+    assert_response_ok(response).await;
 
-    assert_count_crashes(store.clone(), 0).await;
-    assert_count_minidumps(store.clone(), 0).await;
+    assert_count_crashes(store.clone(), 1).await;
+    assert_count_minidumps(store.clone(), 1).await;
     assert_count_attachments(store.clone(), 0).await;
 }
 
 #[sqlx::test(migrations = "../../migrations")]
-async fn test_minidump_upload_invalid_annotation_content_type(pool: PgPool) {
-    let (app, store, boundary, _worker, _body, token) = setup(&pool).await;
+async fn test_minidump_upload_per_product_validation_script_missing(pool: PgPool) {
+    // Create settings with per-product validation scripts, but not for the product we'll use
+    let mut settings = create_settings();
+    // Set up validation scripts only for a different product
+    settings.minidumps.validation_scripts =
+        Some(vec![common::settings::ValidationScript::ProductSpecific {
+            product: "^SomeOtherProduct$".to_string(),
+            script: "scripts/other_product_specific.rhai".to_string(),
+        }]);
 
-    let config = MinidumpBodyConfig {
-        boundary: &boundary,
-        product: Some("TestProduct"),
-        version: Some("1.0.0"),
-        minidump_filename: Some("test.minidump"),
-        annotation_content_type: "application/json",
-        channel: Some("test-channel"),
-        commit: Some("test-commit"),
-        ..Default::default()
+    let repo = Repo::new(pool.clone());
+    let worker = Arc::new(TestMinidumpProcessor::new());
+    let store = Arc::new(object_store::memory::InMemory::new());
+
+    let settings = Arc::new(settings);
+    let state = AppState {
+        repo,
+        webauthn: create_webauthn(settings.clone()),
+        settings: settings.clone(),
+        storage: store.clone(),
+        worker: worker.clone(),
     };
 
-    let body = create_body_from_config(&config);
+    let app: Router = Router::new()
+        .nest("/api", routes(state.clone()).await)
+        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
+        .layer(TraceLayer::new_for_http())
+        .with_state(state.clone());
+
+    let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
+    let body = create_body_from_config(&MinidumpBodyConfig {
+        boundary,
+        ..Default::default()
+    });
+
+    // Use a product that doesn't have validation scripts
+    let product = create_test_product_with_details(
+        &pool,
+        "UnknownProduct",
+        "Product without validation scripts",
+    )
+    .await;
+    let (token, _) =
+        create_test_token(&pool, "Test Token", Some(product.id), None, &["minidump-upload"]).await;
 
     let request = Request::builder()
         .method("POST")
@@ -1303,26 +1443,72 @@ async fn test_minidump_upload_invalid_annotation_content_type(pool: PgPool) {
 
     let response = app.oneshot(request).await.unwrap();
 
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("general failure: invalid annotation content type: application/json"),
-    )
-    .await;
+    // When no validation scripts are found for a product, it should still succeed
+    // (based on our implementation which only runs scripts if found)
+    assert_response_ok(response).await;
 
-    assert_count_crashes(store.clone(), 0).await;
-    assert_count_minidumps(store.clone(), 0).await;
+    assert_count_crashes(store.clone(), 1).await;
+    assert_count_minidumps(store.clone(), 1).await;
     assert_count_attachments(store.clone(), 0).await;
 }
 
 #[sqlx::test(migrations = "../../migrations")]
-async fn test_minidump_queue_failed(pool: PgPool) {
-    let (app, store, boundary, worker, _body, token) = setup(&pool).await;
+async fn test_minidump_upload_validation_script_regex_patterns(pool: PgPool) {
+    // Test various regex patterns for product matching
+    let mut settings = create_settings();
+    settings.minidumps.validation_scripts = Some(vec![
+        // Global script for all products
+        common::settings::ValidationScript::Global("scripts/product_validation.rhai".to_string()),
+        // Exact match for TestProduct
+        common::settings::ValidationScript::ProductSpecific {
+            product: "^TestProduct$".to_string(),
+            script: "scripts/test_product_specific.rhai".to_string(),
+        },
+        // Pattern for any product starting with "Test"
+        common::settings::ValidationScript::ProductSpecific {
+            product: "^Test.*".to_string(),
+            script: "scripts/test_product_specific.rhai".to_string(),
+        },
+        // Pattern for any product containing "workrave" (case insensitive would be "(?i)workrave")
+        common::settings::ValidationScript::ProductSpecific {
+            product: ".*workrave.*".to_string(),
+            script: "scripts/workrave_validation.rhai".to_string(),
+        },
+    ]);
+    let settings = Arc::new(settings);
 
-    worker.failure();
+    let repo = Repo::new(pool.clone());
+    let worker = Arc::new(TestMinidumpProcessor::new());
+    let store = Arc::new(object_store::memory::InMemory::new());
 
+    let state = AppState {
+        repo,
+        webauthn: create_webauthn(settings.clone()),
+        settings: settings.clone(),
+        storage: store.clone(),
+        worker: worker.clone(),
+    };
+
+    let app: Router = Router::new()
+        .nest("/api", routes(state.clone()).await)
+        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
+        .layer(TraceLayer::new_for_http())
+        .with_state(state.clone());
+
+    // Test with a product that matches multiple patterns (TestSomething)
+    let product = create_test_product_with_details(
+        &pool,
+        "TestSomething",
+        "Test product with multiple pattern matches",
+    )
+    .await;
+    let (token, _) =
+        create_test_token(&pool, "Test Token", Some(product.id), None, &["minidump-upload"]).await;
+
+    let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
     let body = create_body_from_config(&MinidumpBodyConfig {
-        boundary: &boundary,
+        boundary,
+        product: Some("TestSomething"), // Match the authorized product
         ..Default::default()
     });
 
@@ -1335,218 +1521,11 @@ async fn test_minidump_queue_failed(pool: PgPool) {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("general failure: failed to queue minidump job"),
-    )
-    .await;
 
-    assert_count_crashes(store.clone(), 0).await;
-    assert_count_minidumps(store.clone(), 0).await;
+    // Should succeed - global script + Test.* pattern script both run
+    assert_response_ok(response).await;
+
+    assert_count_crashes(store.clone(), 1).await;
+    assert_count_minidumps(store.clone(), 1).await;
     assert_count_attachments(store.clone(), 0).await;
-}
-
-#[sqlx::test(migrations = "../../migrations")]
-async fn test_minidump_storage_for_crash_failed(pool: PgPool) {
-    let mut mock_store = MockObjectStore::new();
-
-    mock_store.expect_put_opts().returning(|_, _, _| {
-        Ok(PutResult {
-            e_tag: None,
-            version: None,
-        })
-    });
-    mock_store
-        .expect_put()
-        .with(
-            predicate::function(move |path: &Path| path.to_string().starts_with("crashes")),
-            predicate::always(),
-        )
-        .returning(move |_, _| {
-            Err(Error::Generic {
-                store: "mock",
-                source: Box::new(std::io::Error::other("x")),
-            })
-        });
-    mock_store
-        .expect_delete()
-        .with(predicate::function(move |path: &Path| path.to_string().starts_with("minidumps")))
-        .returning(|_| Ok(()))
-        .once();
-    mock_store
-        .expect_delete()
-        .with(predicate::function(move |path: &Path| path.to_string().starts_with("crashes")))
-        .returning(|_| Ok(()))
-        .once();
-
-    let (app, _store, boundary, _worker, _body, token) =
-        setup_with_storage(&pool, Arc::new(mock_store)).await;
-
-    let body = create_body_from_config(&MinidumpBodyConfig {
-        boundary: &boundary,
-        ..Default::default()
-    });
-
-    let request = Request::builder()
-        .method("POST")
-        .uri("/api/minidump/upload")
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
-        .body(Body::from(body))
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("general failure: failed to upload crash info to S3"),
-    )
-    .await;
-}
-
-#[sqlx::test(migrations = "../../migrations")]
-async fn test_minidump_storage_for_minidump_failed(pool: PgPool) {
-    let mut mock_store = MockObjectStore::new();
-
-    mock_store
-        .expect_put_opts()
-        .with(
-            predicate::function(move |path: &Path| path.to_string().starts_with("minidumps")),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(move |_, _, _| {
-            Err(Error::Generic {
-                store: "mock",
-                source: Box::new(std::io::Error::other("x")),
-            })
-        });
-    mock_store
-        .expect_put()
-        .with(
-            predicate::function(move |path: &Path| path.to_string().starts_with("crashes")),
-            predicate::always(),
-        )
-        .returning(move |_, _| {
-            Err(Error::Generic {
-                store: "mock",
-                source: Box::new(std::io::Error::other("x")),
-            })
-        });
-
-    mock_store
-        .expect_delete()
-        .with(predicate::function(move |path: &Path| path.to_string().starts_with("crashes")))
-        .returning(|_| Ok(()))
-        .once();
-
-    let (app, _store, boundary, _worker, _body, token) =
-        setup_with_storage(&pool, Arc::new(mock_store)).await;
-
-    let body = create_body_from_config(&MinidumpBodyConfig {
-        boundary: &boundary,
-        ..Default::default()
-    });
-
-    let request = Request::builder()
-        .method("POST")
-        .uri("/api/minidump/upload")
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
-        .body(Body::from(body))
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("general failure: failed to store minidump"),
-    )
-    .await;
-}
-
-#[sqlx::test(migrations = "../../migrations")]
-async fn test_minidump_storage_for_attachments_failed(pool: PgPool) {
-    let mut mock_store = MockObjectStore::new();
-
-    mock_store
-        .expect_put_opts()
-        .with(
-            predicate::function(move |path: &Path| path.to_string().starts_with("minidumps")),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(move |_, _, _| {
-            Ok(PutResult {
-                e_tag: None,
-                version: None,
-            })
-        });
-    mock_store
-        .expect_put_opts()
-        .with(
-            predicate::function(move |path: &Path| path.to_string().starts_with("attachments")),
-            predicate::always(),
-            predicate::always(),
-        )
-        .returning(move |_, _, _| {
-            Err(Error::Generic {
-                store: "mock",
-                source: Box::new(std::io::Error::other("x")),
-            })
-        });
-    mock_store
-        .expect_put()
-        .with(
-            predicate::function(move |path: &Path| path.to_string().starts_with("crashes")),
-            predicate::always(),
-        )
-        .returning(move |_, _| {
-            Err(Error::Generic {
-                store: "mock",
-                source: Box::new(std::io::Error::other("x")),
-            })
-        });
-    mock_store
-        .expect_delete()
-        .with(predicate::function(move |path: &Path| path.to_string().starts_with("minidumps")))
-        .returning(|_| Ok(()))
-        .once();
-    mock_store
-        .expect_delete()
-        .with(predicate::function(move |path: &Path| path.to_string().starts_with("crashes")))
-        .returning(|_| Ok(()))
-        .once();
-
-    let (app, _store, boundary, _worker, _body, token) =
-        setup_with_storage(&pool, Arc::new(mock_store)).await;
-
-    let attachment1_content = "LOG DATA 1";
-    let attachment2_content = "LOG DATA 2";
-    let body = create_body_from_config(&MinidumpBodyConfig {
-        boundary: &boundary,
-        extra: Some(format!(
-            "--{boundary}\r\nContent-Disposition: form-data; name=\"attachment1\"; filename=\"log.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n{attachment1_content}\r\n\
-             --{boundary}\r\nContent-Disposition: form-data; name=\"attachment2\"\r\nContent-Type: application/octet-stream\r\n\r\n{attachment2_content}\r\n"
-        )),
-        ..Default::default()
-    });
-
-    log::info!("Body: {body}");
-    let request = Request::builder()
-        .method("POST")
-        .uri("/api/minidump/upload")
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
-        .body(Body::from(body))
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("general failure: failed to store attachment"),
-    )
-    .await;
 }

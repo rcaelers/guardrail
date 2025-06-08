@@ -212,4 +212,5 @@ minidumps:
     - "build_date"
   validation_script_files:
     - "scripts/product_validation.rhai"
-    - "scripts/build_age_validation.rhai"
+    - product: "^workrave$"
+      script: "scripts/build_age_validation.rhai"
