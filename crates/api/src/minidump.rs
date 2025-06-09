@@ -243,30 +243,24 @@ impl MinidumpApi {
         }
     }
 
-    #[instrument(skip(_tx, _api_token, state, crash_info), fields(crash_id = %crash_info.crash_id))]
-    async fn validate_crash<E>(
-        _tx: &mut E,
-        _api_token: &ApiToken,
-        state: &AppState,
-        crash_info: &mut CrashInfo,
-    ) -> Result<(), ApiError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
-        debug!(crash_id = %crash_info.crash_id, "Validating crash info");
+    #[instrument(skip(crash_info), fields(crash_id = %crash_info.crash_id))]
+    fn validate_minidump_presence(crash_info: &CrashInfo) -> Result<(), ApiError> {
+        debug!(crash_id = %crash_info.crash_id, "Validating minidump presence");
         if crash_info.minidump.is_none() {
             error!("No minidump found in submission");
             return Err(ApiError::Failure("no minidump found in submission".to_string()));
         }
+        Ok(())
+    }
 
-        let mandatory: Vec<String> = state
-            .settings
-            .minidumps
-            .mandatory_annotations
-            .clone()
-            .unwrap_or_default();
+    #[instrument(skip(crash_info, mandatory_annotations), fields(crash_id = %crash_info.crash_id))]
+    fn validate_mandatory_annotations(
+        crash_info: &CrashInfo,
+        mandatory_annotations: &[String],
+    ) -> Result<(), ApiError> {
+        debug!(crash_id = %crash_info.crash_id, "Validating mandatory annotations");
 
-        for required_field in mandatory.iter() {
+        for required_field in mandatory_annotations {
             let value = crash_info.annotations.get(required_field).cloned();
 
             if value.is_none() {
@@ -286,75 +280,126 @@ impl MinidumpApi {
             }
         }
 
-        if let Some(validation_scripts) = &state.settings.minidumps.validation_scripts {
-            for validation_script in validation_scripts {
-                match validation_script {
-                    common::settings::ValidationScript::Global(script_file) => {
-                        let script_file = format!("{}/{}", &state.settings.config_dir, script_file);
-                        debug!(script_file = %script_file, "Running global validation script");
-                        Self::validate_with_rhai_script(&script_file, crash_info)?;
-                    }
-                    common::settings::ValidationScript::ProductSpecific { product, script } => {
-                        if let Some(authorized_product) = &crash_info.authorized_product {
-                            match fancy_regex::Regex::new(product) {
-                                Ok(product_regex) => {
-                                    match product_regex.is_match(authorized_product) {
-                                        Ok(true) => {
-                                            let script_file = format!(
-                                                "{}/{}",
-                                                &state.settings.config_dir, script
-                                            );
-                                            debug!(
-                                                script_file = %script_file,
-                                                product_pattern = %product,
-                                                authorized_product = %authorized_product,
-                                                "Running product-specific validation script"
-                                            );
-                                            Self::validate_with_rhai_script(
-                                                &script_file,
-                                                crash_info,
-                                            )?;
-                                        }
-                                        Ok(false) => {
-                                            debug!(
-                                                product_pattern = %product,
-                                                authorized_product = %authorized_product,
-                                                "Product pattern does not match authorized product, skipping script"
-                                            );
-                                        }
-                                        Err(e) => {
-                                            error!(
-                                                error = %e,
-                                                product_pattern = %product,
-                                                "Failed to execute regex match for product pattern"
-                                            );
-                                            return Err(ApiError::Failure(format!(
-                                                "Invalid regex execution for product pattern '{product}': {e}"
-                                            )));
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    error!(
-                                        product_pattern = %product,
-                                        error = %e,
-                                        "Invalid regex pattern in product validation script configuration"
-                                    );
-                                    return Err(ApiError::Failure(format!(
-                                        "Invalid regex pattern '{product}' in validation script configuration: {e}"
-                                    )));
-                                }
-                            }
-                        } else {
-                            debug!(
-                                product_pattern = %product,
-                                "No authorized product found, skipping product-specific validation script"
-                            );
-                        }
-                    }
+        Ok(())
+    }
+
+    #[instrument(skip(crash_info, state), fields(crash_id = %crash_info.crash_id))]
+    fn run_global_validation_script(
+        crash_info: &mut CrashInfo,
+        state: &AppState,
+        script_file: &str,
+    ) -> Result<(), ApiError> {
+        let script_path = format!("{}/{}", &state.settings.config_dir, script_file);
+        debug!(script_file = %script_path, "Running global validation script");
+        Self::validate_with_rhai_script(&script_path, crash_info)
+    }
+
+    #[instrument(skip(crash_info, state), fields(crash_id = %crash_info.crash_id))]
+    fn run_product_specific_validation_script(
+        crash_info: &mut CrashInfo,
+        state: &AppState,
+        product_pattern: &str,
+        script_file: &str,
+    ) -> Result<(), ApiError> {
+        let Some(authorized_product) = &crash_info.authorized_product else {
+            debug!(
+                product_pattern = %product_pattern,
+                "No authorized product found, skipping product-specific validation script"
+            );
+            return Ok(());
+        };
+
+        let product_regex = fancy_regex::Regex::new(product_pattern).map_err(|e| {
+            error!(
+                product_pattern = %product_pattern,
+                error = %e,
+                "Invalid regex pattern in product validation script configuration"
+            );
+            ApiError::Failure(format!(
+                "Invalid regex pattern '{product_pattern}' in validation script configuration: {e}"
+            ))
+        })?;
+
+        let matches = product_regex.is_match(authorized_product).map_err(|e| {
+            error!(
+                error = %e,
+                product_pattern = %product_pattern,
+                "Failed to execute regex match for product pattern"
+            );
+            ApiError::Failure(format!(
+                "Invalid regex execution for product pattern '{product_pattern}': {e}"
+            ))
+        })?;
+
+        if matches {
+            let script_path = format!("{}/{}", &state.settings.config_dir, script_file);
+            debug!(
+                script_file = %script_path,
+                product_pattern = %product_pattern,
+                authorized_product = %authorized_product,
+                "Running product-specific validation script"
+            );
+            Self::validate_with_rhai_script(&script_path, crash_info)
+        } else {
+            debug!(
+                product_pattern = %product_pattern,
+                authorized_product = %authorized_product,
+                "Product pattern does not match authorized product, skipping script"
+            );
+            Ok(())
+        }
+    }
+
+    #[instrument(skip(crash_info, state), fields(crash_id = %crash_info.crash_id))]
+    fn run_validation_scripts(
+        crash_info: &mut CrashInfo,
+        state: &AppState,
+    ) -> Result<(), ApiError> {
+        debug!(crash_id = %crash_info.crash_id, "Running validation scripts");
+
+        let Some(validation_scripts) = &state.settings.minidumps.validation_scripts else {
+            return Ok(());
+        };
+
+        for validation_script in validation_scripts {
+            match validation_script {
+                common::settings::ValidationScript::Global(script_file) => {
+                    Self::run_global_validation_script(crash_info, state, script_file)?;
+                }
+                common::settings::ValidationScript::ProductSpecific { product, script } => {
+                    Self::run_product_specific_validation_script(
+                        crash_info, state, product, script,
+                    )?;
                 }
             }
         }
+
+        Ok(())
+    }
+
+    #[instrument(skip(_tx, _api_token, state, crash_info), fields(crash_id = %crash_info.crash_id))]
+    async fn validate_crash<E>(
+        _tx: &mut E,
+        _api_token: &ApiToken,
+        state: &AppState,
+        crash_info: &mut CrashInfo,
+    ) -> Result<(), ApiError>
+    where
+        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
+    {
+        debug!(crash_id = %crash_info.crash_id, "Validating crash info");
+
+        Self::validate_minidump_presence(crash_info)?;
+
+        let mandatory_annotations = state
+            .settings
+            .minidumps
+            .mandatory_annotations
+            .as_deref()
+            .unwrap_or_default();
+        Self::validate_mandatory_annotations(crash_info, mandatory_annotations)?;
+
+        Self::run_validation_scripts(crash_info, state)?;
 
         Ok(())
     }
