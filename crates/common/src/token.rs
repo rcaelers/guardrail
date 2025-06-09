@@ -1,5 +1,5 @@
 use argon2::{
-    Argon2,
+    Algorithm, Argon2, Params, Version,
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
@@ -14,7 +14,12 @@ const MIN_TOKEN_LEN: usize = UUID_LEN + 16;
 
 fn hash_secret(secret: &[u8]) -> Result<String, argon2::password_hash::Error> {
     let salt = SaltString::generate(&mut OsRng);
-    Argon2::default()
+
+    let params =
+        Params::new(32768, 2, 2, None).map_err(|_| argon2::password_hash::Error::PhcStringField)?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+
+    argon2
         .hash_password(secret, &salt)
         .map(|hash| hash.to_string())
 }
@@ -59,9 +64,13 @@ pub fn verify_api_secret(
     let parsed_hash =
         PasswordHash::new(stored_hash).map_err(|_| argon2::password_hash::Error::Password)?;
 
-    let verified = Argon2::default()
-        .verify_password(secret, &parsed_hash)
-        .is_ok();
+    // Use the same parameters for verification (though Argon2 will read them from the hash)
+    let params =
+        Params::new(32768, 2, 2, None).map_err(|_| argon2::password_hash::Error::PhcStringField)?;
+
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+
+    let verified = argon2.verify_password(secret, &parsed_hash).is_ok();
 
     Ok(verified)
 }
