@@ -32,7 +32,7 @@ services:
       PGRST_DB_URI: postgres://authenticator:wezei4Joozooz8To@postgresql:5432/guardrail
       PGRST_ADMIN_SERVER_PORT: 3001
       PGRST_OPENAPI_SERVER_PROXY_URI: http://127.0.0.1:3000
-      PGRST_DB_SCHEMAS: "guardrail"
+      PGRST_DB_SCHEMAS: "core"
       PGRST_DB_ANON_ROLE: "guardrail_anonymous"
       PGRST_JWT_SECRET: "@/ed25519-jwk.json"
       PGRST_LOG_LEVEL: "debug"
