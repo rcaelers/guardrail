@@ -90,7 +90,7 @@ async fn test_full_minidump_processing_flow(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -225,7 +225,7 @@ async fn test_missing_crash_id(pool: PgPool) {
 
     let crash_info = json!({
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -290,7 +290,7 @@ async fn test_invalid_crash_id(pool: PgPool) {
     let crash_info = json!({
         "crash_id": "invalid-uuid".to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -355,7 +355,7 @@ async fn test_minidump_not_found(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -420,7 +420,7 @@ async fn test_invalid_product_id(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": "nonexistent-product-id".to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -485,7 +485,7 @@ async fn test_product_id_not_found(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": "56be53ac-adfe-4f50-91a6-70ecbe6e7d0c",
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -550,7 +550,7 @@ async fn test_minidump_storage_id_missing(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -615,7 +615,7 @@ async fn test_minidump_storage_path_missing(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -680,7 +680,7 @@ async fn test_minidump_missing(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -739,7 +739,7 @@ async fn test_minidump_storage_id_invald(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -805,7 +805,7 @@ async fn test_atachment_missing_filename(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -870,7 +870,7 @@ async fn test_attachment_missing_content_type(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -935,7 +935,7 @@ async fn test_attachment_missing_size(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -1000,7 +1000,7 @@ async fn test_attachment_missing_storage_path(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -1064,7 +1064,7 @@ async fn test_annotation_value_wrong_type(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -1135,7 +1135,7 @@ async fn test_minidump_invalid(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -1205,7 +1205,7 @@ async fn test_minidump_attachment_db_failure(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -1275,7 +1275,7 @@ async fn test_minidump_annotation_db_failure(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),
@@ -1345,7 +1345,7 @@ async fn test_minidump_crash_db_failure(pool: PgPool) {
     let crash_info = json!({
         "crash_id": crash_id.to_string(),
         "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
-        "authorized_product": "TestProduct".to_string(),
+        "product": "TestProduct".to_string(),
         "product_id": product_id.to_string(),
         "product": "TestProduct".to_string(),
         "version": "1.0.0".to_string(),

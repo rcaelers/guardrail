@@ -33,7 +33,7 @@ struct Symbols {
 #[derive(Default, Debug, Serialize)]
 struct SymbolsInfo {
     submission_timestamp: String,
-    authorized_product: Option<String>,
+    product: Option<String>,
     annotations: std::collections::HashMap<String, String>,
     symbols: Option<Symbols>,
 }
@@ -351,10 +351,10 @@ impl SymbolsApi {
             )
         })?;
 
-        let authorized_product = get_product_by_id(&mut *tx, product_id).await?;
-        symbols_info.authorized_product = Some(authorized_product.name.clone());
+        let product = get_product_by_id(&mut *tx, product_id).await?;
+        symbols_info.product = Some(product.name.clone());
 
-        info!(product = %authorized_product.name, "Processing symbol for product");
+        info!(product = %product.name, "Processing symbol for product");
 
         while let Some(field) = multipart.next_field().await.map_err(|e| {
             error!(error = ?e, "Failed to get next multipart field");
@@ -380,7 +380,7 @@ impl SymbolsApi {
     ) -> Result<Json<SymbolsResponse>, ApiError> {
         let mut symbols_info = SymbolsInfo {
             submission_timestamp: chrono::Utc::now().to_rfc3339(),
-            authorized_product: None,
+            product: None,
             annotations: std::collections::HashMap::new(),
             ..Default::default()
         };

@@ -1,7 +1,7 @@
 // Test product specific validation script
 // This script validates basic test product requirements
 
-let product = crash_info.get("authorized_product");
+let product = crash_info.get("product");
 if product != "TestProduct" {
     throw(`Expected product 'TestProduct', got '${product}'`);
 }

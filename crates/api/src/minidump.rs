@@ -47,7 +47,7 @@ struct Attachment {
 struct CrashInfo {
     crash_id: uuid::Uuid,
     submission_timestamp: String,
-    authorized_product: Option<String>,
+    product: Option<String>,
     product_id: Option<uuid::Uuid>,
     minidump: Option<Minidump>,
     attachments: Vec<Attachment>,
@@ -301,7 +301,7 @@ impl MinidumpApi {
         product_pattern: &str,
         script_file: &str,
     ) -> Result<(), ApiError> {
-        let Some(authorized_product) = &crash_info.authorized_product else {
+        let Some(product) = &crash_info.product else {
             debug!(
                 product_pattern = %product_pattern,
                 "No authorized product found, skipping product-specific validation script"
@@ -320,7 +320,7 @@ impl MinidumpApi {
             ))
         })?;
 
-        let matches = product_regex.is_match(authorized_product).map_err(|e| {
+        let matches = product_regex.is_match(product).map_err(|e| {
             error!(
                 error = %e,
                 product_pattern = %product_pattern,
@@ -336,14 +336,14 @@ impl MinidumpApi {
             debug!(
                 script_file = %script_path,
                 product_pattern = %product_pattern,
-                authorized_product = %authorized_product,
+                product = %product,
                 "Running product-specific validation script"
             );
             Self::validate_with_rhai_script(&script_path, crash_info)
         } else {
             debug!(
                 product_pattern = %product_pattern,
-                authorized_product = %authorized_product,
+                product = %product,
                 "Product pattern does not match authorized product, skipping script"
             );
             Ok(())
@@ -437,13 +437,13 @@ impl MinidumpApi {
             )
         })?;
 
-        let authorized_product = get_product_by_id(&mut *tx, product_id).await?;
-        crash_info.authorized_product = Some(authorized_product.name.clone());
+        let product = get_product_by_id(&mut *tx, product_id).await?;
+        crash_info.product = Some(product.name.clone());
 
-        info!(product = %authorized_product.name, "Processing crash for product");
+        info!(product = %product.name, "Processing crash for product");
 
-        if !authorized_product.accepting_crashes {
-            return Err(ApiError::ProductNotAcceptingCrashes(authorized_product.name));
+        if !product.accepting_crashes {
+            return Err(ApiError::ProductNotAcceptingCrashes(product.name));
         }
 
         while let Some(field) = multipart.next_field().await.map_err(|e| {
@@ -490,7 +490,7 @@ impl MinidumpApi {
         let mut crash_info = CrashInfo {
             crash_id,
             submission_timestamp: chrono::Utc::now().to_rfc3339(),
-            authorized_product: None,
+            product: None,
             minidump: None,
             attachments: Vec::new(),
             annotations: HashMap::new(),
@@ -559,7 +559,7 @@ impl MinidumpApi {
 
         error!(crash_id = %crash_info.crash_id, error = %error_message, "Validation script returned failure");
         Err(ApiError::ValidationError(
-            crash_info.authorized_product.clone().unwrap_or_default(),
+            crash_info.product.clone().unwrap_or_default(),
             error_message,
         ))
     }
@@ -574,7 +574,7 @@ impl MinidumpApi {
             .ok_or_else(|| {
                 error!(crash_id = %crash_info.crash_id, "Validation result missing 'valid' field");
                 ApiError::ValidationError(
-                    crash_info.authorized_product.clone().unwrap_or_default(),
+                    crash_info.product.clone().unwrap_or_default(),
                     "Invalid validation result".to_string(),
                 )
             })
@@ -591,7 +591,7 @@ impl MinidumpApi {
         let map = result.try_cast::<rhai::Map>().ok_or_else(|| {
             error!(crash_id = %crash_info.crash_id, "Validation script must return a validation result");
             ApiError::ValidationError(
-                crash_info.authorized_product.clone().unwrap_or_default(),
+                crash_info.product.clone().unwrap_or_default(),
                 "Validation script failed".to_string(),
             )
         })?;
@@ -612,8 +612,8 @@ impl MinidumpApi {
         map.insert("crash_id".into(), crash_info.crash_id.to_string().into());
         map.insert("submission_timestamp".into(), crash_info.submission_timestamp.clone().into());
 
-        if let Some(ref product) = crash_info.authorized_product {
-            map.insert("authorized_product".into(), product.clone().into());
+        if let Some(ref product) = crash_info.product {
+            map.insert("product".into(), product.clone().into());
         }
 
         if let Some(ref product_id) = crash_info.product_id {
@@ -707,7 +707,7 @@ impl MinidumpApi {
             Err(e) => {
                 error!(crash_id = %crash_info.crash_id, error = %e, "Rhai validation script execution failed");
                 Err(ApiError::ValidationError(
-                    crash_info.authorized_product.clone().unwrap_or_default(),
+                    crash_info.product.clone().unwrap_or_default(),
                     "Validation script failed".to_string(),
                 ))
             }
@@ -727,7 +727,7 @@ mod tests {
         let mut crash_info = CrashInfo {
             crash_id: uuid::Uuid::new_v4(),
             submission_timestamp: "2023-01-01T00:00:00Z".to_string(),
-            authorized_product: Some("TestProduct".to_string()),
+            product: Some("TestProduct".to_string()),
             product_id: Some(uuid::Uuid::new_v4()),
             minidump: None,
             attachments: vec![],
