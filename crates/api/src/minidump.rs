@@ -486,6 +486,7 @@ impl MinidumpApi {
         }))
     }
 
+    #[instrument(skip(scope, crash_info), fields(crash_id = %crash_info.crash_id))]
     fn handle_validation_success(
         scope: &mut rhai::Scope,
         crash_info: &mut CrashInfo,
@@ -504,6 +505,7 @@ impl MinidumpApi {
         Ok(())
     }
 
+    #[instrument(skip(map, crash_info), fields(crash_id = %crash_info.crash_id))]
     fn handle_validation_failure(map: &rhai::Map, crash_info: &CrashInfo) -> Result<(), ApiError> {
         let error_message = map
             .get("error")
@@ -517,6 +519,7 @@ impl MinidumpApi {
         ))
     }
 
+    #[instrument(skip(map, crash_info), fields(crash_id = %crash_info.crash_id))]
     fn extract_validation_result(
         map: &rhai::Map,
         crash_info: &CrashInfo,
@@ -532,6 +535,7 @@ impl MinidumpApi {
             })
     }
 
+    #[instrument(skip(result, scope, crash_info), fields(crash_id = %crash_info.crash_id))]
     fn handle_validation_result(
         result: rhai::Dynamic,
         scope: &mut rhai::Scope,
@@ -556,6 +560,7 @@ impl MinidumpApi {
         }
     }
 
+    #[instrument(skip(crash_info), fields(crash_id = %crash_info.crash_id))]
     fn convert_crash_info_to_rhai_map(crash_info: &CrashInfo) -> rhai::Map {
         let mut map = rhai::Map::new();
 
@@ -595,6 +600,7 @@ impl MinidumpApi {
         map
     }
 
+    #[instrument(fields(crash_id = %crash_id))]
     fn create_rhai_engine(crash_id: uuid::Uuid) -> Engine {
         let mut engine = Engine::new();
         engine.build_type::<TrackedAnnotations>();
@@ -634,6 +640,7 @@ impl MinidumpApi {
         engine
     }
 
+    #[instrument(skip(script_path, crash_info), fields(crash_id = %crash_info.crash_id))]
     fn validate_with_rhai_script(
         script_path: &str,
         crash_info: &mut CrashInfo,
@@ -700,11 +707,19 @@ mod tests {
 
         // Test script that uses crash_info.annotations as TrackedAnnotations
         let script = r#"
+            fn check(crash_info, annotations) {
+                annotations["check_product1"] = "pending";
+            }
+
             // Test that we can read existing annotations with bracket notation
             let existing = crash_info.annotations["existing_key"];
 
             // Test that we can write to annotations with bracket notation
             crash_info.annotations["script_key"] = "script_value";
+
+            let annotations = crash_info["annotations"];
+            annotations["check_product2"] = "pending";
+            check(crash_info, annotations);
 
             // Test that we can read the value we just wrote
             let script_val = crash_info.annotations["script_key"];

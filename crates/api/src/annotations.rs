@@ -1,6 +1,8 @@
 use rhai::{CustomType, TypeBuilder};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
+use tracing::{debug, instrument};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnnotationEntry {
@@ -10,67 +12,130 @@ pub struct AnnotationEntry {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct TrackedAnnotations {
+    data: Arc<Mutex<TrackedAnnotationsData>>,
+}
+
+#[derive(Debug, Serialize)]
+struct TrackedAnnotationsData {
     original: HashMap<String, AnnotationEntry>,
     modified: HashMap<String, AnnotationEntry>,
 }
 
 impl TrackedAnnotations {
     pub fn new() -> Self {
+        debug!("Creating new TrackedAnnotations instance");
         Self {
-            original: HashMap::new(),
-            modified: HashMap::new(),
+            data: Arc::new(Mutex::new(TrackedAnnotationsData {
+                original: HashMap::new(),
+                modified: HashMap::new(),
+            })),
         }
     }
 
     pub fn from_map(annotations: HashMap<String, AnnotationEntry>) -> Self {
         Self {
-            original: annotations,
-            modified: HashMap::new(),
+            data: Arc::new(Mutex::new(TrackedAnnotationsData {
+                original: annotations,
+                modified: HashMap::new(),
+            })),
         }
     }
 
-    pub fn get(&self, key: &str) -> Option<&AnnotationEntry> {
-        self.modified.get(key).or_else(|| self.original.get(key))
+    pub fn get(&self, key: &str) -> Option<AnnotationEntry> {
+        match self.data.lock() {
+            Ok(data) => data.modified.get(key)
+                .or_else(|| data.original.get(key))
+                .cloned(),
+            Err(_) => {
+                debug!("Failed to lock TrackedAnnotations for get operation");
+                None
+            }
+        }
     }
 
-    pub fn set(&mut self, key: String, value: String) {
+    #[instrument()]
+    pub fn set(&self, key: String, value: String) {
+        debug!("Setting script annotation: {} = {}", key, value);
         let entry = AnnotationEntry {
             value,
             source: "script".to_string(),
         };
-        self.modified.insert(key, entry);
+        match self.data.lock() {
+            Ok(mut data) => {
+                data.modified.insert(key, entry);
+                debug!("({} modified entries)", data.modified.len());
+            }
+            Err(_) => {
+                debug!("Failed to lock TrackedAnnotations for set operation");
+            }
+        }
     }
 
-    pub fn remove(&mut self, key: &str) -> Option<AnnotationEntry> {
-        self.modified.remove(key)
+    pub fn remove(&self, key: &str) -> Option<AnnotationEntry> {
+        match self.data.lock() {
+            Ok(mut data) => data.modified.remove(key),
+            Err(_) => {
+                debug!("Failed to lock TrackedAnnotations for remove operation");
+                None
+            }
+        }
     }
 
     pub fn keys(&self) -> Vec<String> {
-        let mut all_keys: HashSet<String> = HashSet::new();
-        for key in self.original.keys() {
-            all_keys.insert(key.clone());
+        match self.data.lock() {
+            Ok(data) => {
+                let mut all_keys: HashSet<String> = HashSet::new();
+                for key in data.original.keys() {
+                    all_keys.insert(key.clone());
+                }
+                for key in data.modified.keys() {
+                    all_keys.insert(key.clone());
+                }
+                all_keys.into_iter().collect()
+            }
+            Err(_) => {
+                debug!("Failed to lock TrackedAnnotations for keys operation");
+                Vec::new()
+            }
         }
-        for key in self.modified.keys() {
-            all_keys.insert(key.clone());
-        }
-        all_keys.into_iter().collect()
     }
 
+    #[instrument()]
     pub fn finalize(self) -> HashMap<String, AnnotationEntry> {
-        let mut result = self.original;
-        for (key, value) in self.modified {
-            result.insert(key, value);
+        debug!("Finalizing annotations");
+        match self.data.lock() {
+            Ok(data) => {
+                let mut result = data.original.clone();
+                for (key, value) in &data.modified {
+                    result.insert(key.clone(), value.clone());
+                }
+                result
+            }
+            Err(_) => {
+                debug!("Failed to lock TrackedAnnotations for finalize operation");
+                HashMap::new()
+            }
         }
-        result
     }
 
+    #[instrument()]
     pub fn was_modified(&self) -> bool {
-        !self.modified.is_empty()
+        match self.data.lock() {
+            Ok(data) => {
+                debug!("Checking if annotations were modified ({} modified entries)", data.modified.len());
+                !data.modified.is_empty()
+            }
+            Err(_) => {
+                debug!("Failed to lock TrackedAnnotations for was_modified operation");
+                false
+            }
+        }
     }
 }
 
 impl Default for TrackedAnnotations {
     fn default() -> Self {
+        debug!("Creating default TrackedAnnotations instance");
         Self::new()
     }
 }
@@ -82,10 +147,11 @@ impl CustomType for TrackedAnnotations {
             .with_fn("get", |annotations: &mut Self, key: String| {
                 annotations
                     .get(&key)
-                    .map(|entry| entry.value.clone())
+                    .map(|entry| entry.value)
                     .unwrap_or_default()
             })
             .with_fn("set", |annotations: &mut Self, key: String, value: String| {
+                debug!("Setting annotation set: {} = {}", key, value);
                 annotations.set(key, value);
             })
             .with_fn("remove", |annotations: &mut Self, key: String| {
@@ -97,12 +163,14 @@ impl CustomType for TrackedAnnotations {
             .with_fn("keys", |annotations: &mut Self| annotations.keys())
             .with_fn("has", |annotations: &mut Self, key: String| annotations.get(&key).is_some())
             .with_indexer_get(|annotations: &mut Self, key: String| {
+                debug!("Getting annotation: {}", key);
                 annotations
                     .get(&key)
-                    .map(|entry| entry.value.clone())
+                    .map(|entry| entry.value)
                     .unwrap_or_default()
             })
             .with_indexer_set(|annotations: &mut Self, key: String, value: String| {
+                debug!("Setting annotation: {} = {}", key, value);
                 annotations.set(key, value);
             });
     }
@@ -120,7 +188,7 @@ mod tests {
         engine.build_type::<TrackedAnnotations>();
 
         // Create a tracked annotations instance
-        let mut tracked = TrackedAnnotations::new();
+        let tracked = TrackedAnnotations::new();
         tracked.set("initial_key".to_string(), "initial_value".to_string());
 
         // Create a scope with the annotations
@@ -201,7 +269,7 @@ mod tests {
         );
 
         // Create TrackedAnnotations from original map
-        let mut tracked = TrackedAnnotations::from_map(original_annotations);
+        let tracked = TrackedAnnotations::from_map(original_annotations);
 
         // Add a new annotation
         tracked.set("new_key".to_string(), "new_value".to_string());
@@ -233,7 +301,7 @@ mod tests {
             ),
         ]);
 
-        let mut tracked = TrackedAnnotations::from_map(original);
+        let tracked = TrackedAnnotations::from_map(original);
 
         // Test getting existing values
         assert_eq!(tracked.get("key1").unwrap().value, "value1");
