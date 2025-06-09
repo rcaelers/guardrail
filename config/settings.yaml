@@ -209,8 +209,7 @@ minidumps:
   mandatory_annotations:
     - "product"
     - "version"
-    - "build_date"
-  validation_script_files:
+  validation_scripts:
     - "scripts/product_validation.rhai"
-    - product: "^workrave$"
+    - product: "^Workrave$"
       script: "scripts/build_age_validation.rhai"
