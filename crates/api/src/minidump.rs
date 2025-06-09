@@ -439,6 +439,7 @@ impl MinidumpApi {
 
         let product = get_product_by_id(&mut *tx, product_id).await?;
         crash_info.product = Some(product.name.clone());
+        crash_info.product_id = Some(product.id);
 
         info!(product = %product.name, "Processing crash for product");
 
