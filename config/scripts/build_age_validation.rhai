@@ -25,6 +25,9 @@ fn check_build_age(annotations) {
     let now = timestamp();
     let max_age_ago = now - (max_age_days * 24 * 60 * 60);
 
+    let age = now - build_timestamp;
+    annotations["age"] = age.to_string();
+
     debug("Checking build timestamp " + build_timestamp + " against threshold " + max_age_ago);
 
     if build_timestamp < max_age_ago {

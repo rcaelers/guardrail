@@ -277,7 +277,7 @@ async fn test_minidump_upload_ok(pool: PgPool) {
     let crash_info: serde_json::Value =
         serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
-    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 5);
+    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 6);
     assert_eq!(
         crash_info["annotations"]["product"]["value"]
             .as_str()
@@ -361,7 +361,7 @@ async fn test_minidump_upload_ok_without_filename(pool: PgPool) {
     let crash_info: serde_json::Value =
         serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
-    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 5);
+    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 6);
     assert_eq!(
         crash_info["annotations"]["product"]["value"]
             .as_str()
@@ -494,7 +494,7 @@ async fn test_minidump_upload_with_attachments_ok(pool: PgPool) {
             .unwrap(),
         "2025-05-15T20:26:15+02:00"
     );
-    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 5);
+    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 6);
     assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 2);
 
     let minidump = crash_info["minidump"]["storage_path"]
@@ -610,7 +610,7 @@ async fn test_minidump_upload_with_annotations_ok(pool: PgPool) {
     let crash_info: serde_json::Value =
         serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
-    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 7);
+    assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 8);
     assert_eq!(
         crash_info["annotations"]["product"]["value"]
             .as_str()
