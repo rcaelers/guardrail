@@ -96,7 +96,7 @@ impl GuardrailJobs {
         );
 
         if let Err(e) =
-            maintenance::MaintenanceJob::run_all_maintenance_tasks(state.clone(), pg.clone()).await
+            maintenance::MaintenanceJob::run_all_maintenance_tasks(state.clone(), &pg).await
         {
             error!("Failed to run startup maintenance tasks: {}", e);
         }

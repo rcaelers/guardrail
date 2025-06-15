@@ -6,10 +6,12 @@ use tracing::{error, info};
 use crate::{jobs::MinidumpJob, state::AppState};
 
 pub mod database_vacuum;
+pub mod job_cleaner;
 pub mod orphaned_attachment_cleaner;
 pub mod orphaned_minidump_cleaner;
 
 pub use database_vacuum::DatabaseVacuum;
+pub use job_cleaner::JobCleaner;
 pub use orphaned_attachment_cleaner::OrphanedAttachmentCleaner;
 pub use orphaned_minidump_cleaner::OrphanedMinidumpCleaner;
 
@@ -24,17 +26,18 @@ impl MaintenanceJob {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let app_state = (*app_state).clone();
         let pg = (*pg).clone();
-        Self::run_all_maintenance_tasks(app_state, pg).await?;
+
+        Self::run_all_maintenance_tasks(app_state, &pg).await?;
         Ok(())
     }
 
     pub async fn run_all_maintenance_tasks(
         app_state: AppState,
-        pg: PostgresStorage<MinidumpJob>,
+        pg: &PostgresStorage<MinidumpJob>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         info!("Starting all maintenance tasks");
 
-        if let Err(e) = DatabaseVacuum::run(pg).await {
+        if let Err(e) = DatabaseVacuum::run(pg.clone()).await {
             error!("Failed to run database vacuum: {}", e);
         }
 
@@ -44,6 +47,10 @@ impl MaintenanceJob {
 
         if let Err(e) = OrphanedAttachmentCleaner::run(&app_state).await {
             error!("Failed to remove orphaned S3 attachments: {}", e);
+        }
+
+        if let Err(e) = JobCleaner::run(&app_state, pg).await {
+            error!("Failed to run Apalis job cleaner: {}", e);
         }
 
         info!("Completed all maintenance tasks");
