@@ -7,16 +7,19 @@ pub enum JobError {
     #[error("internal failure")]
     InternalFailure(),
 
-    #[error("general failure")]
+    #[error("general failure: `{0}'")]
     Failure(String),
 
-    #[error("database error: `{0}`")]
+    #[error("database error: `{0}'")]
     RepoError(#[from] repos::error::RepoError),
 
-    #[error("failed to process minidump: `{0}`")]
+    #[error("storage error: `{0}'")]
+    StorageError(#[from] object_store::Error),
+
+    #[error("failed to process minidump: `{0}'")]
     MinidumpError(#[from] minidump::Error),
 
-    #[error("failed to process minidump: `{0}`")]
+    #[error("failed to process minidump: `{0}'")]
     MinidumpProcessError(#[from] ProcessError),
 
     #[error("Regex error: {0}")]

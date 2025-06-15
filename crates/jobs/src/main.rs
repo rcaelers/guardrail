@@ -1,5 +1,8 @@
-use apalis::layers::retry::RetryPolicy;
+use apalis::layers::retry::HasherRng;
+use apalis::layers::retry::backoff::MakeBackoff;
+use apalis::layers::retry::{RetryPolicy, backoff::ExponentialBackoffMaker};
 use apalis::prelude::*;
+use apalis_cron::{CronStream, Schedule};
 use apalis_sql::{
     Config,
     postgres::{PgListen, PostgresStorage},
@@ -7,15 +10,12 @@ use apalis_sql::{
 use axum::{Router, extract::State, http::StatusCode, routing::get};
 use clap::Parser;
 use common::{init_logging, settings::Settings};
-use jobs::{
-    minidump::MinidumpProcessor,
-    state::AppState,
-};
+use jobs::{maintenance, minidump::MinidumpProcessor, state::AppState};
 use repos::Repo;
 use sqlx::ConnectOptions;
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, str::FromStr, sync::Arc, time::Duration};
 use tower_http::{timeout::TimeoutLayer, trace::TraceLayer};
 use tracing::{debug, error, info};
 
@@ -68,10 +68,18 @@ impl GuardrailJobs {
 
         async {
             let addr = SocketAddr::from(([0, 0, 0, 0], self.settings.job_server.port));
-            axum_server::bind(addr)
-                .serve(routes_all.into_make_service())
-                .await
-                .unwrap()
+            let server = axum_server::bind(addr).serve(routes_all.into_make_service());
+
+            tokio::select! {
+                result = server => {
+                    if let Err(err) = result {
+                        error!("HTTP server error: {}", err);
+                    }
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    info!("HTTP server shutting down gracefully");
+                }
+            }
         }
     }
 
@@ -86,6 +94,13 @@ impl GuardrailJobs {
             worker_db.clone(),
             Config::new("guardrail::Jobs").set_poll_interval(std::time::Duration::from_secs(5)),
         );
+
+        if let Err(e) =
+            maintenance::MaintenanceJob::run_all_maintenance_tasks(state.clone(), pg.clone()).await
+        {
+            error!("Failed to run startup maintenance tasks: {}", e);
+        }
+
         let mut listener = PgListen::new(worker_db)
             .await
             .expect("Failed to create listener");
@@ -101,12 +116,35 @@ impl GuardrailJobs {
         async move {
             Monitor::new()
                 .register({
+                    let backoff = ExponentialBackoffMaker::new(
+                        Duration::from_millis(1000),
+                        Duration::from_millis(5000),
+                        1.25,
+                        HasherRng::default(),
+                    )
+                    .expect("Failed to create backoff")
+                    .make_backoff();
+
                     WorkerBuilder::new("minidump")
                         .data(state.clone())
-                        .retry(RetryPolicy::retries(5))
+                        .retry(RetryPolicy::retries(5).with_backoff(backoff))
                         .enable_tracing()
-                        .backend(pg)
+                        .concurrency(2)
+                        .backend(pg.clone())
                         .build_fn(MinidumpProcessor::process)
+                })
+                .register({
+                    let maintenance_schedule = Schedule::from_str("0 0 2 * * * *")
+                        .expect("Invalid cron schedule for maintenance");
+
+                    WorkerBuilder::new("maintenance")
+                        .data(state.clone())
+                        .data(pg.clone())
+                        .enable_tracing()
+                        .backend(CronStream::<jobs::maintenance::MaintenanceJob, _>::new(
+                            maintenance_schedule,
+                        ))
+                        .build_fn(jobs::maintenance::MaintenanceJob::run_maintenance_tasks)
                 })
                 .on_event(|e| debug!("Apalis event: {e}"))
                 .run_with_signal(async {
@@ -115,7 +153,8 @@ impl GuardrailJobs {
                     Ok(())
                 })
                 .await
-                .expect("Failed to run the monitor")
+                .expect("Failed to run the monitor");
+            info!("Guardrail Jobs server ends");
         }
     }
 
@@ -133,9 +172,11 @@ impl GuardrailJobs {
             storage: store,
         };
 
+        info!("Guardrail Jobs server is starting");
         let http = self.run_http(state.clone());
         let apalis = self.run_apalis(state.clone());
-        let _res = tokio::join!(http, apalis);
+        let (_http_result, _apalis_result) = tokio::join!(http.await, apalis.await);
+        info!("Guardrail Jobs server has stopped");
     }
 
     async fn init_guardrail_db(&self) -> Result<PgPool, sqlx::Error> {

@@ -8,7 +8,7 @@ use minidump_unwind::{
 use object_store::{ObjectStore, path::Path};
 use repos::{Repo, symbols::SymbolsRepo};
 use std::{path::PathBuf, sync::Arc};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 pub fn s3_symbol_supplier(storage: Arc<dyn ObjectStore>, repo: Repo) -> impl SymbolSupplier {
     S3SymbolSupplier::new(storage, repo)
@@ -41,13 +41,13 @@ impl S3SymbolSupplier {
         )
         .await
         .map_err(|err| {
-            error!(
+            warn!(
                 "Failed to retrieve symbols for build_id: {build_id}, module_id: {module_id}: {err}"
             );
             SymbolError::NotFound
         })?
         .ok_or_else(|| {
-            error!(
+            warn!(
                 "Failed to retrieve symbols for build_id: {build_id}, module_id: {module_id}"
             );
             SymbolError::NotFound

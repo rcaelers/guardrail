@@ -46,6 +46,7 @@ breakpad-symbols.workspace = true
 # Misc
 apalis-sql.workspace = true
 apalis.workspace = true
+apalis-cron.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
 chrono.workspace = true

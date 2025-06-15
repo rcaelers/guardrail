@@ -188,6 +188,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "apalis-cron"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d870929af161c4ce10d22e26aea952d48101a79cf186a481561dbea24bb248b3"
+dependencies = [
+ "apalis-core",
+ "async-stream",
+ "chrono",
+ "cron",
+ "futures",
+ "tower",
+]
+
+[[package]]
 name = "apalis-sql"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -853,9 +867,9 @@ checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chrono"
-version = "0.4.41"
+version = "0.4.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c469d952047f47f91b68d1cba3f10d63c11d73e4636f24f08daf0278abf01c4d"
+checksum = "1a7964611d71df112cb1730f2ee67324fcf4d0fc6606acbbe9bfe06df124637c"
 dependencies = [
  "android-tzdata",
  "iana-time-zone",
@@ -885,9 +899,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.39"
+version = "4.5.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd60e63e9be68e5fb56422e397cf9baddded06dae1d2e523401542383bc72a9f"
+checksum = "40b6887a1d8685cebccf115538db5c0efe625ccac9696ad45c409d96566e910f"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -895,9 +909,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.39"
+version = "4.5.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89cc6392a1f72bbeb820d71f32108f61fdaf18bc526e1d23954168a67759ef51"
+checksum = "e0c66c08ce9f0c698cbce5c0279d0bb6ac936d8674174fe48f736533b964f59e"
 dependencies = [
  "anstream",
  "anstyle",
@@ -907,9 +921,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.5.32"
+version = "4.5.40"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "09176aae279615badda0765c0c0b3f6ed53f4709118af73cf4655d85d1530cd7"
+checksum = "d2c7947ae4cc3d851207c1adb5b5e260ff0cca11446b1d6d1423788e442257ce"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -1016,7 +1030,7 @@ dependencies = [
  "serde",
  "serde_json",
  "toml",
- "winnow",
+ "winnow 0.7.1",
  "yaml-rust2",
 ]
 
@@ -1174,6 +1188,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a97769d94ddab943e4510d138150169a2758b5ef3eb191a9ee688de3e23ef7b3"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "cron"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5877d3fbf742507b66bc2a1945106bd30dd8504019d596901ddd012a4dd01740"
+dependencies = [
+ "chrono",
+ "once_cell",
+ "winnow 0.6.26",
 ]
 
 [[package]]
@@ -1531,9 +1556,9 @@ dependencies = [
 
 [[package]]
 name = "enumflags2"
-version = "0.7.11"
+version = "0.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba2f4b465f5318854c6f8dd686ede6c0a9dc67d4b1ac241cf0eb51521a309147"
+checksum = "1027f7680c853e056ebcec683615fb6fbbc07dbaa13b4d5d9442b146ded4ecef"
 dependencies = [
  "enumflags2_derive",
  "serde",
@@ -1541,9 +1566,9 @@ dependencies = [
 
 [[package]]
 name = "enumflags2_derive"
-version = "0.7.11"
+version = "0.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc4caf64a58d7a6d65ab00639b046ff54399a39f5f2554728895ace4b297cd79"
+checksum = "67c78a4d8fdf9953a5c9d458f9efe940fd97a0cab0941c075a813ac594733827"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2687,6 +2712,7 @@ name = "jobs"
 version = "0.1.0"
 dependencies = [
  "apalis",
+ "apalis-cron",
  "apalis-sql",
  "argon2",
  "async-trait",
@@ -2985,8 +3011,9 @@ dependencies = [
 
 [[package]]
 name = "leptos-struct-table"
-version = "0.14.0-beta3"
-source = "git+https://github.com/rcaelers/leptos-struct-table.git?branch=leptos-0.8#c7b8357dba92bf1a495ff90c9b4e196f4b9dad74"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4eb35803b56447f627ad24a3e524ee5fadce6d951ff735cc70e51e02a4c8078"
 dependencies = [
  "chrono",
  "leptos",
@@ -3002,9 +3029,9 @@ dependencies = [
 
 [[package]]
 name = "leptos-struct-table-macro"
-version = "0.13.0-beta2"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f532e98aabb7a52784f24a04612826d2c1f81ea70014709db92a8126bfe13b1"
+checksum = "c32e02c79e8bf8eb6f9b8bbeab8e92e9a1695359afb85119fe7252449789579d"
 dependencies = [
  "darling",
  "heck 0.4.1",
@@ -3015,9 +3042,9 @@ dependencies = [
 
 [[package]]
 name = "leptos-use"
-version = "0.16.0-beta2"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68e9c37c9c2e5e01567b2f88b70a7cde9fe48b975318339ad5a0f2f386b81553"
+checksum = "5ad239353dc658c7b7e1e33aaf5c9ff975aca3b3b2c3e9082e9f9582ef8fea42"
 dependencies = [
  "cfg-if",
  "chrono",
@@ -3703,9 +3730,9 @@ dependencies = [
 
 [[package]]
 name = "object_store"
-version = "0.12.1"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d94ac16b433c0ccf75326388c893d2835ab7457ea35ab8ba5d745c053ef5fa16"
+checksum = "7781f96d79ed0f961a7021424ab01840efbda64ae7a505aaea195efc91eaaec4"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -5996,7 +6023,7 @@ dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "winnow",
+ "winnow 0.7.1",
 ]
 
 [[package]]
@@ -6972,6 +6999,15 @@ name = "windows_x86_64_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "589f6da84c646204747d1270a2a5661ea66ed1cced2631d546fdfb155959f9ec"
+
+[[package]]
+name = "winnow"
+version = "0.6.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e90edd2ac1aa278a5c4599b1d89cf03074b610800f866d4026dc199d7929a28"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "winnow"

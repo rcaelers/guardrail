@@ -217,6 +217,106 @@ async fn test_full_minidump_processing_flow(pool: PgPool) {
 }
 
 #[sqlx::test(migrations = "../../migrations")]
+async fn test_cleanup_after_successful_processing(pool: PgPool) {
+    let store = Arc::new(object_store::memory::InMemory::new());
+    let (product_id, attachment_id) = setup(&pool, store.clone()).await;
+
+    let crash_id = Uuid::new_v4();
+
+    let crash_info = json!({
+        "crash_id": crash_id.to_string(),
+        "submission_timestamp": "2023-10-01T12:00:00Z".to_string(),
+        "product": "TestProduct".to_string(),
+        "product_id": product_id.to_string(),
+        "product": "TestProduct".to_string(),
+        "version": "1.0.0".to_string(),
+        "channel": "stable".to_string(),
+        "commit": "abcdef1234567890".to_string(),
+        "build_id": "EE9E2672A6863B084C4C44205044422E1".to_string(),
+        "minidump": {
+            "filename": "test.dmp".to_string(),
+            "content_type": "application/octet-stream".to_string(),
+            "size": 1024,
+            "storage_path": "minidumps/6fda4029-be94-43ea-90b6-32fe2a78074a".to_string(),
+            "storage_id": "6fda4029-be94-43ea-90b6-32fe2a78074a".to_string()
+        },
+        "attachments": [
+            {
+                "filename": "init.sh".to_string(),
+                "content_type": "application/octet-stream".to_string(),
+                "size": 1234,
+                "storage_path": format!("attachments/{attachment_id}"),
+                "storage_id": attachment_id.to_string()
+            }
+
+        ],
+        "annotations": {
+          "user_id": { "value": "12345", "source": "submission" },
+          "session_id": { "value": "67890", "source": "submission" }
+        },
+    });
+
+    // Put crash_info in storage (minidump and symbols are already uploaded by setup)
+    let crash_info_path = format!("crashes/{crash_id}.json");
+    let minidump_path = "minidumps/6fda4029-be94-43ea-90b6-32fe2a78074a";
+
+    store
+        .put(&Path::from(crash_info_path.as_str()), serde_json::to_vec(&crash_info).unwrap().into())
+        .await
+        .expect("Failed to put crash_info");
+
+    // Verify files exist before processing
+    assert!(
+        store
+            .get(&Path::from(crash_info_path.as_str()))
+            .await
+            .is_ok(),
+        "crash_info file should exist before processing"
+    );
+    assert!(
+        store.get(&Path::from(minidump_path)).await.is_ok(),
+        "minidump file should exist before processing"
+    );
+
+    let job = MinidumpJob { crash: crash_info };
+
+    let app_state = Data::new(AppState {
+        repo: Repo::new(pool.clone()),
+        storage: store.clone(),
+        settings: Arc::new(Settings::default()),
+    });
+
+    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
+
+    let result = MinidumpProcessor::process(job, worker, app_state).await;
+
+    assert!(result.is_ok(), "Processing should succeed");
+
+    // Verify files are cleaned up after successful processing
+    assert!(
+        store
+            .get(&Path::from(crash_info_path.as_str()))
+            .await
+            .is_err(),
+        "crash_info file should be deleted after processing"
+    );
+    assert!(
+        store.get(&Path::from(minidump_path)).await.is_err(),
+        "minidump file should be deleted after processing"
+    );
+
+    // Verify database records still exist
+    let crash = CrashRepo::get_by_id(&pool, crash_id)
+        .await
+        .expect("Failed to get crash")
+        .expect("Crash not found");
+    assert_eq!(
+        crash.minidump,
+        Some(Uuid::parse_str("6fda4029-be94-43ea-90b6-32fe2a78074a").unwrap())
+    );
+}
+
+#[sqlx::test(migrations = "../../migrations")]
 async fn test_missing_crash_id(pool: PgPool) {
     let store = Arc::new(object_store::memory::InMemory::new());
     let (product_id, attachment_id) = setup(&pool, store.clone()).await;
@@ -1023,8 +1123,8 @@ async fn test_attachment_missing_storage_path(pool: PgPool) {
 
         ],
         "annotations": {
-          "user_id": {"value": "12345", "source": "submission"},
-          "session_id": {"value": "67890", "source": "submission"}
+          "user_id": { "value": "12345", "source": "submission" },
+          "session_id": { "value": "67890", "source": "submission" }
         },
     });
 

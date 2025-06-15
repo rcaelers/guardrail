@@ -7,7 +7,7 @@ use object_store::{ObjectStore, path::Path};
 use serde_json::Value;
 use sqlx::Postgres;
 use std::sync::Arc;
-use tracing::{error, info};
+use tracing::{debug, error, info, instrument};
 
 use crate::{
     error::JobError,
@@ -64,6 +64,7 @@ impl MinidumpProcessor {
         }
     }
 
+    #[instrument(skip(self, crash_info), fields(crash_id = %crash_info["crash_id"]))]
     async fn generate_signature(&self, crash_info: &serde_json::Value) -> Result<String, JobError> {
         let crashing_thread = crash_info
             .get("crashing_thread")
@@ -77,11 +78,13 @@ impl MinidumpProcessor {
         Ok(signature)
     }
 
+    #[instrument(skip(self, crash_info), fields(crash_id = %crash_info["crash_id"]))]
     async fn handle_job(
         &self,
         crash_id: uuid::Uuid,
         mut crash_info: serde_json::Value,
     ) -> Result<(), JobError> {
+        info!("Processor handling job: {}", crash_id);
         let mut tx = self.repo.begin_admin().await?;
 
         let minidump_path = crash_info["minidump"]["storage_path"]
@@ -126,6 +129,7 @@ impl MinidumpProcessor {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     async fn get_minidump_object(&self, path: &str) -> Result<Bytes, JobError> {
         let object = self.storage.get(&Path::from(path)).await.map_err(|err| {
             error!("Failed to get minidump object: {err}");
@@ -139,6 +143,7 @@ impl MinidumpProcessor {
         Ok(data)
     }
 
+    #[instrument(skip(tx, crash_info, report))]
     async fn create_crash<E>(
         tx: &mut E,
         crash_id: uuid::Uuid,
@@ -190,6 +195,7 @@ impl MinidumpProcessor {
         Ok(id)
     }
 
+    #[instrument(skip(tx, crash_info))]
     async fn create_annotations<E>(
         tx: &mut E,
         crash_id: uuid::Uuid,
@@ -244,6 +250,7 @@ impl MinidumpProcessor {
         Ok(())
     }
 
+    #[instrument(skip(tx, crash_info))]
     async fn create_attachments<E>(
         tx: &mut E,
         crash_id: uuid::Uuid,
@@ -291,11 +298,13 @@ impl MinidumpProcessor {
         Ok(())
     }
 
+    #[instrument(skip(job, _worker, state), fields(crash_id = %job.crash["crash_id"]))]
     pub async fn process(
         job: MinidumpJob,
         _worker: Worker<Context>,
         state: Data<AppState>,
     ) -> Result<(), JobError> {
+        info!("Incoming minidump");
         let crash_id = job.crash["crash_id"]
             .as_str()
             .ok_or_else(|| {
@@ -308,11 +317,36 @@ impl MinidumpProcessor {
                 JobError::Failure("invalid crash_id format".to_string())
             })?;
         info!("Process minidump: {}", crash_id);
-
-        let processor = MinidumpProcessor::new(state);
-        processor.handle_job(crash_id, job.crash).await?;
+        let processor = MinidumpProcessor::new(state.clone());
+        processor.handle_job(crash_id, job.crash.clone()).await?;
+        processor.cleanup_files(crash_id, &job.crash).await;
         info!("Successfully processed minidump for crash ID: {}", crash_id);
+
         Ok(())
+    }
+
+    #[instrument(skip(self, crash_info), fields(crash_id = %crash_id))]
+    async fn cleanup_files(&self, crash_id: uuid::Uuid, crash_info: &serde_json::Value) {
+        let crash_info_path = format!("crashes/{crash_id}.json");
+        if let Err(e) = self
+            .storage
+            .delete(&Path::from(crash_info_path.as_str()))
+            .await
+        {
+            error!(crash_id = %crash_id, path = %crash_info_path, error = ?e, "Failed to delete crash_info file");
+        } else {
+            info!(crash_id = %crash_id, path = %crash_info_path, "Successfully deleted crash_info file");
+        }
+
+        if let Some(minidump_path) = crash_info["minidump"]["storage_path"].as_str() {
+            if let Err(e) = self.storage.delete(&Path::from(minidump_path)).await {
+                error!(crash_id = %crash_id, path = %minidump_path, error = ?e, "Failed to delete minidump file");
+            } else {
+                info!(crash_id = %crash_id, path = %minidump_path, "Successfully deleted minidump file");
+            }
+        } else {
+            debug!(crash_id = %crash_id, "No minidump path found for cleanup");
+        }
     }
 }
 
