@@ -88,7 +88,7 @@ where
         Ok::<u64, ApiError>(bytes_copied)
     }
     .await
-    .map_err(|_err| (ApiError::InternalFailure()))
+    .map_err(|_err| ApiError::InternalFailure())
 }
 
 pub async fn get_product<E>(tx: &mut E, product_name: &str) -> Result<Product, ApiError>
@@ -129,13 +129,13 @@ pub fn validate_api_token_for_product(
     product_name: &str,
 ) -> Result<(), ApiError> {
     if let Some(token_product_id) = api_token.product_id
-        && token_product_id != product.id {
-            error!(
-                "API token not authorized for product {}, token is for product_id: {}",
-                product_name, token_product_id
-            );
-            return Err(ApiError::ProductAccessDenied(product_name.to_owned()));
-        }
+        && token_product_id != product.id
+    {
+        error!(
+            "API token not authorized for product {}, token is for product_id: {}",
+            product_name, token_product_id
+        );
+        return Err(ApiError::ProductAccessDenied(product_name.to_owned()));
+    }
     Ok(())
 }
-

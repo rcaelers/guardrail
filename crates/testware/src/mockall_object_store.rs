@@ -4,7 +4,7 @@ use mockall::mock;
 use mockall::predicate::*;
 use object_store::{
     GetOptions, GetResult, ListResult, MultipartUpload, ObjectMeta, ObjectStore as OSObjectStore,
-    PutMultipartOpts, PutOptions, PutPayload, PutResult, Result, path::Path,
+    PutMultipartOptions, PutOptions, PutPayload, PutResult, Result, path::Path,
 };
 use std::fmt::{self, Display, Formatter};
 use std::sync::Arc;
@@ -16,7 +16,7 @@ mock! {
     impl OSObjectStore for ObjectStore {
         async fn put(&self, location: &Path, payload: PutPayload) -> Result<PutResult>;
         async fn put_opts(&self, location: &Path,  payload: PutPayload, opts: PutOptions) -> Result<PutResult>;
-        async fn put_multipart_opts(&self, location: &Path, opts: PutMultipartOpts) -> Result<Box<dyn MultipartUpload>>;
+        async fn put_multipart_opts(&self, location: &Path, opts: PutMultipartOptions) -> Result<Box<dyn MultipartUpload>>;
         async fn get_opts(&self, location: &Path, options: GetOptions) -> Result<GetResult>;
         async fn delete(&self, location: &Path) -> Result<()>;
         fn list<'a>(&'a self, prefix: Option<&'a Path>) -> BoxStream<'static, Result<ObjectMeta>>;
@@ -89,7 +89,7 @@ impl OSObjectStore for MockObjectStoreWrapper {
     async fn put_multipart_opts(
         &self,
         location: &Path,
-        opts: PutMultipartOpts,
+        opts: PutMultipartOptions,
     ) -> Result<Box<dyn MultipartUpload>> {
         self.inner.put_multipart_opts(location, opts).await
     }

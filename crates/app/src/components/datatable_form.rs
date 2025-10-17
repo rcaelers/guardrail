@@ -224,7 +224,7 @@ impl Fields {
         self.0.insert(name, Box::new(field));
     }
 
-    pub fn values(&self) -> indexmap::map::Values<String, Box<dyn FieldTrait>> {
+    pub fn values(&self) -> indexmap::map::Values<'_, String, Box<dyn FieldTrait>> {
         self.0.values()
     }
 
@@ -243,7 +243,7 @@ impl Fields {
         self.0.get(name).unwrap().options().clone()
     }
 
-    pub fn iter(&self) -> indexmap::map::Iter<String, Box<dyn FieldTrait>> {
+    pub fn iter(&self) -> indexmap::map::Iter<'_, String, Box<dyn FieldTrait>> {
         self.0.iter()
     }
 }
