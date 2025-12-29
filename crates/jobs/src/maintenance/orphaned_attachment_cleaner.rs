@@ -1,5 +1,5 @@
 use futures::stream::TryStreamExt;
-use object_store::{ObjectStore, path::Path};
+use object_store::{ObjectStore, ObjectStoreExt, path::Path};
 use sqlx::Postgres;
 use std::collections::{HashMap, HashSet};
 use tracing::{error, info};

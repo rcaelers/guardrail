@@ -12,57 +12,57 @@ opt-level = 'z'
 [workspace.dependencies]
 
 # Leptos
-leptos = { version = "0.8.10", features = ["nightly"] }
+leptos = { version = "0.8.15", features = ["nightly"] }
 leptos_meta = { version = "0.8.5" }
-leptos_router = { version = "0.8.8", features = ["nightly"] }
-leptos_axum = { version = "0.8.6" }
-leptos-use = { version = "0.16.3" }
-leptos-struct-table = { version = "0.15.0", features = ["chrono", "uuid"] }
+leptos_router = { version = "0.8.11", features = ["nightly"] }
+leptos_axum = { version = "0.8.7" }
+leptos-use = { version = "0.17.0" }
+leptos-struct-table = { version = "0.16.0", features = ["chrono", "uuid"] }
 
 # Wasm
-wasm-bindgen = { version = "0.2.104", features = ["serde-serialize"] }
-wasm-bindgen-futures = { version = "0.4.54" }
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+wasm-bindgen-futures = { version = "0.4.56" }
 
 # WebAuthn
-webauthn-rs-proto = { version = "0.5.2", features = ["wasm"] }
-webauthn-rs = { version = "0.5.2", features = [
+webauthn-rs-proto = { version = "0.5.4", features = ["wasm"] }
+webauthn-rs = { version = "0.5.4", features = [
   "danger-allow-state-serialisation",
 ] }
 
 # Serde / json
 serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
+serde_json = "1.0.148"
 serde-wasm-bindgen = "0.6.5"
-rmp-serde = "1.3.0"
+rmp-serde = "1.3.1"
 
 # Tokio
 tokio = { version = "1.48.0", features = ["full"] }
-tokio-util = { version = "0.7.16", features = ["tracing", "io"] }
+tokio-util = { version = "0.7.17", features = ["tracing", "io"] }
 
 # Tower / Axum
 tower = { version = "0.5.2", features = ["full"] }
-tower-http = { version = "0.6.6", features = ["full"] }
+tower-http = { version = "0.6.8", features = ["full"] }
 tower-sessions = "0.14.0"
-axum = { version = "0.8.6", features = [
+axum = { version = "0.8.8", features = [
   "form",
   "query",
   "macros",
   "multipart",
   "tracing",
 ] }
-axum-extra = { version = "0.10.3", features = ["error-response", "query"] }
-axum-server = { version = "0.7.2", features = ["tls-rustls"] }
-rustls = "0.23.33"
+axum-extra = { version = "0.12.5", features = ["error-response", "query"] }
+axum-server = { version = "0.8.0", features = ["tls-rustls"] }
+rustls = "0.23.35"
 
 # Tracing
-tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.20", features = [
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = [
   "tracing-log",
   "local-time",
   "env-filter",
   "json",
 ] }
-tracing-appender = "0.2"
+tracing-appender = "0.2.4"
 tracing-subscriber-wasm = "0.1.0"
 tracing-log = "0.2.0"
 
@@ -77,53 +77,56 @@ sqlx = { version = "0.8.6", features = [
 ] }
 
 # K8s
-k8s-openapi = { version = "0.26.0", features = ["latest"] }
+k8s-openapi = { version = "0.26.1", features = ["latest"] }
 kube = { version = "2.0.1", features = ["runtime", "derive"] }
 
 # Minidump
-minidump = { version = "0.26.0" }
-minidump-processor = { version = "0.26.0" }
-minidump-unwind = { version = "0.26.0", features = ["http"] }
-breakpad-symbols = "0.26.0"
+minidump = { version = "0.26.1" }
+minidump-processor = { version = "0.26.1" }
+minidump-unwind = { version = "0.26.1", features = ["http"] }
+breakpad-symbols = "0.26.1"
 
 # Misc
-apalis = { version = "0.7.3", features = ["layers", "uuid"] }
-apalis-sql = { version = "0.7.3", features = ["postgres", "tokio-comp"] }
-apalis-cron = { version = "0.7.3" }
+apalis = { version = "1.0.0-rc.1" }
+apalis-codec = { version = "0.1.0-rc.1" }
+apalis-core = { version = "1.0.0-rc.1" }
+apalis-postgres = { version = "1.0.0-rc.1" }
+apalis-cron = { version = "1.0.0-rc.1" }
+cron = "0.15"
 argon2 = "0.5.3"
 async-trait = "0.1.89"
 base64 = "0.22.1"
-bytes = "1.10.1"
+bytes = "1.11.0"
 cfg-if = "1"
 chrono = { version = "0.4.42", features = ["serde"] }
-clap = { version = "4.5.49", features = ["derive"] }
-config = "0.15.18"
+clap = { version = "4.5.53", features = ["derive"] }
+config = "0.15.19"
 console_error_panic_hook = "0.1.7"
 console_log = "1"
 data-encoding = "2.9.0"
 dyn-clone = "1.0.20"
 enumflags2 = { version = "0.7.12", features = ["serde"] }
-fancy-regex = "0.16.2"
+fancy-regex = "0.17.0"
 futures = "0.3.31"
 glob = "0.3.3"
-http = "1.3.1"
-indexmap = "2.11.4"
+http = "1.4.0"
+indexmap = "2.12.1"
 itertools = "0.14.0"
-jsonwebtoken = { version = "10.0.0", features = ["aws_lc_rs"]}
+jsonwebtoken = { version = "10.2.0", features = ["aws_lc_rs"] }
 jwt-authorizer = "0.15.0"
-log = "0.4.28"
+log = "0.4.29"
 mime = "0.3.17"
 natord = "1.0.9"
-object_store = { version = "0.12.4", features = ["aws"] }
+object_store = { version = "0.13.0", features = ["aws"] }
 paste = "1.0.15"
 rand = { version = "0.9.2", features = ["small_rng", "serde"] }
-rhai = { version = "1.23.4", features = ["serde"] }
+rhai = { version = "1.23.6", features = ["serde"] }
 strum = "0.27.2"
 strum_macros = "0.27.2"
 thiserror = "2.0.17"
 time = "0.3.44"
 url = { version = "2.5.7", features = ["serde"] }
-uuid = { version = "1.18.1", features = [
+uuid = { version = "1.19.0", features = [
   "js",
   "v4",
   "fast-rng",
@@ -139,7 +142,7 @@ uuid = { version = "1.18.1", features = [
 # ] }
 
 #[dev-dependencies]
-mockall = { version = "0.13.1" }
+mockall = { version = "0.14.0" }
 
 [[workspace.metadata.leptos]]
 # this name is used for the wasm, js and css file names

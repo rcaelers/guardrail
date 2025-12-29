@@ -1,6 +1,6 @@
-use apalis_sql::Config;
-use apalis_sql::postgres::PostgresStorage;
+use apalis_postgres::{Config, PostgresStorage};
 use axum::extract::DefaultBodyLimit;
+use axum::http::StatusCode;
 use axum::{Router, http::header::AUTHORIZATION};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
@@ -70,7 +70,7 @@ impl GuardrailApp {
         }
 
         let pg =
-            PostgresStorage::new_with_config(worker_db.clone(), Config::new("guardrail::Jobs"));
+            PostgresStorage::new_with_config(&worker_db, &Config::new("guardrail::Jobs"));
         let worker = Arc::new(MinidumpProcessor::new(pg.clone()));
 
         let state = AppState {
@@ -87,7 +87,7 @@ impl GuardrailApp {
             .layer(RequestDecompressionLayer::new())
             .layer(CompressionLayer::new().quality(CompressionLevel::Fastest))
             .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
-            .layer(TimeoutLayer::new(Duration::from_secs(60)))
+            .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(60)))
             .layer(TraceLayer::new_for_http())
             .with_state(state);
 

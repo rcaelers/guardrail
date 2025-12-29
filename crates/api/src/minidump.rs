@@ -2,7 +2,7 @@ use axum::extract::multipart::Field;
 use axum::extract::{Multipart, State};
 use axum::{Extension, Json};
 use object_store::path::Path;
-use object_store::{ObjectStore, PutPayload};
+use object_store::{ObjectStore, ObjectStoreExt, PutPayload};
 use rhai::Engine;
 use serde::Serialize;
 use sqlx::Postgres;
@@ -422,7 +422,7 @@ impl MinidumpApi {
     }
 
     #[instrument(skip(state, api_token, crash_info, multipart), fields(crash_id))]
-    pub async fn handle_upload(
+    async fn handle_upload(
         state: AppState,
         api_token: ApiToken,
         mut multipart: Multipart,

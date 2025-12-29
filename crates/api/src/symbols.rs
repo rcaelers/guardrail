@@ -7,6 +7,7 @@ use axum::extract::{Multipart, State};
 use axum::{Extension, Json};
 use data::api_token::ApiToken;
 use data::symbols::NewSymbols;
+use object_store::ObjectStoreExt;
 use object_store::path::Path;
 use repos::symbols::SymbolsRepo;
 use serde::Serialize;
@@ -336,7 +337,7 @@ impl SymbolsApi {
     }
 
     #[instrument(skip(state, api_token, multipart))]
-    pub async fn handle_upload(
+    async fn handle_upload(
         state: AppState,
         api_token: ApiToken,
         mut multipart: Multipart,

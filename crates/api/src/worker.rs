@@ -1,5 +1,5 @@
 use apalis::prelude::*;
-use apalis_sql::postgres::PostgresStorage;
+use apalis_postgres::PostgresStorage;
 use async_trait::async_trait;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
@@ -13,9 +13,15 @@ pub trait Worker: Send + Sync + Debug + 'static {
     async fn queue_minidump(&self, crash: serde_json::Value) -> Result<String, ApiError>;
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct MinidumpProcessor {
     worker: PostgresStorage<MinidumpJob>,
+}
+
+impl std::fmt::Debug for MinidumpProcessor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MinidumpProcessor").finish()
+    }
 }
 
 impl MinidumpProcessor {
@@ -27,8 +33,12 @@ impl MinidumpProcessor {
 #[async_trait]
 impl Worker for MinidumpProcessor {
     async fn queue_minidump(&self, crash: serde_json::Value) -> Result<String, ApiError> {
-        let job = self
-            .worker
+        let task_id = crash
+            .get("crash_id")
+            .and_then(|v| v.as_str().map(|s| s.to_owned()))
+            .unwrap_or("unknown".to_string());
+
+        self.worker
             .clone()
             .push(MinidumpJob { crash })
             .await
@@ -36,7 +46,8 @@ impl Worker for MinidumpProcessor {
                 error!("Failed to queue minidump job: {:?}", e);
                 ApiError::Failure("failed to queue minidump job".to_string())
             })?;
-        Ok(job.task_id.to_string())
+
+        Ok(task_id)
     }
 }
 
@@ -70,9 +81,10 @@ impl Default for TestMinidumpProcessor {
 impl Worker for TestMinidumpProcessor {
     async fn queue_minidump(&self, crash: serde_json::Value) -> Result<String, ApiError> {
         if let Ok(failure) = self.failure.lock()
-            && *failure {
-                return Err(ApiError::Failure("failed to queue minidump job".to_string()));
-            }
+            && *failure
+        {
+            return Err(ApiError::Failure("failed to queue minidump job".to_string()));
+        }
         if let Ok(mut requests) = self.requests.lock() {
             requests.push(crash.to_string());
         }

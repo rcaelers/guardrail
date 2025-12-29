@@ -1,70 +1,96 @@
-use apalis::prelude::*;
-use apalis_sql::postgres::PostgresStorage;
+use apalis::prelude::{ListTasks, Status};
+use apalis_core::backend::Filter;
 use futures::stream::TryStreamExt;
-use object_store::{ObjectStore, path::Path};
+use object_store::{ObjectStore, ObjectStoreExt, path::Path};
 use std::collections::HashSet;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::{error::JobError, jobs::MinidumpJob, state::AppState};
+
+use super::NotifyPostgresStorage;
 
 pub struct JobCleaner;
 
 impl JobCleaner {
     pub async fn run(
         app_state: &AppState,
-        storage: &PostgresStorage<MinidumpJob>,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        info!("Starting Apalis job cleaner");
+        pg: &NotifyPostgresStorage<MinidumpJob>,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+    where
+        NotifyPostgresStorage<MinidumpJob>: ListTasks<MinidumpJob>,
+    {
+        info!("Starting cleanup of crash info files for completed jobs");
 
-        let object_store = app_state.storage.clone();
+        let storage = app_state.storage.clone();
 
-        let completed_job_crash_ids = Self::get_completed_job_crash_ids(storage).await?;
-        if completed_job_crash_ids.is_empty() {
-            info!("No completed jobs found, nothing to clean up");
-            return Ok(());
-        }
-        info!("Found {} crash_ids from completed jobs", completed_job_crash_ids.len());
+        let mut crash_ids_to_clean = HashSet::new();
 
-        let deleted_count =
-            Self::remove_crash_info_files(&object_store, &completed_job_crash_ids).await?;
+        let done_crash_ids = Self::get_crash_ids_for_status(pg, Status::Done).await?;
+        crash_ids_to_clean.extend(done_crash_ids);
 
-        info!("Deleted {} crash_info files for completed jobs", deleted_count);
-        info!("Completed Apalis job cleaner");
+        let killed_crash_ids = Self::get_crash_ids_for_status(pg, Status::Killed).await?;
+        crash_ids_to_clean.extend(killed_crash_ids);
+
+        info!("Found {} crash_ids from completed jobs to clean up", crash_ids_to_clean.len());
+        let deleted_count = Self::remove_crash_info_files(&storage, &crash_ids_to_clean).await?;
+
+        info!("Deleted {} crash info files for completed jobs", deleted_count);
+        info!("Completed cleanup of crash info files for completed jobs");
         Ok(())
     }
 
-    async fn get_completed_job_crash_ids(
-        storage: &PostgresStorage<MinidumpJob>,
-    ) -> Result<HashSet<Uuid>, JobError> {
+    async fn get_crash_ids_for_status(
+        pg: &NotifyPostgresStorage<MinidumpJob>,
+        status: Status,
+    ) -> Result<HashSet<Uuid>, JobError>
+    where
+        NotifyPostgresStorage<MinidumpJob>: ListTasks<MinidumpJob>,
+    {
         let mut crash_ids = HashSet::new();
+        let mut page = 1u32;
+        let page_size = 100u32;
 
-        let done_jobs = storage
-            .list_jobs(&apalis::prelude::State::Done, 1)
-            .await
-            .map_err(|e| JobError::Failure(format!("Failed to list Done jobs: {e}")))?;
+        loop {
+            let filter = Filter {
+                status: Some(status.clone()),
+                page,
+                page_size: Some(page_size),
+            };
 
-        for job in done_jobs {
-            if let Some(crash_id) = Self::extract_crash_id_from_job(&job.args) {
-                crash_ids.insert(crash_id);
+            let tasks = pg
+                .list_tasks("guardrail::Jobs", &filter)
+                .await
+                .map_err(|e| {
+                    JobError::Failure(format!(
+                        "Failed to list tasks with status {:?}: {}",
+                        status, e
+                    ))
+                })?;
+
+            if tasks.is_empty() {
+                break;
             }
+
+            for task in &tasks {
+                if let Some(crash_id) = Self::extract_crash_id_from_job(&task.args) {
+                    crash_ids.insert(crash_id);
+                }
+            }
+
+            // If we got fewer than page_size, we've reached the end
+            if tasks.len() < page_size as usize {
+                break;
+            }
+
+            page += 1;
         }
 
-        let killed_jobs = storage
-            .list_jobs(&apalis::prelude::State::Killed, 1)
-            .await
-            .map_err(|e| JobError::Failure(format!("Failed to list Killed jobs: {e}")))?;
-
-        for job in killed_jobs {
-            if let Some(crash_id) = Self::extract_crash_id_from_job(&job.args) {
-                crash_ids.insert(crash_id);
-            }
-        }
-
-        info!("Extracted {} unique crash_ids from completed Apalis jobs", crash_ids.len());
+        info!("Found {} crash_ids with status {:?}", crash_ids.len(), status);
         Ok(crash_ids)
     }
 
+    /// Extract crash_id from a MinidumpJob
     pub fn extract_crash_id_from_job(job: &MinidumpJob) -> Option<Uuid> {
         job.crash
             .get("crash_id")
@@ -75,45 +101,40 @@ impl JobCleaner {
     pub async fn remove_crash_info_files(
         storage: &dyn ObjectStore,
         crash_ids: &HashSet<Uuid>,
-    ) -> Result<usize, JobError> {
+    ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
         let mut deleted_count = 0;
 
-        let mut crash_stream = storage.list(Some(&Path::from("crashes/")));
+        let existing_files = Self::get_existing_crash_info_files(storage).await?;
 
-        while let Some(object_meta) = crash_stream.try_next().await? {
-            let path_str = object_meta.location.to_string();
-
-            if !path_str.ends_with(".json") {
-                continue;
-            }
-
-            if let Some(filename) = path_str
-                .strip_prefix("crashes/")
-                .and_then(|f| f.strip_suffix(".json"))
-            {
-                match Uuid::parse_str(filename) {
-                    Ok(crash_id) => {
-                        if crash_ids.contains(&crash_id) {
-                            match storage.delete(&object_meta.location).await {
-                                Ok(()) => {
-                                    info!("Deleted crash_info file: {}", path_str);
-                                    deleted_count += 1;
-                                }
-                                Err(e) => {
-                                    error!("Failed to delete crash_info file {}: {}", path_str, e);
-                                }
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        warn!("Failed to parse crash_id from filename '{}': {}", filename, e);
-                    }
+        for (file_crash_id, path) in existing_files {
+            if crash_ids.contains(&file_crash_id) {
+                info!("Deleting crash info file for completed job: {}", path);
+                if let Err(e) = storage.delete(&path).await {
+                    error!("Failed to delete crash info file {}: {}", path, e);
+                } else {
+                    deleted_count += 1;
                 }
-            } else {
-                warn!("Unexpected crash file path format: {}", path_str);
             }
         }
 
         Ok(deleted_count)
+    }
+
+    async fn get_existing_crash_info_files(
+        storage: &dyn ObjectStore,
+    ) -> Result<Vec<(Uuid, Path)>, JobError> {
+        let mut crash_info_files = Vec::new();
+
+        let mut crash_info_stream = storage.list(Some(&Path::from("crashes/")));
+        while let Some(object_meta) = crash_info_stream.try_next().await? {
+            let path_str = object_meta.location.to_string();
+            if let Some(name) = path_str.strip_prefix("crashes/")
+                && let Some(uuid_str) = name.strip_suffix(".json")
+                && let Ok(uuid) = Uuid::parse_str(uuid_str)
+            {
+                crash_info_files.push((uuid, object_meta.location.clone()));
+            }
+        }
+        Ok(crash_info_files)
     }
 }

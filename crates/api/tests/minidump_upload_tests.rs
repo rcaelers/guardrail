@@ -7,8 +7,8 @@ use bytes::Bytes;
 use chrono::Utc;
 use data::product::Product;
 use futures::TryStreamExt;
-use object_store::ObjectStore;
 use object_store::path::Path;
+use object_store::{ObjectStore, ObjectStoreExt};
 use serde_json::json;
 use sqlx::PgPool;
 use std::sync::Arc;
@@ -79,7 +79,7 @@ pub struct MinidumpBodyConfig<'a> {
     pub boundary: &'a str,
     pub product: Option<&'a str>,
     pub version: Option<&'a str>,
-    pub build_date: Option<&'a str>,
+    pub build_date: Option<String>,
     pub extra: Option<String>,
     pub content: &'a str,
     pub channel: Option<&'a str>,
@@ -96,7 +96,7 @@ impl<'a> Default for MinidumpBodyConfig<'a> {
             boundary: "----WebKitFormBoundary7MA4YWxkTrZu0gW",
             product: Some("TestProduct"),
             version: Some("1.0.0"),
-            build_date: Some("2025-05-15T20:26:15+02:00"),
+            build_date: Some(Utc::now().to_rfc3339()),
             extra: None,
             content: "MINIDUMP DATA",
             channel: Some("test-channel"),
@@ -163,7 +163,7 @@ pub fn create_body_from_config(config: &MinidumpBodyConfig) -> String {
         );
     }
 
-    if let Some(build_date) = config.build_date {
+    if let Some(build_date) = &config.build_date {
         body = format!(
             "{body}--{boundary}\r\nContent-Disposition: form-data; name=\"build_date\"\r\nContent-Type: {annotation_content_type}\r\n\r\n{build_date}\r\n",
             boundary = config.boundary,
@@ -251,10 +251,12 @@ async fn assert_count_attachments(store: Arc<dyn ObjectStore>, expected_count: u
 async fn test_minidump_upload_ok(pool: PgPool) {
     let (app, store, boundary, _worker, _body, token) = setup(&pool).await;
 
-    let body = create_body_from_config(&MinidumpBodyConfig {
+    let config = MinidumpBodyConfig {
         boundary: &boundary,
         ..Default::default()
-    });
+    };
+    let expected_build_date = config.build_date.clone().unwrap();
+    let body = create_body_from_config(&config);
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
@@ -312,7 +314,7 @@ async fn test_minidump_upload_ok(pool: PgPool) {
         crash_info["annotations"]["build_date"]["value"]
             .as_str()
             .unwrap(),
-        "2025-05-15T20:26:15+02:00"
+        expected_build_date
     );
     assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 0);
     assert_eq!(crash_info["minidump"]["filename"].as_str().unwrap(), "test.dmp");
@@ -334,11 +336,13 @@ async fn test_minidump_upload_ok(pool: PgPool) {
 async fn test_minidump_upload_ok_without_filename(pool: PgPool) {
     let (app, store, boundary, _worker, _body, token) = setup(&pool).await;
 
-    let body = create_body_from_config(&MinidumpBodyConfig {
+    let config = MinidumpBodyConfig {
         boundary: &boundary,
         minidump_filename: None,
         ..Default::default()
-    });
+    };
+    let expected_build_date = config.build_date.clone().unwrap();
+    let body = create_body_from_config(&config);
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
@@ -396,7 +400,7 @@ async fn test_minidump_upload_ok_without_filename(pool: PgPool) {
         crash_info["annotations"]["build_date"]["value"]
             .as_str()
             .unwrap(),
-        "2025-05-15T20:26:15+02:00"
+        expected_build_date
     );
     assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 0);
     assert_eq!(crash_info["minidump"]["filename"].as_str().unwrap(), "unnamed_minidump");
@@ -424,14 +428,16 @@ async fn test_minidump_upload_with_attachments_ok(pool: PgPool) {
 
     let attachment1_content = "LOG DATA 1";
     let attachment2_content = "LOG DATA 2";
-    let body = create_body_from_config(&MinidumpBodyConfig {
+    let config = MinidumpBodyConfig {
         boundary: &boundary,
         extra: Some(format!(
             "--{boundary}\r\nContent-Disposition: form-data; name=\"attachment1\"; filename=\"log.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n{attachment1_content}\r\n\
              --{boundary}\r\nContent-Disposition: form-data; name=\"attachment2\"; filename=\"log2.txt\"\r\nContent-Type: application/octet-stream\r\n\r\n{attachment2_content}\r\n"
         )),
         ..Default::default()
-    });
+    };
+    let expected_build_date = config.build_date.clone().unwrap();
+    let body = create_body_from_config(&config);
 
     log::info!("Body: {body}");
     let request = Request::builder()
@@ -492,7 +498,7 @@ async fn test_minidump_upload_with_attachments_ok(pool: PgPool) {
         crash_info["annotations"]["build_date"]["value"]
             .as_str()
             .unwrap(),
-        "2025-05-15T20:26:15+02:00"
+        expected_build_date
     );
     assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 6);
     assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 2);
@@ -576,14 +582,16 @@ async fn test_minidump_upload_with_attachments_no_name(pool: PgPool) {
 async fn test_minidump_upload_with_annotations_ok(pool: PgPool) {
     let (app, store, boundary, _worker, _body, token) = setup(&pool).await;
 
-    let body = create_body_from_config(&MinidumpBodyConfig {
+    let config = MinidumpBodyConfig {
         boundary: &boundary,
         extra: Some(format!(
             "--{boundary}\r\nContent-Disposition: form-data; name=\"features\"; \r\nContent-Type: text/plain\r\n\r\ntracing\r\n\
              --{boundary}\r\nContent-Disposition: form-data; name=\"ui\"; \r\nContent-Type: text/plain\r\n\r\nQt\r\n"
         )),
         ..Default::default()
-    });
+    };
+    let expected_build_date = config.build_date.clone().unwrap();
+    let body = create_body_from_config(&config);
 
     log::info!("Body: {body}");
     let request = Request::builder()
@@ -659,7 +667,7 @@ async fn test_minidump_upload_with_annotations_ok(pool: PgPool) {
         crash_info["annotations"]["build_date"]["value"]
             .as_str()
             .unwrap(),
-        "2025-05-15T20:26:15+02:00"
+        expected_build_date
     );
     assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 0);
 
@@ -1256,7 +1264,7 @@ async fn test_minidump_upload_product_too_old(pool: PgPool) {
 
     let body = create_body_from_config(&MinidumpBodyConfig {
         boundary: &boundary,
-        build_date: Some("2015-05-15T20:26:15+02:00"),
+        build_date: Some("2015-05-15T20:26:15+02:00".to_string()),
         ..Default::default()
     });
 

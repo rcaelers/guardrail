@@ -176,9 +176,8 @@ where
     // });
 
     let on_delete_click = Callback::new(move |_| {
-        let row = selected_row.get();
-        if row.is_some() {
-            let row: T::RowType = row.unwrap();
+        if let Some(row) = selected_row.get() {
+            let row: T::RowType = row;
             spawn_local(async move {
                 set_custom_text.set(format!(
                     "Remove {} '{}'",
@@ -192,9 +191,8 @@ where
     });
 
     let on_related_click = Callback::new(move |(index,): (usize,)| {
-        let row = selected_row.get();
-        if row.is_some() {
-            let row: T::RowType = row.unwrap();
+        if let Some(row) = selected_row.get() {
+            let row: T::RowType = row;
             let id = row.get_id();
             spawn_local(async move {
                 let navigate = use_navigate();
@@ -222,9 +220,8 @@ where
 
     let q2 = query.clone();
     let on_edit_click = Callback::new(move |_| {
-        let row = selected_row.get();
-        if row.is_some() {
-            let row: T::RowType = row.unwrap();
+        if let Some(row) = selected_row.get() {
+            let row: T::RowType = row;
             let q2 = q2.clone();
             spawn_local(async move {
                 let data: T::DataType = T::get(row.get_id()).await.unwrap();
@@ -239,15 +236,12 @@ where
 
     let on_yes_click = Callback::new(move |_| {
         set_show_confirm_popup(false);
-        if let State::Delete = state.get() {
-            let row = selected_row.get();
-            if row.is_some() {
-                let row: T::RowType = row.unwrap();
-                spawn_local(async move {
-                    T::remove(row.get_id()).await.unwrap();
-                    state.set(State::Idle);
-                });
-            }
+        if let (State::Delete, Some(row)) = (state.get(), selected_row.get()) {
+            let row: T::RowType = row;
+            spawn_local(async move {
+                T::remove(row.get_id()).await.unwrap();
+                state.set(State::Idle);
+            });
         }
     });
 

@@ -1,9 +1,9 @@
-use apalis::prelude::{Context, Data, Worker};
+use apalis::prelude::Data;
 use bytes::Bytes;
 use minidump::Minidump;
 use minidump_processor::ProcessorOptions;
 use minidump_unwind::Symbolizer;
-use object_store::{ObjectStore, path::Path};
+use object_store::{ObjectStore, ObjectStoreExt, path::Path};
 use serde_json::Value;
 use sqlx::Postgres;
 use std::sync::Arc;
@@ -298,12 +298,8 @@ impl MinidumpProcessor {
         Ok(())
     }
 
-    #[instrument(skip(job, _worker, state), fields(crash_id = %job.crash["crash_id"]))]
-    pub async fn process(
-        job: MinidumpJob,
-        _worker: Worker<Context>,
-        state: Data<AppState>,
-    ) -> Result<(), JobError> {
+    #[instrument(skip(job, state), fields(crash_id = %job.crash["crash_id"]))]
+    pub async fn process(job: MinidumpJob, state: Data<AppState>) -> Result<(), JobError> {
         info!("Incoming minidump");
         let crash_id = job.crash["crash_id"]
             .as_str()

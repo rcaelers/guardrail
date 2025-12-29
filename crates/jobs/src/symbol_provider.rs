@@ -5,7 +5,7 @@ use minidump::Module;
 use minidump_unwind::{
     FileError, FileKind, LocateSymbolsResult, SymbolError, SymbolFile, SymbolSupplier,
 };
-use object_store::{ObjectStore, path::Path};
+use object_store::{ObjectStore, ObjectStoreExt, path::Path};
 use repos::{Repo, symbols::SymbolsRepo};
 use std::{path::PathBuf, sync::Arc};
 use tracing::{error, info, warn};

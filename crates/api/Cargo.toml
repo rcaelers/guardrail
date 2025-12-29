@@ -61,7 +61,7 @@ jsonwebtoken.workspace = true
 log.workspace = true
 object_store.workspace = true
 apalis.workspace = true
-apalis-sql.workspace = true
+apalis-postgres.workspace = true
 bytes.workspace = true
 
 [dev-dependencies]

@@ -4,7 +4,7 @@ use axum::extract::DefaultBodyLimit;
 use axum::http::{Request, StatusCode};
 use axum::{Router, body::Body};
 use chrono::Utc;
-use object_store::ObjectStore;
+use object_store::{ObjectStore, ObjectStoreExt};
 use object_store::path::Path;
 use serde_json::json;
 use sqlx::PgPool;

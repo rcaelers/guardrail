@@ -2,15 +2,19 @@ use apalis::layers::retry::HasherRng;
 use apalis::layers::retry::backoff::MakeBackoff;
 use apalis::layers::retry::{RetryPolicy, backoff::ExponentialBackoffMaker};
 use apalis::prelude::*;
-use apalis_cron::{CronStream, Schedule};
-use apalis_sql::{
-    Config,
-    postgres::{PgListen, PostgresStorage},
-};
+use apalis_cron::CronStream;
+use apalis_cron::Tick;
+use apalis_postgres::{Config, PostgresStorage};
 use axum::{Router, extract::State, http::StatusCode, routing::get};
 use clap::Parser;
 use common::{init_logging, settings::Settings};
-use jobs::{maintenance, minidump::MinidumpProcessor, state::AppState};
+use cron::Schedule;
+use jobs::{
+    jobs::MinidumpJob,
+    maintenance::{self, NotifyPostgresStorage},
+    minidump::MinidumpProcessor,
+    state::AppState,
+};
 use repos::Repo;
 use sqlx::ConnectOptions;
 use sqlx::PgPool;
@@ -24,6 +28,21 @@ use tracing::{debug, error, info};
 struct CliArgs {
     #[arg(short = 'C', long, default_value = "config")]
     config_dir: String,
+}
+
+/// Combined state for maintenance tasks that need both AppState and PostgresStorage
+#[derive(Clone)]
+struct MaintenanceState {
+    app_state: AppState,
+    pg: NotifyPostgresStorage<MinidumpJob>,
+}
+
+async fn handle_maintenance_tick(
+    _tick: Tick,
+    state: Data<MaintenanceState>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    maintenance::MaintenanceJob::run_all_maintenance_tasks(&state.app_state, &state.pg).await?;
+    Ok(())
 }
 
 struct GuardrailJobs {
@@ -62,7 +81,7 @@ impl GuardrailJobs {
         let routes_all = Router::new()
             .route("/live", get(Self::live))
             .route("/ready", get(Self::ready))
-            .layer(TimeoutLayer::new(Duration::from_secs(60)))
+            .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(60)))
             .layer(TraceLayer::new_for_http())
             .with_state(state);
 
@@ -90,32 +109,33 @@ impl GuardrailJobs {
             .await
             .expect("unable to run migrations for postgres");
 
-        let mut pg = PostgresStorage::new_with_config(
-            worker_db.clone(),
-            Config::new("guardrail::Jobs").set_poll_interval(std::time::Duration::from_secs(5)),
-        );
+        let config = Config::new("guardrail::Jobs");
+        let pg = PostgresStorage::new_with_notify(&worker_db, &config);
 
         if let Err(e) =
-            maintenance::MaintenanceJob::run_all_maintenance_tasks(state.clone(), &pg).await
+            maintenance::MaintenanceJob::run_all_maintenance_tasks(&state, &pg).await
         {
             error!("Failed to run startup maintenance tasks: {}", e);
         }
 
-        let mut listener = PgListen::new(worker_db)
-            .await
-            .expect("Failed to create listener");
-
-        listener.subscribe_with(&mut pg);
-
-        tokio::spawn(async move {
-            listener.listen().await.unwrap();
-        });
-
         info!("Start monitoring for minidumps");
         let state = state.clone();
         async move {
+            let maintenance_schedule = Schedule::from_str("0 0 2 * * * *")
+                .expect("Invalid cron schedule for maintenance");
+
+            // Clone for the first closure
+            let pg1 = pg.clone();
+            let state1 = state.clone();
+
+            // Clone for the second closure - maintenance needs both AppState and PostgresStorage
+            let maintenance_state = MaintenanceState {
+                app_state: state.clone(),
+                pg: pg.clone(),
+            };
+
             Monitor::new()
-                .register({
+                .register(move |_idx| {
                     let backoff = ExponentialBackoffMaker::new(
                         Duration::from_millis(1000),
                         Duration::from_millis(5000),
@@ -126,27 +146,21 @@ impl GuardrailJobs {
                     .make_backoff();
 
                     WorkerBuilder::new("minidump")
-                        .data(state.clone())
+                        .backend(pg1.clone())
+                        .data(state1.clone())
                         .retry(RetryPolicy::retries(5).with_backoff(backoff))
                         .enable_tracing()
                         .concurrency(2)
-                        .backend(pg.clone())
-                        .build_fn(MinidumpProcessor::process)
+                        .build(MinidumpProcessor::process)
                 })
-                .register({
-                    let maintenance_schedule = Schedule::from_str("0 0 2 * * * *")
-                        .expect("Invalid cron schedule for maintenance");
-
+                .register(move |_idx| {
                     WorkerBuilder::new("maintenance")
-                        .data(state.clone())
-                        .data(pg.clone())
+                        .backend(CronStream::new(maintenance_schedule.clone()))
+                        .data(maintenance_state.clone())
                         .enable_tracing()
-                        .backend(CronStream::<jobs::maintenance::MaintenanceJob, _>::new(
-                            maintenance_schedule,
-                        ))
-                        .build_fn(jobs::maintenance::MaintenanceJob::run_maintenance_tasks)
+                        .build(handle_maintenance_tick)
                 })
-                .on_event(|e| debug!("Apalis event: {e}"))
+                .on_event(|_worker, e| debug!("Apalis event: {e}"))
                 .run_with_signal(async {
                     tokio::signal::ctrl_c().await?;
                     info!("Shutting down the system");

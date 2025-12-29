@@ -3,13 +3,11 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use apalis::prelude::{Context, Data, Worker, WorkerId};
+use apalis::prelude::Data;
 use common::QueryParams;
 use data::symbols::NewSymbols;
 use jobs::error::JobError;
-use object_store::ObjectStore;
-use object_store::PutPayload;
-use object_store::path::Path;
+use object_store::{ObjectStore, ObjectStoreExt, PutPayload, path::Path};
 use repos::annotation::AnnotationsRepo;
 use repos::symbols::SymbolsRepo;
 use repos::{attachment::AttachmentsRepo, crash::CrashRepo};
@@ -134,9 +132,8 @@ async fn test_full_minidump_processing_flow(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_ok());
 
@@ -286,9 +283,8 @@ async fn test_cleanup_after_successful_processing(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_ok(), "Processing should succeed");
 
@@ -369,8 +365,7 @@ async fn test_missing_crash_id(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -434,8 +429,7 @@ async fn test_invalid_crash_id(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -499,8 +493,7 @@ async fn test_minidump_not_found(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -564,8 +557,7 @@ async fn test_invalid_product_id(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -629,8 +621,7 @@ async fn test_product_id_not_found(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -693,9 +684,8 @@ async fn test_minidump_storage_id_missing(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -758,9 +748,8 @@ async fn test_minidump_storage_path_missing(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -817,9 +806,8 @@ async fn test_minidump_missing(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -883,9 +871,8 @@ async fn test_minidump_storage_id_invald(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -948,9 +935,8 @@ async fn test_atachment_missing_filename(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -1013,9 +999,8 @@ async fn test_attachment_missing_content_type(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -1078,9 +1063,8 @@ async fn test_attachment_missing_size(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -1142,9 +1126,8 @@ async fn test_attachment_missing_storage_path(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -1207,9 +1190,8 @@ async fn test_annotation_value_wrong_type(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -1278,9 +1260,8 @@ async fn test_minidump_invalid(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -1348,9 +1329,8 @@ async fn test_minidump_attachment_db_failure(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -1418,9 +1398,8 @@ async fn test_minidump_annotation_db_failure(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {
@@ -1488,9 +1467,8 @@ async fn test_minidump_crash_db_failure(pool: PgPool) {
         settings: Arc::new(Settings::default()),
     });
 
-    let worker = Worker::new(WorkerId::new("test-worker"), Context::default());
 
-    let result = MinidumpProcessor::process(job, worker, app_state).await;
+    let result = MinidumpProcessor::process(job, app_state).await;
 
     assert!(result.is_err());
     if let Err(JobError::Failure(msg)) = result {

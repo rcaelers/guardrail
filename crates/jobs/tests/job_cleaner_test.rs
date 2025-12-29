@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use object_store::{ObjectStore, path::Path};
+use object_store::{ObjectStoreExt, path::Path};
 use serde_json::json;
 use std::{collections::HashSet, sync::Arc};
 use uuid::Uuid;
