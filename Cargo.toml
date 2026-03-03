@@ -60,7 +60,7 @@ rustls = "0.23.27"
 
 # Tracing
 tracing = "0.1.41"
-tracing-subscriber = { version = "0.3.19", features = [
+tracing-subscriber = { version = "0.3.20", features = [
   "tracing-log",
   "local-time",
   "env-filter",
@@ -107,7 +107,7 @@ mime = "0.3.17"
 paste = "1.0.15"
 rand = { version = "0.9.1", features = ["small_rng", "serde"] }
 thiserror = "2.0.12"
-time = "0.3.41"
+time = "0.3.47"
 url = { version = "2.5.4", features = ["serde"] }
 uuid = { version = "1.16.0", features = [
   "js",
@@ -118,7 +118,7 @@ uuid = { version = "1.16.0", features = [
 ] }
 clap = { version = "4.5.1", features = ["derive"] }
 jwt-authorizer = "0.15.0"
-jsonwebtoken = "9.3.1"
+jsonwebtoken = "10.3.0"
 indexmap = "2.9.0"
 itertools = "0.14.0"
 dyn-clone = "1.0.19"
@@ -128,7 +128,7 @@ apalis-sql = { version = "0.7.1", features = ["postgres", "tokio-comp"] }
 strum = "0.27"
 strum_macros = "0.27"
 base64 = "0.22.1"
-bytes = "1.10.1"
+bytes = "1.11.1"
 glob = "0.3.2"
 natord = "1.0.9"
 
