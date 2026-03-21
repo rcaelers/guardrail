@@ -25,8 +25,11 @@ mod tests {
     #[test]
     fn test_crash_json_loading() {
         // Test loading the crash.json file using
-        let content =
-            std::fs::read_to_string("../../dev/crash.json").expect("Failed to load crash.json");
+        let content = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../dev/crash.json"
+        ))
+        .expect("Failed to load crash.json");
         let crash_data_value: serde_json::Value =
             serde_json::from_str(&content).expect("Failed to parse crash.json");
 
@@ -52,8 +55,11 @@ mod tests {
     #[test]
     fn test_crash_data_conversion() {
         // Test that conversion from serde_json::Value to thread data works
-        let content =
-            std::fs::read_to_string("../../dev/crash.json").expect("Failed to load crash.json");
+        let content = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../dev/crash.json"
+        ))
+        .expect("Failed to load crash.json");
         let crash_data_value: serde_json::Value =
             serde_json::from_str(&content).expect("Failed to parse crash.json");
 
