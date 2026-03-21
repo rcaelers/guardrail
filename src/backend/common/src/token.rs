@@ -3,7 +3,7 @@ use argon2::{
     password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
-use rand::RngCore;
+use rand::Rng;
 use rand::rng;
 use uuid::Uuid;
 
