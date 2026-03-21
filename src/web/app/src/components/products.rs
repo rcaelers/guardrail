@@ -1,8 +1,5 @@
 use ::chrono::NaiveDateTime;
 use async_trait::async_trait;
-use common::QueryParams;
-use common::SortOrder;
-use data::product::Product;
 use enumflags2::BitFlags;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -11,6 +8,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::ops::Range;
 use uuid::Uuid;
 
+use common::QueryParams;
+use common::SortOrder;
+use data::product::Product;
 use super::datatable::{Capabilities, DataTableTrait, ExtraRowTrait};
 use super::datatable_form::{FieldString, Fields};
 use crate::classes::ClassesPreset;

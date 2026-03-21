@@ -6,8 +6,14 @@ use apalis_cron::CronStream;
 use apalis_cron::Tick;
 use apalis_postgres::{Config, PostgresStorage};
 use clap::Parser;
-use common::{init_logging, settings::Settings};
 use cron::Schedule;
+use sqlx::ConnectOptions;
+use sqlx::PgPool;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use std::{str::FromStr, sync::Arc, time::Duration};
+use tracing::{debug, error, info};
+
+use common::{init_logging, settings::Settings};
 use common::jobs::queue;
 use curator::{
     import_crash::ImportCrashProcessor,
@@ -17,11 +23,6 @@ use curator::{
     state::AppState,
 };
 use repos::Repo;
-use sqlx::ConnectOptions;
-use sqlx::PgPool;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use std::{str::FromStr, sync::Arc, time::Duration};
-use tracing::{debug, error, info};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

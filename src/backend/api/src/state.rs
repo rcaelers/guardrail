@@ -1,11 +1,11 @@
 use axum::extract::FromRef;
-use common::settings::Settings;
 use object_store::ObjectStore;
-use repos::Repo;
 use std::sync::Arc;
 use webauthn_rs::prelude::*;
 
 use crate::worker::Worker;
+use common::settings::Settings;
+use repos::Repo;
 
 #[derive(FromRef, Debug, Clone)]
 pub struct AppState {

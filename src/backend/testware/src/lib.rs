@@ -2,16 +2,18 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::Utc;
-use common::settings::Settings;
-use common::token::generate_api_token;
 use sqlx::PgPool;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
+use webauthn_rs::prelude::Url;
+use webauthn_rs::{Webauthn, WebauthnBuilder};
 
 pub mod mockall_object_store;
 pub mod setup;
 
 // Data models
+use common::settings::Settings;
+use common::token::generate_api_token;
 use data::api_token::NewApiToken;
 use data::attachment::NewAttachment;
 use data::crash::NewCrash;
@@ -37,9 +39,6 @@ use data::credentials::Credential;
 use data::product::Product;
 use data::symbols::Symbols;
 use data::user::User;
-
-use webauthn_rs::prelude::Url;
-use webauthn_rs::{Webauthn, WebauthnBuilder};
 
 /// Create a test product with a random name
 pub async fn create_test_product(pool: &PgPool) -> Product {

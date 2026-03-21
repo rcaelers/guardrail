@@ -1,11 +1,11 @@
 use ::chrono::NaiveDateTime;
-use data::crash::Crash;
 //use leptos::prelude::*;
 use leptos_struct_table::*;
 use std::fmt::Debug;
 use uuid::Uuid;
 
 use crate::{classes::ClassesPreset, components::datatable::ExtraRowTrait};
+use data::crash::Crash;
 
 #[derive(TableRow, Clone, Debug)]
 #[table(sortable, classes_provider = ClassesPreset)]

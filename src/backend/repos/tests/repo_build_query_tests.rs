@@ -1,8 +1,9 @@
+use sqlx::QueryBuilder;
+use std::collections::VecDeque;
+
 use common::{QueryParams, SortOrder};
 use repos::error::RepoError;
 use repos::*;
-use sqlx::QueryBuilder;
-use std::collections::VecDeque;
 
 
 #[test]

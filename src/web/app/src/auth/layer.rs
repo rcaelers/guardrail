@@ -1,9 +1,10 @@
-use crate::auth::{AuthSession, AuthenticatedUser};
 use axum::{Extension, RequestExt, body::Body, http::Request, response::Response};
 use futures::future::BoxFuture;
 use std::task::{Context, Poll};
 use tower::{Layer, Service};
 use tower_sessions::Session;
+
+use crate::auth::{AuthSession, AuthenticatedUser};
 
 #[derive(Clone)]
 struct AuthState {}

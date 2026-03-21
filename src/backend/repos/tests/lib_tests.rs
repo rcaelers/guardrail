@@ -1,5 +1,6 @@
-use common::{QueryParams, SortOrder};
 use std::collections::VecDeque;
+
+use common::{QueryParams, SortOrder};
 
 #[test]
 fn test_sort_order_to_sql() {

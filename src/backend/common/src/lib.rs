@@ -7,9 +7,10 @@ pub mod token;
 #[cfg(feature = "ssr")]
 use object_store::{ObjectStore, aws::AmazonS3Builder};
 use serde::{Deserialize, Serialize};
-use settings::Settings;
 use tracing_subscriber::{EnvFilter, FmtSubscriber, fmt::format::FmtSpan, layer::SubscriberExt};
 use uuid::Uuid;
+
+use settings::Settings;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthenticatedUser {
