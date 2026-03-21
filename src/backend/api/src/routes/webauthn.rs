@@ -1,17 +1,18 @@
-use crate::{error::ApiError, state::AppState};
 use axum::{
     extract::{Json, Path, State},
     http::StatusCode,
     response::IntoResponse,
 };
-use common::AuthenticatedUser;
-use data::{credentials::NewCredential, user::User};
-use repos::{credentials::CredentialsRepo, user::UserRepo};
 use serde::{Deserialize, Serialize};
 use sqlx::Postgres;
 use tower_sessions::Session;
 use tracing::error;
 use webauthn_rs::prelude::*;
+
+use crate::{error::ApiError, state::AppState};
+use common::AuthenticatedUser;
+use data::{credentials::NewCredential, user::User};
+use repos::{credentials::CredentialsRepo, user::UserRepo};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct RegistrationState {
@@ -229,17 +230,18 @@ where
         })?;
         let updated = passkey.update_credential(&auth_result);
         if let Some(updated) = updated
-            && updated {
-                CredentialsRepo::update_data(
-                    &mut *tx,
-                    cred.id,
-                    serde_json::to_value(&passkey).map_err(|e| {
-                        error!("failed to serialize passkey: {:?}", e);
-                        ApiError::InternalFailure()
-                    })?,
-                )
-                .await?;
-            }
+            && updated
+        {
+            CredentialsRepo::update_data(
+                &mut *tx,
+                cred.id,
+                serde_json::to_value(&passkey).map_err(|e| {
+                    error!("failed to serialize passkey: {:?}", e);
+                    ApiError::InternalFailure()
+                })?,
+            )
+            .await?;
+        }
     }
     Ok(())
 }

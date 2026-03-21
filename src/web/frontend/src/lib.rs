@@ -1,8 +1,9 @@
-use app::*;
 use tracing::Level;
 use tracing_subscriber::fmt;
 use tracing_subscriber::prelude::*;
 use tracing_subscriber_wasm::MakeConsoleWriter;
+
+use app::*;
 
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {

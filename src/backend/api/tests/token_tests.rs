@@ -8,19 +8,19 @@ use axum::{
     extract::DefaultBodyLimit,
     http::{Request, StatusCode},
 };
-use common::token::decode_api_token;
 use jsonwebtoken::{Algorithm, Validation};
 use sqlx::PgPool;
+use tower::ServiceExt;
+use tower_http::trace::TraceLayer;
+
+use api::state::AppState;
+use api::{routes::routes, worker::TestWorker};
+use common::token::decode_api_token;
+use repos::Repo;
 use testware::{
     create_settings, create_test_product_with_details, create_test_token, create_test_user,
     create_webauthn,
 };
-use tower::ServiceExt;
-
-use api::state::AppState;
-use api::{routes::routes, worker::TestWorker};
-use repos::Repo;
-use tower_http::trace::TraceLayer;
 
 async fn setup(pool: &PgPool) -> (Router, AppState) {
     let settings = create_settings();

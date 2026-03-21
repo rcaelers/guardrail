@@ -1,11 +1,12 @@
+use sqlx::{Pool, Postgres};
+use uuid::Uuid;
+
 use common::QueryParams;
 use data::annotation::AnnotationSource;
 use data::annotation::NewAnnotation;
 use repos::{annotation::AnnotationsRepo, error::RepoError};
-use sqlx::{Pool, Postgres};
 use testware::create_test_crash;
 use testware::create_test_product;
-use uuid::Uuid;
 
 // AnnotationKind tests
 
