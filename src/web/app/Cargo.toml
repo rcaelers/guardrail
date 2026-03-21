@@ -9,13 +9,13 @@ repos = { path = "../../backend/repos", optional = true }
 data = { path = "../../backend/data" }
 
 # Leptos
-leptos = { version = "0.8.15", features = ["nightly", "tracing"] }
-leptos_meta = { version = "0.8.5" }
-leptos_router = { version = "0.8.11", features = ["nightly"] }
-leptos-use = { version = "0.18.0" }
-leptos_axum = { version = "0.8.7", optional = true }
+leptos = { version = "0.8.17", features = ["nightly", "tracing"] }
+leptos_meta = { version = "0.8.6" }
+leptos_router = { version = "0.8.12", features = ["nightly"] }
+leptos-use = { version = "0.18.3" }
+leptos_axum = { version = "0.8.8", optional = true }
 leptos-struct-table = { version = "0.17.0", features = ["chrono", "uuid"] }
-wasm-bindgen-futures = { version = "0.4.58" }
+wasm-bindgen-futures = { version = "0.4.64" }
 
 # Serde / json
 serde.workspace = true

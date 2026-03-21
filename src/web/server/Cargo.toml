@@ -9,8 +9,8 @@ repos = { path = "../../backend/repos" }
 common = { path = "../../backend/common" }
 
 # Leptos
-leptos = { version = "0.8.15", features = ["nightly", "ssr", "tracing"] }
-leptos_axum = { version = "0.8.7" }
+leptos = { version = "0.8.17", features = ["nightly", "ssr", "tracing"] }
+leptos_axum = { version = "0.8.8" }
 # leptos_router.workspace = true
 # leptos-use.workspace = true
 

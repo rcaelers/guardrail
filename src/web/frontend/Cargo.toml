@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 app = { path = "../app", default-features = false, features = ["hydrate"] }
 
 # Leptos
-leptos = { version = "0.8.15", features = ["nightly", "hydrate", "tracing"] }
+leptos = { version = "0.8.17", features = ["nightly", "hydrate", "tracing"] }
 
 console_error_panic_hook = "0.1.7"
 wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
