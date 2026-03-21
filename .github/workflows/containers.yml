@@ -50,15 +50,29 @@ jobs:
             runner: ubuntu-24.04-arm
             platform: linux/arm64
 
-          - name: jobs
-            file: Containerfile.jobs
+          - name: processor
+            file: Containerfile.processor
             arch: amd64
             target: x86_64-unknown-linux-gnu
             runner: ubuntu-24.04
             platform: linux/amd64
 
-          - name: jobs
-            file: Containerfile.jobs
+          - name: processor
+            file: Containerfile.processor
+            arch: arm64
+            target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+
+          - name: curator
+            file: Containerfile.curator
+            arch: amd64
+            target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            platform: linux/amd64
+
+          - name: curator
+            file: Containerfile.curator
             arch: arm64
             target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
@@ -96,7 +110,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        name: [api, jobs, web]
+        name: [api, processor, curator, web]
 
     steps:
       - name: Set up Cosign

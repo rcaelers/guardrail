@@ -1,0 +1,2086 @@
+{
+  "pid": 11424,
+  "status": "OK",
+  "handles": [
+    {
+      "handle": 4,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 8,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 12,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 16,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 20,
+      "type_name": "IoCompletion",
+      "object_name": null
+    },
+    {
+      "handle": 24,
+      "type_name": "WaitCompletionPacket",
+      "object_name": null
+    },
+    {
+      "handle": 28,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 32,
+      "type_name": "TpWorkerFactory",
+      "object_name": null
+    },
+    {
+      "handle": 36,
+      "type_name": "IRTimer",
+      "object_name": null
+    },
+    {
+      "handle": 40,
+      "type_name": "WaitCompletionPacket",
+      "object_name": null
+    },
+    {
+      "handle": 44,
+      "type_name": "IRTimer",
+      "object_name": null
+    },
+    {
+      "handle": 48,
+      "type_name": "WaitCompletionPacket",
+      "object_name": null
+    },
+    {
+      "handle": 52,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 56,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 60,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 64,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 68,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 72,
+      "type_name": "Directory",
+      "object_name": null
+    },
+    {
+      "handle": 76,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 80,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 84,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 88,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 92,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 96,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 100,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 104,
+      "type_name": "ALPC Port",
+      "object_name": null
+    },
+    {
+      "handle": 108,
+      "type_name": "Section",
+      "object_name": null
+    },
+    {
+      "handle": 112,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 116,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 120,
+      "type_name": "Thread",
+      "object_name": null
+    },
+    {
+      "handle": 124,
+      "type_name": "SchedulerSharedData",
+      "object_name": null
+    },
+    {
+      "handle": 128,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 132,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 136,
+      "type_name": "ALPC Port",
+      "object_name": null
+    },
+    {
+      "handle": 140,
+      "type_name": "Thread",
+      "object_name": null
+    },
+    {
+      "handle": 144,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 148,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 152,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 156,
+      "type_name": "Mutant",
+      "object_name": null
+    },
+    {
+      "handle": 160,
+      "type_name": "Directory",
+      "object_name": null
+    },
+    {
+      "handle": 164,
+      "type_name": "Semaphore",
+      "object_name": null
+    },
+    {
+      "handle": 168,
+      "type_name": "Semaphore",
+      "object_name": null
+    },
+    {
+      "handle": 172,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 176,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 180,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 184,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 188,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 192,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 196,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 200,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 204,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 208,
+      "type_name": "TpWorkerFactory",
+      "object_name": null
+    },
+    {
+      "handle": 212,
+      "type_name": "IoCompletion",
+      "object_name": null
+    },
+    {
+      "handle": 216,
+      "type_name": "IRTimer",
+      "object_name": null
+    },
+    {
+      "handle": 220,
+      "type_name": "WaitCompletionPacket",
+      "object_name": null
+    },
+    {
+      "handle": 224,
+      "type_name": "IRTimer",
+      "object_name": null
+    },
+    {
+      "handle": 228,
+      "type_name": "WaitCompletionPacket",
+      "object_name": null
+    },
+    {
+      "handle": 232,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 236,
+      "type_name": "Key",
+      "object_name": null
+    },
+    {
+      "handle": 244,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 248,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 252,
+      "type_name": "Thread",
+      "object_name": null
+    },
+    {
+      "handle": 256,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 260,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 264,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 268,
+      "type_name": "Key",
+      "object_name": null
+    },
+    {
+      "handle": 272,
+      "type_name": "Key",
+      "object_name": null
+    },
+    {
+      "handle": 276,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 284,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 288,
+      "type_name": "Thread",
+      "object_name": null
+    },
+    {
+      "handle": 296,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 304,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 308,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 316,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 320,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 324,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 328,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 332,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 336,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 340,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 344,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 348,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 352,
+      "type_name": "Key",
+      "object_name": null
+    },
+    {
+      "handle": 356,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 360,
+      "type_name": "IoCompletion",
+      "object_name": null
+    },
+    {
+      "handle": 364,
+      "type_name": "WindowStation",
+      "object_name": null
+    },
+    {
+      "handle": 368,
+      "type_name": "Desktop",
+      "object_name": null
+    },
+    {
+      "handle": 372,
+      "type_name": "WindowStation",
+      "object_name": null
+    },
+    {
+      "handle": 376,
+      "type_name": "Section",
+      "object_name": null
+    },
+    {
+      "handle": 380,
+      "type_name": "Semaphore",
+      "object_name": null
+    },
+    {
+      "handle": 384,
+      "type_name": "Semaphore",
+      "object_name": null
+    },
+    {
+      "handle": 388,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 392,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 396,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 400,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 404,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 408,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 412,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 416,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 420,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 424,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 428,
+      "type_name": "Key",
+      "object_name": null
+    },
+    {
+      "handle": 432,
+      "type_name": "Key",
+      "object_name": null
+    },
+    {
+      "handle": 436,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 440,
+      "type_name": "Key",
+      "object_name": null
+    },
+    {
+      "handle": 444,
+      "type_name": "Key",
+      "object_name": null
+    },
+    {
+      "handle": 448,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 452,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 456,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 460,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 464,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 468,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 472,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 476,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 480,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 484,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 488,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 492,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 496,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 500,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 504,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 508,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 512,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 516,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 520,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 524,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 528,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 532,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 536,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 540,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 544,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 548,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 552,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 556,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 560,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 564,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 568,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 572,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 576,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 580,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 584,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 588,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 592,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 596,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 600,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 604,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 608,
+      "type_name": "Key",
+      "object_name": null
+    },
+    {
+      "handle": 612,
+      "type_name": "Section",
+      "object_name": null
+    },
+    {
+      "handle": 616,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 620,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 624,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 628,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 632,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 636,
+      "type_name": "Key",
+      "object_name": null
+    },
+    {
+      "handle": 640,
+      "type_name": "WaitCompletionPacket",
+      "object_name": null
+    },
+    {
+      "handle": 644,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 648,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 652,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 656,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 660,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 664,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 668,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 672,
+      "type_name": "Key",
+      "object_name": null
+    },
+    {
+      "handle": 676,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 680,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 684,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 688,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 692,
+      "type_name": "Thread",
+      "object_name": null
+    },
+    {
+      "handle": 696,
+      "type_name": "ALPC Port",
+      "object_name": null
+    },
+    {
+      "handle": 700,
+      "type_name": "IoCompletion",
+      "object_name": null
+    },
+    {
+      "handle": 704,
+      "type_name": "TpWorkerFactory",
+      "object_name": null
+    },
+    {
+      "handle": 708,
+      "type_name": "IRTimer",
+      "object_name": null
+    },
+    {
+      "handle": 712,
+      "type_name": "WaitCompletionPacket",
+      "object_name": null
+    },
+    {
+      "handle": 716,
+      "type_name": "IRTimer",
+      "object_name": null
+    },
+    {
+      "handle": 720,
+      "type_name": "WaitCompletionPacket",
+      "object_name": null
+    },
+    {
+      "handle": 728,
+      "type_name": "Semaphore",
+      "object_name": null
+    },
+    {
+      "handle": 732,
+      "type_name": "Semaphore",
+      "object_name": null
+    },
+    {
+      "handle": 736,
+      "type_name": "Semaphore",
+      "object_name": null
+    },
+    {
+      "handle": 740,
+      "type_name": "Semaphore",
+      "object_name": null
+    },
+    {
+      "handle": 744,
+      "type_name": "Semaphore",
+      "object_name": null
+    },
+    {
+      "handle": 748,
+      "type_name": "Semaphore",
+      "object_name": null
+    },
+    {
+      "handle": 752,
+      "type_name": "Semaphore",
+      "object_name": null
+    },
+    {
+      "handle": 756,
+      "type_name": "Semaphore",
+      "object_name": null
+    },
+    {
+      "handle": 760,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 764,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 768,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 780,
+      "type_name": null,
+      "object_name": null
+    },
+    {
+      "handle": 784,
+      "type_name": "Key",
+      "object_name": null
+    },
+    {
+      "handle": 808,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 812,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 816,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 968,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 1020,
+      "type_name": "Thread",
+      "object_name": null
+    },
+    {
+      "handle": 1112,
+      "type_name": "Mutant",
+      "object_name": null
+    },
+    {
+      "handle": 1120,
+      "type_name": "Mutant",
+      "object_name": null
+    },
+    {
+      "handle": 1180,
+      "type_name": "Mutant",
+      "object_name": null
+    },
+    {
+      "handle": 1184,
+      "type_name": "Mutant",
+      "object_name": null
+    },
+    {
+      "handle": 1188,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 1192,
+      "type_name": "Event",
+      "object_name": null
+    },
+    {
+      "handle": 1196,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 1200,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 1204,
+      "type_name": "File",
+      "object_name": null
+    },
+    {
+      "handle": 1208,
+      "type_name": "File",
+      "object_name": null
+    }
+  ],
+  "modules": [
+    {
+      "code_id": "6521619a6dd000",
+      "version": "0.0.0.0",
+      "debug_id": "EE9E2672A6863B084C4C44205044422E1",
+      "end_addr": "0x00007ff60533d000",
+      "filename": "crash.exe",
+      "base_addr": "0x00007ff604c60000",
+      "debug_file": "crash.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": true,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "4092c1b7402000",
+      "version": "10.0.25967.1000",
+      "debug_id": "4B245FC21BEBADAF3FD11ADC96DCB0F81",
+      "end_addr": "0x00007ff98d782000",
+      "filename": "ntdll.dll",
+      "base_addr": "0x00007ff98d380000",
+      "debug_file": "ntdll.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": true
+    },
+    {
+      "code_id": "0ddcee1415d000",
+      "version": "10.0.25967.1000",
+      "debug_id": "D48939DAD263B15578D06556B4A674261",
+      "end_addr": "0x00007ff98cbfd000",
+      "filename": "xtajit64.dll",
+      "base_addr": "0x00007ff98caa0000",
+      "debug_file": "xtajit64.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "1262bad2160000",
+      "version": "10.0.25967.1000",
+      "debug_id": "9E1847A64C35879EEBF8E36717AAA2A21",
+      "end_addr": "0x00007ff98b370000",
+      "filename": "KERNEL32.DLL",
+      "base_addr": "0x00007ff98b210000",
+      "debug_file": "kernel32.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": true
+    },
+    {
+      "code_id": "576b4dd15ba000",
+      "version": "10.0.25967.1000",
+      "debug_id": "BC3E05277B8255453110393C72E034411",
+      "end_addr": "0x00007ff98998a000",
+      "filename": "KERNELBASE.dll",
+      "base_addr": "0x00007ff9893d0000",
+      "debug_file": "kernelbase.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": true
+    },
+    {
+      "code_id": "755c379d105000",
+      "version": "10.0.25967.1000",
+      "debug_id": "64F375D3A293333192EF4F1249ED67B01",
+      "end_addr": "0x00007ff988925000",
+      "filename": "apphelp.dll",
+      "base_addr": "0x00007ff988820000",
+      "debug_file": "apphelp.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "a2593e56219000",
+      "version": "10.0.25967.1000",
+      "debug_id": "F90E76195B781DBCF6F144A11DC33D811",
+      "end_addr": "0x00007ff988df9000",
+      "filename": "ucrtbase.dll",
+      "base_addr": "0x00007ff988be0000",
+      "debug_file": "ucrtbase.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "9e9ed91ef32000",
+      "version": "10.0.25967.1000",
+      "debug_id": "FBA88BC8ACFA98DE8B0ACF298F31C9641",
+      "end_addr": "0x00007ff98b0c2000",
+      "filename": "SHELL32.dll",
+      "base_addr": "0x00007ff98a190000",
+      "debug_file": "shell32.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "013f4c7b151000",
+      "version": "10.0.25967.1000",
+      "debug_id": "0D0B33F335D457D1FAAB00914E1392B01",
+      "end_addr": "0x00007ff988f51000",
+      "filename": "msvcp_win.dll",
+      "base_addr": "0x00007ff988e00000",
+      "debug_file": "msvcp_win.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "64f646dc4c000",
+      "version": "1.12.0.0",
+      "debug_id": "000000000000000000000000000000000",
+      "end_addr": "0x00007ff980bfc000",
+      "filename": "libspdlog.dll",
+      "base_addr": "0x00007ff980bb0000",
+      "debug_file": "libspdlog.dll",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "6510997628000",
+      "version": "0.0.0.0",
+      "debug_id": "000000000000000000000000000000000",
+      "end_addr": "0x00007ff97df68000",
+      "filename": "libfmt.dll",
+      "base_addr": "0x00007ff97df40000",
+      "debug_file": "libfmt.dll",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "650db4e9133000",
+      "version": "0.0.0.0",
+      "debug_id": "000000000000000000000000000000000",
+      "end_addr": "0x00007ff968583000",
+      "filename": "libc++.dll",
+      "base_addr": "0x00007ff968450000",
+      "debug_file": "libc++.dll",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "2837953c25f000",
+      "version": "10.0.25967.1000",
+      "debug_id": "0F412FA5969B84F98BCAEF1501085E2C1",
+      "end_addr": "0x00007ff98bb3f000",
+      "filename": "USER32.dll",
+      "base_addr": "0x00007ff98b8e0000",
+      "debug_file": "user32.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "429a9c4c5d000",
+      "version": "10.0.25967.1000",
+      "debug_id": "E963ED0A63AD0B1141EF9684E7F9217B1",
+      "end_addr": "0x00007ff9893bd000",
+      "filename": "win32u.dll",
+      "base_addr": "0x00007ff989360000",
+      "debug_file": "win32u.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "21e817595f000",
+      "version": "10.0.25967.1000",
+      "debug_id": "E1C890F305F719A165F48D176DED03E61",
+      "end_addr": "0x00007ff98b1ff000",
+      "filename": "GDI32.dll",
+      "base_addr": "0x00007ff98b1a0000",
+      "debug_file": "gdi32.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "77345baf1d4000",
+      "version": "10.0.25967.1000",
+      "debug_id": "6BA058BB96002872DFD84BBC4A5226881",
+      "end_addr": "0x00007ff989134000",
+      "filename": "gdi32full.dll",
+      "base_addr": "0x00007ff988f60000",
+      "debug_file": "gdi32full.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "0e50307f2a0000",
+      "version": "10.0.25967.1000",
+      "debug_id": "8E20EDDA903CB0F067A44A82DC9017AA1",
+      "end_addr": "0x00007ff98be50000",
+      "filename": "ole32.dll",
+      "base_addr": "0x00007ff98bbb0000",
+      "debug_file": "ole32.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "1ce939e7650000",
+      "version": "10.0.25967.1000",
+      "debug_id": "6E62531A79A3DBDBD6725B9A59DBC0DE1",
+      "end_addr": "0x00007ff98d260000",
+      "filename": "combase.dll",
+      "base_addr": "0x00007ff98cc10000",
+      "debug_file": "combase.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "ec6725cb1f8000",
+      "version": "10.0.25967.1000",
+      "debug_id": "68129CA4A9B9B8423FE289815BB604941",
+      "end_addr": "0x00007ff98a188000",
+      "filename": "RPCRT4.dll",
+      "base_addr": "0x00007ff989f90000",
+      "debug_file": "rpcrt4.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "aebddaca134000",
+      "version": "10.0.25967.1000",
+      "debug_id": "9A670812420648D525420034E3806CD71",
+      "end_addr": "0x00007ff989ac4000",
+      "filename": "ADVAPI32.dll",
+      "base_addr": "0x00007ff989990000",
+      "debug_file": "advapi32.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "61434582144000",
+      "version": "7.0.25967.1000",
+      "debug_id": "7E6719B82C40485B541BA90FFF0C64221",
+      "end_addr": "0x00007ff989c14000",
+      "filename": "msvcrt.dll",
+      "base_addr": "0x00007ff989ad0000",
+      "debug_file": "msvcrt.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "234509c6117000",
+      "version": "10.0.25967.1000",
+      "debug_id": "5F4E0AEAA849A2AB7E89070AAE1E1DB31",
+      "end_addr": "0x00007ff98c127000",
+      "filename": "sechost.dll",
+      "base_addr": "0x00007ff98c010000",
+      "debug_file": "sechost.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "651c60e715a000",
+      "version": "2.78.0.0",
+      "debug_id": "000000000000000000000000000000000",
+      "end_addr": "0x00007ff96844a000",
+      "filename": "libglib-2.0-0.dll",
+      "base_addr": "0x00007ff9682f0000",
+      "debug_file": "libglib-2.0-0.dll",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "65205c0b22000",
+      "version": "0.0.0.0",
+      "debug_id": "356F1B5DA5758C9F4C4C44205044422E1",
+      "end_addr": "0x00007ff97df32000",
+      "filename": "harpoon64.dll",
+      "base_addr": "0x00007ff97df10000",
+      "debug_file": "harpoon64.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "380fa6e3c2000",
+      "version": "10.0.25967.1000",
+      "debug_id": "216BF8DE68E76C780D6A39E3C3E0AC3F1",
+      "end_addr": "0x00007ff98b192000",
+      "filename": "WS2_32.dll",
+      "base_addr": "0x00007ff98b0d0000",
+      "debug_file": "ws2_32.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "d3926c5a15000",
+      "version": "10.0.25967.1000",
+      "debug_id": "E31C971BDE3F63366F7FA124315C2FCF1",
+      "end_addr": "0x00007ff9878f5000",
+      "filename": "CRYPTBASE.DLL",
+      "base_addr": "0x00007ff9878e0000",
+      "debug_file": "cryptbase.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "649bfb2d22000",
+      "version": "0.21.1.0",
+      "debug_id": "000000000000000000000000000000000",
+      "end_addr": "0x00007ff97c012000",
+      "filename": "libintl-8.dll",
+      "base_addr": "0x00007ff97bff0000",
+      "debug_file": "libintl-8.dll",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "639df1fe65000",
+      "version": "0.0.0.0",
+      "debug_id": "000000000000000000000000000000000",
+      "end_addr": "0x00007ff97b015000",
+      "filename": "libpcre2-8-0.dll",
+      "base_addr": "0x00007ff97afb0000",
+      "debug_file": "libpcre2-8-0.dll",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "63f216ee111000",
+      "version": "1.17.0.0",
+      "debug_id": "000000000000000000000000000000000",
+      "end_addr": "0x00007ff9682e1000",
+      "filename": "libiconv-2.dll",
+      "base_addr": "0x00007ff9681d0000",
+      "debug_file": "libiconv-2.dll",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "f88aedbbc7000",
+      "version": "10.0.25967.1000",
+      "debug_id": "57A0581969875995A9421263E41B29A41",
+      "end_addr": "0x00007ff989207000",
+      "filename": "bcryptPrimitives.dll",
+      "base_addr": "0x00007ff989140000",
+      "debug_file": "bcryptprimitives.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "856cea6452000",
+      "version": "10.0.25967.1000",
+      "debug_id": "67DACF9649DBAEB870CB1BC2129C11701",
+      "end_addr": "0x00007ff989ea2000",
+      "filename": "IMM32.DLL",
+      "base_addr": "0x00007ff989e50000",
+      "debug_file": "imm32.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "3ea779a511e9000",
+      "version": "10.0.25967.1000",
+      "debug_id": "5A5C0100D4A677E13A83D1CDD357C91F1",
+      "end_addr": "0x00007ff986119000",
+      "filename": "windows.storage.dll",
+      "base_addr": "0x00007ff984f30000",
+      "debug_file": "Windows.Storage.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "35608cd71b9000",
+      "version": "10.0.25967.1000",
+      "debug_id": "A4FE6AEFAA3A92905B014FB2193C92841",
+      "end_addr": "0x00007ff98b549000",
+      "filename": "SHCORE.dll",
+      "base_addr": "0x00007ff98b390000",
+      "debug_file": "shcore.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "f3546cada3000",
+      "version": "10.0.25967.1000",
+      "debug_id": "A6E66EE7A9F566F45CA9FFAFDECB02E41",
+      "end_addr": "0x00007ff98d313000",
+      "filename": "shlwapi.dll",
+      "base_addr": "0x00007ff98d270000",
+      "debug_file": "shlwapi.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    },
+    {
+      "code_id": "3637ab0e5d000",
+      "version": "10.0.25967.1000",
+      "debug_id": "F50B4AA9CDBB1AE949F37545DD059B9F1",
+      "end_addr": "0x00007ff984b1d000",
+      "filename": "ntmarta.dll",
+      "base_addr": "0x00007ff984ac0000",
+      "debug_file": "ntmarta.pdb",
+      "symbol_url": null,
+      "cert_subject": null,
+      "loaded_symbols": false,
+      "corrupt_symbols": false,
+      "missing_symbols": false
+    }
+  ],
+  "threads": [
+    {
+      "frames": [
+        {
+          "file": "\\\\?\\C:\\mystuff\\src\\workrave-v1_11\\libs\\crash\\test\\crash.cc",
+          "line": 76,
+          "frame": 0,
+          "trust": "context",
+          "module": "crash.exe",
+          "offset": "0x00007ff604c61d8b",
+          "inlines": null,
+          "function": "crash2()",
+          "module_offset": "0x0000000000001d8b",
+          "function_offset": "0x000000000000001b",
+          "missing_symbols": false,
+          "unloaded_modules": null
+        },
+        {
+          "file": "\\\\?\\C:\\mystuff\\src\\workrave-v1_11\\libs\\crash\\test\\crash.cc",
+          "line": 84,
+          "frame": 1,
+          "trust": "cfi",
+          "module": "crash.exe",
+          "offset": "0x00007ff604c61d0a",
+          "inlines": null,
+          "function": "crash1()",
+          "module_offset": "0x0000000000001d0a",
+          "function_offset": "0x000000000000006a",
+          "missing_symbols": false,
+          "unloaded_modules": null
+        },
+        {
+          "file": "\\\\?\\C:\\mystuff\\src\\workrave-v1_11\\libs\\crash\\test\\crash.cc",
+          "line": 91,
+          "frame": 2,
+          "trust": "cfi",
+          "module": "crash.exe",
+          "offset": "0x00007ff604c61bea",
+          "inlines": null,
+          "function": "crash()",
+          "module_offset": "0x0000000000001bea",
+          "function_offset": "0x000000000000006a",
+          "missing_symbols": false,
+          "unloaded_modules": null
+        },
+        {
+          "file": "\\\\?\\C:\\mystuff\\src\\workrave-v1_11\\libs\\crash\\test\\crash.cc",
+          "line": 108,
+          "frame": 3,
+          "trust": "cfi",
+          "module": "crash.exe",
+          "offset": "0x00007ff604c61519",
+          "inlines": null,
+          "function": "run(int, char**)",
+          "module_offset": "0x0000000000001519",
+          "function_offset": "0x0000000000000179",
+          "missing_symbols": false,
+          "unloaded_modules": null
+        },
+        {
+          "file": "\\\\?\\C:\\mystuff\\src\\workrave-v1_11\\libs\\crash\\test\\crash.cc",
+          "line": 116,
+          "frame": 4,
+          "trust": "cfi",
+          "module": "crash.exe",
+          "offset": "0x00007ff604c61c86",
+          "inlines": null,
+          "function": "main(int, char**)",
+          "module_offset": "0x0000000000001c86",
+          "function_offset": "0x0000000000000036",
+          "missing_symbols": false,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 5,
+          "trust": "cfi",
+          "module": "crash.exe",
+          "offset": "0x00007ff604c61314",
+          "inlines": null,
+          "function": "WinMainCRTStartup",
+          "module_offset": "0x0000000000001314",
+          "function_offset": "0x00000000000001d4",
+          "missing_symbols": false,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 6,
+          "trust": "cfi",
+          "module": "crash.exe",
+          "offset": "0x00007ff604c61365",
+          "inlines": null,
+          "function": "mainCRTStartup",
+          "module_offset": "0x0000000000001365",
+          "function_offset": "0x0000000000000015",
+          "missing_symbols": false,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 7,
+          "trust": "cfi",
+          "module": "KERNEL32.DLL",
+          "offset": "0x00007ff98b2ff22b",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x00000000000ef22b",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 8,
+          "trust": "scan",
+          "module": "KERNEL32.DLL",
+          "offset": "0x00007ff98b27f5a7",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x000000000006f5a7",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 9,
+          "trust": "scan",
+          "module": "ntdll.dll",
+          "offset": "0x00007ff98d57fcff",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x00000000001ffcff",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 10,
+          "trust": "scan",
+          "module": "KERNELBASE.dll",
+          "offset": "0x00007ff98963079f",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x000000000026079f",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        }
+      ],
+      "thread_id": 7520,
+      "frame_count": 11,
+      "thread_name": null,
+      "last_error_value": "ERROR_SUCCESS"
+    },
+    {
+      "frames": [
+        {
+          "file": null,
+          "line": null,
+          "frame": 0,
+          "trust": "context",
+          "module": "ntdll.dll",
+          "offset": "0x00007ff98d4ee7a4",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x000000000016e7a4",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 1,
+          "trust": "scan",
+          "module": "ntdll.dll",
+          "offset": "0x00007ff98d4e502f",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x000000000016502f",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 2,
+          "trust": "scan",
+          "module": "ntdll.dll",
+          "offset": "0x00007ff98d564fef",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x00000000001e4fef",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        }
+      ],
+      "thread_id": 912,
+      "frame_count": 3,
+      "thread_name": null,
+      "last_error_value": "ERROR_SUCCESS"
+    },
+    {
+      "frames": [
+        {
+          "file": null,
+          "line": null,
+          "frame": 0,
+          "trust": "context",
+          "module": "ntdll.dll",
+          "offset": "0x00007ff98d4ee7a4",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x000000000016e7a4",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 1,
+          "trust": "scan",
+          "module": "ntdll.dll",
+          "offset": "0x00007ff98d4e502f",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x000000000016502f",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 2,
+          "trust": "scan",
+          "module": "ntdll.dll",
+          "offset": "0x00007ff98d564fef",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x00000000001e4fef",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        }
+      ],
+      "thread_id": 1292,
+      "frame_count": 3,
+      "thread_name": null,
+      "last_error_value": "ERROR_SUCCESS"
+    },
+    {
+      "frames": [
+        {
+          "file": null,
+          "line": null,
+          "frame": 0,
+          "trust": "context",
+          "module": "ntdll.dll",
+          "offset": "0x00007ff98d4ee7a4",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x000000000016e7a4",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 1,
+          "trust": "scan",
+          "module": "ntdll.dll",
+          "offset": "0x00007ff98d4e502f",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x000000000016502f",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 2,
+          "trust": "scan",
+          "module": "ntdll.dll",
+          "offset": "0x00007ff98d564fef",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x00000000001e4fef",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        }
+      ],
+      "thread_id": 2900,
+      "frame_count": 3,
+      "thread_name": null,
+      "last_error_value": "ERROR_SUCCESS"
+    },
+    {
+      "frames": [
+        {
+          "file": null,
+          "line": null,
+          "frame": 0,
+          "trust": "context",
+          "module": "ntdll.dll",
+          "offset": "0x00007ff98d4e51a4",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x00000000001651a4",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 1,
+          "trust": "scan",
+          "module": "ntdll.dll",
+          "offset": "0x00007ff98d4e502f",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x000000000016502f",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        },
+        {
+          "file": null,
+          "line": null,
+          "frame": 2,
+          "trust": "scan",
+          "module": "ntdll.dll",
+          "offset": "0x00007ff98d57fccf",
+          "inlines": null,
+          "function": null,
+          "module_offset": "0x00000000001ffccf",
+          "function_offset": null,
+          "missing_symbols": true,
+          "unloaded_modules": null
+        }
+      ],
+      "thread_id": 6556,
+      "frame_count": 3,
+      "thread_name": null,
+      "last_error_value": "ERROR_SUCCESS"
+    }
+  ],
+  "crash_info": {
+    "type": "EXCEPTION_ACCESS_VIOLATION_WRITE",
+    "address": "0x0000000000000000",
+    "assertion": null,
+    "instruction": null,
+    "crashing_thread": 0,
+    "memory_accesses": null,
+    "adjusted_address": null,
+    "possible_bit_flips": null
+  },
+  "lsb_release": null,
+  "main_module": 0,
+  "proc_limits": null,
+  "system_info": {
+    "os": "Windows NT",
+    "os_ver": "10.0.25967 1000",
+    "cpu_arch": "amd64",
+    "cpu_info": "family 21 model 0 stepping 1",
+    "cpu_count": 16,
+    "cpu_microcode_version": null
+  },
+  "thread_count": 5,
+  "mac_boot_args": null,
+  "mac_crash_info": null,
+  "crashing_thread": {
+    "frames": [
+      {
+        "file": "\\\\?\\C:\\mystuff\\src\\workrave-v1_11\\libs\\crash\\test\\crash.cc",
+        "line": 76,
+        "frame": 0,
+        "trust": "context",
+        "module": "crash.exe",
+        "offset": "0x00007ff604c61d8b",
+        "inlines": null,
+        "function": "crash2()",
+        "registers": {
+          "r8": "0x0000000000000001",
+          "r9": "0x000001e55dc95e51",
+          "r10": "0x0000000000000001",
+          "r11": "0x0000000000000002",
+          "r12": "0x0000000000000000",
+          "r13": "0x0000000000000000",
+          "r14": "0x000001e55dc7d610",
+          "r15": "0x0000000000000001",
+          "rax": "0x0000000000000000",
+          "rbp": "0x000000b81898fed0",
+          "rbx": "0x0000000000000001",
+          "rcx": "0x000000b81898fcb8",
+          "rdi": "0x0000000000000034",
+          "rdx": "0x0000000000000000",
+          "rip": "0x00007ff604c61d8b",
+          "rsi": "0x000001e55dc87d80",
+          "rsp": "0x000000b81898fba0"
+        },
+        "module_offset": "0x0000000000001d8b",
+        "function_offset": "0x000000000000001b",
+        "missing_symbols": false,
+        "unloaded_modules": null
+      },
+      {
+        "file": "\\\\?\\C:\\mystuff\\src\\workrave-v1_11\\libs\\crash\\test\\crash.cc",
+        "line": 84,
+        "frame": 1,
+        "trust": "cfi",
+        "module": "crash.exe",
+        "offset": "0x00007ff604c61d0a",
+        "inlines": null,
+        "function": "crash1()",
+        "module_offset": "0x0000000000001d0a",
+        "function_offset": "0x000000000000006a",
+        "missing_symbols": false,
+        "unloaded_modules": null
+      },
+      {
+        "file": "\\\\?\\C:\\mystuff\\src\\workrave-v1_11\\libs\\crash\\test\\crash.cc",
+        "line": 91,
+        "frame": 2,
+        "trust": "cfi",
+        "module": "crash.exe",
+        "offset": "0x00007ff604c61bea",
+        "inlines": null,
+        "function": "crash()",
+        "module_offset": "0x0000000000001bea",
+        "function_offset": "0x000000000000006a",
+        "missing_symbols": false,
+        "unloaded_modules": null
+      },
+      {
+        "file": "\\\\?\\C:\\mystuff\\src\\workrave-v1_11\\libs\\crash\\test\\crash.cc",
+        "line": 108,
+        "frame": 3,
+        "trust": "cfi",
+        "module": "crash.exe",
+        "offset": "0x00007ff604c61519",
+        "inlines": null,
+        "function": "run(int, char**)",
+        "module_offset": "0x0000000000001519",
+        "function_offset": "0x0000000000000179",
+        "missing_symbols": false,
+        "unloaded_modules": null
+      },
+      {
+        "file": "\\\\?\\C:\\mystuff\\src\\workrave-v1_11\\libs\\crash\\test\\crash.cc",
+        "line": 116,
+        "frame": 4,
+        "trust": "cfi",
+        "module": "crash.exe",
+        "offset": "0x00007ff604c61c86",
+        "inlines": null,
+        "function": "main(int, char**)",
+        "module_offset": "0x0000000000001c86",
+        "function_offset": "0x0000000000000036",
+        "missing_symbols": false,
+        "unloaded_modules": null
+      },
+      {
+        "file": null,
+        "line": null,
+        "frame": 5,
+        "trust": "cfi",
+        "module": "crash.exe",
+        "offset": "0x00007ff604c61314",
+        "inlines": null,
+        "function": "WinMainCRTStartup",
+        "module_offset": "0x0000000000001314",
+        "function_offset": "0x00000000000001d4",
+        "missing_symbols": false,
+        "unloaded_modules": null
+      },
+      {
+        "file": null,
+        "line": null,
+        "frame": 6,
+        "trust": "cfi",
+        "module": "crash.exe",
+        "offset": "0x00007ff604c61365",
+        "inlines": null,
+        "function": "mainCRTStartup",
+        "module_offset": "0x0000000000001365",
+        "function_offset": "0x0000000000000015",
+        "missing_symbols": false,
+        "unloaded_modules": null
+      },
+      {
+        "file": null,
+        "line": null,
+        "frame": 7,
+        "trust": "cfi",
+        "module": "KERNEL32.DLL",
+        "offset": "0x00007ff98b2ff22b",
+        "inlines": null,
+        "function": null,
+        "module_offset": "0x00000000000ef22b",
+        "function_offset": null,
+        "missing_symbols": true,
+        "unloaded_modules": null
+      },
+      {
+        "file": null,
+        "line": null,
+        "frame": 8,
+        "trust": "scan",
+        "module": "KERNEL32.DLL",
+        "offset": "0x00007ff98b27f5a7",
+        "inlines": null,
+        "function": null,
+        "module_offset": "0x000000000006f5a7",
+        "function_offset": null,
+        "missing_symbols": true,
+        "unloaded_modules": null
+      },
+      {
+        "file": null,
+        "line": null,
+        "frame": 9,
+        "trust": "scan",
+        "module": "ntdll.dll",
+        "offset": "0x00007ff98d57fcff",
+        "inlines": null,
+        "function": null,
+        "module_offset": "0x00000000001ffcff",
+        "function_offset": null,
+        "missing_symbols": true,
+        "unloaded_modules": null
+      },
+      {
+        "file": null,
+        "line": null,
+        "frame": 10,
+        "trust": "scan",
+        "module": "KERNELBASE.dll",
+        "offset": "0x00007ff98963079f",
+        "inlines": null,
+        "function": null,
+        "module_offset": "0x000000000026079f",
+        "function_offset": null,
+        "missing_symbols": true,
+        "unloaded_modules": null
+      }
+    ],
+    "thread_id": 7520,
+    "frame_count": 11,
+    "thread_name": null,
+    "threads_index": 0,
+    "last_error_value": "ERROR_SUCCESS"
+  },
+  "unloaded_modules": [],
+  "linux_memory_map_count": null,
+  "modules_contains_cert_info": false
+}

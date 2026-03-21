@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO core.symbols\n                  (\n                    os,\n                    arch,\n                    build_id,\n                    module_id,\n                    storage_path,\n                    product_id\n                  )\n                VALUES ($1, $2, $3, $4, $5, $6)\n                RETURNING\n                  id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0a4a0645d47006aa37a7958fa868dd68dc2bf154c135fa98aef40e39f726e4e6"
+}

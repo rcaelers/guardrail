@@ -1,0 +1,25 @@
+[package]
+name = "data"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+
+# Serde / json
+serde.workspace = true
+serde_json.workspace = true
+
+# SQLx
+sqlx = { workspace = true, optional = true }
+
+# Tracing
+tracing.workspace = true
+
+# Misc
+uuid.workspace = true
+chrono.workspace = true
+strum.workspace = true
+strum_macros.workspace = true
+
+[features]
+ssr = ["dep:sqlx"]

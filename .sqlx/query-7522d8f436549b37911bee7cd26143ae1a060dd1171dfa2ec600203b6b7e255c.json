@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT *\n                FROM core.symbols\n                WHERE core.symbols.id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 2,
+        "name": "updated_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 3,
+        "name": "os",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "arch",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "build_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "module_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "storage_path",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "product_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7522d8f436549b37911bee7cd26143ae1a060dd1171dfa2ec600203b6b7e255c"
+}

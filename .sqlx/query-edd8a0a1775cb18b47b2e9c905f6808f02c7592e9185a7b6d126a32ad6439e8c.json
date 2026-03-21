@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO core.api_tokens\n                  (\n                    description,\n                    token_id,\n                    token_hash,\n                    product_id,\n                    user_id,\n                    entitlements,\n                    expires_at,\n                    is_active\n                  )\n                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n                RETURNING\n                  id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "TextArray",
+        "Timestamp",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "edd8a0a1775cb18b47b2e9c905f6808f02c7592e9185a7b6d126a32ad6439e8c"
+}

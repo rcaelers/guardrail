@@ -1,0 +1,349 @@
+use apalis::prelude::*;
+use apalis_postgres::PostgresStorage;
+use bytes::Bytes;
+use minidump::Minidump;
+use minidump_processor::ProcessorOptions;
+use minidump_unwind::Symbolizer;
+use object_store::{ObjectStore, ObjectStoreExt, path::Path};
+use serde_json::Value;
+use std::sync::Arc;
+use tracing::{debug, error, info, instrument};
+
+use crate::{
+    error::JobError,
+    jobs::{ImportCrashJob, MinidumpJob},
+    signature_generator::{SignatureGenerator, SignatureGeneratorConfig},
+    state::AppState,
+    symbol_supplier::S3SymbolSupplier,
+};
+
+pub struct MinidumpProcessor {
+    storage: Arc<dyn ObjectStore>,
+    signature_generator: SignatureGenerator,
+}
+
+impl MinidumpProcessor {
+    pub fn new(s: Data<AppState>) -> MinidumpProcessor {
+        let storage = s.storage.clone();
+
+        let config = SignatureGeneratorConfig {
+            end_patterns: s
+                .settings
+                .job_server
+                .end_patterns
+                .clone()
+                .unwrap_or_default(),
+            skip_patterns: s
+                .settings
+                .job_server
+                .skip_patterns
+                .clone()
+                .unwrap_or_default(),
+            delimiter: s
+                .settings
+                .job_server
+                .delimiter
+                .clone()
+                .unwrap_or("|".to_string()),
+            maximum_frame_count: s.settings.job_server.maximum_frame_count.unwrap_or(20),
+        };
+
+        let signature_generator = SignatureGenerator::new(config).unwrap();
+
+        MinidumpProcessor {
+            storage,
+            signature_generator,
+        }
+    }
+
+    #[instrument(skip(self, crash_info), fields(crash_id = %crash_info["crash_id"]))]
+    async fn generate_signature(&self, crash_info: &serde_json::Value) -> Result<String, JobError> {
+        let crashing_thread = crash_info
+            .get("crashing_thread")
+            .ok_or_else(|| JobError::Failure("Failed to get crashing thread".to_string()))?;
+
+        let signature = self
+            .signature_generator
+            .generate(crashing_thread)
+            .map_err(|e| JobError::Failure(format!("Failed to generate signature: {e}")))?;
+
+        Ok(signature)
+    }
+
+    #[instrument(skip(self, crash_info, pg_storage), fields(crash_id = %crash_info["crash_id"]))]
+    async fn handle_job(
+        &self,
+        crash_id: uuid::Uuid,
+        mut crash_info: serde_json::Value,
+        pg_storage: &PostgresStorage<ImportCrashJob>,
+    ) -> Result<(), JobError> {
+        info!("Processor handling job: {}", crash_id);
+
+        let minidump_path = crash_info["minidump"]["storage_path"]
+            .as_str()
+            .ok_or_else(|| {
+                error!("No minidump found for crash {}", crash_info["id"]);
+                JobError::Failure("no minidump found".to_string())
+            })?;
+        let data = self.get_minidump_object(minidump_path).await?;
+
+        let mut options = ProcessorOptions::default();
+        options.recover_function_args = true;
+
+        let dump = Minidump::read(data).map_err(|e| {
+            error!("Failed to read minidump: {:?}", e);
+            JobError::Failure("failed to read minidump".to_string())
+        })?;
+        let provider = Symbolizer::new(S3SymbolSupplier::new(self.storage.clone()));
+        let state = minidump_processor::process_minidump_with_options(&dump, &provider, options)
+            .await
+            .expect("Failed to process minidump");
+
+        let mut json_output = Vec::new();
+        state
+            .print_json(&mut json_output, false)
+            .expect("Failed to print json");
+        let report: Value = serde_json::from_slice(&json_output).map_err(|e| {
+            error!("Failed to parse minidump json: {:?}", e);
+            JobError::Failure("failed to parse minidump json".to_string())
+        })?;
+
+        let signature = self.generate_signature(&report).await?;
+        crash_info["signature"] = Value::String(signature);
+
+        // Write processed crash report to S3
+        self.write_processed_crash(crash_id, &crash_info, &report)
+            .await?;
+        info!("Wrote processed crash report to S3: {:?}", crash_id);
+
+        // Enqueue ImportCrashJob for the maintenance worker to import into database
+        let import_job = ImportCrashJob { crash_id };
+        pg_storage.clone().push(import_job).await.map_err(|e| {
+            error!(error = ?e, "Failed to enqueue ImportCrashJob");
+            JobError::ApalisError(format!("failed to enqueue ImportCrashJob: {:?}", e))
+        })?;
+        info!("Enqueued ImportCrashJob for crash ID: {:?}", crash_id);
+
+        Ok(())
+    }
+
+    #[instrument(skip(self))]
+    async fn get_minidump_object(&self, path: &str) -> Result<Bytes, JobError> {
+        let object = self.storage.get(&Path::from(path)).await.map_err(|err| {
+            error!("Failed to get minidump object: {err}");
+            JobError::Failure("Failed to retrieve minidump".to_string())
+        })?;
+        info!("Got minidump object: {:?}", object);
+        let data = object.bytes().await.map_err(|err| {
+            error!("Failed to read minidump object: {err}");
+            JobError::Failure("Failed to retrieve minidump ".to_string())
+        })?;
+        Ok(data)
+    }
+
+    #[instrument(skip(self, crash_info, report), fields(crash_id = %crash_id))]
+    async fn write_processed_crash(
+        &self,
+        crash_id: uuid::Uuid,
+        crash_info: &serde_json::Value,
+        report: &serde_json::Value,
+    ) -> Result<(), JobError> {
+        let processed_crash = serde_json::json!({
+            "crash_info": crash_info,
+            "report": report,
+        });
+
+        let json_bytes = serde_json::to_vec_pretty(&processed_crash).map_err(|e| {
+            error!("Failed to serialize processed crash: {:?}", e);
+            JobError::Failure("failed to serialize processed crash".to_string())
+        })?;
+
+        let path = format!("processed-crashes/{crash_id}.json");
+        self.storage
+            .put(&Path::from(path.as_str()), json_bytes.into())
+            .await
+            .map_err(|e| {
+                error!("Failed to write processed crash to S3: {:?}", e);
+                JobError::Failure("failed to write processed crash to S3".to_string())
+            })?;
+
+        Ok(())
+    }
+
+    #[instrument(skip(job, state, pg_storage), fields(crash_id = %job.crash["crash_id"]))]
+    pub async fn process(
+        job: MinidumpJob,
+        state: Data<AppState>,
+        pg_storage: Data<PostgresStorage<ImportCrashJob>>,
+    ) -> Result<(), JobError> {
+        info!("Incoming minidump");
+        let crash_id = job.crash["crash_id"]
+            .as_str()
+            .ok_or_else(|| {
+                error!("Crash ID is missing in job");
+                JobError::Failure("crash_id is missing".to_string())
+            })?
+            .parse::<uuid::Uuid>()
+            .map_err(|_| {
+                error!("Invalid crash ID format in job");
+                JobError::Failure("invalid crash_id format".to_string())
+            })?;
+        info!("Process minidump: {}", crash_id);
+        let processor = MinidumpProcessor::new(state.clone());
+        processor
+            .handle_job(crash_id, job.crash.clone(), &pg_storage)
+            .await?;
+        processor.cleanup_files(crash_id, &job.crash).await;
+        info!("Successfully processed minidump for crash ID: {}", crash_id);
+
+        Ok(())
+    }
+
+    #[instrument(skip(self, crash_info), fields(crash_id = %crash_id))]
+    async fn cleanup_files(&self, crash_id: uuid::Uuid, crash_info: &serde_json::Value) {
+        let crash_info_path = format!("crashes/{crash_id}.json");
+        if let Err(e) = self
+            .storage
+            .delete(&Path::from(crash_info_path.as_str()))
+            .await
+        {
+            error!(crash_id = %crash_id, path = %crash_info_path, error = ?e, "Failed to delete crash_info file");
+        } else {
+            info!(crash_id = %crash_id, path = %crash_info_path, "Successfully deleted crash_info file");
+        }
+
+        if let Some(minidump_path) = crash_info["minidump"]["storage_path"].as_str() {
+            if let Err(e) = self.storage.delete(&Path::from(minidump_path)).await {
+                error!(crash_id = %crash_id, path = %minidump_path, error = ?e, "Failed to delete minidump file");
+            } else {
+                info!(crash_id = %crash_id, path = %minidump_path, "Successfully deleted minidump file");
+            }
+        } else {
+            debug!(crash_id = %crash_id, "No minidump path found for cleanup");
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    #[test]
+    fn test_annotation_processing() {
+        // Test data with both submission annotations and script annotations
+        let crash_info = json!({
+            "annotations": {
+                "product_version": "1.0.0",
+                "user_email": "test@example.com",
+                "submission_notes": "App crashed on startup"
+            },
+            "script_annotations": {
+                "script_classification": "access_violation",
+                "script_known_issue": "ISSUE-123",
+                "product_version": "1.0.0-debug"  // Same key as submission, different value
+            }
+        });
+
+        // Verify that we can extract both annotation types
+        let submission_annotations = crash_info["annotations"].as_object().unwrap();
+        let script_annotations = crash_info["script_annotations"].as_object().unwrap();
+
+        // Verify submission annotations
+        assert_eq!(
+            submission_annotations
+                .get("product_version")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "1.0.0"
+        );
+        assert_eq!(
+            submission_annotations
+                .get("user_email")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "test@example.com"
+        );
+        assert_eq!(
+            submission_annotations
+                .get("submission_notes")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "App crashed on startup"
+        );
+
+        // Verify script annotations
+        assert_eq!(
+            script_annotations
+                .get("script_classification")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "access_violation"
+        );
+        assert_eq!(
+            script_annotations
+                .get("script_known_issue")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "ISSUE-123"
+        );
+        assert_eq!(
+            script_annotations
+                .get("product_version")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "1.0.0-debug"
+        );
+
+        // Verify that the same key can have different values in different sources
+        assert_ne!(
+            submission_annotations
+                .get("product_version")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            script_annotations
+                .get("product_version")
+                .unwrap()
+                .as_str()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_missing_annotations() {
+        // Test with missing annotation fields
+        let crash_info = json!({
+            "annotations": {
+                "product_version": "1.0.0"
+            }
+            // No script_annotations field
+        });
+
+        let submission_annotations = crash_info["annotations"].as_object().unwrap();
+        let script_annotations = crash_info["script_annotations"].as_object();
+
+        assert!(submission_annotations.contains_key("product_version"));
+        assert!(script_annotations.is_none()); // Should handle missing script_annotations gracefully
+    }
+
+    #[test]
+    fn test_empty_annotations() {
+        // Test with empty annotation objects
+        let crash_info = json!({
+            "annotations": {},
+            "script_annotations": {}
+        });
+
+        let submission_annotations = crash_info["annotations"].as_object().unwrap();
+        let script_annotations = crash_info["script_annotations"].as_object().unwrap();
+
+        assert!(submission_annotations.is_empty());
+        assert!(script_annotations.is_empty());
+    }
+}

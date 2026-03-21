@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE core.api_tokens\n                SET last_used_at = now()\n                WHERE id = $1\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "31d87286f7bf1ece179d3398ae1ebf3b52ae9b7a226975a8a0b16777d211c848"
+}

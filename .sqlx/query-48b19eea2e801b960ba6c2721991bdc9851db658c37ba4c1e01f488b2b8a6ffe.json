@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO core.users\n                  (\n                    username,\n                    is_admin\n                  )\n                VALUES ($1, $2)\n                RETURNING\n                  id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "48b19eea2e801b960ba6c2721991bdc9851db658c37ba4c1e01f488b2b8a6ffe"
+}

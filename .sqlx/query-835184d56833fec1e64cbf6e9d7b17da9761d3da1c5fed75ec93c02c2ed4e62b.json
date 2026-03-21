@@ -1,0 +1,26 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO core.annotations\n                  (\n                    key,\n                    source,\n                    value,\n                    crash_id,\n                    product_id\n                  )\n                VALUES ($1, $2, $3, $4, $5)\n                RETURNING\n                  id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "835184d56833fec1e64cbf6e9d7b17da9761d3da1c5fed75ec93c02c2ed4e62b"
+}

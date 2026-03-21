@@ -1,0 +1,19 @@
+[package]
+name = "frontend"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+app = { path = "../app", default-features = false, features = ["hydrate"] }
+
+# Leptos
+leptos = { version = "0.8.17", features = ["nightly", "hydrate", "tracing"] }
+
+console_error_panic_hook = "0.1.7"
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+tracing.workspace = true
+tracing-subscriber-wasm = "0.1.0"
+tracing-subscriber.workspace = true

@@ -1,0 +1,84 @@
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+common = { path = "../../backend/common" }
+repos = { path = "../../backend/repos", optional = true }
+data = { path = "../../backend/data" }
+
+# Leptos
+leptos = { version = "0.8.17", features = ["nightly", "tracing"] }
+leptos_meta = { version = "0.8.6" }
+leptos_router = { version = "0.8.12", features = ["nightly"] }
+leptos-use = { version = "0.18.3" }
+leptos_axum = { version = "0.8.8", optional = true }
+leptos-struct-table = { version = "0.17.0", features = ["chrono", "uuid"] }
+wasm-bindgen-futures = { version = "0.4.64" }
+
+# Serde / json
+serde.workspace = true
+serde_json.workspace = true
+serde-wasm-bindgen = "0.6.5"
+
+# Tower / Axum
+tower = { workspace = true, optional = true }
+tower-sessions = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+
+# Tracing
+tracing.workspace = true
+
+# SQLx
+sqlx = { workspace = true, optional = true }
+
+# Misc
+async-trait.workspace = true
+cfg-if = "1"
+chrono.workspace = true
+enumflags2.workspace = true
+futures.workspace = true
+http.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+webauthn-rs-proto = { version = "0.5.4", features = ["wasm"] }
+indexmap.workspace = true
+# itertools.workspace = true
+dyn-clone.workspace = true
+paste.workspace = true
+
+[features]
+default = []
+hydrate = ["leptos/hydrate"]
+ssr = [
+  "leptos/ssr",
+  "leptos_meta/ssr",
+  "leptos_router/ssr",
+  "leptos-use/ssr",
+  "dep:leptos_axum",
+  "dep:sqlx",
+  "dep:axum",
+  "dep:tower",
+  "dep:tower-sessions",
+  "dep:repos",
+]
+
+[dependencies.web-sys]
+version = "0.3"
+features = [
+  "CredentialCreationOptions",
+  "CredentialRequestOptions",
+  "CredentialsContainer",
+  "Location",
+  "Navigator",
+  "PublicKeyCredential",
+  "PublicKeyCredentialCreationOptions",
+  "Window",
+  "PublicKeyCredentialUserEntity",
+  "PublicKeyCredentialRpEntity",
+  "AuthenticatorResponse",
+  "AuthenticationExtensionsClientOutputs",
+  "PublicKeyCredentialParameters",
+  "PublicKeyCredentialType",
+]
