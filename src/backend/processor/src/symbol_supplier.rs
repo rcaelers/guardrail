@@ -123,7 +123,7 @@ mod test {
             .map(PathBuf::from)
             .unwrap_or_else(|_| std::env::current_dir().expect("Failed to get current directory"))
             .ancestors()
-            .nth(2)
+            .nth(3)
             .expect("Failed to find workspace root")
             .to_path_buf();
 
@@ -203,7 +203,7 @@ mod test {
             .map(PathBuf::from)
             .unwrap_or_else(|_| std::env::current_dir().expect("Failed to get current directory"))
             .ancestors()
-            .nth(2)
+            .nth(3)
             .expect("Failed to find workspace root")
             .to_path_buf();
 
