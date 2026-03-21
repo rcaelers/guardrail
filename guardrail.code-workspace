@@ -5,6 +5,9 @@
     },
     {
       "path": "../leptos-struct-table"
+    },
+    {
+      "path": "../workrave-infra"
     }
   ],
   "settings": {

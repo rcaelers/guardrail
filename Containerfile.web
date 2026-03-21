@@ -5,32 +5,32 @@
 FROM --platform=$BUILDPLATFORM rustlang/rust:nightly-alpine AS builder
 
 RUN apk add --no-cache \
-    clang \
-    openssl \
-    pkgconfig \
-    openssl-dev \
-    openssl-libs-static \
-    musl-dev \
-    build-base \
-    nodejs \
-    npm
+  clang \
+  openssl \
+  pkgconfig \
+  openssl-dev \
+  openssl-libs-static \
+  musl-dev \
+  build-base \
+  nodejs \
+  npm
 
 RUN mkdir -p /app
 WORKDIR /app
 COPY . .
 
 RUN npm install
-RUN npx @tailwindcss/cli -i ./crates/server/static/input.css -o style.css
+RUN npx @tailwindcss/cli -i ./src/web/server/static/input.css -o style.css
 
 RUN ARCH=$(uname -m) && \
   if [ "$ARCH" = "x86_64" ]; then \
-    wget https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz && \
-    tar -xvf cargo-binstall-x86_64-unknown-linux-musl.tgz; \
+  wget https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-unknown-linux-musl.tgz && \
+  tar -xvf cargo-binstall-x86_64-unknown-linux-musl.tgz; \
   elif [ "$ARCH" = "aarch64" ]; then \
-    wget https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-aarch64-unknown-linux-musl.tgz && \
-    tar -xvf cargo-binstall-aarch64-unknown-linux-musl.tgz; \
+  wget https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-aarch64-unknown-linux-musl.tgz && \
+  tar -xvf cargo-binstall-aarch64-unknown-linux-musl.tgz; \
   else \
-    echo "Unsupported architecture: $ARCH" && exit 1; \
+  echo "Unsupported architecture: $ARCH" && exit 1; \
   fi
 RUN cp cargo-binstall /usr/local/cargo/bin
 

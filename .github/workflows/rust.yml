@@ -2,11 +2,11 @@ name: Rust
 
 on:
   push:
-    branches: ["main", "dev"]
+    branches: ['main', 'dev']
     tags:
-      - "v*.*.*"
+      - 'v*.*.*'
   pull_request:
-    branches: ["main", "dev"]
+    branches: ['main', 'dev']
 
 env:
   CARGO_TERM_COLOR: always
@@ -38,7 +38,7 @@ jobs:
         run: |
           export SQLX_OFFLINE=1
           npm i
-          npx @tailwindcss/cli -i ./crates/server/static/input.css -o ./crates/server/static/css/style.css --watch
+          npx @tailwindcss/cli -i ./src/web/server/static/input.css -o ./src/web/server/static/css/style.css --watch
           cargo leptos build -vv
           cargo build --workspace --all-features
 
@@ -90,4 +90,4 @@ jobs:
       - name: Run tests
         run: |
           export SQLX_OFFLINE=1
-          RUST_BACKTRACE=1 cargo test -p api -p repos -p jobs --no-fail-fast
+          RUST_BACKTRACE=1 cargo test -p api -p repos -p processor -p curator --no-fail-fast
