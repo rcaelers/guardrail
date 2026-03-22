@@ -33,13 +33,21 @@ jobs:
         with:
           key: ${{ matrix.os }}
 
-      - name: Build
+      - name: Build CSS
+        run: |
+          npm i
+          npx @tailwindcss/cli -i ./src/web/server/static/input.css -o ./src/web/server/static/css/style.css
+
+      - name: Build web
         run: |
           export SQLX_OFFLINE=1
-          npm i
-          npx @tailwindcss/cli -i ./src/web/server/static/input.css -o ./src/web/server/static/css/style.css --watch
+          cd src/web
           cargo leptos build -vv
-          cargo build --workspace --all-features
+
+      - name: Build backend
+        run: |
+          export SQLX_OFFLINE=1
+          cargo build --workspace
 
   test:
     runs-on: ubuntu-24.04
