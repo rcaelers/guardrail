@@ -1,5 +1,4 @@
 use async_trait::async_trait;
-use common::QueryParams;
 use enumflags2::{BitFlags, bitflags};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -12,6 +11,7 @@ use std::marker::PhantomData;
 use tracing::info;
 use uuid::Uuid;
 
+use common::QueryParams;
 use crate::components::confirmation::ConfirmationModal;
 use crate::components::datatable_form::{DataTableModalForm, Fields};
 use crate::components::datatable_header::DataTableHeader;

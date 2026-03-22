@@ -4,6 +4,12 @@ use apalis::layers::retry::{RetryPolicy, backoff::ExponentialBackoffMaker};
 use apalis::prelude::*;
 use apalis_postgres::{Config, PostgresStorage};
 use clap::Parser;
+use sqlx::ConnectOptions;
+use sqlx::PgPool;
+use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
+use std::{sync::Arc, time::Duration};
+use tracing::{debug, info};
+
 use common::jobs::queue;
 use common::{init_logging, settings::Settings};
 use processor::{
@@ -12,11 +18,6 @@ use processor::{
     state::AppState,
     symbols::SymbolProcessor,
 };
-use sqlx::ConnectOptions;
-use sqlx::PgPool;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use std::{sync::Arc, time::Duration};
-use tracing::{debug, info};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]

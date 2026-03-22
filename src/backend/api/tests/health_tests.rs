@@ -9,13 +9,13 @@ use axum::{
     http::{Request, StatusCode},
 };
 use sqlx::PgPool;
-use testware::{create_settings, create_webauthn};
 use tower::ServiceExt;
+use tower_http::trace::TraceLayer;
 
 use api::state::AppState;
 use api::{routes::routes, worker::TestWorker};
 use repos::Repo;
-use tower_http::trace::TraceLayer;
+use testware::{create_settings, create_webauthn};
 
 async fn setup(pool: &PgPool) -> Router {
     let settings = create_settings();
