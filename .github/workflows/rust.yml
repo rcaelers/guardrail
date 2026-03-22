@@ -38,11 +38,11 @@ jobs:
           npm i
           npx @tailwindcss/cli -i ./src/web/server/static/input.css -o ./src/web/server/static/css/style.css
 
-      - name: Build web
-        run: |
-          export SQLX_OFFLINE=1
-          cd src/web
-          cargo leptos build -vv
+      # - name: Build web
+      #   run: |
+      #     export SQLX_OFFLINE=1
+      #     cd src/web
+      #     cargo leptos build -vv
 
       - name: Build backend
         run: |
