@@ -15,8 +15,6 @@ use processor::{
     state::AppState,
     symbols::SymbolProcessor,
 };
-use std::{sync::Arc, time::Duration};
-use tracing::{debug, info};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
