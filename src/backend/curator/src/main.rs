@@ -4,7 +4,7 @@ use apalis::layers::retry::{RetryPolicy, backoff::ExponentialBackoffMaker};
 use apalis::prelude::*;
 use apalis_cron::CronStream;
 use apalis_cron::Tick;
-use apalis_postgres::{Config, PostgresStorage};
+use apalis_redis::{RedisConfig, RedisStorage};
 use clap::Parser;
 use cron::Schedule;
 use sqlx::ConnectOptions;
@@ -19,7 +19,7 @@ use curator::{
     import_crash::ImportCrashProcessor,
     import_symbol::ImportSymbolProcessor,
     jobs::ImportCrashJob,
-    maintenance::{self, NotifyPostgresStorage},
+    maintenance,
     state::AppState,
 };
 use repos::Repo;
@@ -31,18 +31,18 @@ struct CliArgs {
     config_dir: String,
 }
 
-/// Combined state for maintenance tasks that need both AppState and PostgresStorage
+/// Combined state for maintenance tasks that need both AppState and RedisStorage
 #[derive(Clone)]
 struct MaintenanceState {
     app_state: AppState,
-    pg: NotifyPostgresStorage<ImportCrashJob>,
+    redis: RedisStorage<ImportCrashJob>,
 }
 
 async fn handle_maintenance_tick(
     _tick: Tick,
     state: Data<MaintenanceState>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    maintenance::MaintenanceJob::run_all_maintenance_tasks(&state.app_state, &state.pg).await?;
+    maintenance::MaintenanceJob::run_all_maintenance_tasks(&state.app_state, &state.redis).await?;
     Ok(())
 }
 
@@ -60,16 +60,16 @@ impl MaintenanceWorker {
     }
 
     async fn run_apalis(&self, state: AppState) {
-        let worker_db = self.init_worker_db().await.unwrap();
-
-        PostgresStorage::setup(&worker_db)
+        let conn = apalis_redis::connect(self.settings.job_server.redis_uri.clone())
             .await
-            .expect("unable to run migrations for postgres");
+            .expect("Failed to connect to Redis/Valkey");
 
-        let config = Config::new(queue::IMPORT_CRASH_JOBS);
-        let pg = PostgresStorage::new_with_notify(&worker_db, &config);
+        let redis_import_crash = RedisStorage::<ImportCrashJob>::new_with_config(
+            conn.clone(),
+            RedisConfig::new(queue::IMPORT_CRASH_JOBS),
+        );
 
-        if let Err(e) = maintenance::MaintenanceJob::run_all_maintenance_tasks(&state, &pg).await {
+        if let Err(e) = maintenance::MaintenanceJob::run_all_maintenance_tasks(&state, &redis_import_crash).await {
             error!("Failed to run startup maintenance tasks: {}", e);
         }
 
@@ -78,18 +78,20 @@ impl MaintenanceWorker {
             Schedule::from_str("0 0 2 * * * *").expect("Invalid cron schedule for maintenance");
 
         // Clone for import crash worker
-        let pg_import_crash = pg.clone();
+        let redis_import_crash_worker = redis_import_crash.clone();
         let state_import_crash = state.clone();
 
         // Set up import symbol worker
-        let import_symbol_config = Config::new(queue::IMPORT_SYMBOL_JOBS);
-        let pg_import_symbol = PostgresStorage::new_with_notify(&worker_db, &import_symbol_config);
+        let redis_import_symbol = RedisStorage::new_with_config(
+            conn.clone(),
+            RedisConfig::new(queue::IMPORT_SYMBOL_JOBS),
+        );
         let state_import_symbol = state.clone();
 
         // Clone for maintenance worker
         let maintenance_state = MaintenanceState {
             app_state: state.clone(),
-            pg: pg.clone(),
+            redis: redis_import_crash.clone(),
         };
 
         Monitor::new()
@@ -104,7 +106,7 @@ impl MaintenanceWorker {
                 .make_backoff();
 
                 WorkerBuilder::new("import-crash")
-                    .backend(pg_import_crash.clone())
+                    .backend(redis_import_crash_worker.clone())
                     .data(state_import_crash.clone())
                     .retry(RetryPolicy::retries(5).with_backoff(backoff))
                     .enable_tracing()
@@ -122,7 +124,7 @@ impl MaintenanceWorker {
                 .make_backoff();
 
                 WorkerBuilder::new("import-symbol")
-                    .backend(pg_import_symbol.clone())
+                    .backend(redis_import_symbol.clone())
                     .data(state_import_symbol.clone())
                     .retry(RetryPolicy::retries(5).with_backoff(backoff))
                     .enable_tracing()
@@ -164,19 +166,6 @@ impl MaintenanceWorker {
 
     async fn init_guardrail_db(&self) -> Result<PgPool, sqlx::Error> {
         let database_url = &self.settings.database.db_uri;
-        let mut opts: PgConnectOptions = database_url.parse()?;
-        opts = opts.log_statements(log::LevelFilter::Debug);
-
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect_with(opts)
-            .await?;
-
-        Ok(pool)
-    }
-
-    async fn init_worker_db(&self) -> Result<PgPool, sqlx::Error> {
-        let database_url = &self.settings.job_server.db_uri;
         let mut opts: PgConnectOptions = database_url.parse()?;
         opts = opts.log_statements(log::LevelFilter::Debug);
 

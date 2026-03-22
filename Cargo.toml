@@ -87,7 +87,7 @@ breakpad-symbols = "0.26.1"
 apalis = { version = "1.0.0-rc.6" }
 apalis-codec = { version = "0.1.0-rc.6" }
 apalis-core = { version = "1.0.0-rc.6" }
-apalis-postgres = { version = "1.0.0-rc.6" }
+apalis-redis = { version = "1.0.0-rc.6" }
 apalis-cron = { version = "1.0.0-rc.6" }
 cron = "0.15"
 argon2 = "0.5.3"

@@ -1,4 +1,4 @@
-use apalis_postgres::{Config, PostgresStorage};
+use apalis_redis::{RedisConfig, RedisStorage};
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::{Router, http::header::AUTHORIZATION};
@@ -59,7 +59,9 @@ impl GuardrailApiApp {
         info!("Starting server on port {}", self.settings.api_server.port);
 
         let guardrail_db = self.init_guardrail_db().await.unwrap();
-        let worker_db = self.init_worker_db().await.unwrap();
+        let redis_conn = apalis_redis::connect(self.settings.job_server.redis_uri.clone())
+            .await
+            .expect("Failed to connect to Redis/Valkey");
         let webauthn = self.create_webauthn();
         let repo = Repo::new(guardrail_db.clone());
         let store = common::init_s3_object_store(self.settings.clone()).await;
@@ -70,11 +72,15 @@ impl GuardrailApiApp {
             tracing::error!("Failed to create default API token: {}", err);
         }
 
-        let pg_minidump =
-            PostgresStorage::new_with_config(&worker_db, &Config::new(queue::MINIDUMP_JOBS));
-        let pg_symbol =
-            PostgresStorage::new_with_config(&worker_db, &Config::new(queue::SYMBOL_JOBS));
-        let worker = Arc::new(WorkQueue::new(pg_minidump, pg_symbol));
+        let redis_minidump = RedisStorage::new_with_config(
+            redis_conn.clone(),
+            RedisConfig::new(queue::MINIDUMP_JOBS),
+        );
+        let redis_symbol = RedisStorage::new_with_config(
+            redis_conn.clone(),
+            RedisConfig::new(queue::SYMBOL_JOBS),
+        );
+        let worker = Arc::new(WorkQueue::new(redis_minidump, redis_symbol));
 
         let state = AppState {
             repo,
@@ -184,23 +190,6 @@ impl GuardrailApiApp {
             .run(&pool)
             .await
             .expect("Failed to run migrations");
-
-        Ok(pool)
-    }
-
-    async fn init_worker_db(&self) -> Result<PgPool, sqlx::Error> {
-        let database_url = &self.settings.job_server.db_uri;
-        let mut opts: PgConnectOptions = database_url.parse()?;
-        opts = opts.log_statements(log::LevelFilter::Debug);
-
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect_with(opts)
-            .await?;
-
-        PostgresStorage::setup(&pool)
-            .await
-            .expect("unable to run migrations for postgres");
 
         Ok(pool)
     }

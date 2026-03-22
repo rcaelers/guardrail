@@ -1,5 +1,6 @@
 use apalis::prelude::{ListTasks, Status};
 use apalis_core::backend::Filter;
+use apalis_redis::RedisStorage;
 use futures::stream::TryStreamExt;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path};
 use std::collections::HashSet;
@@ -10,17 +11,15 @@ use crate::jobs::ImportCrashJob;
 use crate::error::JobError;
 use crate::state::AppState;
 
-use super::NotifyPostgresStorage;
-
 pub struct JobCleaner;
 
 impl JobCleaner {
     pub async fn run(
         app_state: &AppState,
-        pg: &NotifyPostgresStorage<ImportCrashJob>,
+        redis: &RedisStorage<ImportCrashJob>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     where
-        NotifyPostgresStorage<ImportCrashJob>: ListTasks<ImportCrashJob>,
+        RedisStorage<ImportCrashJob>: ListTasks<ImportCrashJob>,
     {
         info!("Starting cleanup of crash info files for completed jobs");
 
@@ -28,10 +27,10 @@ impl JobCleaner {
 
         let mut crash_ids_to_clean = HashSet::new();
 
-        let done_crash_ids = Self::get_crash_ids_for_status(pg, Status::Done).await?;
+        let done_crash_ids = Self::get_crash_ids_for_status(redis, Status::Done).await?;
         crash_ids_to_clean.extend(done_crash_ids);
 
-        let killed_crash_ids = Self::get_crash_ids_for_status(pg, Status::Killed).await?;
+        let killed_crash_ids = Self::get_crash_ids_for_status(redis, Status::Killed).await?;
         crash_ids_to_clean.extend(killed_crash_ids);
 
         info!("Found {} crash_ids from completed jobs to clean up", crash_ids_to_clean.len());
@@ -43,11 +42,11 @@ impl JobCleaner {
     }
 
     async fn get_crash_ids_for_status(
-        pg: &NotifyPostgresStorage<ImportCrashJob>,
+        redis: &RedisStorage<ImportCrashJob>,
         status: Status,
     ) -> Result<HashSet<Uuid>, JobError>
     where
-        NotifyPostgresStorage<ImportCrashJob>: ListTasks<ImportCrashJob>,
+        RedisStorage<ImportCrashJob>: ListTasks<ImportCrashJob>,
     {
         let mut crash_ids = HashSet::new();
         let mut page = 1u32;
@@ -60,7 +59,7 @@ impl JobCleaner {
                 page_size: Some(page_size),
             };
 
-            let tasks = pg
+            let tasks = redis
                 .list_tasks("guardrail::Jobs", &filter)
                 .await
                 .map_err(|e| {

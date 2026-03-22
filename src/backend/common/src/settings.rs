@@ -33,7 +33,7 @@ pub struct WebServer {
 #[derive(Debug, Deserialize, Default)]
 pub struct JobServer {
     pub port: u16,
-    pub db_uri: String,
+    pub redis_uri: String,
     pub skip_patterns: Option<Vec<String>>,
     pub end_patterns: Option<Vec<String>>,
     pub delimiter: Option<String>,

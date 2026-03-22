@@ -32,12 +32,11 @@ minidump-unwind.workspace = true
 
 # Misc
 apalis.workspace = true
-apalis-postgres.workspace = true
+apalis-redis.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
 fancy-regex.workspace = true
 log.workspace = true
 object_store.workspace = true
-sqlx.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
