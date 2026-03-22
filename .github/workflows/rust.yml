@@ -5,8 +5,7 @@ on:
     branches: ['main', 'dev']
     tags:
       - 'v*.*.*'
-  pull_request:
-    branches: ['main', 'dev']
+  pull_request: {}
 
 env:
   CARGO_TERM_COLOR: always
