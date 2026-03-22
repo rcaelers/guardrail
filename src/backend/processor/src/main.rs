@@ -2,11 +2,8 @@ use apalis::layers::retry::HasherRng;
 use apalis::layers::retry::backoff::MakeBackoff;
 use apalis::layers::retry::{RetryPolicy, backoff::ExponentialBackoffMaker};
 use apalis::prelude::*;
-use apalis_postgres::{Config, PostgresStorage};
+use apalis_redis::{RedisConfig, RedisStorage};
 use clap::Parser;
-use sqlx::ConnectOptions;
-use sqlx::PgPool;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::{sync::Arc, time::Duration};
 use tracing::{debug, info};
 
@@ -18,6 +15,8 @@ use processor::{
     state::AppState,
     symbols::SymbolProcessor,
 };
+use std::{sync::Arc, time::Duration};
+use tracing::{debug, info};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
