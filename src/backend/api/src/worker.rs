@@ -1,5 +1,5 @@
 use apalis::prelude::*;
-use apalis_postgres::PostgresStorage;
+use apalis_redis::RedisStorage;
 use async_trait::async_trait;
 use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
@@ -16,8 +16,8 @@ pub trait Worker: Send + Sync + Debug + 'static {
 
 #[derive(Clone)]
 pub struct WorkQueue {
-    minidump_storage: PostgresStorage<MinidumpJob>,
-    symbol_storage: PostgresStorage<SymbolJob>,
+    minidump_storage: RedisStorage<MinidumpJob>,
+    symbol_storage: RedisStorage<SymbolJob>,
 }
 
 impl std::fmt::Debug for WorkQueue {
@@ -28,8 +28,8 @@ impl std::fmt::Debug for WorkQueue {
 
 impl WorkQueue {
     pub fn new(
-        minidump_storage: PostgresStorage<MinidumpJob>,
-        symbol_storage: PostgresStorage<SymbolJob>,
+        minidump_storage: RedisStorage<MinidumpJob>,
+        symbol_storage: RedisStorage<SymbolJob>,
     ) -> Self {
         WorkQueue {
             minidump_storage,

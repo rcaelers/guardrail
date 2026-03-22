@@ -174,7 +174,7 @@ api_server:
     -----END PRIVATE KEY-----
 job_server:
   port: 88
-  db_uri: postgres://guardrail:wezei4Joozooz8To@localhost/apalis
+  redis_uri: redis://localhost:6379
   maximum_frame_count: 10
   delimiter: "|"
   skip_patterns:
