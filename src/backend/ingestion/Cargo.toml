@@ -1,13 +1,9 @@
 [package]
-name = "api"
+name = "ingestion"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-repos = { path = "../repos" }
-data = { path = "../data", default-features = false, features = [
-  "ssr",
-] }
 common = { path = "../common", default-features = false, features = [
   "ssr",
 ] }
@@ -15,9 +11,6 @@ common = { path = "../common", default-features = false, features = [
 # Serde / json
 serde.workspace = true
 serde_json.workspace = true
-
-# SQLx
-sqlx.workspace = true
 
 # Tokio / Axum
 tokio.workspace = true
@@ -33,14 +26,6 @@ clap.workspace = true
 # Tower
 tower.workspace = true
 tower-http.workspace = true
-tower-sessions.workspace = true
-
-# K8s
-k8s-openapi.workspace = true
-kube.workspace = true
-
-# Security
-argon2.workspace = true
 
 # Tracing
 tracing.workspace = true
@@ -52,18 +37,36 @@ tracing-log.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
 data-encoding.workspace = true
+fancy-regex.workspace = true
 futures.workspace = true
-rand.workspace = true
+rhai.workspace = true
 thiserror.workspace = true
-time.workspace = true
 uuid.workspace = true
-webauthn-rs.workspace = true
 jsonwebtoken.workspace = true
 log.workspace = true
 object_store.workspace = true
 apalis.workspace = true
 apalis-redis.workspace = true
 bytes.workspace = true
+redis.workspace = true
+
+[features]
+default = []
+auth = ["dep:repos", "dep:data", "dep:sqlx"]
+
+[dependencies.repos]
+path = "../repos"
+optional = true
+
+[dependencies.data]
+path = "../data"
+default-features = false
+features = ["ssr"]
+optional = true
+
+[dependencies.sqlx]
+workspace = true
+optional = true
 
 [dev-dependencies]
 testware = { path = "../testware" }
