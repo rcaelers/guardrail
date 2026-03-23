@@ -417,11 +417,15 @@ impl MinidumpApi {
             .unwrap_or_default();
         Self::validate_mandatory_annotations(crash_info, mandatory_annotations)?;
 
-        let product_name = crash_info
-            .annotations
-            .get("product")
-            .map(|a| a.value.clone())
-            .expect("product annotation validated above");
+        let product_name = match crash_info.annotations.get("product") {
+            Some(a) => a.value.clone(),
+            None => {
+                error!("Missing required 'product' annotation");
+                return Err(ApiError::Failure(
+                    "missing required 'product' annotation".to_string(),
+                ));
+            }
+        };
 
         let product = state
             .product_cache
