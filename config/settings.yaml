@@ -87,6 +87,8 @@ web_server:
     -----END PRIVATE KEY-----
 api_server:
   port: 80
+ingestion_server:
+  port: 81
   public_keyx: |
     -----BEGIN CERTIFICATE-----
     MIIFRTCCAy2gAwIBAgIUPEsUwWkKGlhvwLZzolvPcjjCE8wwDQYJKoZIhvcNAQEL

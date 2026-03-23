@@ -6,16 +6,16 @@ use std::sync::{Arc, Mutex};
 use tracing::error;
 
 use crate::error::ApiError;
-use common::jobs::SymbolJob;
+use common::jobs::MinidumpJob;
 
 #[async_trait]
 pub trait Worker: Send + Sync + Debug + 'static {
-    async fn queue_symbol(&self, symbol_info: serde_json::Value) -> Result<String, ApiError>;
+    async fn queue_minidump(&self, crash: serde_json::Value) -> Result<String, ApiError>;
 }
 
 #[derive(Clone)]
 pub struct WorkQueue {
-    symbol_storage: RedisStorage<SymbolJob>,
+    minidump_storage: RedisStorage<MinidumpJob>,
 }
 
 impl std::fmt::Debug for WorkQueue {
@@ -25,33 +25,29 @@ impl std::fmt::Debug for WorkQueue {
 }
 
 impl WorkQueue {
-    pub fn new(
-        symbol_storage: RedisStorage<SymbolJob>,
-    ) -> Self {
-        WorkQueue {
-            symbol_storage,
-        }
+    pub fn new(minidump_storage: RedisStorage<MinidumpJob>) -> Self {
+        WorkQueue { minidump_storage }
     }
 }
 
 #[async_trait]
 impl Worker for WorkQueue {
-    async fn queue_symbol(&self, symbol_info: serde_json::Value) -> Result<String, ApiError> {
-        let upload_id = symbol_info
-            .get("symbol_upload_id")
+    async fn queue_minidump(&self, crash: serde_json::Value) -> Result<String, ApiError> {
+        let task_id = crash
+            .get("crash_id")
             .and_then(|v| v.as_str().map(|s| s.to_owned()))
             .unwrap_or("unknown".to_string());
 
-        self.symbol_storage
+        self.minidump_storage
             .clone()
-            .push(SymbolJob { symbol_info })
+            .push(MinidumpJob { crash })
             .await
             .map_err(|e| {
-                error!("Failed to queue symbol job: {:?}", e);
-                ApiError::Failure("failed to queue symbol job".to_string())
+                error!("Failed to queue minidump job: {:?}", e);
+                ApiError::Failure("failed to queue minidump job".to_string())
             })?;
 
-        Ok(upload_id)
+        Ok(task_id)
     }
 }
 
@@ -83,15 +79,15 @@ impl Default for TestWorker {
 
 #[async_trait]
 impl Worker for TestWorker {
-    async fn queue_symbol(&self, symbol_info: serde_json::Value) -> Result<String, ApiError> {
+    async fn queue_minidump(&self, crash: serde_json::Value) -> Result<String, ApiError> {
         if let Ok(failure) = self.failure.lock()
             && *failure
         {
-            return Err(ApiError::Failure("failed to queue symbol job".to_string()));
+            return Err(ApiError::Failure("failed to queue minidump job".to_string()));
         }
         if let Ok(mut requests) = self.requests.lock() {
-            requests.push(symbol_info.to_string());
+            requests.push(crash.to_string());
         }
-        Ok(symbol_info["symbol_upload_id"].to_string())
+        Ok(crash["id"].to_string())
     }
 }

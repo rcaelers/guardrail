@@ -72,15 +72,11 @@ impl GuardrailApiApp {
             tracing::error!("Failed to create default API token: {}", err);
         }
 
-        let redis_minidump = RedisStorage::new_with_config(
-            redis_conn.clone(),
-            RedisConfig::new(queue::MINIDUMP_JOBS),
-        );
         let redis_symbol = RedisStorage::new_with_config(
             redis_conn.clone(),
             RedisConfig::new(queue::SYMBOL_JOBS),
         );
-        let worker = Arc::new(WorkQueue::new(redis_minidump, redis_symbol));
+        let worker = Arc::new(WorkQueue::new(redis_symbol));
 
         let state = AppState {
             repo,

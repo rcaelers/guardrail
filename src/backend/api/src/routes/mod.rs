@@ -1,5 +1,4 @@
 mod health;
-mod minidump;
 mod symbols;
 mod token;
 mod webauthn;
@@ -11,7 +10,6 @@ use axum::{
 
 use super::api_token::{ApiTokenLayer, RequiredEntitlement};
 use crate::state::AppState;
-use minidump::MinidumpApi;
 use symbols::SymbolsApi;
 
 pub async fn routes(app_state: AppState) -> Router<AppState> {
@@ -21,12 +19,6 @@ pub async fn routes(app_state: AppState) -> Router<AppState> {
             "/symbols/upload",
             post(SymbolsApi::upload)
                 .layer(ApiTokenLayer::new(app_state.clone(), RequiredEntitlement::SymbolUpload)),
-        )
-        // Minidump upload endpoint
-        .route(
-            "/minidump/upload",
-            post(MinidumpApi::upload)
-                .layer(ApiTokenLayer::new(app_state.clone(), RequiredEntitlement::MinidumpUpload)),
         )
         // JWT token generation endpoint
         .route(
