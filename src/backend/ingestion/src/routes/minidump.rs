@@ -13,6 +13,7 @@ use crate::annotations::{AnnotationEntry, TrackedAnnotations};
 use crate::error::ApiError;
 use crate::state::AppState;
 use crate::utils::stream_to_s3;
+use crate::validation::CompiledValidationScript;
 
 pub struct MinidumpApi;
 
@@ -297,6 +298,7 @@ impl MinidumpApi {
         crash_info: &mut CrashInfo,
         state: &AppState,
         product_pattern: &str,
+        product_regex: &fancy_regex::Regex,
         script_file: &str,
     ) -> Result<(), ApiError> {
         let Some(product) = &crash_info.product else {
@@ -306,17 +308,6 @@ impl MinidumpApi {
             );
             return Ok(());
         };
-
-        let product_regex = fancy_regex::Regex::new(product_pattern).map_err(|e| {
-            error!(
-                product_pattern = %product_pattern,
-                error = %e,
-                "Invalid regex pattern in product validation script configuration"
-            );
-            ApiError::Failure(format!(
-                "Invalid regex pattern '{product_pattern}' in validation script configuration: {e}"
-            ))
-        })?;
 
         let matches = product_regex.is_match(product).map_err(|e| {
             error!(
@@ -355,18 +346,18 @@ impl MinidumpApi {
     ) -> Result<(), ApiError> {
         debug!(crash_id = %crash_info.crash_id, "Running validation scripts");
 
-        let Some(validation_scripts) = &state.settings.minidumps.validation_scripts else {
-            return Ok(());
-        };
-
-        for validation_script in validation_scripts {
+        for validation_script in state.compiled_validation_scripts.iter() {
             match validation_script {
-                common::settings::ValidationScript::Global(script_file) => {
+                CompiledValidationScript::Global(script_file) => {
                     Self::run_global_validation_script(crash_info, state, script_file)?;
                 }
-                common::settings::ValidationScript::ProductSpecific { product, script } => {
+                CompiledValidationScript::ProductSpecific {
+                    pattern,
+                    regex,
+                    script,
+                } => {
                     Self::run_product_specific_validation_script(
-                        crash_info, state, product, script,
+                        crash_info, state, pattern, regex, script,
                     )?;
                 }
             }

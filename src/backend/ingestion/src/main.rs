@@ -16,6 +16,7 @@ use tracing::info;
 use ingestion::product_cache::ProductCache;
 use ingestion::routes;
 use ingestion::state::AppState;
+use ingestion::validation::CompiledValidationScript;
 use ingestion::worker::WorkQueue;
 use common::jobs::queue;
 use common::{init_logging, settings::Settings};
@@ -71,11 +72,23 @@ impl GuardrailIngestionApp {
         );
         let worker = Arc::new(WorkQueue::new(redis_minidump));
 
+        let compiled_validation_scripts = Arc::new(
+            CompiledValidationScript::compile_all(
+                self.settings
+                    .minidumps
+                    .validation_scripts
+                    .as_deref()
+                    .unwrap_or_default(),
+            )
+            .expect("Failed to compile validation script regex patterns"),
+        );
+
         let state = AppState {
             product_cache,
             settings: self.settings.clone(),
             storage: store,
             worker,
+            compiled_validation_scripts,
         };
 
         let routes_all = Router::new()

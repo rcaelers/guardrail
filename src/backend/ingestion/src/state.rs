@@ -3,6 +3,7 @@ use object_store::ObjectStore;
 use std::sync::Arc;
 
 use crate::product_cache::ProductCache;
+use crate::validation::CompiledValidationScript;
 use crate::worker::Worker;
 use common::settings::Settings;
 
@@ -12,4 +13,5 @@ pub struct AppState {
     pub settings: Arc<Settings>,
     pub storage: Arc<dyn ObjectStore>,
     pub worker: Arc<dyn Worker>,
+    pub compiled_validation_scripts: Arc<Vec<CompiledValidationScript>>,
 }
