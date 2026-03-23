@@ -197,6 +197,7 @@ async fn test_create(pool: PgPool) {
     let new_product = NewProduct {
         name: "NewProduct".to_string(),
         description: "New product description".to_string(),
+        ..Default::default()
     };
 
     let product_id = ProductRepo::create(&pool, new_product.clone())
@@ -220,6 +221,7 @@ async fn test_create_duplicate_name(pool: PgPool) {
     let new_product = NewProduct {
         name: product_name.to_string(),
         description: description.to_string(),
+        ..Default::default()
     };
 
     ProductRepo::create(&pool, new_product)
@@ -229,6 +231,7 @@ async fn test_create_duplicate_name(pool: PgPool) {
     let duplicate_product = NewProduct {
         name: product_name.to_string(),
         description: "Different description".to_string(),
+        ..Default::default()
     };
 
     let result = ProductRepo::create(&pool, duplicate_product).await;
@@ -268,6 +271,7 @@ async fn test_update_non_existent(pool: PgPool) {
         accepting_crashes: true,
         created_at: chrono::Utc::now().naive_utc(),
         updated_at: chrono::Utc::now().naive_utc(),
+        ..Default::default()
     };
 
     let result = ProductRepo::update(&pool, non_existent_product).await;

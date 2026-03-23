@@ -49,6 +49,7 @@ struct CrashInfo {
     submission_timestamp: String,
     product: Option<String>,
     product_id: Option<uuid::Uuid>,
+    product_metadata: Option<serde_json::Value>,
     minidump: Option<Minidump>,
     attachments: Vec<Attachment>,
     annotations: HashMap<String, AnnotationEntry>,
@@ -439,7 +440,8 @@ impl MinidumpApi {
 
         let product = get_product_by_id(&mut *tx, product_id).await?;
         crash_info.product = Some(product.name.clone());
-        crash_info.product_id = Some(product.id);
+         crash_info.product_id = Some(product.id);
+        crash_info.product_metadata = Some(product.metadata);
 
         info!(product = %product.name, "Processing crash for product");
 
@@ -606,6 +608,35 @@ impl MinidumpApi {
         }
     }
 
+    fn json_to_rhai_dynamic(value: &serde_json::Value) -> rhai::Dynamic {
+        match value {
+            serde_json::Value::Null => rhai::Dynamic::UNIT,
+            serde_json::Value::Bool(b) => (*b).into(),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    i.into()
+                } else if let Some(f) = n.as_f64() {
+                    f.into()
+                } else {
+                    rhai::Dynamic::UNIT
+                }
+            }
+            serde_json::Value::String(s) => s.clone().into(),
+            serde_json::Value::Array(arr) => {
+                let rhai_arr: Vec<rhai::Dynamic> =
+                    arr.iter().map(Self::json_to_rhai_dynamic).collect();
+                rhai_arr.into()
+            }
+            serde_json::Value::Object(obj) => {
+                let mut map = rhai::Map::new();
+                for (k, v) in obj {
+                    map.insert(k.as_str().into(), Self::json_to_rhai_dynamic(v));
+                }
+                map.into()
+            }
+        }
+    }
+
     #[instrument(skip(crash_info), fields(crash_id = %crash_info.crash_id))]
     fn convert_crash_info_to_rhai_map(crash_info: &CrashInfo) -> rhai::Map {
         let mut map = rhai::Map::new();
@@ -619,6 +650,10 @@ impl MinidumpApi {
 
         if let Some(ref product_id) = crash_info.product_id {
             map.insert("product_id".into(), product_id.to_string().into());
+        }
+
+        if let Some(ref metadata) = crash_info.product_metadata {
+            map.insert("product_metadata".into(), Self::json_to_rhai_dynamic(metadata));
         }
 
         let tracked_annotations = TrackedAnnotations::from_map(crash_info.annotations.clone());
@@ -733,6 +768,7 @@ mod tests {
             minidump: None,
             attachments: vec![],
             annotations: HashMap::new(),
+            ..Default::default()
         };
 
         crash_info.annotations.insert(

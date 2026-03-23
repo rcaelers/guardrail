@@ -31,6 +31,7 @@ fn create_test_product_cache() -> ProductCache {
             id: product_id,
             name: "TestProduct".to_string(),
             accepting_crashes: true,
+            metadata: serde_json::Value::Object(Default::default()),
         },
     );
     ProductCache::from_map(products)
@@ -45,6 +46,7 @@ fn create_test_product_cache_with(entries: Vec<(&str, bool)>) -> ProductCache {
                 id: uuid::Uuid::new_v4(),
                 name: name.to_string(),
                 accepting_crashes: accepting,
+                metadata: serde_json::Value::Object(Default::default()),
             },
         );
     }

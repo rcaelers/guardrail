@@ -12,6 +12,8 @@ struct ProductChangePayload {
     id: uuid::Uuid,
     name: String,
     accepting_crashes: bool,
+    #[serde(default)]
+    metadata: serde_json::Value,
     old_name: Option<String>,
 }
 
@@ -43,6 +45,7 @@ pub async fn listen_for_product_changes(
                     id: change.id,
                     name: change.name.clone(),
                     accepting_crashes: change.accepting_crashes,
+                    metadata: change.metadata.clone(),
                 };
                 let json = serde_json::to_string(&info)?;
                 let key = product_cache_key(&change.name);

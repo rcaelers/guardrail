@@ -79,6 +79,7 @@ impl ProductRepo {
                 "name",
                 "description",
                 "accepting_crashes",
+                "metadata",
                 "created_at",
                 "updated_at",
             ],
@@ -99,14 +100,16 @@ impl ProductRepo {
                 INSERT INTO core.products
                   (
                     name,
-                    description
+                    description,
+                    metadata
                   )
-                VALUES ($1, $2)
+                VALUES ($1, $2, $3)
                 RETURNING
                   id
             "#,
             product.name,
-            product.description
+            product.description,
+            product.metadata
         )
         .fetch_one(executor)
         .await
@@ -120,13 +123,14 @@ impl ProductRepo {
         sqlx::query_scalar!(
             r#"
                 UPDATE core.products
-                SET name = $1, description = $2, accepting_crashes = $3
-                WHERE id = $4
+                SET name = $1, description = $2, accepting_crashes = $3, metadata = $4
+                WHERE id = $5
                 RETURNING id
             "#,
             product.name,
             product.description,
             product.accepting_crashes,
+            product.metadata,
             product.id,
         )
         .fetch_optional(executor)

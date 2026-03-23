@@ -24,6 +24,7 @@ pub async fn sync_products_to_valkey(
             id: product.id,
             name: product.name.clone(),
             accepting_crashes: product.accepting_crashes,
+            metadata: product.metadata.clone(),
         };
 
         let json = serde_json::to_string(&info)?;
