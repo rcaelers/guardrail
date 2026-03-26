@@ -171,8 +171,10 @@ jobs:
 
       - name: Verify the images
         run: |
-          cosign verify ghcr.io/whoissqr/cg-test-keyless-sign \
-              --certificate-identity https://github.com/whoissqr/cg-test-keyless-sign/.github/workflows/main.yml@refs/heads/main \
+          IMAGE=${{ env.GHCR }}-${{ matrix.name }}
+
+          cosign verify ${IMAGE}:latest \
+              --certificate-identity-regexp "https://github.com/rcaelers/guardrail/.github/workflows/containers.yml@refs/.*" \
               --certificate-oidc-issuer https://token.actions.githubusercontent.com | jq
 
       - name: Generate and attach attestation
