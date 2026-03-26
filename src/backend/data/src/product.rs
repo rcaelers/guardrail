@@ -8,6 +8,7 @@ pub struct Product {
     pub name: String,
     pub description: String,
     pub accepting_crashes: bool,
+    pub metadata: serde_json::Value,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -17,6 +18,8 @@ pub struct Product {
 pub struct NewProduct {
     pub name: String,
     pub description: String,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
 }
 
 impl From<Product> for NewProduct {
@@ -24,6 +27,7 @@ impl From<Product> for NewProduct {
         Self {
             name: product.name,
             description: product.description,
+            metadata: product.metadata,
         }
     }
 }

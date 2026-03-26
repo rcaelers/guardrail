@@ -20,6 +20,8 @@ use curator::{
     import_symbol::ImportSymbolProcessor,
     jobs::ImportCrashJob,
     maintenance,
+    product_listener,
+    product_sync,
     state::AppState,
 };
 use repos::Repo;
@@ -59,10 +61,17 @@ impl MaintenanceWorker {
         }
     }
 
-    async fn run_apalis(&self, state: AppState) {
+    async fn run_apalis(&self, state: AppState, guardrail_db: PgPool) {
         let conn = apalis_redis::connect(self.settings.job_server.redis_uri.clone())
             .await
             .expect("Failed to connect to Redis/Valkey");
+
+        let redis_client =
+            redis::Client::open(self.settings.job_server.redis_uri.as_str())
+                .expect("Failed to create Redis client");
+        let mut redis_manager = redis::aio::ConnectionManager::new(redis_client)
+            .await
+            .expect("Failed to create Redis connection manager");
 
         let redis_import_crash = RedisStorage::<ImportCrashJob>::new_with_config(
             conn.clone(),
@@ -72,6 +81,25 @@ impl MaintenanceWorker {
         if let Err(e) = maintenance::MaintenanceJob::run_all_maintenance_tasks(&state, &redis_import_crash).await {
             error!("Failed to run startup maintenance tasks: {}", e);
         }
+
+        if let Err(e) = product_sync::sync_products_to_valkey(&state.repo, &mut redis_manager).await {
+            error!("Failed to run startup product sync: {}", e);
+        }
+
+        // Spawn the LISTEN/NOTIFY listener for real-time product cache updates
+        let listener_pool = guardrail_db.clone();
+        let listener_redis = redis_manager.clone();
+        tokio::spawn(async move {
+            loop {
+                if let Err(e) = product_listener::listen_for_product_changes(
+                    listener_pool.clone(),
+                    listener_redis.clone(),
+                ).await {
+                    error!("Product change listener failed: {}, restarting...", e);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+            }
+        });
 
         info!("Start monitoring for import and maintenance jobs");
         let maintenance_schedule =
@@ -160,7 +188,7 @@ impl MaintenanceWorker {
         let state = AppState::new(repo, self.settings.clone(), store);
 
         info!("Maintenance worker is starting");
-        self.run_apalis(state.clone()).await;
+        self.run_apalis(state.clone(), guardrail_db).await;
         info!("Maintenance worker has stopped");
     }
 

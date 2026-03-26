@@ -1,4 +1,5 @@
 pub mod jobs;
+pub mod product_info;
 pub mod settings;
 
 #[cfg(feature = "ssr")]

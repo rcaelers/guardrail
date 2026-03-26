@@ -24,6 +24,13 @@ pub struct Minidumps {
 }
 
 #[derive(Debug, Deserialize, Default)]
+pub struct IngestionServer {
+    pub port: u16,
+    pub public_key: Option<String>,
+    pub private_key: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
 pub struct WebServer {
     pub port: u16,
     pub public_key: Option<String>,
@@ -82,6 +89,7 @@ pub struct ObjectStorage {
 #[derive(Debug, Deserialize, Default)]
 pub struct Settings {
     pub api_server: ApiServer,
+    pub ingestion_server: IngestionServer,
     pub web_server: WebServer,
     pub job_server: JobServer,
     pub database: Database,

@@ -45,6 +45,7 @@ pub async fn create_test_product(pool: &PgPool) -> Product {
     let new_product = NewProduct {
         name: format!("TestProduct_{}", Uuid::new_v4()),
         description: "Test Product Description".to_string(),
+        ..Default::default()
     };
 
     let product_id = ProductRepo::create(pool, new_product)
@@ -66,6 +67,7 @@ pub async fn create_test_product_with_details(
     let new_product = NewProduct {
         name: name.to_string(),
         description: description.to_string(),
+        ..Default::default()
     };
 
     let product_id = ProductRepo::create(pool, new_product)
