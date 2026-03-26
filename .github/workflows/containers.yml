@@ -78,6 +78,20 @@ jobs:
             runner: ubuntu-24.04-arm
             platform: linux/arm64
 
+          - name: ingestion
+            file: Containerfile.ingestion
+            arch: amd64
+            target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            platform: linux/amd64
+
+          - name: ingestion
+            file: Containerfile.ingestion
+            arch: arm64
+            target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+
     steps:
       - uses: actions/checkout@v4
 
@@ -110,7 +124,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        name: [api, processor, curator, web]
+        name: [api, processor, curator, ingestion, web]
 
     steps:
       - name: Set up Cosign
