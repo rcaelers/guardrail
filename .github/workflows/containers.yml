@@ -6,7 +6,7 @@ on:
       - main
       - dev
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
 
 env:
@@ -124,7 +124,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        name: [api, processor, curator, ingestion, web]
+        name: [api, processor, curator, ingestion]
 
     steps:
       - name: Set up Cosign
