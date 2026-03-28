@@ -4,9 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-common = { path = "../common", default-features = false, features = [
-  "ssr",
-] }
+common = { path = "../common", default-features = false, features = ["ssr"] }
 
 # Serde / json
 serde.workspace = true
