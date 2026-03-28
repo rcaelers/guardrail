@@ -10,7 +10,7 @@ pub struct AnnotationEntry {
     pub source: String,
 }
 
-    #[derive(Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct TrackedAnnotations {
     data: Arc<Mutex<TrackedAnnotationsData>>,
 }
