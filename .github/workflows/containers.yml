@@ -6,7 +6,7 @@ on:
       - main
       - dev
     tags:
-      - "v*"
+      - 'v*'
   workflow_dispatch:
 
 env:
@@ -78,6 +78,20 @@ jobs:
             runner: ubuntu-24.04-arm
             platform: linux/arm64
 
+          - name: ingestion
+            file: Containerfile.ingestion
+            arch: amd64
+            target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+            platform: linux/amd64
+
+          - name: ingestion
+            file: Containerfile.ingestion
+            arch: arm64
+            target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+
     steps:
       - uses: actions/checkout@v4
 
@@ -110,7 +124,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        name: [api, processor, curator, web]
+        name: [api, processor, curator, ingestion]
 
     steps:
       - name: Set up Cosign
@@ -157,8 +171,11 @@ jobs:
 
       - name: Verify the images
         run: |
-          cosign verify ghcr.io/whoissqr/cg-test-keyless-sign \
-              --certificate-identity https://github.com/whoissqr/cg-test-keyless-sign/.github/workflows/main.yml@refs/heads/main \
+          set -o pipefail
+          IMAGE=${{ env.GHCR }}-${{ matrix.name }}
+
+          cosign verify ${IMAGE}:latest \
+              --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/(heads/(main|dev)|tags/v.*)$" \
               --certificate-oidc-issuer https://token.actions.githubusercontent.com | jq
 
       - name: Generate and attach attestation
