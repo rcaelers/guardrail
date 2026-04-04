@@ -37,7 +37,7 @@ impl MinidumpWorker {
     }
 
     async fn run_apalis(&self, state: AppState) {
-        let conn = apalis_redis::connect(self.settings.job_server.redis_uri.clone())
+        let conn = apalis_redis::connect(self.settings.valkey.uri.clone())
             .await
             .expect("Failed to connect to Redis/Valkey");
 

@@ -59,7 +59,7 @@ impl GuardrailApiApp {
         info!("Starting server on port {}", self.settings.api_server.port);
 
         let guardrail_db = self.init_guardrail_db().await.unwrap();
-        let redis_conn = apalis_redis::connect(self.settings.job_server.redis_uri.clone())
+        let redis_conn = apalis_redis::connect(self.settings.valkey.uri.clone())
             .await
             .expect("Failed to connect to Redis/Valkey");
         let webauthn = self.create_webauthn();
