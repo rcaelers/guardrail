@@ -38,9 +38,13 @@ pub struct WebServer {
 }
 
 #[derive(Debug, Deserialize, Default)]
-pub struct JobServer {
-    pub port: u16,
-    pub redis_uri: String,
+pub struct Valkey {
+    pub uri: String,
+}
+
+#[derive(Debug, Deserialize, Default)]
+#[serde(default)]
+pub struct ProcessorServer {
     pub skip_patterns: Option<Vec<String>>,
     pub end_patterns: Option<Vec<String>>,
     pub delimiter: Option<String>,
@@ -91,7 +95,8 @@ pub struct Settings {
     pub api_server: ApiServer,
     pub ingestion_server: IngestionServer,
     pub web_server: WebServer,
-    pub job_server: JobServer,
+    pub valkey: Valkey,
+    pub processor: ProcessorServer,
     pub database: Database,
     pub object_storage: ObjectStorage,
     pub auth: Auth,

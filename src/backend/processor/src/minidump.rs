@@ -29,23 +29,23 @@ impl MinidumpProcessor {
         let config = SignatureGeneratorConfig {
             end_patterns: s
                 .settings
-                .job_server
+                .processor
                 .end_patterns
                 .clone()
                 .unwrap_or_default(),
             skip_patterns: s
                 .settings
-                .job_server
+                .processor
                 .skip_patterns
                 .clone()
                 .unwrap_or_default(),
             delimiter: s
                 .settings
-                .job_server
+                .processor
                 .delimiter
                 .clone()
                 .unwrap_or("|".to_string()),
-            maximum_frame_count: s.settings.job_server.maximum_frame_count.unwrap_or(20),
+            maximum_frame_count: s.settings.processor.maximum_frame_count.unwrap_or(20),
         };
 
         let signature_generator = SignatureGenerator::new(config).unwrap();

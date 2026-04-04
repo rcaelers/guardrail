@@ -62,12 +62,12 @@ impl MaintenanceWorker {
     }
 
     async fn run_apalis(&self, state: AppState, guardrail_db: PgPool) {
-        let conn = apalis_redis::connect(self.settings.job_server.redis_uri.clone())
+        let conn = apalis_redis::connect(self.settings.valkey.uri.clone())
             .await
             .expect("Failed to connect to Redis/Valkey");
 
         let redis_client =
-            redis::Client::open(self.settings.job_server.redis_uri.as_str())
+            redis::Client::open(self.settings.valkey.uri.as_str())
                 .expect("Failed to create Redis client");
         let mut redis_manager = redis::aio::ConnectionManager::new(redis_client)
             .await

@@ -50,13 +50,13 @@ impl GuardrailIngestionApp {
             self.settings.ingestion_server.port
         );
 
-        let redis_conn = apalis_redis::connect(self.settings.job_server.redis_uri.clone())
+        let redis_conn = apalis_redis::connect(self.settings.valkey.uri.clone())
             .await
             .expect("Failed to connect to Redis/Valkey");
         let store = common::init_s3_object_store(self.settings.clone()).await;
 
         let redis_client =
-            redis::Client::open(self.settings.job_server.redis_uri.as_str())
+            redis::Client::open(self.settings.valkey.uri.as_str())
                 .expect("Failed to create Redis client");
         let redis_manager = redis::aio::ConnectionManager::new(redis_client)
             .await
