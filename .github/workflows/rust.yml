@@ -27,11 +27,14 @@ jobs:
           rustup default nightly
           rustup target add wasm32-unknown-unknown
           rustup upgrade
-          cargo install --locked cargo-leptos
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.os }}
+          shared-key: ${{ matrix.os }}
+          cache-all-crates: 'true'
+
+      - name: Install cargo-leptos
+        run: cargo install --locked cargo-leptos
 
       - name: Build CSS
         run: |
@@ -64,12 +67,17 @@ jobs:
           rustup default nightly
           rustup target add wasm32-unknown-unknown
           rustup upgrade
-          cargo install --locked cargo-leptos
-          cargo install --locked cargo-llvm-cov
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ubuntu-24.04
+          shared-key: ubuntu-24.04
+          cache-all-crates: 'true'
+
+      - name: Install cargo-leptos
+        run: cargo install --locked cargo-leptos
+
+      - name: Install cargo-llvm-cov
+        run: cargo install --locked cargo-llvm-cov
 
       - name: Run PostgreSQL container
         run: |
