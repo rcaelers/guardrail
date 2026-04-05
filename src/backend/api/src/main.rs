@@ -4,11 +4,6 @@ use axum::http::StatusCode;
 use axum::{Router, http::header::AUTHORIZATION};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
-use k8s_openapi::api::core::v1::Secret;
-use kube::{
-    Api, Client,
-    api::{ObjectMeta, PostParams},
-};
 use sqlx::ConnectOptions;
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
@@ -26,11 +21,8 @@ use api::routes;
 use api::state::AppState;
 use api::worker::WorkQueue;
 use common::jobs::queue;
-use common::token::generate_api_token;
 use common::{init_logging, settings::Settings};
 use repos::Repo;
-
-const SECRET_NAME: &str = "guardrail-initial-admin-token";
 const MAX_UPLOAD_BYTES: usize = 20 * 1024 * 1024;
 
 #[derive(Parser, Debug)]
@@ -58,19 +50,19 @@ impl GuardrailApiApp {
 
         info!("Starting server on port {}", self.settings.api_server.port);
 
-        let guardrail_db = self.init_guardrail_db().await.unwrap();
-        let redis_conn = apalis_redis::connect(self.settings.valkey.uri.clone())
-            .await
-            .expect("Failed to connect to Redis/Valkey");
+        let guardrail_db = common::retry_startup("PostgreSQL", || async {
+            self.init_guardrail_db().await
+        })
+        .await;
+        let redis_conn = common::retry_startup("Valkey", || async {
+            apalis_redis::connect(self.settings.valkey.uri.clone()).await
+        })
+        .await;
         let webauthn = self.create_webauthn();
         let repo = Repo::new(guardrail_db.clone());
         let store = common::init_s3_object_store(self.settings.clone()).await;
 
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-        if let Err(err) = self.ensure_default_api_token(&repo).await {
-            tracing::error!("Failed to create default API token: {}", err);
-        }
 
         let redis_symbol = RedisStorage::new_with_config(
             redis_conn.clone(),
@@ -182,88 +174,7 @@ impl GuardrailApiApp {
             .connect_with(opts)
             .await?;
 
-        sqlx::migrate!("../../../migrations")
-            .run(&pool)
-            .await
-            .expect("Failed to run migrations");
-
         Ok(pool)
-    }
-
-    async fn create_k8s_initial_token_secret(
-        &self,
-        token: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let client = Client::try_default().await?;
-        let namespace =
-            std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-                .unwrap_or_else(|_| {
-                    tracing::warn!("Could not determine current namespace, using 'default'");
-                    "default".to_string()
-                });
-
-        let secrets: Api<Secret> = Api::namespaced(client, &namespace);
-
-        if secrets.get_opt(SECRET_NAME).await?.is_some() {
-            return Ok(());
-        }
-
-        let secret = Secret {
-            metadata: ObjectMeta {
-                name: Some(SECRET_NAME.to_string()),
-                labels: Some(
-                    [("app.kubernetes.io/part-of".to_string(), "guardrail".to_string())].into(),
-                ),
-                ..Default::default()
-            },
-            string_data: Some([("token".to_string(), token.to_string())].into()),
-            type_: Some("Opaque".to_string()),
-            ..Default::default()
-        };
-
-        secrets
-            .create(&PostParams::default(), &secret)
-            .await
-            .expect("Failed to create secret");
-        Ok(())
-    }
-
-    async fn ensure_default_api_token(
-        &self,
-        repo: &Repo,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        use data::api_token::NewApiToken;
-        use repos::api_token::ApiTokenRepo;
-        use tracing::info;
-
-        let mut conn = repo.acquire_admin().await?;
-
-        let tokens = ApiTokenRepo::get_all(&mut *conn).await?;
-        if !tokens.is_empty() {
-            info!("API tokens already exist, skipping default token creation");
-            return Ok(());
-        }
-
-        let (token_id, token, token_hash) =
-            generate_api_token().map_err(|_| "Failed to generate API token")?;
-
-        let new_token = NewApiToken {
-            description: "Default API token".to_string(),
-            token_id,
-            token_hash,
-            product_id: None,
-            user_id: None,
-            entitlements: vec!["token".to_string()],
-            expires_at: None,
-            is_active: true,
-        };
-
-        let _token_id = ApiTokenRepo::create(&mut *conn, new_token).await?;
-        info!("Created default API token: {}", token);
-
-        self.create_k8s_initial_token_secret(&token).await?;
-
-        Ok(())
     }
 }
 

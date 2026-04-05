@@ -37,9 +37,10 @@ impl MinidumpWorker {
     }
 
     async fn run_apalis(&self, state: AppState) {
-        let conn = apalis_redis::connect(self.settings.valkey.uri.clone())
-            .await
-            .expect("Failed to connect to Redis/Valkey");
+        let conn = common::retry_startup("Valkey", || async {
+            apalis_redis::connect(self.settings.valkey.uri.clone()).await
+        })
+        .await;
 
         let redis_minidump = RedisStorage::<MinidumpJob>::new_with_config(
             conn.clone(),

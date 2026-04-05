@@ -7,24 +7,27 @@ use apalis_cron::Tick;
 use apalis_redis::{RedisConfig, RedisStorage};
 use clap::Parser;
 use cron::Schedule;
+use k8s_openapi::api::core::v1::Secret;
+use kube::{
+    Api, Client,
+    api::{ObjectMeta, PostParams},
+};
 use sqlx::ConnectOptions;
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tracing::{debug, error, info};
 
-use common::{init_logging, settings::Settings};
 use common::jobs::queue;
+use common::token::generate_api_token;
+use common::{init_logging, settings::Settings};
 use curator::{
-    import_crash::ImportCrashProcessor,
-    import_symbol::ImportSymbolProcessor,
-    jobs::ImportCrashJob,
-    maintenance,
-    product_listener,
-    product_sync,
-    state::AppState,
+    import_crash::ImportCrashProcessor, import_symbol::ImportSymbolProcessor, jobs::ImportCrashJob,
+    maintenance, product_listener, product_sync, state::AppState,
 };
 use repos::Repo;
+
+const SECRET_NAME: &str = "guardrail-initial-admin-token";
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -62,27 +65,31 @@ impl MaintenanceWorker {
     }
 
     async fn run_apalis(&self, state: AppState, guardrail_db: PgPool) {
-        let conn = apalis_redis::connect(self.settings.valkey.uri.clone())
-            .await
-            .expect("Failed to connect to Redis/Valkey");
+        let conn = common::retry_startup("Valkey", || async {
+            apalis_redis::connect(self.settings.valkey.uri.clone()).await
+        })
+        .await;
 
-        let redis_client =
-            redis::Client::open(self.settings.valkey.uri.as_str())
-                .expect("Failed to create Redis client");
-        let mut redis_manager = redis::aio::ConnectionManager::new(redis_client)
-            .await
-            .expect("Failed to create Redis connection manager");
+        let mut redis_manager = common::retry_startup("Valkey connection manager", || async {
+            let redis_client = redis::Client::open(self.settings.valkey.uri.as_str())?;
+            redis::aio::ConnectionManager::new(redis_client).await
+        })
+        .await;
 
         let redis_import_crash = RedisStorage::<ImportCrashJob>::new_with_config(
             conn.clone(),
             RedisConfig::new(queue::IMPORT_CRASH_JOBS),
         );
 
-        if let Err(e) = maintenance::MaintenanceJob::run_all_maintenance_tasks(&state, &redis_import_crash).await {
+        if let Err(e) =
+            maintenance::MaintenanceJob::run_all_maintenance_tasks(&state, &redis_import_crash)
+                .await
+        {
             error!("Failed to run startup maintenance tasks: {}", e);
         }
 
-        if let Err(e) = product_sync::sync_products_to_valkey(&state.repo, &mut redis_manager).await {
+        if let Err(e) = product_sync::sync_products_to_valkey(&state.repo, &mut redis_manager).await
+        {
             error!("Failed to run startup product sync: {}", e);
         }
 
@@ -94,7 +101,9 @@ impl MaintenanceWorker {
                 if let Err(e) = product_listener::listen_for_product_changes(
                     listener_pool.clone(),
                     listener_redis.clone(),
-                ).await {
+                )
+                .await
+                {
                     error!("Product change listener failed: {}, restarting...", e);
                     tokio::time::sleep(Duration::from_secs(5)).await;
                 }
@@ -181,8 +190,17 @@ impl MaintenanceWorker {
         init_logging().await;
 
         info!("Starting maintenance worker");
-        let guardrail_db = self.init_guardrail_db().await.unwrap();
+        let guardrail_db = common::retry_startup("PostgreSQL", || async {
+            self.init_guardrail_db().await
+        })
+        .await;
         let repo = Repo::new(guardrail_db.clone());
+
+        common::retry_startup("curator bootstrap", || async {
+            self.ensure_default_api_token(&repo).await
+        })
+        .await;
+
         let store = common::init_s3_object_store(self.settings.clone()).await;
 
         let state = AppState::new(repo, self.settings.clone(), store);
@@ -202,7 +220,86 @@ impl MaintenanceWorker {
             .connect_with(opts)
             .await?;
 
+        sqlx::migrate!("../../../migrations").run(&pool).await?;
+
         Ok(pool)
+    }
+
+    async fn create_k8s_initial_token_secret(
+        &self,
+        token: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let client = Client::try_default().await?;
+        let namespace =
+            std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+                .unwrap_or_else(|_| {
+                    tracing::warn!("Could not determine current namespace, using 'default'");
+                    "default".to_string()
+                });
+
+        let secrets: Api<Secret> = Api::namespaced(client, &namespace);
+
+        if secrets.get_opt(SECRET_NAME).await?.is_some() {
+            return Ok(());
+        }
+
+        let secret = Secret {
+            metadata: ObjectMeta {
+                name: Some(SECRET_NAME.to_string()),
+                labels: Some(
+                    [("app.kubernetes.io/part-of".to_string(), "guardrail".to_string())].into(),
+                ),
+                ..Default::default()
+            },
+            string_data: Some([("token".to_string(), token.to_string())].into()),
+            type_: Some("Opaque".to_string()),
+            ..Default::default()
+        };
+
+        secrets
+            .create(&PostParams::default(), &secret)
+            .await
+            .expect("Failed to create secret");
+        Ok(())
+    }
+
+    async fn ensure_default_api_token(
+        &self,
+        repo: &Repo,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use data::api_token::NewApiToken;
+        use repos::api_token::ApiTokenRepo;
+
+        let mut conn = repo.acquire_admin().await?;
+
+        let tokens = ApiTokenRepo::get_all(&mut *conn).await?;
+        if !tokens.is_empty() {
+            info!("API tokens already exist, skipping default token creation");
+            return Ok(());
+        }
+
+        let (token_id, token, token_hash) =
+            generate_api_token().map_err(|_| "Failed to generate API token")?;
+
+        let new_token = NewApiToken {
+            description: "Default API token".to_string(),
+            token_id,
+            token_hash,
+            product_id: None,
+            user_id: None,
+            entitlements: vec!["token".to_string()],
+            expires_at: None,
+            is_active: true,
+        };
+
+        let _token_id = ApiTokenRepo::create(&mut *conn, new_token).await?;
+        info!("Created default API token: {}", token);
+
+        if let Err(err) = self.create_k8s_initial_token_secret(&token).await {
+            tracing::warn!("Failed to create initial token secret: {}", err);
+        }
+
+        Ok(())
     }
 }
 

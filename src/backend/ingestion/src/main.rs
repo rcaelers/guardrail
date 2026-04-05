@@ -50,17 +50,17 @@ impl GuardrailIngestionApp {
             self.settings.ingestion_server.port
         );
 
-        let redis_conn = apalis_redis::connect(self.settings.valkey.uri.clone())
-            .await
-            .expect("Failed to connect to Redis/Valkey");
+        let redis_conn = common::retry_startup("Valkey", || async {
+            apalis_redis::connect(self.settings.valkey.uri.clone()).await
+        })
+        .await;
         let store = common::init_s3_object_store(self.settings.clone()).await;
 
-        let redis_client =
-            redis::Client::open(self.settings.valkey.uri.as_str())
-                .expect("Failed to create Redis client");
-        let redis_manager = redis::aio::ConnectionManager::new(redis_client)
-            .await
-            .expect("Failed to create Redis connection manager");
+        let redis_manager = common::retry_startup("Valkey connection manager", || async {
+            let redis_client = redis::Client::open(self.settings.valkey.uri.as_str())?;
+            redis::aio::ConnectionManager::new(redis_client).await
+        })
+        .await;
         let product_cache = ProductCache::new(redis_manager);
 
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
