@@ -25,6 +25,7 @@ base64.workspace = true
 glob.workspace = true
 natord.workspace = true
 object_store = { workspace = true, optional = true }
+tokio.workspace = true
 
 [features]
 default = []

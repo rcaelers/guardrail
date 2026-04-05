@@ -30,7 +30,7 @@ impl AuthenticatedUser {
     }
 }
 
-use std::{collections::VecDeque, io::IsTerminal, ops::Range, sync::Arc};
+use std::{collections::VecDeque, future::Future, io::IsTerminal, ops::Range, sync::Arc, time::Duration};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SortOrder {
@@ -79,6 +79,35 @@ pub async fn init_logging() {
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     tracing_log::LogTracer::init().expect("Failed to set logger");
+}
+
+pub async fn retry_startup<F, Fut, T, E>(dependency: &str, mut init: F) -> T
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = Result<T, E>>,
+    E: std::fmt::Display,
+{
+    let mut attempt = 1u32;
+    let mut delay = Duration::from_secs(1);
+
+    loop {
+        match init().await {
+            Ok(value) => {
+                if attempt > 1 {
+                    tracing::info!("Connected to {dependency} after {attempt} attempts");
+                }
+                return value;
+            }
+            Err(err) => {
+                tracing::warn!(
+                    "Waiting for {dependency} during startup (attempt {attempt}): {err}"
+                );
+                tokio::time::sleep(delay).await;
+                attempt += 1;
+                delay = std::cmp::min(delay.saturating_mul(2), Duration::from_secs(30));
+            }
+        }
+    }
 }
 
 #[cfg(feature = "ssr")]
