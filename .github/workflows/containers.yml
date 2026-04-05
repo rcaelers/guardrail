@@ -143,16 +143,19 @@ jobs:
       - name: Create multi-arch manifest for ${{ matrix.name }}
         run: |
           IMAGE=${{ env.GHCR }}-${{ matrix.name }}
+          SHA_TAG="${GITHUB_SHA::7}"
 
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             VERSION_TAG="${GITHUB_REF_NAME}"
             docker buildx imagetools create \
               --tag ${IMAGE}:${VERSION_TAG} \
+              --tag ${IMAGE}:${SHA_TAG} \
               --tag ${IMAGE}:latest \
               ${IMAGE}:amd64-${GITHUB_SHA} \
               ${IMAGE}:arm64-${GITHUB_SHA}
           else
             docker buildx imagetools create \
+              --tag ${IMAGE}:${SHA_TAG} \
               --tag ${IMAGE}:latest \
               ${IMAGE}:amd64-${GITHUB_SHA} \
               ${IMAGE}:arm64-${GITHUB_SHA}
@@ -161,11 +164,14 @@ jobs:
       - name: Sign multi-arch image for ${{ matrix.name }}
         run: |
           IMAGE=${{ env.GHCR }}-${{ matrix.name }}
+          SHA_TAG="${GITHUB_SHA::7}"
 
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             cosign sign --yes ${IMAGE}:${GITHUB_REF_NAME}
+            cosign sign --yes ${IMAGE}:${SHA_TAG}
             cosign sign --yes ${IMAGE}:latest
           else
+            cosign sign --yes ${IMAGE}:${SHA_TAG}
             cosign sign --yes ${IMAGE}:latest
           fi
 
@@ -173,6 +179,11 @@ jobs:
         run: |
           set -o pipefail
           IMAGE=${{ env.GHCR }}-${{ matrix.name }}
+          SHA_TAG="${GITHUB_SHA::7}"
+
+          cosign verify ${IMAGE}:${SHA_TAG} \
+              --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/(heads/(main|dev)|tags/v.*)$" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com | jq
 
           cosign verify ${IMAGE}:latest \
               --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/(heads/(main|dev)|tags/v.*)$" \
@@ -181,6 +192,7 @@ jobs:
       - name: Generate and attach attestation
         run: |
           IMAGE=${{ env.GHCR }}-${{ matrix.name }}
+          SHA_TAG="${GITHUB_SHA::7}"
 
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             cosign attest \
@@ -188,6 +200,11 @@ jobs:
               --predicate <(echo '{"buildType":"github-actions","builder":{"id":"https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/tags/${{ github.ref_name }}"}}') \
               ${IMAGE}:${GITHUB_REF_NAME}
           fi
+
+          cosign attest \
+            --yes \
+            --predicate <(echo '{"buildType":"github-actions","builder":{"id":"https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/heads/${{ github.ref_name || github.ref_name }}"}}') \
+            ${IMAGE}:${SHA_TAG}
 
           cosign attest \
             --yes \
