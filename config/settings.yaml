@@ -174,9 +174,9 @@ ingestion_server:
     Qeqd8A0LJGwWC2dOVwmV06aN/txAvVPEG5KDJkJ6hLzi2BK+zpHz7RpnWn/H6Bgi
     kH89+JqlOvmRo8PEP2GF/hiNjlwfzwg=
     -----END PRIVATE KEY-----
-job_server:
-  port: 88
-  redis_uri: redis://localhost:6379
+valkey:
+  uri: redis://localhost:6379
+processor:
   maximum_frame_count: 10
   delimiter: "|"
   skip_patterns:
