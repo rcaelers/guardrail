@@ -20,6 +20,24 @@ pub async fn ready(State(state): State<AppState>) -> StatusCode {
         return StatusCode::SERVICE_UNAVAILABLE;
     }
 
+    let api_tokens_table_exists = match sqlx::query_scalar::<_, bool>(
+        "SELECT to_regclass('core.api_tokens') IS NOT NULL",
+    )
+    .fetch_one(&mut *conn)
+    .await
+    {
+        Ok(exists) => exists,
+        Err(err) => {
+            error!("Health check failed to inspect bootstrap schema: {}", err);
+            return StatusCode::SERVICE_UNAVAILABLE;
+        }
+    };
+
+    if !api_tokens_table_exists {
+        error!("Health check failed: bootstrap schema is not available yet");
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
+
     let bootstrap_ready = match sqlx::query_scalar::<_, bool>(
         "SELECT EXISTS (SELECT 1 FROM core.api_tokens)"
     )
