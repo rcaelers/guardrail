@@ -64,7 +64,8 @@ async fn test_health_live_ok(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../../migrations")]
 async fn test_health_ready_ok(pool: PgPool) {
-    let (token_id, _token, token_hash) = generate_api_token().expect("Failed to generate API token");
+    let (token_id, _token, token_hash) =
+        generate_api_token().expect("Failed to generate API token");
     let new_token = NewApiToken {
         description: "Default API token".to_string(),
         token_id,

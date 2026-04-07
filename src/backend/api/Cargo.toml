@@ -19,6 +19,10 @@ serde_json.workspace = true
 # SQLx
 sqlx.workspace = true
 
+# K8s
+k8s-openapi.workspace = true
+kube.workspace = true
+
 # Tokio / Axum
 tokio.workspace = true
 tokio-util.workspace = true
