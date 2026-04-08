@@ -5,8 +5,7 @@ on:
     branches: ['main', 'dev']
     tags:
       - 'v*.*.*'
-  pull_request:
-    branches: ['main', 'dev']
+  pull_request: {}
 
 env:
   CARGO_TERM_COLOR: always
@@ -20,7 +19,7 @@ jobs:
           - ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Rust
         run: |
@@ -28,19 +27,30 @@ jobs:
           rustup default nightly
           rustup target add wasm32-unknown-unknown
           rustup upgrade
-          cargo install --locked cargo-leptos
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.os }}
+          shared-key: ${{ matrix.os }}
+          cache-all-crates: 'true'
 
-      - name: Build
+      - name: Install cargo-leptos
+        run: cargo install --locked cargo-leptos
+
+      - name: Build CSS
+        run: |
+          npm i
+          npx @tailwindcss/cli -i ./src/web/server/static/input.css -o ./src/web/server/static/css/style.css
+
+      # - name: Build web
+      #   run: |
+      #     export SQLX_OFFLINE=1
+      #     cd src/web
+      #     cargo leptos build -vv
+
+      - name: Build backend
         run: |
           export SQLX_OFFLINE=1
-          npm i
-          npx @tailwindcss/cli -i ./src/web/server/static/input.css -o ./src/web/server/static/css/style.css --watch
-          cargo leptos build -vv
-          cargo build --workspace --all-features
+          cargo build --workspace
 
   test:
     runs-on: ubuntu-24.04
@@ -49,7 +59,7 @@ jobs:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/guardrail
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Rust
         run: |
@@ -57,12 +67,17 @@ jobs:
           rustup default nightly
           rustup target add wasm32-unknown-unknown
           rustup upgrade
-          cargo install --locked cargo-leptos
-          cargo install --locked cargo-llvm-cov
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ubuntu-24.04
+          shared-key: ubuntu-24.04
+          cache-all-crates: 'true'
+
+      - name: Install cargo-leptos
+        run: cargo install --locked cargo-leptos
+
+      - name: Install cargo-llvm-cov
+        run: cargo install --locked cargo-llvm-cov
 
       - name: Run PostgreSQL container
         run: |

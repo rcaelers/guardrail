@@ -4,24 +4,22 @@ use apalis::layers::retry::{RetryPolicy, backoff::ExponentialBackoffMaker};
 use apalis::prelude::*;
 use apalis_cron::CronStream;
 use apalis_cron::Tick;
-use apalis_postgres::{Config, PostgresStorage};
+use apalis_redis::{RedisConfig, RedisStorage};
 use clap::Parser;
-use common::{init_logging, settings::Settings};
 use cron::Schedule;
-use common::jobs::queue;
-use curator::{
-    import_crash::ImportCrashProcessor,
-    import_symbol::ImportSymbolProcessor,
-    jobs::ImportCrashJob,
-    maintenance::{self, NotifyPostgresStorage},
-    state::AppState,
-};
-use repos::Repo;
 use sqlx::ConnectOptions;
 use sqlx::PgPool;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::{str::FromStr, sync::Arc, time::Duration};
 use tracing::{debug, error, info};
+
+use common::jobs::queue;
+use common::{init_logging, settings::Settings};
+use curator::{
+    import_crash::ImportCrashProcessor, import_symbol::ImportSymbolProcessor, jobs::ImportCrashJob,
+    maintenance, product_listener, product_sync, state::AppState,
+};
+use repos::Repo;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -30,18 +28,18 @@ struct CliArgs {
     config_dir: String,
 }
 
-/// Combined state for maintenance tasks that need both AppState and PostgresStorage
+/// Combined state for maintenance tasks that need both AppState and RedisStorage
 #[derive(Clone)]
 struct MaintenanceState {
     app_state: AppState,
-    pg: NotifyPostgresStorage<ImportCrashJob>,
+    redis: RedisStorage<ImportCrashJob>,
 }
 
 async fn handle_maintenance_tick(
     _tick: Tick,
     state: Data<MaintenanceState>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    maintenance::MaintenanceJob::run_all_maintenance_tasks(&state.app_state, &state.pg).await?;
+    maintenance::MaintenanceJob::run_all_maintenance_tasks(&state.app_state, &state.redis).await?;
     Ok(())
 }
 
@@ -58,37 +56,71 @@ impl MaintenanceWorker {
         }
     }
 
-    async fn run_apalis(&self, state: AppState) {
-        let worker_db = self.init_worker_db().await.unwrap();
+    async fn run_apalis(&self, state: AppState, guardrail_db: PgPool) {
+        let conn = common::retry_startup("Valkey", || async {
+            apalis_redis::connect(self.settings.valkey.uri.clone()).await
+        })
+        .await;
 
-        PostgresStorage::setup(&worker_db)
-            .await
-            .expect("unable to run migrations for postgres");
+        let mut redis_manager = common::retry_startup("Valkey connection manager", || async {
+            let redis_client = redis::Client::open(self.settings.valkey.uri.as_str())?;
+            redis::aio::ConnectionManager::new(redis_client).await
+        })
+        .await;
 
-        let config = Config::new(queue::IMPORT_CRASH_JOBS);
-        let pg = PostgresStorage::new_with_notify(&worker_db, &config);
+        let redis_import_crash = RedisStorage::<ImportCrashJob>::new_with_config(
+            conn.clone(),
+            RedisConfig::new(queue::IMPORT_CRASH_JOBS),
+        );
 
-        if let Err(e) = maintenance::MaintenanceJob::run_all_maintenance_tasks(&state, &pg).await {
+        if let Err(e) =
+            maintenance::MaintenanceJob::run_all_maintenance_tasks(&state, &redis_import_crash)
+                .await
+        {
             error!("Failed to run startup maintenance tasks: {}", e);
         }
+
+        if let Err(e) = product_sync::sync_products_to_valkey(&state.repo, &mut redis_manager).await
+        {
+            error!("Failed to run startup product sync: {}", e);
+        }
+
+        // Spawn the LISTEN/NOTIFY listener for real-time product cache updates
+        let listener_pool = guardrail_db.clone();
+        let listener_redis = redis_manager.clone();
+        tokio::spawn(async move {
+            loop {
+                if let Err(e) = product_listener::listen_for_product_changes(
+                    listener_pool.clone(),
+                    listener_redis.clone(),
+                )
+                .await
+                {
+                    error!("Product change listener failed: {}, restarting...", e);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                }
+            }
+        });
 
         info!("Start monitoring for import and maintenance jobs");
         let maintenance_schedule =
             Schedule::from_str("0 0 2 * * * *").expect("Invalid cron schedule for maintenance");
 
         // Clone for import crash worker
-        let pg_import_crash = pg.clone();
+        let redis_import_crash_worker = redis_import_crash.clone();
         let state_import_crash = state.clone();
 
         // Set up import symbol worker
-        let import_symbol_config = Config::new(queue::IMPORT_SYMBOL_JOBS);
-        let pg_import_symbol = PostgresStorage::new_with_notify(&worker_db, &import_symbol_config);
+        let redis_import_symbol = RedisStorage::new_with_config(
+            conn.clone(),
+            RedisConfig::new(queue::IMPORT_SYMBOL_JOBS),
+        );
         let state_import_symbol = state.clone();
 
         // Clone for maintenance worker
         let maintenance_state = MaintenanceState {
             app_state: state.clone(),
-            pg: pg.clone(),
+            redis: redis_import_crash.clone(),
         };
 
         Monitor::new()
@@ -103,7 +135,7 @@ impl MaintenanceWorker {
                 .make_backoff();
 
                 WorkerBuilder::new("import-crash")
-                    .backend(pg_import_crash.clone())
+                    .backend(redis_import_crash_worker.clone())
                     .data(state_import_crash.clone())
                     .retry(RetryPolicy::retries(5).with_backoff(backoff))
                     .enable_tracing()
@@ -121,7 +153,7 @@ impl MaintenanceWorker {
                 .make_backoff();
 
                 WorkerBuilder::new("import-symbol")
-                    .backend(pg_import_symbol.clone())
+                    .backend(redis_import_symbol.clone())
                     .data(state_import_symbol.clone())
                     .retry(RetryPolicy::retries(5).with_backoff(backoff))
                     .enable_tracing()
@@ -150,32 +182,23 @@ impl MaintenanceWorker {
         init_logging().await;
 
         info!("Starting maintenance worker");
-        let guardrail_db = self.init_guardrail_db().await.unwrap();
+        let guardrail_db = common::retry_startup("PostgreSQL", || async {
+            self.init_guardrail_db().await
+        })
+        .await;
         let repo = Repo::new(guardrail_db.clone());
+
         let store = common::init_s3_object_store(self.settings.clone()).await;
 
         let state = AppState::new(repo, self.settings.clone(), store);
 
         info!("Maintenance worker is starting");
-        self.run_apalis(state.clone()).await;
+        self.run_apalis(state.clone(), guardrail_db).await;
         info!("Maintenance worker has stopped");
     }
 
     async fn init_guardrail_db(&self) -> Result<PgPool, sqlx::Error> {
         let database_url = &self.settings.database.db_uri;
-        let mut opts: PgConnectOptions = database_url.parse()?;
-        opts = opts.log_statements(log::LevelFilter::Debug);
-
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect_with(opts)
-            .await?;
-
-        Ok(pool)
-    }
-
-    async fn init_worker_db(&self) -> Result<PgPool, sqlx::Error> {
-        let database_url = &self.settings.job_server.db_uri;
         let mut opts: PgConnectOptions = database_url.parse()?;
         opts = opts.log_statements(log::LevelFilter::Debug);
 

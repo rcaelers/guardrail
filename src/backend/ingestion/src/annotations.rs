@@ -10,9 +10,16 @@ pub struct AnnotationEntry {
     pub source: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone)]
 pub struct TrackedAnnotations {
     data: Arc<Mutex<TrackedAnnotationsData>>,
+}
+
+impl Serialize for TrackedAnnotations {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let data = self.data.lock().map_err(serde::ser::Error::custom)?;
+        data.serialize(serializer)
+    }
 }
 
 #[derive(Debug, Serialize)]

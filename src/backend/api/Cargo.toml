@@ -19,11 +19,14 @@ serde_json.workspace = true
 # SQLx
 sqlx.workspace = true
 
+# K8s
+k8s-openapi.workspace = true
+kube.workspace = true
+
 # Tokio / Axum
 tokio.workspace = true
 tokio-util.workspace = true
 axum.workspace = true
-axum-extra.workspace = true
 axum-server.workspace = true
 rustls.workspace = true
 
@@ -35,27 +38,20 @@ tower.workspace = true
 tower-http.workspace = true
 tower-sessions.workspace = true
 
-# K8s
-k8s-openapi.workspace = true
-kube.workspace = true
-
 # Security
 argon2.workspace = true
 
 # Tracing
 tracing.workspace = true
 tracing-subscriber.workspace = true
-tracing-appender.workspace = true
 tracing-log.workspace = true
 
 # Misc
 async-trait.workspace = true
 chrono.workspace = true
 data-encoding.workspace = true
-fancy-regex.workspace = true
 futures.workspace = true
 rand.workspace = true
-rhai.workspace = true
 thiserror.workspace = true
 time.workspace = true
 uuid.workspace = true
@@ -64,7 +60,7 @@ jsonwebtoken.workspace = true
 log.workspace = true
 object_store.workspace = true
 apalis.workspace = true
-apalis-postgres.workspace = true
+apalis-redis.workspace = true
 bytes.workspace = true
 
 [dev-dependencies]

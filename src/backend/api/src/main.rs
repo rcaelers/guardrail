@@ -1,4 +1,4 @@
-use apalis_postgres::{Config, PostgresStorage};
+use apalis_redis::{RedisConfig, RedisStorage};
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use axum::{Router, http::header::AUTHORIZATION};
@@ -58,23 +58,29 @@ impl GuardrailApiApp {
 
         info!("Starting server on port {}", self.settings.api_server.port);
 
-        let guardrail_db = self.init_guardrail_db().await.unwrap();
-        let worker_db = self.init_worker_db().await.unwrap();
+        let guardrail_db = common::retry_startup("PostgreSQL", || async {
+            self.init_guardrail_db().await
+        })
+        .await;
+        let redis_conn = common::retry_startup("Valkey", || async {
+            apalis_redis::connect(self.settings.valkey.uri.clone()).await
+        })
+        .await;
         let webauthn = self.create_webauthn();
         let repo = Repo::new(guardrail_db.clone());
+        common::retry_startup("api bootstrap", || async {
+            self.ensure_default_api_token(&repo).await
+        })
+        .await;
         let store = common::init_s3_object_store(self.settings.clone()).await;
 
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-        if let Err(err) = self.ensure_default_api_token(&repo).await {
-            tracing::error!("Failed to create default API token: {}", err);
-        }
-
-        let pg_minidump =
-            PostgresStorage::new_with_config(&worker_db, &Config::new(queue::MINIDUMP_JOBS));
-        let pg_symbol =
-            PostgresStorage::new_with_config(&worker_db, &Config::new(queue::SYMBOL_JOBS));
-        let worker = Arc::new(WorkQueue::new(pg_minidump, pg_symbol));
+        let redis_symbol = RedisStorage::new_with_config(
+            redis_conn.clone(),
+            RedisConfig::new(queue::SYMBOL_JOBS),
+        );
+        let worker = Arc::new(WorkQueue::new(redis_symbol));
 
         let state = AppState {
             repo,
@@ -180,27 +186,7 @@ impl GuardrailApiApp {
             .connect_with(opts)
             .await?;
 
-        sqlx::migrate!("../../../migrations")
-            .run(&pool)
-            .await
-            .expect("Failed to run migrations");
-
-        Ok(pool)
-    }
-
-    async fn init_worker_db(&self) -> Result<PgPool, sqlx::Error> {
-        let database_url = &self.settings.job_server.db_uri;
-        let mut opts: PgConnectOptions = database_url.parse()?;
-        opts = opts.log_statements(log::LevelFilter::Debug);
-
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect_with(opts)
-            .await?;
-
-        PostgresStorage::setup(&pool)
-            .await
-            .expect("unable to run migrations for postgres");
+        sqlx::migrate!("../../../migrations").run(&pool).await?;
 
         Ok(pool)
     }
@@ -249,7 +235,6 @@ impl GuardrailApiApp {
     ) -> Result<(), Box<dyn std::error::Error>> {
         use data::api_token::NewApiToken;
         use repos::api_token::ApiTokenRepo;
-        use tracing::info;
 
         let mut conn = repo.acquire_admin().await?;
 
@@ -276,7 +261,9 @@ impl GuardrailApiApp {
         let _token_id = ApiTokenRepo::create(&mut *conn, new_token).await?;
         info!("Created default API token: {}", token);
 
-        self.create_k8s_initial_token_secret(&token).await?;
+        if let Err(err) = self.create_k8s_initial_token_secret(&token).await {
+            tracing::warn!("Failed to create initial token secret: {}", err);
+        }
 
         Ok(())
     }

@@ -8,14 +8,17 @@ use axum::{
     extract::DefaultBodyLimit,
     http::{Request, StatusCode},
 };
+use common::token::generate_api_token;
+use data::api_token::NewApiToken;
+use repos::api_token::ApiTokenRepo;
 use sqlx::PgPool;
-use testware::{create_settings, create_webauthn};
 use tower::ServiceExt;
+use tower_http::trace::TraceLayer;
 
 use api::state::AppState;
 use api::{routes::routes, worker::TestWorker};
 use repos::Repo;
-use tower_http::trace::TraceLayer;
+use testware::{create_settings, create_webauthn};
 
 async fn setup(pool: &PgPool) -> Router {
     let settings = create_settings();
@@ -61,6 +64,22 @@ async fn test_health_live_ok(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../../migrations")]
 async fn test_health_ready_ok(pool: PgPool) {
+    let (token_id, _token, token_hash) =
+        generate_api_token().expect("Failed to generate API token");
+    let new_token = NewApiToken {
+        description: "Default API token".to_string(),
+        token_id,
+        token_hash,
+        product_id: None,
+        user_id: None,
+        entitlements: vec!["token".to_string()],
+        expires_at: None,
+        is_active: true,
+    };
+    ApiTokenRepo::create(&pool, new_token)
+        .await
+        .expect("Failed to create API token");
+
     let app = setup(&pool).await;
 
     let request = Request::builder()

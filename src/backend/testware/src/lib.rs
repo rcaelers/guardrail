@@ -2,16 +2,18 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::Utc;
-use common::settings::Settings;
-use common::token::generate_api_token;
 use sqlx::PgPool;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
+use webauthn_rs::prelude::Url;
+use webauthn_rs::{Webauthn, WebauthnBuilder};
 
 pub mod mockall_object_store;
 pub mod setup;
 
 // Data models
+use common::settings::Settings;
+use common::token::generate_api_token;
 use data::api_token::NewApiToken;
 use data::attachment::NewAttachment;
 use data::crash::NewCrash;
@@ -38,14 +40,12 @@ use data::product::Product;
 use data::symbols::Symbols;
 use data::user::User;
 
-use webauthn_rs::prelude::Url;
-use webauthn_rs::{Webauthn, WebauthnBuilder};
-
 /// Create a test product with a random name
 pub async fn create_test_product(pool: &PgPool) -> Product {
     let new_product = NewProduct {
         name: format!("TestProduct_{}", Uuid::new_v4()),
         description: "Test Product Description".to_string(),
+        ..Default::default()
     };
 
     let product_id = ProductRepo::create(pool, new_product)
@@ -67,6 +67,7 @@ pub async fn create_test_product_with_details(
     let new_product = NewProduct {
         name: name.to_string(),
         description: description.to_string(),
+        ..Default::default()
     };
 
     let product_id = ProductRepo::create(pool, new_product)
@@ -337,7 +338,7 @@ pub fn create_settings() -> Settings {
         .map(PathBuf::from)
         .unwrap_or_else(|_| std::env::current_dir().expect("Failed to get current directory"))
         .ancestors()
-        .nth(2)
+        .nth(3)
         .expect("Failed to find workspace root")
         .to_string_lossy()
         .to_string();

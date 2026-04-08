@@ -2,8 +2,23 @@ volumes:
   postgresql18-storage:
   pgadmin4-storage:
   minio-storage:
+  valkey-storage:
 
 services:
+  valkey:
+    container_name: valkey
+    image: valkey/valkey:latest
+    ports:
+      - 6379:6379
+    volumes:
+      - valkey-storage:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'valkey-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   postgresql:
     container_name: postgresql
     image: postgres:latest

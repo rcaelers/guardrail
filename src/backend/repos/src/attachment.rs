@@ -1,10 +1,10 @@
-use common::QueryParams;
 use sqlx::{Postgres, QueryBuilder};
 
 use crate::{
     Repo,
     error::{RepoError, handle_sql_error},
 };
+use common::QueryParams;
 use data::attachment::{Attachment, NewAttachment};
 
 pub struct AttachmentsRepo {}

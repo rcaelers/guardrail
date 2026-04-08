@@ -1,10 +1,10 @@
 use ::chrono::NaiveDateTime;
 //use leptos::prelude::*;
 use leptos_struct_table::*;
-use data::user::User;
 use uuid::Uuid;
 
 use crate::{classes::ClassesPreset, components::datatable::ExtraRowTrait};
+use data::user::User;
 
 #[derive(TableRow, Clone, Debug)]
 #[table(sortable, classes_provider = ClassesPreset)]

@@ -1,5 +1,5 @@
 use apalis::prelude::*;
-use apalis_postgres::PostgresStorage;
+use apalis_redis::RedisStorage;
 use bytes::Bytes;
 use minidump::Minidump;
 use minidump_processor::ProcessorOptions;
@@ -29,23 +29,23 @@ impl MinidumpProcessor {
         let config = SignatureGeneratorConfig {
             end_patterns: s
                 .settings
-                .job_server
+                .processor
                 .end_patterns
                 .clone()
                 .unwrap_or_default(),
             skip_patterns: s
                 .settings
-                .job_server
+                .processor
                 .skip_patterns
                 .clone()
                 .unwrap_or_default(),
             delimiter: s
                 .settings
-                .job_server
+                .processor
                 .delimiter
                 .clone()
                 .unwrap_or("|".to_string()),
-            maximum_frame_count: s.settings.job_server.maximum_frame_count.unwrap_or(20),
+            maximum_frame_count: s.settings.processor.maximum_frame_count.unwrap_or(20),
         };
 
         let signature_generator = SignatureGenerator::new(config).unwrap();
@@ -70,12 +70,12 @@ impl MinidumpProcessor {
         Ok(signature)
     }
 
-    #[instrument(skip(self, crash_info, pg_storage), fields(crash_id = %crash_info["crash_id"]))]
+    #[instrument(skip(self, crash_info, redis_storage), fields(crash_id = %crash_info["crash_id"]))]
     async fn handle_job(
         &self,
         crash_id: uuid::Uuid,
         mut crash_info: serde_json::Value,
-        pg_storage: &PostgresStorage<ImportCrashJob>,
+        redis_storage: &RedisStorage<ImportCrashJob>,
     ) -> Result<(), JobError> {
         info!("Processor handling job: {}", crash_id);
 
@@ -118,7 +118,7 @@ impl MinidumpProcessor {
 
         // Enqueue ImportCrashJob for the maintenance worker to import into database
         let import_job = ImportCrashJob { crash_id };
-        pg_storage.clone().push(import_job).await.map_err(|e| {
+        redis_storage.clone().push(import_job).await.map_err(|e| {
             error!(error = ?e, "Failed to enqueue ImportCrashJob");
             JobError::ApalisError(format!("failed to enqueue ImportCrashJob: {:?}", e))
         })?;
@@ -170,11 +170,11 @@ impl MinidumpProcessor {
         Ok(())
     }
 
-    #[instrument(skip(job, state, pg_storage), fields(crash_id = %job.crash["crash_id"]))]
+    #[instrument(skip(job, state, redis_storage), fields(crash_id = %job.crash["crash_id"]))]
     pub async fn process(
         job: MinidumpJob,
         state: Data<AppState>,
-        pg_storage: Data<PostgresStorage<ImportCrashJob>>,
+        redis_storage: Data<RedisStorage<ImportCrashJob>>,
     ) -> Result<(), JobError> {
         info!("Incoming minidump");
         let crash_id = job.crash["crash_id"]
@@ -191,7 +191,7 @@ impl MinidumpProcessor {
         info!("Process minidump: {}", crash_id);
         let processor = MinidumpProcessor::new(state.clone());
         processor
-            .handle_job(crash_id, job.crash.clone(), &pg_storage)
+            .handle_job(crash_id, job.crash.clone(), &redis_storage)
             .await?;
         processor.cleanup_files(crash_id, &job.crash).await;
         info!("Successfully processed minidump for crash ID: {}", crash_id);

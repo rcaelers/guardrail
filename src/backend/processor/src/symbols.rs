@@ -1,5 +1,5 @@
 use apalis::prelude::*;
-use apalis_postgres::PostgresStorage;
+use apalis_redis::RedisStorage;
 use minidump_unwind::SymbolFile;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path};
 use std::sync::Arc;
@@ -22,12 +22,12 @@ impl SymbolProcessor {
         }
     }
 
-    #[instrument(skip(self, symbol_info, pg_storage), fields(storage_path))]
+    #[instrument(skip(self, symbol_info, redis_storage), fields(storage_path))]
     async fn handle_job(
         &self,
         symbol_upload_id: uuid::Uuid,
         symbol_info: serde_json::Value,
-        pg_storage: &PostgresStorage<ImportSymbolJob>,
+        redis_storage: &RedisStorage<ImportSymbolJob>,
     ) -> Result<(), JobError> {
         info!("SymbolProcessor handling job: {}", symbol_upload_id);
 
@@ -53,7 +53,7 @@ impl SymbolProcessor {
 
         // Enqueue ImportSymbolJob for the curator to import into database
         let import_job = ImportSymbolJob { symbol_upload_id };
-        pg_storage.clone().push(import_job).await.map_err(|e| {
+        redis_storage.clone().push(import_job).await.map_err(|e| {
             error!(error = ?e, "Failed to enqueue ImportSymbolJob");
             JobError::ApalisError(format!("failed to enqueue ImportSymbolJob: {:?}", e))
         })?;
@@ -98,11 +98,11 @@ impl SymbolProcessor {
         Ok(())
     }
 
-    #[instrument(skip(job, state, pg_storage))]
+    #[instrument(skip(job, state, redis_storage))]
     pub async fn process(
         job: SymbolJob,
         state: Data<AppState>,
-        pg_storage: Data<PostgresStorage<ImportSymbolJob>>,
+        redis_storage: Data<RedisStorage<ImportSymbolJob>>,
     ) -> Result<(), JobError> {
         info!("Incoming symbol job");
         let symbol_upload_id = job.symbol_info["symbol_upload_id"]
@@ -119,7 +119,7 @@ impl SymbolProcessor {
         info!("Process symbol: {}", symbol_upload_id);
         let processor = SymbolProcessor::new(state.clone());
         processor
-            .handle_job(symbol_upload_id, job.symbol_info.clone(), &pg_storage)
+            .handle_job(symbol_upload_id, job.symbol_info.clone(), &redis_storage)
             .await?;
         info!("Successfully processed symbol for upload ID: {}", symbol_upload_id);
 

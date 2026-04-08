@@ -1,11 +1,10 @@
+use axum::Json;
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, State};
-use axum::{Extension, Json};
 use object_store::path::Path;
 use object_store::{ObjectStore, ObjectStoreExt, PutPayload};
 use rhai::Engine;
 use serde::Serialize;
-use sqlx::Postgres;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tracing::{debug, error, info, instrument};
@@ -13,8 +12,7 @@ use tracing::{debug, error, info, instrument};
 use crate::annotations::{AnnotationEntry, TrackedAnnotations};
 use crate::error::ApiError;
 use crate::state::AppState;
-use crate::utils::{get_product_by_id, stream_to_s3};
-use data::api_token::ApiToken;
+use crate::utils::stream_to_s3;
 
 pub struct MinidumpApi;
 
@@ -49,6 +47,7 @@ struct CrashInfo {
     submission_timestamp: String,
     product: Option<String>,
     product_id: Option<uuid::Uuid>,
+    product_metadata: Option<serde_json::Value>,
     minidump: Option<Minidump>,
     attachments: Vec<Attachment>,
     annotations: HashMap<String, AnnotationEntry>,
@@ -377,33 +376,6 @@ impl MinidumpApi {
         Ok(())
     }
 
-    #[instrument(skip(_tx, _api_token, state, crash_info), fields(crash_id = %crash_info.crash_id))]
-    async fn validate_crash<E>(
-        _tx: &mut E,
-        _api_token: &ApiToken,
-        state: &AppState,
-        crash_info: &mut CrashInfo,
-    ) -> Result<(), ApiError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
-        debug!(crash_id = %crash_info.crash_id, "Validating crash info");
-
-        Self::validate_minidump_presence(crash_info)?;
-
-        let mandatory_annotations = state
-            .settings
-            .minidumps
-            .mandatory_annotations
-            .as_deref()
-            .unwrap_or_default();
-        Self::validate_mandatory_annotations(crash_info, mandatory_annotations)?;
-
-        Self::run_validation_scripts(crash_info, state)?;
-
-        Ok(())
-    }
-
     #[instrument(skip(storage, crash_info), fields(crash_id = %crash_id))]
     async fn upload_crash(
         storage: Arc<dyn ObjectStore>,
@@ -421,32 +393,12 @@ impl MinidumpApi {
         Ok(())
     }
 
-    #[instrument(skip(state, api_token, crash_info, multipart), fields(crash_id))]
+    #[instrument(skip(state, crash_info, multipart), fields(crash_id))]
     async fn handle_upload(
         state: AppState,
-        api_token: ApiToken,
         mut multipart: Multipart,
         crash_info: &mut CrashInfo,
     ) -> Result<(), ApiError> {
-        let mut tx = state.repo.begin_admin().await?;
-
-        let product_id = api_token.product_id.ok_or_else(|| {
-            error!("API token does not have a product ID");
-            ApiError::ProductAccessDenied(
-                "API token is not associated with any product".to_string(),
-            )
-        })?;
-
-        let product = get_product_by_id(&mut *tx, product_id).await?;
-        crash_info.product = Some(product.name.clone());
-        crash_info.product_id = Some(product.id);
-
-        info!(product = %product.name, "Processing crash for product");
-
-        if !product.accepting_crashes {
-            return Err(ApiError::ProductNotAcceptingCrashes(product.name));
-        }
-
         while let Some(field) = multipart.next_field().await.map_err(|e| {
             error!(error = ?e, "Failed to get next multipart field");
             ApiError::Failure("failed to read multipart field from upload".to_string())
@@ -454,9 +406,44 @@ impl MinidumpApi {
             Self::process_field(field, crash_info, state.clone()).await?;
         }
 
-        Self::validate_crash(&mut *tx, &api_token, &state, crash_info).await?;
+        Self::validate_minidump_presence(crash_info)?;
 
-        state.repo.end(tx).await?;
+        let mandatory_annotations = state
+            .settings
+            .minidumps
+            .mandatory_annotations
+            .as_deref()
+            .unwrap_or_default();
+        Self::validate_mandatory_annotations(crash_info, mandatory_annotations)?;
+
+        let product_name = match crash_info.annotations.get("product") {
+            Some(a) => a.value.clone(),
+            None => {
+                error!("Missing required 'product' annotation");
+                return Err(ApiError::Failure("missing required 'product' annotation".to_string()));
+            }
+        };
+
+        let product = state
+            .product_cache
+            .get_product_by_name(&product_name)
+            .await?
+            .ok_or_else(|| {
+                error!(product = %product_name, "Product not found in cache");
+                ApiError::ProductNotFound(product_name.clone())
+            })?;
+
+        crash_info.product = Some(product.name.clone());
+        crash_info.product_id = Some(product.id);
+        crash_info.product_metadata = Some(product.metadata);
+
+        info!(product = %product.name, "Processing crash for product");
+
+        if !product.accepting_crashes {
+            return Err(ApiError::ProductNotAcceptingCrashes(product.name));
+        }
+
+        Self::run_validation_scripts(crash_info, &state)?;
 
         let crash_info_json = serde_json::to_value(&crash_info).map_err(|e| {
             error!(error = ?e, "Failed to serialize crash info");
@@ -478,10 +465,9 @@ impl MinidumpApi {
         Ok(())
     }
 
-    #[instrument(skip(state, api_token, multipart), fields(crash_id))]
+    #[instrument(skip(state, multipart), fields(crash_id))]
     pub async fn upload(
         State(state): State<AppState>,
-        Extension(api_token): Extension<ApiToken>,
         multipart: Multipart,
     ) -> Result<Json<MinidumpResponse>, ApiError> {
         let crash_id = uuid::Uuid::new_v4();
@@ -498,7 +484,7 @@ impl MinidumpApi {
             ..Default::default()
         };
 
-        let r = Self::handle_upload(state.clone(), api_token, multipart, &mut crash_info).await;
+        let r = Self::handle_upload(state.clone(), multipart, &mut crash_info).await;
         if let Err(e) = r {
             error!(error = ?e, "Failed to handle minidump upload");
 
@@ -606,6 +592,35 @@ impl MinidumpApi {
         }
     }
 
+    fn json_to_rhai_dynamic(value: &serde_json::Value) -> rhai::Dynamic {
+        match value {
+            serde_json::Value::Null => rhai::Dynamic::UNIT,
+            serde_json::Value::Bool(b) => (*b).into(),
+            serde_json::Value::Number(n) => {
+                if let Some(i) = n.as_i64() {
+                    i.into()
+                } else if let Some(f) = n.as_f64() {
+                    f.into()
+                } else {
+                    rhai::Dynamic::UNIT
+                }
+            }
+            serde_json::Value::String(s) => s.clone().into(),
+            serde_json::Value::Array(arr) => {
+                let rhai_arr: Vec<rhai::Dynamic> =
+                    arr.iter().map(Self::json_to_rhai_dynamic).collect();
+                rhai_arr.into()
+            }
+            serde_json::Value::Object(obj) => {
+                let mut map = rhai::Map::new();
+                for (k, v) in obj {
+                    map.insert(k.as_str().into(), Self::json_to_rhai_dynamic(v));
+                }
+                map.into()
+            }
+        }
+    }
+
     #[instrument(skip(crash_info), fields(crash_id = %crash_info.crash_id))]
     fn convert_crash_info_to_rhai_map(crash_info: &CrashInfo) -> rhai::Map {
         let mut map = rhai::Map::new();
@@ -619,6 +634,14 @@ impl MinidumpApi {
 
         if let Some(ref product_id) = crash_info.product_id {
             map.insert("product_id".into(), product_id.to_string().into());
+        }
+
+        if let Some(ref metadata) = crash_info.product_metadata {
+            map.insert("product_metadata".into(), Self::json_to_rhai_dynamic(metadata));
+        }
+
+        if let Some(ref metadata) = crash_info.product_metadata {
+            map.insert("product_metadata".into(), Self::json_to_rhai_dynamic(metadata));
         }
 
         let tracked_annotations = TrackedAnnotations::from_map(crash_info.annotations.clone());
@@ -733,6 +756,7 @@ mod tests {
             minidump: None,
             attachments: vec![],
             annotations: HashMap::new(),
+            ..Default::default()
         };
 
         crash_info.annotations.insert(

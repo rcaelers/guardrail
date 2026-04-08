@@ -1,16 +1,17 @@
-use crate::error::ApiError;
-use crate::state::AppState;
-use crate::utils::{get_product, get_product_by_id, validate_api_token_for_product};
-use crate::utils::{peek_line, stream_to_s3};
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, State};
 use axum::{Extension, Json};
-use data::api_token::ApiToken;
 use object_store::path::Path;
 use object_store::ObjectStoreExt;
 use serde::Serialize;
 use sqlx::Postgres;
 use tracing::{error, info, instrument};
+
+use crate::error::ApiError;
+use crate::state::AppState;
+use crate::utils::{get_product, get_product_by_id, validate_api_token_for_product};
+use crate::utils::{peek_line, stream_to_s3};
+use data::api_token::ApiToken;
 
 #[derive(Default, Debug, Serialize)]
 struct SymbolsHeader {

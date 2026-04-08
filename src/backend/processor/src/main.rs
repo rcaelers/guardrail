@@ -2,8 +2,11 @@ use apalis::layers::retry::HasherRng;
 use apalis::layers::retry::backoff::MakeBackoff;
 use apalis::layers::retry::{RetryPolicy, backoff::ExponentialBackoffMaker};
 use apalis::prelude::*;
-use apalis_postgres::{Config, PostgresStorage};
+use apalis_redis::{RedisConfig, RedisStorage};
 use clap::Parser;
+use std::{sync::Arc, time::Duration};
+use tracing::{debug, info};
+
 use common::jobs::queue;
 use common::{init_logging, settings::Settings};
 use processor::{
@@ -12,11 +15,6 @@ use processor::{
     state::AppState,
     symbols::SymbolProcessor,
 };
-use sqlx::ConnectOptions;
-use sqlx::PgPool;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
-use std::{sync::Arc, time::Duration};
-use tracing::{debug, info};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -39,36 +37,41 @@ impl MinidumpWorker {
     }
 
     async fn run_apalis(&self, state: AppState) {
-        let worker_db = self.init_worker_db().await.unwrap();
+        let conn = common::retry_startup("Valkey", || async {
+            apalis_redis::connect(self.settings.valkey.uri.clone()).await
+        })
+        .await;
 
-        PostgresStorage::setup(&worker_db)
-            .await
-            .expect("unable to run migrations for postgres");
+        let redis_minidump = RedisStorage::<MinidumpJob>::new_with_config(
+            conn.clone(),
+            RedisConfig::new(queue::MINIDUMP_JOBS),
+        );
 
-        let config = Config::new(queue::MINIDUMP_JOBS);
-        let pg_minidump = PostgresStorage::<MinidumpJob>::new_with_notify(&worker_db, &config);
-
-        let symbol_config = Config::new(queue::SYMBOL_JOBS);
-        let pg_symbol = PostgresStorage::<SymbolJob>::new_with_notify(&worker_db, &symbol_config);
+        let redis_symbol = RedisStorage::<SymbolJob>::new_with_config(
+            conn.clone(),
+            RedisConfig::new(queue::SYMBOL_JOBS),
+        );
 
         // Create storages for enqueueing jobs to the curator
-        let import_crash_config = Config::new(queue::IMPORT_CRASH_JOBS);
-        let pg_import_crash =
-            PostgresStorage::<ImportCrashJob>::new_with_notify(&worker_db, &import_crash_config);
+        let redis_import_crash = RedisStorage::<ImportCrashJob>::new_with_config(
+            conn.clone(),
+            RedisConfig::new(queue::IMPORT_CRASH_JOBS),
+        );
 
-        let import_symbol_config = Config::new(queue::IMPORT_SYMBOL_JOBS);
-        let pg_import_symbol =
-            PostgresStorage::<ImportSymbolJob>::new_with_notify(&worker_db, &import_symbol_config);
+        let redis_import_symbol = RedisStorage::<ImportSymbolJob>::new_with_config(
+            conn.clone(),
+            RedisConfig::new(queue::IMPORT_SYMBOL_JOBS),
+        );
 
         info!("Start monitoring for minidumps and symbols");
 
         let state1 = state.clone();
-        let pg_minidump1 = pg_minidump.clone();
-        let pg_import_crash1 = pg_import_crash.clone();
+        let redis_minidump1 = redis_minidump.clone();
+        let redis_import_crash1 = redis_import_crash.clone();
 
         let state2 = state.clone();
-        let pg_symbol1 = pg_symbol.clone();
-        let pg_import_symbol1 = pg_import_symbol.clone();
+        let redis_symbol1 = redis_symbol.clone();
+        let redis_import_symbol1 = redis_import_symbol.clone();
 
         Monitor::new()
             .register(move |_idx| {
@@ -82,9 +85,9 @@ impl MinidumpWorker {
                 .make_backoff();
 
                 WorkerBuilder::new("minidump-processor")
-                    .backend(pg_minidump1.clone())
+                    .backend(redis_minidump1.clone())
                     .data(state1.clone())
-                    .data(pg_import_crash1.clone())
+                    .data(redis_import_crash1.clone())
                     .retry(RetryPolicy::retries(5).with_backoff(backoff))
                     .enable_tracing()
                     .concurrency(2)
@@ -101,9 +104,9 @@ impl MinidumpWorker {
                 .make_backoff();
 
                 WorkerBuilder::new("symbol-processor")
-                    .backend(pg_symbol1.clone())
+                    .backend(redis_symbol1.clone())
                     .data(state2.clone())
-                    .data(pg_import_symbol1.clone())
+                    .data(redis_import_symbol1.clone())
                     .retry(RetryPolicy::retries(5).with_backoff(backoff))
                     .enable_tracing()
                     .concurrency(2)
@@ -131,19 +134,6 @@ impl MinidumpWorker {
         info!("Minidump processor is starting");
         self.run_apalis(state.clone()).await;
         info!("Minidump processor has stopped");
-    }
-
-    async fn init_worker_db(&self) -> Result<PgPool, sqlx::Error> {
-        let database_url = &self.settings.job_server.db_uri;
-        let mut opts: PgConnectOptions = database_url.parse()?;
-        opts = opts.log_statements(log::LevelFilter::Debug);
-
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect_with(opts)
-            .await?;
-
-        Ok(pool)
     }
 }
 
