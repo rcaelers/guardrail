@@ -16,8 +16,9 @@ pub async fn ready(State(state): State<AppState>) -> StatusCode {
         }
     };
 
-    if sqlx::query("SELECT 1").execute(&mut *conn).await.is_ok() {
-        return StatusCode::OK;
+    if sqlx::query("SELECT 1").execute(&mut *conn).await.is_err() {
+        return StatusCode::SERVICE_UNAVAILABLE;
     }
-    StatusCode::SERVICE_UNAVAILABLE
+
+    StatusCode::OK
 }
