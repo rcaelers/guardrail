@@ -8,17 +8,11 @@ pub async fn live() -> StatusCode {
 }
 
 pub async fn ready(State(state): State<AppState>) -> StatusCode {
-    let mut conn = match state.repo.acquire_admin().await {
-        Ok(conn) => conn,
+    match state.repo.db.health().await {
+        Ok(()) => StatusCode::OK,
         Err(err) => {
-            error!("Health check failed to get database connection: {}", err);
-            return StatusCode::SERVICE_UNAVAILABLE;
+            error!("Health check failed: {}", err);
+            StatusCode::SERVICE_UNAVAILABLE
         }
-    };
-
-    if sqlx::query("SELECT 1").execute(&mut *conn).await.is_err() {
-        return StatusCode::SERVICE_UNAVAILABLE;
     }
-
-    StatusCode::OK
 }

@@ -2,7 +2,8 @@ use apalis::prelude::Data;
 use bytes::Bytes;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path};
 use serde_json::Value;
-use sqlx::Postgres;
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
 use std::sync::Arc;
 use tracing::{error, info, instrument};
 
@@ -50,7 +51,6 @@ impl ImportCrashProcessor {
     #[instrument(skip(self), fields(crash_id = %crash_id))]
     async fn handle_job(&self, crash_id: uuid::Uuid) -> Result<(), JobError> {
         info!("ImportCrashProcessor handling job: {}", crash_id);
-        let mut tx = self.repo.begin_admin().await?;
 
         let data = self.get_processed_crash(crash_id).await?;
         let processed: Value = serde_json::from_slice(&data).map_err(|e| {
@@ -61,13 +61,8 @@ impl ImportCrashProcessor {
         let crash_info = processed["crash_info"].clone();
         let report = processed["report"].clone();
 
-        Self::create_crash(&mut *tx, crash_id, crash_info, report).await?;
+        Self::create_crash(&self.repo.db, crash_id, crash_info, report).await?;
         info!("Imported crash report with ID: {:?}", crash_id);
-
-        tx.commit().await.map_err(|e| {
-            error!(error = ?e, "Failed to commit transaction");
-            JobError::Failure("failed to commit transaction".to_string())
-        })?;
 
         // Clean up processed crash file after successful import
         self.cleanup_processed_crash(crash_id).await;
@@ -75,16 +70,13 @@ impl ImportCrashProcessor {
         Ok(())
     }
 
-    #[instrument(skip(tx, crash_info, report))]
-    async fn create_crash<E>(
-        tx: &mut E,
+    #[instrument(skip(db, crash_info, report))]
+    async fn create_crash(
+        db: &Surreal<Any>,
         crash_id: uuid::Uuid,
         crash_info: serde_json::Value,
         report: serde_json::Value,
-    ) -> Result<uuid::Uuid, JobError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
+    ) -> Result<uuid::Uuid, JobError> {
         let product_id = crash_info["product_id"]
             .as_str()
             .ok_or_else(|| JobError::Failure("product_id is missing".to_string()))?
@@ -111,32 +103,29 @@ impl ImportCrashProcessor {
             report: Some(report),
         };
 
-        let product = ProductRepo::get_by_id(&mut *tx, product_id)
+        let product = ProductRepo::get_by_id(db, product_id)
             .await
             .map_err(|_| JobError::Failure(format!("failed to get product {product_id}")))?
             .ok_or_else(|| JobError::Failure(format!("no such product {product_id}")))?;
 
-        let id = CrashRepo::create(&mut *tx, crash).await.map_err(|e| {
+        let id = CrashRepo::create(db, crash).await.map_err(|e| {
             error!("Failed to store crash report for {} ({:?})", product.name, e);
             JobError::Failure("failed to store crash report".to_string())
         })?;
 
-        Self::create_annotations(&mut *tx, id, product.id, &crash_info).await?;
-        Self::create_attachments(&mut *tx, id, product.id, &crash_info).await?;
+        Self::create_annotations(db, id, product.id, &crash_info).await?;
+        Self::create_attachments(db, id, product.id, &crash_info).await?;
         info!("Created crash report with ID: {}", id);
         Ok(id)
     }
 
-    #[instrument(skip(tx, crash_info))]
-    async fn create_annotations<E>(
-        tx: &mut E,
+    #[instrument(skip(db, crash_info))]
+    async fn create_annotations(
+        db: &Surreal<Any>,
         crash_id: uuid::Uuid,
         product_id: uuid::Uuid,
         crash_info: &serde_json::Value,
-    ) -> Result<(), JobError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
+    ) -> Result<(), JobError> {
         for (key, annotation_data) in crash_info["annotations"]
             .as_object()
             .unwrap_or(&serde_json::Map::new())
@@ -171,7 +160,7 @@ impl ImportCrashProcessor {
                 value: value.to_string(),
             };
 
-            AnnotationsRepo::create(&mut *tx, annotation)
+            AnnotationsRepo::create(db, annotation)
                 .await
                 .map_err(|e| {
                     error!("Failed to create annotation: {:?}", e);
@@ -182,16 +171,13 @@ impl ImportCrashProcessor {
         Ok(())
     }
 
-    #[instrument(skip(tx, crash_info))]
-    async fn create_attachments<E>(
-        tx: &mut E,
+    #[instrument(skip(db, crash_info))]
+    async fn create_attachments(
+        db: &Surreal<Any>,
         crash_id: uuid::Uuid,
         product_id: uuid::Uuid,
         crash_info: &serde_json::Value,
-    ) -> Result<(), JobError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
+    ) -> Result<(), JobError> {
         for attachment in crash_info["attachments"].as_array().unwrap_or(&vec![]) {
             let filename = attachment["filename"].as_str().ok_or_else(|| {
                 error!("Attachment filename is missing");
@@ -220,7 +206,7 @@ impl ImportCrashProcessor {
                 size: size as i64,
             };
 
-            AttachmentsRepo::create(&mut *tx, attachment)
+            AttachmentsRepo::create(db, attachment)
                 .await
                 .map_err(|e| {
                     error!("Failed to create attachment: {:?}", e);

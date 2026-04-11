@@ -151,26 +151,7 @@ where
                 }
             };
 
-            let mut conn = match app_state.repo.acquire_admin().await {
-                Ok(conn) => conn,
-                Err(err) => {
-                    error!("Failed to get database connection: {}", err);
-                    return Ok(Response::builder()
-                        .status(StatusCode::INTERNAL_SERVER_ERROR)
-                        .header(header::CONTENT_TYPE, "application/json")
-                        .body(
-                            Json(json!({
-                                "result": "failed",
-                                "error": "internal server error"
-                            }))
-                            .into_response()
-                            .into_body(),
-                        )
-                        .unwrap());
-                }
-            };
-
-            let api_token = match ApiTokenRepo::get_by_token_id(&mut *conn, token_id).await {
+            let api_token = match ApiTokenRepo::get_by_token_id(&app_state.repo.db, token_id).await {
                 Ok(Some(api_token)) => api_token,
                 Ok(None) => {
                     return Ok(Response::builder()
@@ -268,7 +249,7 @@ where
                     .unwrap());
             }
 
-            if let Err(err) = ApiTokenRepo::update_last_used(&mut *conn, api_token.id).await {
+            if let Err(err) = ApiTokenRepo::update_last_used(&app_state.repo.db, api_token.id).await {
                 error!("Failed to update last_used_at: {}", err);
             }
 

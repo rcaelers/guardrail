@@ -4,7 +4,8 @@ use axum::{
     response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
-use sqlx::Postgres;
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
 use tower_sessions::Session;
 use tracing::error;
 use webauthn_rs::prelude::*;
@@ -42,12 +43,12 @@ pub async fn start_register(
 ) -> Result<impl IntoResponse, ApiError> {
     session.remove_value("passkey_registration_state").await?;
 
-    let mut tx = state.repo.begin_admin().await?;
+    let db = &state.repo.db;
 
-    let user_query = UserRepo::get_by_name(&mut *tx, &username).await?;
+    let user_query = UserRepo::get_by_name(db, &username).await?;
     let user_unique_id = get_user_unique_id(user_query, &session).await?;
 
-    let exclude_credentials = CredentialsRepo::get_all_by_user_id(&mut *tx, user_unique_id)
+    let exclude_credentials = CredentialsRepo::get_all_by_user_id(db, user_unique_id)
         .await?
         .iter()
         .map(|record| serde_json::from_value::<Passkey>(record.data.clone()))
@@ -75,8 +76,6 @@ pub async fn start_register(
         )
         .await?;
 
-    state.repo.end(tx).await?;
-
     Ok(Json(creation_challenge_response))
 }
 
@@ -91,9 +90,9 @@ pub async fn finish_register(
         .ok_or(ApiError::CorruptSession)?;
     session.remove_value("passkey_registration_state").await?;
 
-    let mut tx = state.repo.begin_admin().await?;
+    let db = &state.repo.db;
 
-    let user = UserRepo::get_by_name(&mut *tx, registration_state.username.as_str()).await?;
+    let user = UserRepo::get_by_name(db, registration_state.username.as_str()).await?;
 
     let passkey = state
         .webauthn
@@ -101,7 +100,7 @@ pub async fn finish_register(
 
     if user.is_none() {
         UserRepo::create_with_id(
-            &mut *tx,
+            db,
             registration_state.user_unique_id,
             registration_state.username.as_str(),
         )
@@ -109,7 +108,7 @@ pub async fn finish_register(
     }
 
     CredentialsRepo::create(
-        &mut *tx,
+        db,
         NewCredential {
             user_id: registration_state.user_unique_id,
             data: serde_json::to_value(&passkey).map_err(|e| {
@@ -120,7 +119,6 @@ pub async fn finish_register(
     )
     .await?;
 
-    state.repo.end(tx).await?;
     Ok(StatusCode::OK)
 }
 
@@ -131,14 +129,14 @@ pub async fn start_authentication(
 ) -> Result<impl IntoResponse, ApiError> {
     session.remove_value("auth_state").await?;
 
-    let mut tx = state.repo.begin_admin().await?;
+    let db = &state.repo.db;
 
-    let user_unique_id = UserRepo::get_by_name(&mut *tx, username.as_str())
+    let user_unique_id = UserRepo::get_by_name(db, username.as_str())
         .await?
         .map(|record| record.id)
         .ok_or(ApiError::UserNotFound(username))?;
 
-    let allow_credentials = CredentialsRepo::get_all_by_user_id(&mut *tx, user_unique_id)
+    let allow_credentials = CredentialsRepo::get_all_by_user_id(db, user_unique_id)
         .await?
         .iter()
         .map(|record| serde_json::from_value::<Passkey>(record.data.clone()))
@@ -158,8 +156,6 @@ pub async fn start_authentication(
         .insert("authentication_state", (user_unique_id, passkey_authentication))
         .await?;
 
-    state.repo.end(tx).await?;
-
     Ok(Json(request_challenge_response))
 }
 
@@ -178,11 +174,11 @@ pub async fn finish_authentication(
         .webauthn
         .finish_passkey_authentication(&auth, &auth_state)?;
 
-    let mut tx = state.repo.begin_admin().await?;
+    let db = &state.repo.db;
 
-    update_passkeys(&mut *tx, user_unique_id, authentication_result).await?;
+    update_passkeys(db, user_unique_id, authentication_result).await?;
 
-    let user = UserRepo::get_by_id(&mut *tx, user_unique_id)
+    let user = UserRepo::get_by_id(db, user_unique_id)
         .await?
         .ok_or(ApiError::CorruptSession)?;
 
@@ -190,8 +186,6 @@ pub async fn finish_authentication(
     session
         .insert("authenticated_user", authenticated_user)
         .await?;
-
-    state.repo.end(tx).await?;
 
     Ok(StatusCode::OK)
 }
@@ -214,15 +208,12 @@ async fn get_user_unique_id(
     Ok(Uuid::new_v4())
 }
 
-pub async fn update_passkeys<E>(
-    tx: &mut E,
+pub async fn update_passkeys(
+    db: &Surreal<Any>,
     user_unique_id: Uuid,
     auth_result: AuthenticationResult,
-) -> Result<(), ApiError>
-where
-    for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-{
-    let credentials = CredentialsRepo::get_all_by_user_id(&mut *tx, user_unique_id).await?;
+) -> Result<(), ApiError> {
+    let credentials = CredentialsRepo::get_all_by_user_id(db, user_unique_id).await?;
     for cred in credentials {
         let mut passkey = serde_json::from_value::<Passkey>(cred.data.clone()).map_err(|e| {
             error!("failed to deserialize passkey: {:?}", e);
@@ -233,7 +224,7 @@ where
             && updated
         {
             CredentialsRepo::update_data(
-                &mut *tx,
+                db,
                 cred.id,
                 serde_json::to_value(&passkey).map_err(|e| {
                     error!("failed to serialize passkey: {:?}", e);

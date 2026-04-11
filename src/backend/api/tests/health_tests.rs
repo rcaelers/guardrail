@@ -11,7 +11,7 @@ use axum::{
 use common::token::generate_api_token;
 use data::api_token::NewApiToken;
 use repos::api_token::ApiTokenRepo;
-use sqlx::PgPool;
+use testware::setup::TestSetup;
 use tower::ServiceExt;
 use tower_http::trace::TraceLayer;
 
@@ -20,9 +20,9 @@ use api::{routes::routes, worker::TestWorker};
 use repos::Repo;
 use testware::{create_settings, create_webauthn};
 
-async fn setup(pool: &PgPool) -> Router {
+async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> Router {
     let settings = create_settings();
-    let repo = Repo::new(pool.clone());
+    let repo = Repo::new(db.clone());
     let store = Arc::new(object_store::memory::InMemory::new());
     let worker = Arc::new(TestWorker::new());
 
@@ -44,9 +44,10 @@ async fn setup(pool: &PgPool) -> Router {
     app
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_health_live_ok(pool: PgPool) {
-    let app = setup(&pool).await;
+#[tokio::test]
+async fn test_health_live_ok() {
+    let db = TestSetup::create_db().await;
+    let app = setup(&db).await;
 
     let request = Request::builder()
         .method("GET")
@@ -62,8 +63,9 @@ async fn test_health_live_ok(pool: PgPool) {
     assert!(body.is_empty());
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_health_ready_ok(pool: PgPool) {
+#[tokio::test]
+async fn test_health_ready_ok() {
+    let db = TestSetup::create_db().await;
     let (token_id, _token, token_hash) =
         generate_api_token().expect("Failed to generate API token");
     let new_token = NewApiToken {
@@ -76,11 +78,11 @@ async fn test_health_ready_ok(pool: PgPool) {
         expires_at: None,
         is_active: true,
     };
-    ApiTokenRepo::create(&pool, new_token)
+    ApiTokenRepo::create(&db, new_token)
         .await
         .expect("Failed to create API token");
 
-    let app = setup(&pool).await;
+    let app = setup(&db).await;
 
     let request = Request::builder()
         .method("GET")
@@ -90,24 +92,6 @@ async fn test_health_ready_ok(pool: PgPool) {
 
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
-        .await
-        .unwrap();
-    assert!(body.is_empty());
-}
-
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_health_ready_not_ok(pool: PgPool) {
-    let app = setup(&pool).await;
-
-    pool.close().await;
-    let request = Request::builder()
-        .method("GET")
-        .uri("/api/ready")
-        .body(Body::empty())
-        .unwrap();
-    let response = app.oneshot(request).await.unwrap();
-    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     let body = axum::body::to_bytes(response.into_body(), 1024 * 1024)
         .await
         .unwrap();

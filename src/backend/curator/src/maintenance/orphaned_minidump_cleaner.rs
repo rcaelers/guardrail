@@ -1,6 +1,7 @@
 use futures::stream::TryStreamExt;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path};
-use sqlx::Postgres;
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
 use std::collections::{HashMap, HashSet};
 use tracing::{error, info};
 use uuid::Uuid;
@@ -18,10 +19,9 @@ impl OrphanedMinidumpCleaner {
 
         let storage = app_state.storage.clone();
         let repo = &app_state.repo;
-        let mut tx = repo.begin_admin().await?;
 
         let s3_paths = Self::get_s3_minidumps(&storage).await?;
-        let db_minidumps = Self::get_database_minidumps(&mut *tx).await?;
+        let db_minidumps = Self::get_database_minidumps(&repo.db).await?;
         let crash_info_minidumps = Self::get_crash_info_minidumps(&storage).await?;
 
         let deleted_count = Self::delete_orphaned_minidumps(
@@ -32,8 +32,6 @@ impl OrphanedMinidumpCleaner {
         )
         .await?;
         info!("Deleted {} orphaned S3 minidumps", deleted_count);
-
-        tx.commit().await?;
 
         info!("Completed removal of orphaned S3 minidumps");
         Ok(())
@@ -64,11 +62,8 @@ impl OrphanedMinidumpCleaner {
         Ok(s3_minidump_paths_to_ids)
     }
 
-    async fn get_database_minidumps<E>(tx: &mut E) -> Result<HashSet<Uuid>, JobError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
-        let crashes = CrashRepo::get_all(tx, QueryParams::default()).await?;
+    async fn get_database_minidumps(db: &Surreal<Any>) -> Result<HashSet<Uuid>, JobError> {
+        let crashes = CrashRepo::get_all(db, QueryParams::default()).await?;
         let db_minidump_storage_ids: HashSet<Uuid> = crashes
             .into_iter()
             .filter_map(|crash| crash.minidump)

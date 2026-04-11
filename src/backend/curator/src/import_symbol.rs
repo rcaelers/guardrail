@@ -2,7 +2,8 @@ use apalis::prelude::Data;
 use bytes::Bytes;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path};
 use serde_json::Value;
-use sqlx::Postgres;
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
 use std::sync::Arc;
 use tracing::{error, info, instrument};
 
@@ -49,7 +50,6 @@ impl ImportSymbolProcessor {
     #[instrument(skip(self), fields(symbol_upload_id = %symbol_upload_id))]
     async fn handle_job(&self, symbol_upload_id: uuid::Uuid) -> Result<(), JobError> {
         info!("ImportSymbolProcessor handling job: {}", symbol_upload_id);
-        let mut tx = self.repo.begin_admin().await?;
 
         let data = self.get_processed_symbol(symbol_upload_id).await?;
         let symbol_info: Value = serde_json::from_slice(&data).map_err(|e| {
@@ -57,27 +57,19 @@ impl ImportSymbolProcessor {
             JobError::Failure("failed to parse processed symbol JSON".to_string())
         })?;
 
-        Self::create_symbol(&mut *tx, &symbol_info).await?;
+        Self::create_symbol(&self.repo.db, &symbol_info).await?;
         info!("Imported symbol metadata for upload: {:?}", symbol_upload_id);
-
-        tx.commit().await.map_err(|e| {
-            error!(error = ?e, "Failed to commit transaction");
-            JobError::Failure("failed to commit transaction".to_string())
-        })?;
 
         self.cleanup_processed_symbol(symbol_upload_id).await;
 
         Ok(())
     }
 
-    #[instrument(skip(tx, symbol_info))]
-    async fn create_symbol<E>(
-        tx: &mut E,
+    #[instrument(skip(db, symbol_info))]
+    async fn create_symbol(
+        db: &Surreal<Any>,
         symbol_info: &serde_json::Value,
-    ) -> Result<uuid::Uuid, JobError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
+    ) -> Result<uuid::Uuid, JobError> {
         let product_id = symbol_info["product_id"]
             .as_str()
             .ok_or_else(|| JobError::Failure("product_id is missing".to_string()))?
@@ -114,7 +106,7 @@ impl ImportSymbolProcessor {
             product_id,
         };
 
-        let id = SymbolsRepo::create(&mut *tx, new_symbols).await.map_err(|e| {
+        let id = SymbolsRepo::create(db, new_symbols).await.map_err(|e| {
             error!("Failed to store symbol metadata: {:?}", e);
             JobError::Failure("failed to store symbol metadata".to_string())
         })?;

@@ -1,91 +1,85 @@
-use sqlx::Postgres;
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
+use chrono::Utc;
 
-use crate::error::{RepoError, handle_sql_error};
+use crate::error::{RepoError, handle_surreal_error};
 use data::credentials::{Credential, NewCredential};
 
 pub struct CredentialsRepo {}
 
 impl CredentialsRepo {
     pub async fn get_by_id(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         id: uuid::Uuid,
     ) -> Result<Option<Credential>, RepoError> {
-        sqlx::query_as!(
-            Credential,
-            r#"
-                SELECT *
-                FROM core.credentials
-                WHERE core.credentials.id = $1
-            "#,
-            id
-        )
-        .fetch_optional(executor)
-        .await
-        .map_err(handle_sql_error)
+        let mut result = db
+            .query("SELECT *, meta::id(id) as id FROM ONLY type::record('credentials', $id)")
+            .bind(("id", id.to_string()))
+            .await
+            .map_err(handle_surreal_error)?;
+        crate::take_one(&mut result, 0)
     }
 
     pub async fn get_all_by_user_id(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         user_id: uuid::Uuid,
     ) -> Result<Vec<Credential>, RepoError> {
-        sqlx::query_as!(
-            Credential,
-            r#"
-                SELECT *
-                FROM core.credentials
-                WHERE core.credentials.user_id = $1
-            "#,
-            user_id
-        )
-        .fetch_all(executor)
-        .await
-        .map_err(handle_sql_error)
+        let mut result = db
+            .query("SELECT *, meta::id(id) as id FROM credentials WHERE user_id = $user_id")
+            .bind(("user_id", user_id))
+            .await
+            .map_err(handle_surreal_error)?;
+        crate::take_many(&mut result, 0)
     }
 
     pub async fn create(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         credentials: NewCredential,
     ) -> Result<uuid::Uuid, RepoError> {
-        sqlx::query_scalar!(
-            r#"
-                INSERT INTO core.credentials
-                  (
-                    user_id,
-                    name,
-                    data,
-                    last_used
-                  )
-                VALUES ($1, 'fixme', $2, $3)
-                RETURNING
-                  id
-            "#,
-            credentials.user_id,
-            credentials.data,
-            chrono::Utc::now().naive_utc(),
-        )
-        .fetch_one(executor)
-        .await
-        .map_err(handle_sql_error)
+        let id = uuid::Uuid::new_v4();
+        let now = Utc::now();
+        let _: Option<serde_json::Value> = db
+            .query("CREATE type::record('credentials', $id) CONTENT {
+                user_id: $user_id,
+                name: 'fixme',
+                data: $data,
+                last_used: $last_used,
+                created_at: time::now(),
+                updated_at: time::now(),
+            }")
+            .bind(("id", id.to_string()))
+            .bind(("user_id", credentials.user_id))
+            .bind(("data", credentials.data.clone()))
+            .bind(("last_used", now))
+            .await
+            .map_err(handle_surreal_error)?
+            .take(0)
+            .map_err(handle_surreal_error)?;
+        Ok(id)
     }
 
     pub async fn update_data(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         id: uuid::Uuid,
         data: serde_json::Value,
     ) -> Result<Option<uuid::Uuid>, RepoError> {
-        sqlx::query_scalar!(
-            r#"
-                UPDATE core.credentials
-                SET data = $1, last_used = $2
-                WHERE id = $3
-                RETURNING id
-            "#,
-            data,
-            chrono::Utc::now().naive_utc(),
-            id,
-        )
-        .fetch_optional(executor)
-        .await
-        .map_err(handle_sql_error)
+        let now = Utc::now();
+        let mut result = db
+            .query("UPDATE type::record('credentials', $id) SET
+                data = $data,
+                last_used = $last_used,
+                updated_at = time::now()
+            RETURN meta::id(id) as id")
+            .bind(("id", id.to_string()))
+            .bind(("data", data.clone()))
+            .bind(("last_used", now))
+            .await
+            .map_err(handle_surreal_error)?;
+        let rows: Vec<serde_json::Value> = result.take(0).map_err(handle_surreal_error)?;
+        Ok(rows.first().and_then(|r| {
+            r.get("id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| uuid::Uuid::parse_str(s).ok())
+        }))
     }
 }

@@ -1,0 +1,20 @@
+name = "guardrail_schema_smoke"
+tags = ["smoke", "schema"]
+
+[[cases]]
+name = "products_table_visible"
+kind = "schema_metadata"
+sql = "INFO FOR TABLE products;"
+contains = ["products", "accepting_crashes"]
+
+[[cases]]
+name = "crashes_table_visible"
+kind = "schema_metadata"
+sql = "INFO FOR TABLE crashes;"
+contains = ["crashes", "signature", "report"]
+
+[[cases]]
+name = "api_tokens_table_visible"
+kind = "schema_metadata"
+sql = "INFO FOR TABLE api_tokens;"
+contains = ["api_tokens", "entitlements", "token_hash"]

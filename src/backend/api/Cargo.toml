@@ -16,8 +16,8 @@ common = { path = "../common", default-features = false, features = [
 serde.workspace = true
 serde_json.workspace = true
 
-# SQLx
-sqlx.workspace = true
+# SurrealDB
+surrealdb.workspace = true
 
 # K8s
 k8s-openapi.workspace = true

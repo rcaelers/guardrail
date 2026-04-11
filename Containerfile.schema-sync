@@ -1,0 +1,41 @@
+##
+## Builder
+##
+
+FROM --platform=$BUILDPLATFORM rust:1.86-alpine AS builder
+
+ARG TARGET
+
+RUN apk add --no-cache \
+  build-base \
+  musl-dev \
+  openssl-dev \
+  pkgconfig
+
+RUN cargo install --locked surrealkit
+
+##
+## Runtime
+##
+
+FROM alpine:latest
+
+RUN addgroup -g 1000 -S guardrail && adduser -u 1000 -S guardrail -G guardrail
+
+WORKDIR /app
+
+RUN apk add --no-cache ca-certificates tzdata tini && \
+  rm -rf /var/cache/apk/*
+
+COPY --from=builder /usr/local/cargo/bin/surrealkit /usr/local/bin/surrealkit
+COPY database /app/database
+COPY ops/surrealkit-rollout-start.sh /app/bin/surrealkit-rollout-start.sh
+COPY ops/surrealkit-rollout-complete.sh /app/bin/surrealkit-rollout-complete.sh
+
+RUN chown -R guardrail:guardrail /app
+
+USER guardrail
+
+ENTRYPOINT ["/sbin/tini", "--"]
+
+CMD ["sh", "/app/bin/surrealkit-rollout-start.sh"]

@@ -1,8 +1,9 @@
-use sqlx::{Postgres, QueryBuilder};
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
 
 use crate::{
     Repo,
-    error::{RepoError, handle_sql_error},
+    error::{RepoError, handle_surreal_error},
 };
 use common::QueryParams;
 use data::attachment::{Attachment, NewAttachment};
@@ -11,124 +12,119 @@ pub struct AttachmentsRepo {}
 
 impl AttachmentsRepo {
     pub async fn get_by_id(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         id: uuid::Uuid,
     ) -> Result<Option<Attachment>, RepoError> {
-        sqlx::query_as!(
-            Attachment,
-            r#"
-                SELECT *
-                FROM core.attachments
-                WHERE core.attachments.id = $1
-            "#,
-            id
-        )
-        .fetch_optional(executor)
-        .await
-        .map_err(handle_sql_error)
+        let mut result = db
+            .query("SELECT *, meta::id(id) as id FROM ONLY type::record('attachments', $id)")
+            .bind(("id", id.to_string()))
+            .await
+            .map_err(handle_surreal_error)?;
+        crate::take_one(&mut result, 0)
     }
 
     pub async fn get_all(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         params: QueryParams,
     ) -> Result<Vec<Attachment>, RepoError> {
-        let mut builder = QueryBuilder::new("SELECT * from core.attachments");
-        Repo::build_query(
-            &mut builder,
+        let suffix = Repo::build_query_suffix(
             &params,
             &["id", "name", "mime_type", "size", "filename"],
             &["name", "filename"],
         )?;
 
-        let query = builder.build_query_as();
+        let query = format!("SELECT *, meta::id(id) as id FROM attachments{suffix}");
+        let mut builder = db.query(&query);
 
-        query.fetch_all(executor).await.map_err(handle_sql_error)
+        if params.filter.is_some() {
+            builder = builder.bind(("filter", params.filter.unwrap()));
+        }
+
+        let mut result = builder.await.map_err(handle_surreal_error)?;
+        crate::take_many(&mut result, 0)
     }
 
     pub async fn create(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         attachment: NewAttachment,
     ) -> Result<uuid::Uuid, RepoError> {
-        sqlx::query_scalar!(
-            r#"
-                INSERT INTO core.attachments
-                  (
-                    name,
-                    mime_type,
-                    size,
-                    filename,
-                    crash_id,
-                    storage_path,
-                    product_id
-                  )
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING
-                  id
-            "#,
-            attachment.name,
-            attachment.mime_type,
-            attachment.size,
-            attachment.filename,
-            attachment.crash_id,
-            attachment.storage_path,
-            attachment.product_id
-        )
-        .fetch_one(executor)
-        .await
-        .map_err(handle_sql_error)
+        let id = uuid::Uuid::new_v4();
+        let _: Option<serde_json::Value> = db
+            .query("CREATE type::record('attachments', $id) CONTENT {
+                name: $name,
+                mime_type: $mime_type,
+                size: $size,
+                filename: $filename,
+                crash_id: $crash_id,
+                storage_path: $storage_path,
+                product_id: $product_id,
+                created_at: time::now(),
+                updated_at: time::now(),
+            }")
+            .bind(("id", id.to_string()))
+            .bind(("name", attachment.name.clone()))
+            .bind(("mime_type", attachment.mime_type.clone()))
+            .bind(("size", attachment.size))
+            .bind(("filename", attachment.filename.clone()))
+            .bind(("crash_id", attachment.crash_id))
+            .bind(("storage_path", attachment.storage_path.clone()))
+            .bind(("product_id", attachment.product_id))
+            .await
+            .map_err(handle_surreal_error)?
+            .take(0)
+            .map_err(handle_surreal_error)?;
+        Ok(id)
     }
 
     pub async fn update(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         attachment: Attachment,
     ) -> Result<Option<uuid::Uuid>, RepoError> {
-        sqlx::query_scalar!(
-            r#"
-                UPDATE core.attachments
-                SET name = $1, mime_type = $2, size = $3, filename = $4
-                WHERE id = $5
-                RETURNING id
-            "#,
-            attachment.name,
-            attachment.mime_type,
-            attachment.size,
-            attachment.filename,
-            attachment.id,
-        )
-        .fetch_optional(executor)
-        .await
-        .map_err(handle_sql_error)
+        let mut result = db
+            .query("UPDATE type::record('attachments', $id) SET
+                name = $name,
+                mime_type = $mime_type,
+                size = $size,
+                filename = $filename,
+                updated_at = time::now()
+            RETURN meta::id(id) as id")
+            .bind(("id", attachment.id.to_string()))
+            .bind(("name", attachment.name.clone()))
+            .bind(("mime_type", attachment.mime_type.clone()))
+            .bind(("size", attachment.size))
+            .bind(("filename", attachment.filename.clone()))
+            .await
+            .map_err(handle_surreal_error)?;
+        let rows: Vec<serde_json::Value> = result.take(0).map_err(handle_surreal_error)?;
+        Ok(rows.first().and_then(|r| {
+            r.get("id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| uuid::Uuid::parse_str(s).ok())
+        }))
     }
 
     pub async fn remove(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         id: uuid::Uuid,
     ) -> Result<(), RepoError> {
-        sqlx::query!(
-            r#"
-                DELETE FROM core.attachments
-                WHERE id = $1
-            "#,
-            id
-        )
-        .execute(executor)
-        .await
-        .map_err(handle_sql_error)
-        .map(|_| ())
+        db.query("DELETE type::record('attachments', $id)")
+            .bind(("id", id.to_string()))
+            .await
+            .map_err(handle_surreal_error)?;
+        Ok(())
     }
 
     pub async fn count(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
     ) -> Result<i64, RepoError> {
-        sqlx::query_scalar!(
-            r#"
-                SELECT COUNT(*)
-                FROM core.attachments
-            "#
-        )
-        .fetch_one(executor)
-        .await
-        .map_err(handle_sql_error)
-        .map(|count| count.unwrap_or(0))
+        let mut result = db
+            .query("SELECT count() as count FROM attachments GROUP ALL")
+            .await
+            .map_err(handle_surreal_error)?;
+        let rows: Vec<serde_json::Value> = result.take(0).map_err(handle_surreal_error)?;
+        Ok(rows
+            .first()
+            .and_then(|r| r.get("count").and_then(|v| v.as_i64()))
+            .unwrap_or(0))
     }
 }

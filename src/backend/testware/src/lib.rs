@@ -2,7 +2,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use chrono::Utc;
-use sqlx::PgPool;
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
 use webauthn_rs::prelude::Url;
@@ -41,18 +42,18 @@ use data::symbols::Symbols;
 use data::user::User;
 
 /// Create a test product with a random name
-pub async fn create_test_product(pool: &PgPool) -> Product {
+pub async fn create_test_product(db: &Surreal<Any>) -> Product {
     let new_product = NewProduct {
         name: format!("TestProduct_{}", Uuid::new_v4()),
         description: "Test Product Description".to_string(),
         ..Default::default()
     };
 
-    let product_id = ProductRepo::create(pool, new_product)
+    let product_id = ProductRepo::create(db, new_product)
         .await
         .expect("Failed to insert test product");
 
-    ProductRepo::get_by_id(pool, product_id)
+    ProductRepo::get_by_id(db, product_id)
         .await
         .expect("Failed to retrieve created product")
         .expect("Created product not found")
@@ -60,7 +61,7 @@ pub async fn create_test_product(pool: &PgPool) -> Product {
 
 /// Create a test product with a specific name and description
 pub async fn create_test_product_with_details(
-    pool: &PgPool,
+    db: &Surreal<Any>,
     name: &str,
     description: &str,
 ) -> Product {
@@ -70,11 +71,11 @@ pub async fn create_test_product_with_details(
         ..Default::default()
     };
 
-    let product_id = ProductRepo::create(pool, new_product)
+    let product_id = ProductRepo::create(db, new_product)
         .await
         .expect("Failed to insert test product");
 
-    ProductRepo::get_by_id(pool, product_id)
+    ProductRepo::get_by_id(db, product_id)
         .await
         .expect("Failed to retrieve created product")
         .expect("Created product not found")
@@ -82,13 +83,13 @@ pub async fn create_test_product_with_details(
 
 /// Create a test crash and its associated product if needed
 pub async fn create_test_crash(
-    pool: &PgPool,
+    db: &Surreal<Any>,
     signature: Option<&str>,
     product_id: Option<Uuid>,
 ) -> Crash {
     let product_id = match product_id {
         Some(pid) => pid,
-        None => create_test_product(pool).await.id,
+        None => create_test_product(db).await.id,
     };
 
     let new_crash = NewCrash {
@@ -102,11 +103,11 @@ pub async fn create_test_crash(
         signature: signature.map(|s| s.to_string()),
     };
 
-    let crash_id = CrashRepo::create(pool, new_crash)
+    let crash_id = CrashRepo::create(db, new_crash)
         .await
         .expect("Failed to insert test crash");
 
-    CrashRepo::get_by_id(pool, crash_id)
+    CrashRepo::get_by_id(db, crash_id)
         .await
         .expect("Failed to retrieve created crash")
         .expect("Created crash not found")
@@ -114,7 +115,7 @@ pub async fn create_test_crash(
 
 /// Create a test attachment and its associated crash if needed
 pub async fn create_test_attachment(
-    pool: &PgPool,
+    db: &Surreal<Any>,
     name: &str,
     mime_type: &str,
     file_size: i64,
@@ -125,7 +126,7 @@ pub async fn create_test_attachment(
     let crash_id = match crash_id {
         Some(id) => id,
         None => {
-            let product = create_test_product(pool).await;
+            let product = create_test_product(db).await;
 
             let new_crash = NewCrash {
                 id: None,
@@ -138,7 +139,7 @@ pub async fn create_test_attachment(
                 signature: Some("test_signature".to_string()),
             };
 
-            CrashRepo::create(pool, new_crash)
+            CrashRepo::create(db, new_crash)
                 .await
                 .expect("Failed to insert test crash")
         }
@@ -148,7 +149,7 @@ pub async fn create_test_attachment(
         Some(id) => id,
         None => {
             // Use crash's product_id if not provided
-            let crash = CrashRepo::get_by_id(pool, crash_id)
+            let crash = CrashRepo::get_by_id(db, crash_id)
                 .await
                 .expect("Failed to get crash")
                 .expect("Crash not found");
@@ -166,11 +167,11 @@ pub async fn create_test_attachment(
         product_id,
     };
 
-    let attachment_id = AttachmentsRepo::create(pool, new_attachment)
+    let attachment_id = AttachmentsRepo::create(db, new_attachment)
         .await
         .expect("Failed to insert test attachment");
 
-    AttachmentsRepo::get_by_id(pool, attachment_id)
+    AttachmentsRepo::get_by_id(db, attachment_id)
         .await
         .expect("Failed to retrieve created attachment")
         .expect("Created attachment not found")
@@ -178,7 +179,7 @@ pub async fn create_test_attachment(
 
 #[allow(clippy::too_many_arguments)]
 pub async fn create_test_symbols(
-    pool: &PgPool,
+    db: &Surreal<Any>,
     os: &str,
     arch: &str,
     build_id: &str,
@@ -188,7 +189,7 @@ pub async fn create_test_symbols(
 ) -> Symbols {
     let product_id = match product_id {
         Some(p) => p,
-        _ => create_test_product(pool).await.id,
+        _ => create_test_product(db).await.id,
     };
 
     let new_symbols = NewSymbols {
@@ -200,64 +201,64 @@ pub async fn create_test_symbols(
         product_id,
     };
 
-    let symbols_id = SymbolsRepo::create(pool, new_symbols)
+    let symbols_id = SymbolsRepo::create(db, new_symbols)
         .await
         .expect("Failed to insert test symbols");
 
-    SymbolsRepo::get_by_id(pool, symbols_id)
+    SymbolsRepo::get_by_id(db, symbols_id)
         .await
         .expect("Failed to retrieve created symbols")
         .expect("Created symbols not found")
 }
 
 /// Create a test user
-pub async fn create_test_user(pool: &PgPool, username: &str, is_admin: bool) -> User {
+pub async fn create_test_user(db: &Surreal<Any>, username: &str, is_admin: bool) -> User {
     let new_user = NewUser {
         username: username.to_string(),
         is_admin,
     };
 
-    let user_id = UserRepo::create(pool, new_user)
+    let user_id = UserRepo::create(db, new_user)
         .await
         .expect("Failed to insert test user");
 
-    UserRepo::get_by_id(pool, user_id)
+    UserRepo::get_by_id(db, user_id)
         .await
         .expect("Failed to retrieve created user")
         .expect("Created user not found")
 }
 
 /// Create a test user with a random username
-pub async fn create_random_test_user(pool: &PgPool) -> Uuid {
+pub async fn create_random_test_user(db: &Surreal<Any>) -> Uuid {
     let username = format!("testuser_{}", Uuid::new_v4());
     let new_user = NewUser {
         username,
         is_admin: false,
     };
 
-    UserRepo::create(pool, new_user)
+    UserRepo::create(db, new_user)
         .await
         .expect("Failed to create test user")
 }
 
 /// Create a test credential
 pub async fn create_test_credential(
-    pool: &PgPool,
+    db: &Surreal<Any>,
     data: serde_json::Value,
     user_id: Option<Uuid>,
 ) -> Credential {
     let user_id = match user_id {
         Some(id) => id,
-        None => create_random_test_user(pool).await,
+        None => create_random_test_user(db).await,
     };
 
     let new_credential = NewCredential { user_id, data };
 
-    let credential_id = CredentialsRepo::create(pool, new_credential)
+    let credential_id = CredentialsRepo::create(db, new_credential)
         .await
         .expect("Failed to insert test credential");
 
-    CredentialsRepo::get_by_id(pool, credential_id)
+    CredentialsRepo::get_by_id(db, credential_id)
         .await
         .expect("Failed to retrieve created credential")
         .expect("Created credential not found")
@@ -299,7 +300,7 @@ pub fn create_webauthn(settings: Arc<Settings>) -> Arc<Webauthn> {
 }
 
 pub async fn create_test_token(
-    pool: &PgPool,
+    db: &Surreal<Any>,
     description: &str,
     product: Option<Uuid>,
     user: Option<Uuid>,
@@ -315,15 +316,15 @@ pub async fn create_test_token(
         product_id: product,
         user_id: user,
         entitlements,
-        expires_at: Some(Utc::now().naive_utc() + chrono::Duration::days(30)), // Default expiry of 30 days
+        expires_at: Some(Utc::now() + chrono::Duration::days(30)), // Default expiry of 30 days
         is_active: true,
     };
 
-    let id = ApiTokenRepo::create(pool, new_token)
+    let id = ApiTokenRepo::create(db, new_token)
         .await
         .expect("Failed to insert test API token");
 
-    let api_token = ApiTokenRepo::get_by_id(pool, id)
+    let api_token = ApiTokenRepo::get_by_id(db, id)
         .await
         .expect("Failed to retrieve the created API token")
         .expect("Created API token not found");
@@ -367,5 +368,36 @@ pub fn create_settings() -> Settings {
         common::settings::ValidationScript::Global("scripts/product_validation.rhai".to_string()),
         common::settings::ValidationScript::Global("scripts/build_age_validation.rhai".to_string()),
     ]);
+    settings
+}
+
+/// Create settings that point to real Docker infrastructure (SurrealDB, Valkey, MinIO).
+/// Uses a unique SurrealDB database per call for test isolation.
+pub fn create_e2e_settings() -> Settings {
+    let mut settings = create_settings();
+
+    // Use a unique database name per test for isolation
+    let db_name = format!("e2e_{}", Uuid::new_v4().to_string().replace('-', ""));
+
+    settings.database.endpoint = std::env::var("SURREALDB_ENDPOINT")
+        .unwrap_or_else(|_| "ws://localhost:8000".to_string());
+    settings.database.namespace = "guardrail".to_string();
+    settings.database.database = db_name;
+    settings.database.username = "root".to_string();
+    settings.database.password = "root".to_string();
+
+    settings.valkey.uri = std::env::var("VALKEY_URI")
+        .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+
+    settings.object_storage.endpoint = Some(
+        std::env::var("MINIO_ENDPOINT")
+            .unwrap_or_else(|_| "http://localhost:9000".to_string()),
+    );
+    settings.object_storage.bucket = "guardrail".to_string();
+    settings.object_storage.region = Some("us-east-1".to_string());
+    settings.object_storage.access_key_id = Some("admin".to_string());
+    settings.object_storage.secret_access_key = Some("minioadmin".to_string());
+    settings.object_storage.allow_http = Some(true);
+
     settings
 }

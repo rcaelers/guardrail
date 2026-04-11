@@ -1,3 +1,4 @@
+pub mod app;
 pub mod error;
 pub mod import_crash;
 pub mod import_symbol;

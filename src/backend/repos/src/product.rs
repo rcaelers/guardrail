@@ -1,9 +1,11 @@
-use sqlx::{Postgres, QueryBuilder};
 use std::collections::HashSet;
+
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
 
 use crate::{
     Repo,
-    error::{RepoError, handle_sql_error},
+    error::{RepoError, handle_surreal_error},
 };
 use common::QueryParams;
 use data::product::{NewProduct, Product};
@@ -12,161 +14,139 @@ pub struct ProductRepo {}
 
 impl ProductRepo {
     pub async fn get_by_id(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         id: uuid::Uuid,
     ) -> Result<Option<Product>, RepoError> {
-        sqlx::query_as!(
-            Product,
-            r#"
-                SELECT *
-                FROM core.products
-                WHERE core.products.id = $1
-            "#,
-            id
-        )
-        .fetch_optional(executor)
-        .await
-        .map_err(handle_sql_error)
+        let mut result = db
+            .query("SELECT *, meta::id(id) as id FROM ONLY type::record('products', $id)")
+            .bind(("id", id.to_string()))
+            .await
+            .map_err(handle_surreal_error)?;
+        crate::take_one(&mut result, 0)
     }
 
     pub async fn get_by_name(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         name: &str,
     ) -> Result<Option<Product>, RepoError> {
-        sqlx::query_as!(
-            Product,
-            r#"
-                SELECT *
-                FROM core.products
-                WHERE core.products.name = $1
-            "#,
-            name.to_string()
-        )
-        .fetch_optional(executor)
-        .await
-        .map_err(handle_sql_error)
+        let mut result = db
+            .query("SELECT *, meta::id(id) as id FROM products WHERE name = $name LIMIT 1")
+            .bind(("name", name.to_owned()))
+            .await
+            .map_err(handle_surreal_error)?;
+        let products: Vec<Product> = crate::take_many(&mut result, 0)?;
+        Ok(products.into_iter().next())
     }
 
     pub async fn get_all_names(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
     ) -> Result<HashSet<String>, RepoError> {
-        sqlx::query!(
-            r#"
-                SELECT name
-                FROM core.products
-            "#
-        )
-        .fetch_all(executor)
-        .await
-        .map_err(handle_sql_error)
-        .map(|rows| {
-            rows.into_iter()
-                .map(|row| row.name)
-                .collect::<HashSet<String>>()
-        })
+        let mut result = db
+            .query("SELECT name FROM products")
+            .await
+            .map_err(handle_surreal_error)?;
+        let rows: Vec<serde_json::Value> = result.take(0).map_err(handle_surreal_error)?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|r| r.get("name").and_then(|v| v.as_str()).map(String::from))
+            .collect())
     }
 
     pub async fn get_all(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         params: QueryParams,
     ) -> Result<Vec<Product>, RepoError> {
-        let mut builder = QueryBuilder::new("SELECT * from core.products");
-        Repo::build_query(
-            &mut builder,
+        let suffix = Repo::build_query_suffix(
             &params,
-            &[
-                "id",
-                "name",
-                "description",
-                "accepting_crashes",
-                "metadata",
-                "created_at",
-                "updated_at",
-            ],
+            &["id", "name", "description", "accepting_crashes", "metadata", "created_at", "updated_at"],
             &["name", "description"],
         )?;
 
-        let query = builder.build_query_as();
+        let query = format!("SELECT *, meta::id(id) as id FROM products{suffix}");
+        let mut builder = db.query(&query);
 
-        query.fetch_all(executor).await.map_err(handle_sql_error)
+        if params.filter.is_some() {
+            builder = builder.bind(("filter", params.filter.unwrap()));
+        }
+
+        let mut result = builder.await.map_err(handle_surreal_error)?;
+        crate::take_many(&mut result, 0)
     }
 
     pub async fn create(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         product: NewProduct,
     ) -> Result<uuid::Uuid, RepoError> {
-        sqlx::query_scalar!(
-            r#"
-                INSERT INTO core.products
-                  (
-                    name,
-                    description,
-                    metadata
-                  )
-                VALUES ($1, $2, $3)
-                RETURNING
-                  id
-            "#,
-            product.name,
-            product.description,
-            product.metadata
-        )
-        .fetch_one(executor)
-        .await
-        .map_err(handle_sql_error)
+        let id = uuid::Uuid::new_v4();
+        let _: Option<serde_json::Value> = db
+            .query("CREATE type::record('products', $id) CONTENT {
+                name: $name,
+                description: $description,
+                accepting_crashes: true,
+                metadata: $metadata,
+                created_at: time::now(),
+                updated_at: time::now(),
+            }")
+            .bind(("id", id.to_string()))
+            .bind(("name", product.name.clone()))
+            .bind(("description", product.description.clone()))
+            .bind(("metadata", product.metadata.clone()))
+            .await
+            .map_err(handle_surreal_error)?
+            .take(0)
+            .map_err(handle_surreal_error)?;
+        Ok(id)
     }
 
     pub async fn update(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         product: Product,
     ) -> Result<Option<uuid::Uuid>, RepoError> {
-        sqlx::query_scalar!(
-            r#"
-                UPDATE core.products
-                SET name = $1, description = $2, accepting_crashes = $3, metadata = $4
-                WHERE id = $5
-                RETURNING id
-            "#,
-            product.name,
-            product.description,
-            product.accepting_crashes,
-            product.metadata,
-            product.id,
-        )
-        .fetch_optional(executor)
-        .await
-        .map_err(handle_sql_error)
+        let mut result = db
+            .query("UPDATE type::record('products', $id) SET
+                name = $name,
+                description = $description,
+                accepting_crashes = $accepting_crashes,
+                metadata = $metadata,
+                updated_at = time::now()
+            RETURN meta::id(id) as id")
+            .bind(("id", product.id.to_string()))
+            .bind(("name", product.name.clone()))
+            .bind(("description", product.description.clone()))
+            .bind(("accepting_crashes", product.accepting_crashes))
+            .bind(("metadata", product.metadata.clone()))
+            .await
+            .map_err(handle_surreal_error)?;
+        let rows: Vec<serde_json::Value> = result.take(0).map_err(handle_surreal_error)?;
+        Ok(rows.first().and_then(|r| {
+            r.get("id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| uuid::Uuid::parse_str(s).ok())
+        }))
     }
 
     pub async fn remove(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         id: uuid::Uuid,
     ) -> Result<(), RepoError> {
-        sqlx::query!(
-            r#"
-                DELETE FROM core.products
-                WHERE id = $1
-            "#,
-            id
-        )
-        .execute(executor)
-        .await
-        .map_err(handle_sql_error)
-        .map(|_| ())
+        db.query("DELETE type::record('products', $id)")
+            .bind(("id", id.to_string()))
+            .await
+            .map_err(handle_surreal_error)?;
+        Ok(())
     }
 
     pub async fn count(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
     ) -> Result<i64, RepoError> {
-        sqlx::query_scalar!(
-            r#"
-                SELECT COUNT(*)
-                FROM core.products
-            "#
-        )
-        .fetch_one(executor)
-        .await
-        .map_err(handle_sql_error)
-        .map(|count| count.unwrap_or(0))
+        let mut result = db
+            .query("SELECT count() as count FROM products GROUP ALL")
+            .await
+            .map_err(handle_surreal_error)?;
+        let rows: Vec<serde_json::Value> = result.take(0).map_err(handle_surreal_error)?;
+        Ok(rows
+            .first()
+            .and_then(|r| r.get("count").and_then(|v| v.as_i64()))
+            .unwrap_or(0))
     }
 }

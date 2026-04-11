@@ -1,4 +1,5 @@
 pub mod annotations;
+pub mod app;
 pub mod error;
 pub mod product_cache;
 pub mod routes;

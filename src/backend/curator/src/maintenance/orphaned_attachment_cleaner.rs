@@ -1,6 +1,7 @@
 use futures::stream::TryStreamExt;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path};
-use sqlx::Postgres;
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
 use std::collections::{HashMap, HashSet};
 use tracing::{error, info};
 use uuid::Uuid;
@@ -18,10 +19,9 @@ impl OrphanedAttachmentCleaner {
 
         let storage = app_state.storage.clone();
         let repo = &app_state.repo;
-        let mut tx = repo.begin_admin().await?;
 
         let s3_paths = Self::get_s3_attachments(&storage).await?;
-        let db_attachments = Self::get_database_attachments(&mut *tx).await?;
+        let db_attachments = Self::get_database_attachments(&repo.db).await?;
         let crash_info_attachments = Self::get_crash_info_attachments(&storage).await?;
 
         let deleted_count = Self::delete_orphaned_attachments(
@@ -32,8 +32,6 @@ impl OrphanedAttachmentCleaner {
         )
         .await?;
         info!("Deleted {} orphaned S3 attachments", deleted_count);
-
-        tx.commit().await?;
 
         info!("Completed removal of orphaned S3 attachments");
         Ok(())
@@ -66,11 +64,8 @@ impl OrphanedAttachmentCleaner {
         Ok(s3_attachment_paths_to_ids)
     }
 
-    async fn get_database_attachments<E>(tx: &mut E) -> Result<HashSet<Uuid>, JobError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
-        let attachments = AttachmentsRepo::get_all(tx, QueryParams::default()).await?;
+    async fn get_database_attachments(db: &Surreal<Any>) -> Result<HashSet<Uuid>, JobError> {
+        let attachments = AttachmentsRepo::get_all(db, QueryParams::default()).await?;
         let db_attachment_storage_ids: HashSet<Uuid> = attachments
             .into_iter()
             .filter_map(|attachment| {

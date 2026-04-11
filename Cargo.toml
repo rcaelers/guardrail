@@ -10,6 +10,7 @@ members = [
   "src/backend/data",
   "src/backend/repos",
   "src/backend/testware",
+  "src/backend/e2e",
 ]
 default-members = [
   "src/backend/api",
@@ -64,15 +65,8 @@ tracing-subscriber = { version = "0.3.23", features = [
 tracing-appender = "0.2.4"
 tracing-log = "0.2.0"
 
-# SQLX
-sqlx = { version = "0.8.6", features = [
-  "runtime-tokio",
-  "tls-rustls",
-  "chrono",
-  "json",
-  "postgres",
-  "uuid",
-] }
+# SurrealDB
+surrealdb = { version = "3.0.5", features = ["kv-mem"] }
 
 # K8s
 k8s-openapi = { version = "0.27.1", features = ["latest"] }

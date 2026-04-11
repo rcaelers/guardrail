@@ -1,12 +1,11 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
-#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 pub struct Crash {
     pub id: uuid::Uuid,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub minidump: Option<uuid::Uuid>,
     pub report: Option<serde_json::Value>,
     pub signature: Option<String>,
@@ -14,7 +13,6 @@ pub struct Crash {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
-#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 pub struct NewCrash {
     pub id: Option<uuid::Uuid>,
     pub minidump: Option<uuid::Uuid>,

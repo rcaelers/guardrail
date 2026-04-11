@@ -1,37 +1,18 @@
-use apalis_redis::{RedisConfig, RedisStorage};
-use axum::extract::DefaultBodyLimit;
-use axum::http::StatusCode;
-use axum::{Router, http::header::AUTHORIZATION};
-use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use k8s_openapi::api::core::v1::Secret;
 use kube::{
     Api, Client,
     api::{ObjectMeta, PostParams},
 };
-use sqlx::ConnectOptions;
-use sqlx::PgPool;
-use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use std::sync::Arc;
-use std::{iter::once, net::SocketAddr, time::Duration};
-use tower_http::{CompressionLevel, compression::CompressionLayer};
-use tower_http::{
-    decompression::RequestDecompressionLayer, sensitive_headers::SetSensitiveRequestHeadersLayer,
-    timeout::TimeoutLayer, trace::TraceLayer,
-};
 use tracing::info;
-use webauthn_rs::prelude::*;
 
-use api::routes;
-use api::state::AppState;
-use api::worker::WorkQueue;
-use common::jobs::queue;
+use api::app::GuardrailApiApp;
 use common::token::generate_api_token;
 use common::{init_logging, settings::Settings};
 use repos::Repo;
 
 const SECRET_NAME: &str = "guardrail-initial-admin-token";
-const MAX_UPLOAD_BYTES: usize = 20 * 1024 * 1024;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -40,238 +21,92 @@ struct CliArgs {
     config_dir: String,
 }
 
-struct GuardrailApiApp {
-    settings: Arc<Settings>,
+async fn create_k8s_initial_token_secret(token: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let client = Client::try_default().await?;
+    let namespace =
+        std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+            .unwrap_or_else(|_| {
+                tracing::warn!("Could not determine current namespace, using 'default'");
+                "default".to_string()
+            });
+
+    let secrets: Api<Secret> = Api::namespaced(client, &namespace);
+
+    if secrets.get_opt(SECRET_NAME).await?.is_some() {
+        return Ok(());
+    }
+
+    let secret = Secret {
+        metadata: ObjectMeta {
+            name: Some(SECRET_NAME.to_string()),
+            labels: Some(
+                [("app.kubernetes.io/part-of".to_string(), "guardrail".to_string())].into(),
+            ),
+            ..Default::default()
+        },
+        string_data: Some([("token".to_string(), token.to_string())].into()),
+        type_: Some("Opaque".to_string()),
+        ..Default::default()
+    };
+
+    secrets
+        .create(&PostParams::default(), &secret)
+        .await
+        .expect("Failed to create secret");
+    Ok(())
 }
 
-impl GuardrailApiApp {
-    async fn new(config_dir: &str) -> Self {
-        Self {
-            settings: Arc::new(
-                Settings::with_config_dir(config_dir).expect("Failed to load settings"),
-            ),
-        }
+async fn ensure_default_api_token(repo: &Repo) -> Result<(), Box<dyn std::error::Error>> {
+    use data::api_token::NewApiToken;
+    use repos::api_token::ApiTokenRepo;
+
+    let tokens = ApiTokenRepo::get_all(&repo.db).await?;
+    if !tokens.is_empty() {
+        info!("API tokens already exist, skipping default token creation");
+        return Ok(());
     }
 
-    async fn run(&self) {
-        init_logging().await;
+    let (token_id, token, token_hash) =
+        generate_api_token().map_err(|_| "Failed to generate API token")?;
 
-        info!("Starting server on port {}", self.settings.api_server.port);
+    let new_token = NewApiToken {
+        description: "Default API token".to_string(),
+        token_id,
+        token_hash,
+        product_id: None,
+        user_id: None,
+        entitlements: vec!["token".to_string()],
+        expires_at: None,
+        is_active: true,
+    };
 
-        let guardrail_db = common::retry_startup("PostgreSQL", || async {
-            self.init_guardrail_db().await
-        })
-        .await;
-        let redis_conn = common::retry_startup("Valkey", || async {
-            apalis_redis::connect(self.settings.valkey.uri.clone()).await
-        })
-        .await;
-        let webauthn = self.create_webauthn();
-        let repo = Repo::new(guardrail_db.clone());
-        common::retry_startup("api bootstrap", || async {
-            self.ensure_default_api_token(&repo).await
-        })
-        .await;
-        let store = common::init_s3_object_store(self.settings.clone()).await;
+    let _token_id = ApiTokenRepo::create(&repo.db, new_token).await?;
+    info!("Created default API token: {}", token);
 
-        let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
-        let redis_symbol = RedisStorage::new_with_config(
-            redis_conn.clone(),
-            RedisConfig::new(queue::SYMBOL_JOBS),
-        );
-        let worker = Arc::new(WorkQueue::new(redis_symbol));
-
-        let state = AppState {
-            repo,
-            webauthn,
-            settings: self.settings.clone(),
-            storage: store,
-            worker,
-        };
-
-        let routes_all = Router::new()
-            .nest("/api", routes::routes(state.clone()).await)
-            .layer(SetSensitiveRequestHeadersLayer::new(once(AUTHORIZATION)))
-            .layer(RequestDecompressionLayer::new())
-            .layer(CompressionLayer::new().quality(CompressionLevel::Fastest))
-            .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))
-            .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(60)))
-            .layer(TraceLayer::new_for_http())
-            .with_state(state);
-
-        if self.settings.api_server.public_key.is_some()
-            && self.settings.api_server.private_key.is_some()
-            && self
-                .settings
-                .api_server
-                .public_key
-                .clone()
-                .unwrap_or_default()
-                != ""
-            && self
-                .settings
-                .api_server
-                .private_key
-                .clone()
-                .unwrap_or_default()
-                != ""
-        {
-            info!("Starting server with TLS");
-            info!(
-                "Public key: {}",
-                self.settings
-                    .api_server
-                    .public_key
-                    .clone()
-                    .unwrap_or_default()
-            );
-            info!(
-                "Private key: {}",
-                self.settings
-                    .api_server
-                    .private_key
-                    .clone()
-                    .unwrap_or_default()
-            );
-            let config = RustlsConfig::from_pem(
-                self.settings
-                    .api_server
-                    .public_key
-                    .clone()
-                    .unwrap_or_default()
-                    .into_bytes(),
-                self.settings
-                    .api_server
-                    .private_key
-                    .clone()
-                    .unwrap_or_default()
-                    .into_bytes(),
-            )
-            .await
-            .unwrap();
-
-            let port = self.settings.clone().api_server.port;
-            let addr = SocketAddr::from(([0, 0, 0, 0], port));
-            axum_server::bind_rustls(addr, config)
-                .serve(routes_all.into_make_service())
-                .await
-                .unwrap();
-        } else {
-            let port = self.settings.clone().api_server.port;
-            let addr = SocketAddr::from(([0, 0, 0, 0], port));
-            axum_server::bind(addr)
-                .serve(routes_all.into_make_service())
-                .await
-                .unwrap();
-        }
+    if let Err(err) = create_k8s_initial_token_secret(&token).await {
+        tracing::warn!("Failed to create initial token secret: {}", err);
     }
 
-    fn create_webauthn(&self) -> Arc<Webauthn> {
-        let rp_id = self.settings.auth.id.as_str();
-        let rp_origin = Url::parse(self.settings.auth.origin.as_str()).expect("Invalid URL");
-        let builder = WebauthnBuilder::new(rp_id, &rp_origin).expect("Invalid configuration");
-        let builder = builder.rp_name(self.settings.auth.name.as_str());
-
-        Arc::new(builder.build().expect("Invalid configuration"))
-    }
-
-    async fn init_guardrail_db(&self) -> Result<PgPool, sqlx::Error> {
-        let database_url = &self.settings.database.db_uri;
-        let mut opts: PgConnectOptions = database_url.parse()?;
-        opts = opts.log_statements(log::LevelFilter::Debug);
-
-        let pool = PgPoolOptions::new()
-            .max_connections(5)
-            .connect_with(opts)
-            .await?;
-
-        sqlx::migrate!("../../../migrations").run(&pool).await?;
-
-        Ok(pool)
-    }
-
-    async fn create_k8s_initial_token_secret(
-        &self,
-        token: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let client = Client::try_default().await?;
-        let namespace =
-            std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-                .unwrap_or_else(|_| {
-                    tracing::warn!("Could not determine current namespace, using 'default'");
-                    "default".to_string()
-                });
-
-        let secrets: Api<Secret> = Api::namespaced(client, &namespace);
-
-        if secrets.get_opt(SECRET_NAME).await?.is_some() {
-            return Ok(());
-        }
-
-        let secret = Secret {
-            metadata: ObjectMeta {
-                name: Some(SECRET_NAME.to_string()),
-                labels: Some(
-                    [("app.kubernetes.io/part-of".to_string(), "guardrail".to_string())].into(),
-                ),
-                ..Default::default()
-            },
-            string_data: Some([("token".to_string(), token.to_string())].into()),
-            type_: Some("Opaque".to_string()),
-            ..Default::default()
-        };
-
-        secrets
-            .create(&PostParams::default(), &secret)
-            .await
-            .expect("Failed to create secret");
-        Ok(())
-    }
-
-    async fn ensure_default_api_token(
-        &self,
-        repo: &Repo,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        use data::api_token::NewApiToken;
-        use repos::api_token::ApiTokenRepo;
-
-        let mut conn = repo.acquire_admin().await?;
-
-        let tokens = ApiTokenRepo::get_all(&mut *conn).await?;
-        if !tokens.is_empty() {
-            info!("API tokens already exist, skipping default token creation");
-            return Ok(());
-        }
-
-        let (token_id, token, token_hash) =
-            generate_api_token().map_err(|_| "Failed to generate API token")?;
-
-        let new_token = NewApiToken {
-            description: "Default API token".to_string(),
-            token_id,
-            token_hash,
-            product_id: None,
-            user_id: None,
-            entitlements: vec!["token".to_string()],
-            expires_at: None,
-            is_active: true,
-        };
-
-        let _token_id = ApiTokenRepo::create(&mut *conn, new_token).await?;
-        info!("Created default API token: {}", token);
-
-        if let Err(err) = self.create_k8s_initial_token_secret(&token).await {
-            tracing::warn!("Failed to create initial token secret: {}", err);
-        }
-
-        Ok(())
-    }
+    Ok(())
 }
 
 #[tokio::main]
 async fn main() {
     let args = CliArgs::parse();
-    let app = GuardrailApiApp::new(&args.config_dir).await;
-    app.run().await;
+    let settings = Arc::new(
+        Settings::with_config_dir(&args.config_dir).expect("Failed to load settings"),
+    );
+
+    init_logging().await;
+    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+
+    info!("Starting server on port {}", settings.api_server.port);
+
+    let app = GuardrailApiApp::from_settings(settings).await;
+
+    if let Err(err) = ensure_default_api_token(app.repo()).await {
+        tracing::warn!("Failed to ensure default API token: {}", err);
+    }
+
+    app.serve().await;
 }

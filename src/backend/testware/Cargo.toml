@@ -12,8 +12,8 @@ common = { path = "../common", default-features = false, features = ["ssr"] }
 serde.workspace = true
 serde_json.workspace = true
 
-# SQLx
-sqlx.workspace = true
+# SurrealDB
+surrealdb.workspace = true
 
 # Tokio / Axum
 tokio.workspace = true

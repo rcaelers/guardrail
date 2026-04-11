@@ -1,0 +1,453 @@
+id = "20260411211855__initial_guardrail_schema"
+name = "initial_guardrail_schema"
+source_schema_hash = "ad301433f67ec7108b54797ac5d7a61df8c92f62fa52ae631da3f49731576ac3"
+target_schema_hash = "385bde19d3eed97fac0307b41ca51028c58fbba070387c2ae89c0546fd6cc602"
+compatibility = "phased"
+renames = []
+
+[[steps]]
+id = "apply_expand_schema"
+phase = "start"
+kind = "apply_schema"
+files = ["database/schema/guardrail.surql"]
+entities = []
+
+[[steps]]
+id = "rollback_expand_schema"
+phase = "rollback"
+kind = "remove_entities"
+files = []
+
+[[steps.entities]]
+kind = "field"
+scope = "annotations"
+name = "crash_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "annotations"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "annotations"
+name = "key"
+
+[[steps.entities]]
+kind = "field"
+scope = "annotations"
+name = "product_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "annotations"
+name = "source"
+
+[[steps.entities]]
+kind = "field"
+scope = "annotations"
+name = "updated_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "annotations"
+name = "value"
+
+[[steps.entities]]
+kind = "field"
+scope = "api_tokens"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "api_tokens"
+name = "description"
+
+[[steps.entities]]
+kind = "field"
+scope = "api_tokens"
+name = "entitlements"
+
+[[steps.entities]]
+kind = "field"
+scope = "api_tokens"
+name = "expires_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "api_tokens"
+name = "is_active"
+
+[[steps.entities]]
+kind = "field"
+scope = "api_tokens"
+name = "last_used_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "api_tokens"
+name = "product_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "api_tokens"
+name = "token_hash"
+
+[[steps.entities]]
+kind = "field"
+scope = "api_tokens"
+name = "token_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "api_tokens"
+name = "updated_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "api_tokens"
+name = "user_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "attachments"
+name = "crash_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "attachments"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "attachments"
+name = "filename"
+
+[[steps.entities]]
+kind = "field"
+scope = "attachments"
+name = "mime_type"
+
+[[steps.entities]]
+kind = "field"
+scope = "attachments"
+name = "name"
+
+[[steps.entities]]
+kind = "field"
+scope = "attachments"
+name = "product_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "attachments"
+name = "size"
+
+[[steps.entities]]
+kind = "field"
+scope = "attachments"
+name = "storage_path"
+
+[[steps.entities]]
+kind = "field"
+scope = "attachments"
+name = "updated_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "crashes"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "crashes"
+name = "minidump"
+
+[[steps.entities]]
+kind = "field"
+scope = "crashes"
+name = "product_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "crashes"
+name = "report"
+
+[[steps.entities]]
+kind = "field"
+scope = "crashes"
+name = "signature"
+
+[[steps.entities]]
+kind = "field"
+scope = "crashes"
+name = "updated_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "credentials"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "credentials"
+name = "data"
+
+[[steps.entities]]
+kind = "field"
+scope = "credentials"
+name = "last_used"
+
+[[steps.entities]]
+kind = "field"
+scope = "credentials"
+name = "name"
+
+[[steps.entities]]
+kind = "field"
+scope = "credentials"
+name = "updated_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "credentials"
+name = "user_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "products"
+name = "accepting_crashes"
+
+[[steps.entities]]
+kind = "field"
+scope = "products"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "products"
+name = "description"
+
+[[steps.entities]]
+kind = "field"
+scope = "products"
+name = "metadata"
+
+[[steps.entities]]
+kind = "field"
+scope = "products"
+name = "name"
+
+[[steps.entities]]
+kind = "field"
+scope = "products"
+name = "updated_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "sessions"
+name = "data"
+
+[[steps.entities]]
+kind = "field"
+scope = "sessions"
+name = "expires_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "symbols"
+name = "arch"
+
+[[steps.entities]]
+kind = "field"
+scope = "symbols"
+name = "build_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "symbols"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "symbols"
+name = "module_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "symbols"
+name = "os"
+
+[[steps.entities]]
+kind = "field"
+scope = "symbols"
+name = "product_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "symbols"
+name = "storage_path"
+
+[[steps.entities]]
+kind = "field"
+scope = "symbols"
+name = "updated_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "user_access"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "user_access"
+name = "product_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "user_access"
+name = "role"
+
+[[steps.entities]]
+kind = "field"
+scope = "user_access"
+name = "updated_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "user_access"
+name = "user_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "users"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "users"
+name = "is_admin"
+
+[[steps.entities]]
+kind = "field"
+scope = "users"
+name = "last_login_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "users"
+name = "updated_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "users"
+name = "username"
+
+[[steps.entities]]
+kind = "function"
+name = "fn::auth::has_product_role"
+
+[[steps.entities]]
+kind = "function"
+name = "fn::auth::is_admin"
+
+[[steps.entities]]
+kind = "function"
+name = "fn::auth::is_product_admin"
+
+[[steps.entities]]
+kind = "function"
+name = "fn::auth::shares_admin_product_with_user"
+
+[[steps.entities]]
+kind = "function"
+name = "fn::auth::user_id"
+
+[[steps.entities]]
+kind = "function"
+name = "fn::auth::username"
+
+[[steps.entities]]
+kind = "index"
+scope = "annotations"
+name = "idx_annotations_unique"
+
+[[steps.entities]]
+kind = "index"
+scope = "api_tokens"
+name = "idx_api_tokens_product"
+
+[[steps.entities]]
+kind = "index"
+scope = "api_tokens"
+name = "idx_api_tokens_token_hash"
+
+[[steps.entities]]
+kind = "index"
+scope = "api_tokens"
+name = "idx_api_tokens_token_id"
+
+[[steps.entities]]
+kind = "index"
+scope = "api_tokens"
+name = "idx_api_tokens_user"
+
+[[steps.entities]]
+kind = "index"
+scope = "attachments"
+name = "idx_attachments_unique"
+
+[[steps.entities]]
+kind = "index"
+scope = "products"
+name = "idx_products_name"
+
+[[steps.entities]]
+kind = "index"
+scope = "user_access"
+name = "idx_user_access_pk"
+
+[[steps.entities]]
+kind = "index"
+scope = "users"
+name = "idx_users_username"
+
+[[steps.entities]]
+kind = "table"
+name = "annotations"
+
+[[steps.entities]]
+kind = "table"
+name = "api_tokens"
+
+[[steps.entities]]
+kind = "table"
+name = "attachments"
+
+[[steps.entities]]
+kind = "table"
+name = "crashes"
+
+[[steps.entities]]
+kind = "table"
+name = "credentials"
+
+[[steps.entities]]
+kind = "table"
+name = "products"
+
+[[steps.entities]]
+kind = "table"
+name = "sessions"
+
+[[steps.entities]]
+kind = "table"
+name = "symbols"
+
+[[steps.entities]]
+kind = "table"
+name = "user_access"
+
+[[steps.entities]]
+kind = "table"
+name = "users"

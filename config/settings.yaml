@@ -186,7 +186,11 @@ processor:
     - "mainCRTStartup"
     - "main()"
 database:
-  db_uri: postgres://guardrail:wezei4Joozooz8To@localhost/guardrail
+  endpoint: ws://localhost:8000
+  namespace: guardrail
+  database: guardrail
+  username: root
+  password: root
 object_storage:
   region: us-east-1
   bucket: guardrail

@@ -12,8 +12,8 @@ common = { path = "../common", features = ["ssr"] }
 serde.workspace = true
 serde_json.workspace = true
 
-# SQLx
-sqlx.workspace = true
+# SurrealDB
+surrealdb.workspace = true
 
 # Tracing
 tracing.workspace = true

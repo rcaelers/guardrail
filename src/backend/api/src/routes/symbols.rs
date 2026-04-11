@@ -4,7 +4,8 @@ use axum::{Extension, Json};
 use object_store::path::Path;
 use object_store::ObjectStoreExt;
 use serde::Serialize;
-use sqlx::Postgres;
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
 use tracing::{error, info, instrument};
 
 use crate::error::ApiError;
@@ -94,15 +95,12 @@ impl SymbolsApi {
         Ok(())
     }
 
-    #[instrument(skip(tx, api_token, symbols_info))]
-    async fn validate_symbols<E>(
-        tx: &mut E,
+    #[instrument(skip(db, api_token, symbols_info))]
+    async fn validate_symbols(
+        db: &Surreal<Any>,
         api_token: &ApiToken,
         symbols_info: &mut SymbolsInfo,
-    ) -> Result<SymbolsContext, ApiError>
-    where
-        for<'a> &'a mut E: sqlx::Executor<'a, Database = Postgres>,
-    {
+    ) -> Result<SymbolsContext, ApiError> {
         if symbols_info.symbols.is_none() {
             error!("No symbols found in submission");
             return Err(ApiError::Failure("no symbols found in submission".to_string()));
@@ -144,7 +142,7 @@ impl SymbolsApi {
             }
         }
 
-        let product = get_product(tx, &product_name).await?;
+        let product = get_product(db, &product_name).await?;
         validate_api_token_for_product(api_token, &product, &product_name)?;
         if !product.accepting_crashes {
             return Err(ApiError::ProductNotAcceptingCrashes(product_name));
@@ -337,7 +335,7 @@ impl SymbolsApi {
         mut multipart: Multipart,
         symbols_info: &mut SymbolsInfo,
     ) -> Result<(), ApiError> {
-        let mut tx = state.repo.begin_admin().await?;
+        let db = &state.repo.db;
 
         let product_id = api_token.product_id.ok_or_else(|| {
             error!("API token does not have a product ID");
@@ -346,7 +344,7 @@ impl SymbolsApi {
             )
         })?;
 
-        let product = get_product_by_id(&mut *tx, product_id).await?;
+        let product = get_product_by_id(db, product_id).await?;
         symbols_info.product = Some(product.name.clone());
 
         info!(product = %product.name, "Processing symbol for product");
@@ -358,9 +356,7 @@ impl SymbolsApi {
             Self::process_field(field, symbols_info, state.clone()).await?;
         }
 
-        let symbol_context = Self::validate_symbols(&mut *tx, &api_token, symbols_info).await?;
-
-        state.repo.end(tx).await?;
+        let symbol_context = Self::validate_symbols(db, &api_token, symbols_info).await?;
 
         let symbol_info_json = Self::build_symbol_info(symbols_info, &symbol_context)?;
 

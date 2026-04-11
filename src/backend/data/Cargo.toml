@@ -9,9 +9,6 @@ edition = "2024"
 serde.workspace = true
 serde_json.workspace = true
 
-# SQLx
-sqlx = { workspace = true, optional = true }
-
 # Tracing
 tracing.workspace = true
 
@@ -22,4 +19,4 @@ strum.workspace = true
 strum_macros.workspace = true
 
 [features]
-ssr = ["dep:sqlx"]
+ssr = []

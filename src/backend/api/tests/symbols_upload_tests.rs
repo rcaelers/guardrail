@@ -7,7 +7,7 @@ use chrono::Utc;
 use object_store::{ObjectStore, ObjectStoreExt};
 use object_store::path::Path;
 use serde_json::json;
-use sqlx::PgPool;
+use testware::setup::TestSetup;
 use std::sync::Arc;
 use tower::ServiceExt;
 use tower_http::trace::TraceLayer;
@@ -27,10 +27,10 @@ use testware::{
     create_settings, create_test_product_with_details, create_test_token, create_webauthn,
 };
 
-async fn setup(pool: &PgPool) -> (Router, Arc<dyn ObjectStore>, String, String, String, String) {
+async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> (Router, Arc<dyn ObjectStore>, String, String, String, String) {
     let settings = create_settings();
 
-    let repo = Repo::new(pool.clone());
+    let repo = Repo::new(db.clone());
     let store = Arc::new(object_store::memory::InMemory::new());
     let worker = Arc::new(TestWorker::new());
 
@@ -57,10 +57,10 @@ async fn setup(pool: &PgPool) -> (Router, Arc<dyn ObjectStore>, String, String, 
     let body = create_body_from_config(config);
 
     let product =
-        create_test_product_with_details(pool, "TestProduct", "Test product description").await;
+        create_test_product_with_details(db, "TestProduct", "Test product description").await;
 
     let (token, _) =
-        create_test_token(pool, "Test Token", Some(product.id), None, &["symbol-upload"]).await;
+        create_test_token(db, "Test Token", Some(product.id), None, &["symbol-upload"]).await;
 
     (app, store, boundary.to_owned(), config.content.to_owned(), body, token)
 }
@@ -206,9 +206,10 @@ async fn assert_response_error(
     response_json
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_ok(pool: PgPool) {
-    let (app, store, boundary, content, body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_ok() {
+    let db = TestSetup::create_db().await;
+    let (app, store, boundary, content, body, token) = setup(&db).await;
 
     let request = Request::builder()
         .method("POST")
@@ -229,9 +230,10 @@ async fn test_symbol_upload_ok(pool: PgPool) {
     assert_eq!(content_str, content);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_no_such_product(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_no_such_product() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let body = create_body_from_config(&SymbolsBodyConfig {
         boundary: &boundary,
@@ -256,16 +258,17 @@ async fn test_symbol_upload_no_such_product(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
 
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_empty_version(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_empty_version() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let body = create_body_from_config(&SymbolsBodyConfig {
         boundary: &boundary,
@@ -289,15 +292,16 @@ async fn test_symbol_upload_empty_version(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_empty_product(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_empty_product() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let body = create_body_from_config(&SymbolsBodyConfig {
         boundary: &boundary,
@@ -321,15 +325,16 @@ async fn test_symbol_upload_empty_product(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_invalid_content_type(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_invalid_content_type() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let body = create_body_from_config(&SymbolsBodyConfig {
         boundary: &boundary,
@@ -353,16 +358,17 @@ async fn test_symbol_upload_invalid_content_type(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
 
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_invalid_header(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_invalid_header() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let content = "MODULE windows EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
                    Hello world\r\n\
@@ -390,16 +396,17 @@ async fn test_symbol_upload_invalid_header(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
 
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_invalid_build_id_1(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_invalid_build_id_1() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1EE9E2672A6863B084C4C44205044422E1EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
                    Hello world\r\n\
@@ -427,16 +434,17 @@ async fn test_symbol_upload_invalid_build_id_1(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
 
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_invalid_build_id_2(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_invalid_build_id_2() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084@4C44205044422E1 crash.pdb\r\n\
                    Hello world\r\n\
@@ -464,16 +472,17 @@ async fn test_symbol_upload_invalid_build_id_2(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
 
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_invalid_module_id1(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_invalid_module_id1() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 crashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.pdb\r\n\
                    Hello world\r\n\
@@ -501,16 +510,17 @@ async fn test_symbol_upload_invalid_module_id1(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
 
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_invalid_module_id2(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_invalid_module_id2() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 cr&ash.pdb\r\n\
                    Hello world\r\n\
@@ -538,16 +548,17 @@ async fn test_symbol_upload_invalid_module_id2(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
 
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_invalid_module_id3(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_invalid_module_id3() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 ../crash.pdb\r\n\
                    Hello world\r\n\
@@ -575,16 +586,17 @@ async fn test_symbol_upload_invalid_module_id3(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
 
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_invalid_multipart(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_invalid_multipart() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
                    Hello world\r\n\
@@ -613,16 +625,17 @@ async fn test_symbol_upload_invalid_multipart(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
 
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_invalid_boundary(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_invalid_boundary() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
                    Hello world\r\n\
@@ -651,18 +664,19 @@ async fn test_symbol_upload_invalid_boundary(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
 
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_wrong_entitlement(pool: PgPool) {
-    let (app, _store, boundary, _content, body, _token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_wrong_entitlement() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, body, _token) = setup(&db).await;
 
-    let (token, _) = create_test_token(&pool, "Wrong", None, None, &["token"]).await;
+    let (token, _) = create_test_token(&db, "Wrong", None, None, &["token"]).await;
 
     let request = Request::builder()
         .method("POST")
@@ -675,17 +689,18 @@ async fn test_symbol_upload_wrong_entitlement(pool: PgPool) {
     let response = app.oneshot(request).await.unwrap();
     assert_response_error(response, StatusCode::FORBIDDEN, Some("insufficient permissions")).await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_expired_entitlement(pool: PgPool) {
-    let (app, _store, boundary, _content, body, _token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_expired_entitlement() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, body, _token) = setup(&db).await;
 
-    let product = ProductRepo::get_by_name(&pool, "TestProduct")
+    let product = ProductRepo::get_by_name(&db, "TestProduct")
         .await
         .expect("Failed to retrieve product")
         .expect("Product not found");
@@ -699,10 +714,10 @@ async fn test_symbol_upload_expired_entitlement(pool: PgPool) {
         product_id: Some(product.id),
         user_id: None,
         entitlements: vec!["symbol-upload".to_string()],
-        expires_at: Some((Utc::now() - chrono::Duration::days(1)).naive_utc()),
+        expires_at: Some(Utc::now() - chrono::Duration::days(1)),
         is_active: true,
     };
-    ApiTokenRepo::create(&pool, new_token)
+    ApiTokenRepo::create(&db, new_token)
         .await
         .expect("Failed to insert test API token");
 
@@ -722,17 +737,18 @@ async fn test_symbol_upload_expired_entitlement(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_inactive_entitlement(pool: PgPool) {
-    let (app, _store, boundary, _content, body, _token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_inactive_entitlement() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, body, _token) = setup(&db).await;
 
-    let product = ProductRepo::get_by_name(&pool, "TestProduct")
+    let product = ProductRepo::get_by_name(&db, "TestProduct")
         .await
         .expect("Failed to retrieve product")
         .expect("Product not found");
@@ -745,10 +761,10 @@ async fn test_symbol_upload_inactive_entitlement(pool: PgPool) {
         product_id: Some(product.id),
         user_id: None,
         entitlements: vec!["symbol-upload".to_string()],
-        expires_at: Some((Utc::now() + chrono::Duration::days(1)).naive_utc()),
+        expires_at: Some(Utc::now() + chrono::Duration::days(1)),
         is_active: false,
     };
-    ApiTokenRepo::create(&pool, new_token)
+    ApiTokenRepo::create(&db, new_token)
         .await
         .expect("Failed to insert test API token");
 
@@ -768,17 +784,18 @@ async fn test_symbol_upload_inactive_entitlement(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_other_product(pool: PgPool) {
-    let (app, _store, boundary, _content, body, _token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_other_product() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, body, _token) = setup(&db).await;
 
-    let product = create_test_product_with_details(&pool, "AnotherProduct", "description").await;
+    let product = create_test_product_with_details(&db, "AnotherProduct", "description").await;
 
     let (token_id, token, token_hash) = generate_api_token().expect("Failed to generate API token");
     let new_token = NewApiToken {
@@ -788,10 +805,10 @@ async fn test_symbol_upload_other_product(pool: PgPool) {
         product_id: Some(product.id),
         user_id: None,
         entitlements: vec!["symbol-upload".to_string()],
-        expires_at: Some((Utc::now() + chrono::Duration::days(1)).naive_utc()),
+        expires_at: Some(Utc::now() + chrono::Duration::days(1)),
         is_active: true,
     };
-    ApiTokenRepo::create(&pool, new_token)
+    ApiTokenRepo::create(&db, new_token)
         .await
         .expect("Failed to insert test API token");
 
@@ -811,15 +828,16 @@ async fn test_symbol_upload_other_product(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_unknown_token(pool: PgPool) {
-    let (app, _store, boundary, _content, body, _token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_unknown_token() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, body, _token) = setup(&db).await;
 
     let request = Request::builder()
         .method("POST")
@@ -832,15 +850,16 @@ async fn test_symbol_upload_unknown_token(pool: PgPool) {
     let response = app.oneshot(request).await.unwrap();
     assert_response_error(response, StatusCode::UNAUTHORIZED, Some("invalid API token")).await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("failed to fetch symbol entry from database");
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_no_token(pool: PgPool) {
-    let (app, _store, boundary, _content, body, _token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_no_token() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, body, _token) = setup(&db).await;
 
     let request = Request::builder()
         .method("POST")
@@ -852,16 +871,17 @@ async fn test_symbol_upload_no_token(pool: PgPool) {
     let response = app.oneshot(request).await.unwrap();
     assert_response_error(response, StatusCode::UNAUTHORIZED, Some("missing API token")).await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
 
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_no_version(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_no_version() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let body = create_body_from_config(&SymbolsBodyConfig {
         boundary: &boundary,
@@ -885,15 +905,16 @@ async fn test_symbol_no_version(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_no_product(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_no_product() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let body = create_body_from_config(&SymbolsBodyConfig {
         boundary: &boundary,
@@ -917,16 +938,17 @@ async fn test_symbol_no_product(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
 
     assert_eq!(allsymbols.len(), 0);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_symbol_upload_empty(pool: PgPool) {
-    let (app, _store, boundary, _content, _body, token) = setup(&pool).await;
+#[tokio::test]
+async fn test_symbol_upload_empty() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
 
     let request = Request::builder()
         .method("POST")
@@ -944,7 +966,7 @@ async fn test_symbol_upload_empty(pool: PgPool) {
     )
     .await;
 
-    let allsymbols = SymbolsRepo::get_all(&pool, QueryParams::default())
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
 

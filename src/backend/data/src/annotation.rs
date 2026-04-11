@@ -1,21 +1,19 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
-#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 pub struct Annotation {
     pub id: uuid::Uuid,
     pub key: String,
     pub source: String,
     pub value: String,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub crash_id: uuid::Uuid,
     pub product_id: uuid::Uuid,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
-#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 pub struct NewAnnotation {
     pub key: String,
     pub source: String,

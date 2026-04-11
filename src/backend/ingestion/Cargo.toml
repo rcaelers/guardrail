@@ -47,7 +47,7 @@ redis.workspace = true
 
 [features]
 default = []
-auth = ["dep:repos", "dep:data", "dep:sqlx"]
+auth = ["dep:repos", "dep:data", "dep:surrealdb"]
 
 [dependencies.repos]
 path = "../repos"
@@ -59,7 +59,7 @@ default-features = false
 features = ["ssr"]
 optional = true
 
-[dependencies.sqlx]
+[dependencies.surrealdb]
 workspace = true
 optional = true
 

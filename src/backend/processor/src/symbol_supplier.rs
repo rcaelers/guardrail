@@ -6,7 +6,7 @@ use minidump_unwind::{
 };
 use object_store::{ObjectStore, ObjectStoreExt, path::Path};
 use std::{path::PathBuf, sync::Arc};
-use tracing::{error, info, warn};
+use tracing::{debug, error, info};
 
 pub struct S3SymbolSupplier {
     pub storage: Arc<dyn ObjectStore>,
@@ -19,12 +19,12 @@ impl S3SymbolSupplier {
 
     async fn get_symbols_object(&self, path: &str) -> Result<Bytes, SymbolError> {
         let object = self.storage.get(&Path::from(path)).await.map_err(|err| {
-            error!("Failed to get symbols object from {}: {err}", path);
+            debug!("Symbols object not found at {}: {err}", path);
             SymbolError::NotFound
         })?;
         info!("Got symbols object: {:?}", object);
         let data = object.bytes().await.map_err(|err| {
-            error!("Failed to read symbols object: {err}");
+            debug!("Failed to read symbols object at {}: {err}", path);
             SymbolError::NotFound
         })?;
         Ok(data)
@@ -74,7 +74,7 @@ impl SymbolSupplier for S3SymbolSupplier {
             Err(_) => {
                 // Fallback: try alternate path format used by guardrail
                 let alt_path = format!("symbols/{}-{}", module_id, build_id);
-                warn!(
+                debug!(
                     "Standard path {} not found, trying alternate path: {}",
                     symbol_path, alt_path
                 );

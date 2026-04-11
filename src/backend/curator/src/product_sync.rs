@@ -11,10 +11,8 @@ pub async fn sync_products_to_valkey(
     repo: &Repo,
     redis: &mut ConnectionManager,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut conn = repo.acquire_admin().await?;
-
     let products = ProductRepo::get_all(
-        &mut *conn,
+        &repo.db,
         QueryParams::default(),
     )
     .await?;

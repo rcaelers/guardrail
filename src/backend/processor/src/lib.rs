@@ -1,3 +1,4 @@
+pub mod app;
 pub mod error;
 pub mod jobs;
 pub mod minidump;

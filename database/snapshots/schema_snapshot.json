@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "path": "database/schema/guardrail.surql",
+      "hash": "bc098ba1cdb3596693d580da546c2a6328d1281fb637571a58b8e05ddf79f6dd"
+    }
+  ]
+}

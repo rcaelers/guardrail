@@ -1,8 +1,9 @@
-use sqlx::{Postgres, QueryBuilder};
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
 
 use crate::{
     Repo,
-    error::{RepoError, handle_sql_error},
+    error::{RepoError, handle_surreal_error},
 };
 use common::QueryParams;
 use data::annotation::{Annotation, NewAnnotation};
@@ -11,42 +12,40 @@ pub struct AnnotationsRepo {}
 
 impl AnnotationsRepo {
     pub async fn get_by_id(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         id: uuid::Uuid,
     ) -> Result<Option<Annotation>, RepoError> {
-        sqlx::query_as!(
-            Annotation,
-            r#"
-                SELECT *
-                FROM core.annotations
-                WHERE core.annotations.id = $1
-            "#,
-            id
-        )
-        .fetch_optional(executor)
-        .await
-        .map_err(handle_sql_error)
+        let mut result = db
+            .query("SELECT *, meta::id(id) as id FROM ONLY type::record('annotations', $id)")
+            .bind(("id", id.to_string()))
+            .await
+            .map_err(handle_surreal_error)?;
+        crate::take_one(&mut result, 0)
     }
 
     pub async fn get_all(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         params: QueryParams,
     ) -> Result<Vec<Annotation>, RepoError> {
-        let mut builder = QueryBuilder::new("SELECT * FROM core.annotations");
-        Repo::build_query(
-            &mut builder,
+        let suffix = Repo::build_query_suffix(
             &params,
             &["id", "key", "source", "value"],
             &["key", "source", "value"],
         )?;
 
-        let query = builder.build_query_as();
+        let query = format!("SELECT *, meta::id(id) as id FROM annotations{suffix}");
+        let mut builder = db.query(&query);
 
-        query.fetch_all(executor).await.map_err(handle_sql_error)
+        if params.filter.is_some() {
+            builder = builder.bind(("filter", params.filter.unwrap()));
+        }
+
+        let mut result = builder.await.map_err(handle_surreal_error)?;
+        crate::take_many(&mut result, 0)
     }
 
     pub async fn create(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         annotation: NewAnnotation,
     ) -> Result<uuid::Uuid, RepoError> {
         if !["submission", "user", "script"].contains(&annotation.source.as_str()) {
@@ -56,33 +55,32 @@ impl AnnotationsRepo {
             )));
         }
 
-        sqlx::query_scalar!(
-            r#"
-                INSERT INTO core.annotations
-                  (
-                    key,
-                    source,
-                    value,
-                    crash_id,
-                    product_id
-                  )
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING
-                  id
-            "#,
-            annotation.key,
-            annotation.source,
-            annotation.value,
-            annotation.crash_id,
-            annotation.product_id
-        )
-        .fetch_one(executor)
-        .await
-        .map_err(handle_sql_error)
+        let id = uuid::Uuid::new_v4();
+        let _: Option<serde_json::Value> = db
+            .query("CREATE type::record('annotations', $id) CONTENT {
+                key: $key,
+                source: $source,
+                value: $value,
+                crash_id: $crash_id,
+                product_id: $product_id,
+                created_at: time::now(),
+                updated_at: time::now(),
+            }")
+            .bind(("id", id.to_string()))
+            .bind(("key", annotation.key.clone()))
+            .bind(("source", annotation.source.clone()))
+            .bind(("value", annotation.value.clone()))
+            .bind(("crash_id", annotation.crash_id))
+            .bind(("product_id", annotation.product_id))
+            .await
+            .map_err(handle_surreal_error)?
+            .take(0)
+            .map_err(handle_surreal_error)?;
+        Ok(id)
     }
 
     pub async fn update(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         annotation: Annotation,
     ) -> Result<Option<uuid::Uuid>, RepoError> {
         if !["submission", "user", "script"].contains(&annotation.source.as_str()) {
@@ -92,74 +90,77 @@ impl AnnotationsRepo {
             )));
         }
 
-        sqlx::query_scalar!(
-            r#"
-                UPDATE core.annotations
-                SET key = $1, source = $2, value = $3
-                WHERE id = $4
-                RETURNING id
-            "#,
-            annotation.key,
-            annotation.source,
-            annotation.value,
-            annotation.id,
-        )
-        .fetch_optional(executor)
-        .await
-        .map_err(handle_sql_error)
+        let mut result = db
+            .query("UPDATE type::record('annotations', $id) SET
+                key = $key,
+                source = $source,
+                value = $value,
+                updated_at = time::now()
+            RETURN meta::id(id) as id")
+            .bind(("id", annotation.id.to_string()))
+            .bind(("key", annotation.key.clone()))
+            .bind(("source", annotation.source.clone()))
+            .bind(("value", annotation.value.clone()))
+            .await
+            .map_err(handle_surreal_error)?;
+        let rows: Vec<serde_json::Value> = result.take(0).map_err(handle_surreal_error)?;
+        Ok(rows.first().and_then(|r| {
+            r.get("id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| uuid::Uuid::parse_str(s).ok())
+        }))
     }
 
     pub async fn remove(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         id: uuid::Uuid,
     ) -> Result<(), RepoError> {
-        sqlx::query!(
-            r#"
-                DELETE FROM core.annotations
-                WHERE id = $1
-            "#,
-            id
-        )
-        .execute(executor)
-        .await
-        .map_err(handle_sql_error)?;
+        db.query("DELETE type::record('annotations', $id)")
+            .bind(("id", id.to_string()))
+            .await
+            .map_err(handle_surreal_error)?;
         Ok(())
     }
 
     pub async fn count(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
     ) -> Result<i64, RepoError> {
-        sqlx::query_scalar!(
-            r#"
-                SELECT COUNT(*)
-                FROM core.annotations
-            "#
-        )
-        .fetch_one(executor)
-        .await
-        .map_err(handle_sql_error)
-        .map(|count| count.unwrap_or(0))
+        let mut result = db
+            .query("SELECT count() as count FROM annotations GROUP ALL")
+            .await
+            .map_err(handle_surreal_error)?;
+        let rows: Vec<serde_json::Value> = result.take(0).map_err(handle_surreal_error)?;
+        Ok(rows
+            .first()
+            .and_then(|r| r.get("count").and_then(|v| v.as_i64()))
+            .unwrap_or(0))
     }
 
     pub async fn get_by_crash_id(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         crash_id: uuid::Uuid,
         params: QueryParams,
     ) -> Result<Vec<Annotation>, RepoError> {
-        let mut builder = QueryBuilder::new("SELECT * FROM core.annotations WHERE crash_id = ");
-        builder.push_bind(crash_id);
-
-        if !params.sorting.is_empty() || params.range.is_some() {
-            Repo::build_query(
-                &mut builder,
-                &params,
+        let suffix = if !params.sorting.is_empty() || params.range.is_some() {
+            let mut p = params.clone();
+            p.filter = None;
+            Repo::build_query_suffix(
+                &p,
                 &["id", "key", "source", "value", "created_at"],
                 &[],
-            )?;
-        }
+            )?
+        } else {
+            String::new()
+        };
 
-        let query = builder.build_query_as();
-
-        query.fetch_all(executor).await.map_err(handle_sql_error)
+        let query = format!(
+            "SELECT *, meta::id(id) as id FROM annotations WHERE crash_id = $crash_id{suffix}"
+        );
+        let mut result = db
+            .query(&query)
+            .bind(("crash_id", crash_id))
+            .await
+            .map_err(handle_surreal_error)?;
+        crate::take_many(&mut result, 0)
     }
 }

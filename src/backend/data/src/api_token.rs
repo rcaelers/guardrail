@@ -1,21 +1,20 @@
-use chrono::{NaiveDateTime, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 pub struct ApiToken {
     pub id: Uuid,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
     pub description: String,
     pub token_id: Uuid,
     pub token_hash: String,
     pub product_id: Option<Uuid>,
     pub user_id: Option<Uuid>,
     pub entitlements: Vec<String>,
-    pub last_used_at: Option<NaiveDateTime>,
-    pub expires_at: Option<NaiveDateTime>,
+    pub last_used_at: Option<DateTime<Utc>>,
+    pub expires_at: Option<DateTime<Utc>>,
     pub is_active: bool,
 }
 
@@ -27,7 +26,7 @@ pub struct NewApiToken {
     pub product_id: Option<Uuid>,
     pub user_id: Option<Uuid>,
     pub entitlements: Vec<String>,
-    pub expires_at: Option<NaiveDateTime>,
+    pub expires_at: Option<DateTime<Utc>>,
     pub is_active: bool,
 }
 
@@ -56,7 +55,7 @@ impl ApiToken {
         }
 
         if let Some(expires_at) = self.expires_at {
-            let now = Utc::now().naive_utc();
+            let now = Utc::now();
             if expires_at < now {
                 return false;
             }

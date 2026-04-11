@@ -75,13 +75,21 @@ pub struct Jwk {
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 pub struct Database {
-    pub db_uri: String,
+    pub endpoint: String,
+    pub namespace: String,
+    pub database: String,
+    pub username: String,
+    pub password: String,
 }
 
 impl Default for Database {
     fn default() -> Self {
         Self {
-            db_uri: "xx".into(),
+            endpoint: "ws://localhost:8000".into(),
+            namespace: "guardrail".into(),
+            database: "guardrail".into(),
+            username: "root".into(),
+            password: "root".into(),
         }
     }
 }

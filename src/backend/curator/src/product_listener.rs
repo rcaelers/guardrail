@@ -1,78 +1,72 @@
+use futures::StreamExt;
 use redis::AsyncCommands;
 use redis::aio::ConnectionManager;
-use sqlx::PgPool;
-use sqlx::postgres::PgListener;
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
+use surrealdb::Notification;
 use tracing::{error, info, warn};
 
 use common::product_info::{ProductInfo, product_cache_key};
-
-#[derive(Debug, serde::Deserialize)]
-struct ProductChangePayload {
-    op: String,
-    id: uuid::Uuid,
-    name: String,
-    accepting_crashes: bool,
-    #[serde(default)]
-    metadata: serde_json::Value,
-    old_name: Option<String>,
-}
+use data::product::Product;
 
 pub async fn listen_for_product_changes(
-    pool: PgPool,
+    db: Surreal<Any>,
     mut redis: ConnectionManager,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let mut listener = PgListener::connect_with(&pool).await?;
-    listener.listen("product_changed").await?;
-    info!("Listening for product_changed notifications");
+    let mut result = db
+        .query("LIVE SELECT *, meta::id(id) as id FROM products")
+        .await?;
+    let mut stream: surrealdb::method::QueryStream<Notification<serde_json::Value>> =
+        result.stream(0)?;
+    info!("Listening for product changes via LIVE SELECT");
 
-    loop {
-        let notification = listener.recv().await?;
-        let payload = notification.payload();
-
-        let change: ProductChangePayload = match serde_json::from_str(payload) {
-            Ok(c) => c,
-            Err(e) => {
-                warn!(payload, error = ?e, "Failed to parse product change payload");
-                continue;
-            }
-        };
-
-        info!(op = %change.op, product = %change.name, id = %change.id, "Product changed");
-
-        match change.op.as_str() {
-            "INSERT" | "UPDATE" => {
-                let info = ProductInfo {
-                    id: change.id,
-                    name: change.name.clone(),
-                    accepting_crashes: change.accepting_crashes,
-                    metadata: change.metadata.clone(),
-                };
-                let json = serde_json::to_string(&info)?;
-                let key = product_cache_key(&change.name);
-
-                if let Err(e) = redis.set::<_, _, ()>(&key, &json).await {
-                    error!(product = %change.name, error = ?e, "Failed to write product to Valkey");
-                }
-
-                // If the product was renamed, remove the old key
-                if let Some(old_name) = &change.old_name {
-                    let old_key = product_cache_key(old_name);
-                    if let Err(e) = redis.del::<_, ()>(&old_key).await {
-                        error!(product = %old_name, error = ?e, "Failed to remove old product key from Valkey");
+    while let Some(notification) = stream.next().await {
+        match notification {
+            Ok(notification) => {
+                let action = &notification.action;
+                let product: Product = match serde_json::from_value(notification.data) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        error!(error = ?e, "Failed to deserialize product notification");
+                        continue;
                     }
-                    info!(old_name, new_name = %change.name, "Product renamed, removed old cache key");
+                };
+
+                info!(action = ?action, product = %product.name, id = %product.id, "Product changed");
+
+                match action {
+                    surrealdb::types::Action::Create | surrealdb::types::Action::Update => {
+                        let info = ProductInfo {
+                            id: product.id,
+                            name: product.name.clone(),
+                            accepting_crashes: product.accepting_crashes,
+                            metadata: product.metadata.clone(),
+                        };
+                        let json = serde_json::to_string(&info)?;
+                        let key = product_cache_key(&product.name);
+
+                        if let Err(e) = redis.set::<_, _, ()>(&key, &json).await {
+                            error!(product = %product.name, error = ?e, "Failed to write product to Valkey");
+                        }
+                    }
+                    surrealdb::types::Action::Delete => {
+                        let key = product_cache_key(&product.name);
+                        if let Err(e) = redis.del::<_, ()>(&key).await {
+                            error!(product = %product.name, error = ?e, "Failed to remove product from Valkey");
+                        }
+                        info!(product = %product.name, "Removed deleted product from Valkey");
+                    }
+                    _ => {
+                        warn!(action = ?action, "Unknown action in product change notification");
+                    }
                 }
             }
-            "DELETE" => {
-                let key = product_cache_key(&change.name);
-                if let Err(e) = redis.del::<_, ()>(&key).await {
-                    error!(product = %change.name, error = ?e, "Failed to remove product from Valkey");
-                }
-                info!(product = %change.name, "Removed deleted product from Valkey");
-            }
-            _ => {
-                warn!(op = %change.op, "Unknown operation in product change notification");
+            Err(e) => {
+                error!(error = ?e, "Error receiving product change notification");
             }
         }
     }
+
+    warn!("LIVE SELECT stream ended unexpectedly");
+    Ok(())
 }

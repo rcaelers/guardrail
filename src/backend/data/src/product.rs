@@ -1,25 +1,37 @@
-use chrono::NaiveDateTime;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
-#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
 pub struct Product {
     pub id: uuid::Uuid,
     pub name: String,
     pub description: String,
     pub accepting_crashes: bool,
     pub metadata: serde_json::Value,
-    pub created_at: NaiveDateTime,
-    pub updated_at: NaiveDateTime,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Default)]
-#[cfg_attr(feature = "ssr", derive(sqlx::FromRow))]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NewProduct {
     pub name: String,
     pub description: String,
-    #[serde(default)]
+    #[serde(default = "default_metadata")]
     pub metadata: serde_json::Value,
+}
+
+fn default_metadata() -> serde_json::Value {
+    serde_json::Value::Object(serde_json::Map::new())
+}
+
+impl Default for NewProduct {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            description: String::new(),
+            metadata: default_metadata(),
+        }
+    }
 }
 
 impl From<Product> for NewProduct {

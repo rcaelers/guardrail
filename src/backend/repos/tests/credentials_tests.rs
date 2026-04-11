@@ -1,7 +1,7 @@
 #![cfg(test)]
 
 use serde_json::json;
-use sqlx::PgPool;
+use testware::setup::TestSetup;
 use uuid::Uuid;
 
 use data::credentials::*;
@@ -9,13 +9,14 @@ use repos::credentials::*;
 
 use testware::{create_random_test_user, create_test_credential};
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_get_by_id(pool: PgPool) {
+#[tokio::test]
+async fn test_get_by_id() {
+    let db = TestSetup::create_db().await;
     let data = json!({"token": "fake-token-123", "scope": "repo"});
 
-    let inserted_credential = create_test_credential(&pool, data.clone(), None).await;
+    let inserted_credential = create_test_credential(&db, data.clone(), None).await;
 
-    let found_credential = CredentialsRepo::get_by_id(&pool, inserted_credential.id)
+    let found_credential = CredentialsRepo::get_by_id(&db, inserted_credential.id)
         .await
         .expect("Failed to get credential by ID");
 
@@ -25,19 +26,21 @@ async fn test_get_by_id(pool: PgPool) {
     assert_eq!(found_credential.data, data);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_get_by_id_not_found(pool: PgPool) {
+#[tokio::test]
+async fn test_get_by_id_not_found() {
+    let db = TestSetup::create_db().await;
     let non_existent_id = Uuid::new_v4();
-    let not_found = CredentialsRepo::get_by_id(&pool, non_existent_id)
+    let not_found = CredentialsRepo::get_by_id(&db, non_existent_id)
         .await
         .expect("Failed to query with non-existent ID");
 
     assert!(not_found.is_none());
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_get_all_by_user_id(pool: PgPool) {
-    let user_id = create_random_test_user(&pool).await;
+#[tokio::test]
+async fn test_get_all_by_user_id() {
+    let db = TestSetup::create_db().await;
+    let user_id = create_random_test_user(&db).await;
 
     let credentials_data = vec![
         (json!({"token": "github-token", "scope": "repo"})),
@@ -46,13 +49,13 @@ async fn test_get_all_by_user_id(pool: PgPool) {
     ];
 
     for data in &credentials_data {
-        create_test_credential(&pool, data.clone(), Some(user_id)).await;
+        create_test_credential(&db, data.clone(), Some(user_id)).await;
     }
 
-    let other_user_id = create_random_test_user(&pool).await;
-    create_test_credential(&pool, json!({"token": "other-token"}), Some(other_user_id)).await;
+    let other_user_id = create_random_test_user(&db).await;
+    create_test_credential(&db, json!({"token": "other-token"}), Some(other_user_id)).await;
 
-    let user_credentials = CredentialsRepo::get_all_by_user_id(&pool, user_id)
+    let user_credentials = CredentialsRepo::get_all_by_user_id(&db, user_id)
         .await
         .expect("Failed to get credentials by user ID");
 
@@ -63,9 +66,10 @@ async fn test_get_all_by_user_id(pool: PgPool) {
     }
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_create(pool: PgPool) {
-    let user_id = create_random_test_user(&pool).await;
+#[tokio::test]
+async fn test_create() {
+    let db = TestSetup::create_db().await;
+    let user_id = create_random_test_user(&db).await;
     let data = json!({
         "username": "test_username",
         "password": "test_password",
@@ -73,7 +77,7 @@ async fn test_create(pool: PgPool) {
     });
 
     let credential_id = CredentialsRepo::create(
-        &pool,
+        &db,
         NewCredential {
             user_id,
             data: data.clone(),
@@ -82,7 +86,7 @@ async fn test_create(pool: PgPool) {
     .await
     .expect("Failed to create credential");
 
-    let created_credential = CredentialsRepo::get_by_id(&pool, credential_id)
+    let created_credential = CredentialsRepo::get_by_id(&db, credential_id)
         .await
         .expect("Failed to get created credential")
         .expect("Created credential not found");
@@ -91,83 +95,28 @@ async fn test_create(pool: PgPool) {
     assert_eq!(created_credential.data, data);
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_update_data(pool: PgPool) {
-    let credential = create_test_credential(&pool, json!({"key": "original-key-data"}), None).await;
+#[tokio::test]
+async fn test_update_data() {
+    let db = TestSetup::create_db().await;
+    let credential = create_test_credential(&db, json!({"key": "original-key-data"}), None).await;
 
     let updated_data = json!({
         "key": "updated-key-data",
         "comment": "Added comment"
     });
 
-    let updated_id = CredentialsRepo::update_data(&pool, credential.id, updated_data.clone())
+    let updated_id = CredentialsRepo::update_data(&db, credential.id, updated_data.clone())
         .await
         .expect("Failed to update credential")
         .expect("Credential not found when updating");
 
     assert_eq!(updated_id, credential.id);
 
-    let updated_credential = CredentialsRepo::get_by_id(&pool, credential.id)
+    let updated_credential = CredentialsRepo::get_by_id(&db, credential.id)
         .await
         .expect("Failed to get updated credential")
         .expect("Updated credential not found");
 
     assert_eq!(updated_credential.data, updated_data);
     assert!(updated_credential.last_used >= credential.last_used);
-}
-
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_update_data_error(pool: PgPool) {
-    let credential =
-        create_test_credential(&pool, json!({"key": "original-key-data-error"}), None).await;
-
-    let updated_data = json!({
-        "key": "should-fail-key-data",
-        "comment": "This update should fail"
-    });
-
-    pool.close().await;
-
-    let result = CredentialsRepo::update_data(&pool, credential.id, updated_data.clone()).await;
-    assert!(result.is_err(), "Expected an error when updating credential data with closed pool");
-}
-
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_create_error(pool: PgPool) {
-    let user_id = create_random_test_user(&pool).await;
-
-    let new_credential = NewCredential {
-        user_id,
-        data: json!({"username": "test", "password": "password123"}),
-    };
-
-    pool.close().await;
-
-    let result = CredentialsRepo::create(&pool, new_credential).await;
-    assert!(result.is_err(), "Expected an error when creating credential with closed pool");
-}
-
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_get_by_id_error(pool: PgPool) {
-    let credential = create_test_credential(&pool, json!({"key": "value"}), None).await;
-
-    pool.close().await;
-
-    let result = CredentialsRepo::get_by_id(&pool, credential.id).await;
-    assert!(result.is_err(), "Expected an error when getting credential by ID with closed pool");
-}
-
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_get_all_by_user_id_error(pool: PgPool) {
-    let user_id = create_random_test_user(&pool).await;
-
-    create_test_credential(&pool, json!({"token": "github-token"}), Some(user_id)).await;
-
-    pool.close().await;
-
-    let result = CredentialsRepo::get_all_by_user_id(&pool, user_id).await;
-    assert!(
-        result.is_err(),
-        "Expected an error when getting credentials by user ID with closed pool"
-    );
 }

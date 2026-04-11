@@ -1,0 +1,37 @@
+[package]
+name = "e2e"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Workspace crates
+ingestion = { path = "../ingestion" }
+processor = { path = "../processor" }
+curator = { path = "../curator" }
+api = { path = "../api" }
+repos = { path = "../repos" }
+common = { path = "../common", default-features = false, features = ["ssr"] }
+testware = { path = "../testware" }
+
+# Serde / json
+serde_json.workspace = true
+
+# SurrealDB
+surrealdb.workspace = true
+
+# Tokio / Axum
+tokio.workspace = true
+axum.workspace = true
+
+# Tower
+tower.workspace = true
+
+# Apalis (for connectivity check)
+apalis-redis.workspace = true
+redis.workspace = true
+
+# Misc
+chrono.workspace = true
+futures.workspace = true
+object_store.workspace = true
+uuid.workspace = true

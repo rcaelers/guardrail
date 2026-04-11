@@ -9,7 +9,7 @@ use axum::{
     http::{Request, StatusCode},
 };
 use jsonwebtoken::{Algorithm, Validation};
-use sqlx::PgPool;
+use testware::setup::TestSetup;
 use tower::ServiceExt;
 use tower_http::trace::TraceLayer;
 
@@ -22,9 +22,9 @@ use testware::{
     create_webauthn,
 };
 
-async fn setup(pool: &PgPool) -> (Router, AppState) {
+async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> (Router, AppState) {
     let settings = create_settings();
-    let repo = Repo::new(pool.clone());
+    let repo = Repo::new(db.clone());
     let store = Arc::new(object_store::memory::InMemory::new());
     let worker = Arc::new(TestWorker::new());
 
@@ -46,11 +46,12 @@ async fn setup(pool: &PgPool) -> (Router, AppState) {
     (app, state)
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_token_jwt_admin_ok(pool: PgPool) {
-    let (app, state) = setup(&pool).await;
+#[tokio::test]
+async fn test_token_jwt_admin_ok() {
+    let db = TestSetup::create_db().await;
+    let (app, state) = setup(&db).await;
 
-    let (token, _) = create_test_token(&pool, "Test Token", None, None, &["token"]).await;
+    let (token, _) = create_test_token(&db, "Test Token", None, None, &["token"]).await;
 
     let request = Request::builder()
         .method("POST")
@@ -85,19 +86,27 @@ async fn test_token_jwt_admin_ok(pool: PgPool) {
     assert_eq!(decoded_jwt.claims["aud"].as_str().unwrap(), "guardrail");
     assert_eq!(decoded_jwt.claims["sub"].as_str().unwrap(), "admin");
     assert_eq!(decoded_jwt.claims["username"].as_str().unwrap(), "admin");
+    assert!(decoded_jwt.claims["user_id"].is_null());
+    assert_eq!(decoded_jwt.claims["is_admin"].as_bool().unwrap(), true);
     assert_eq!(decoded_jwt.claims["iss"].as_str().unwrap(), state.settings.auth.id);
     assert_eq!(decoded_jwt.claims["role"].as_str().unwrap(), "guardrail_apiuser");
     assert!(decoded_jwt.claims["exp"].is_number());
     assert!(decoded_jwt.claims["iat"].is_number());
+    // SurrealDB record-access claims
+    assert_eq!(decoded_jwt.claims["ac"].as_str().unwrap(), "guardrail_api");
+    assert_eq!(decoded_jwt.claims["ns"].as_str().unwrap(), state.settings.database.namespace);
+    assert_eq!(decoded_jwt.claims["db"].as_str().unwrap(), state.settings.database.database);
+    assert!(decoded_jwt.claims.get("id").is_none() || decoded_jwt.claims["id"].is_null(), "admin token should have no id claim");
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_token_jwt_user_ok(pool: PgPool) {
-    let (app, state) = setup(&pool).await;
+#[tokio::test]
+async fn test_token_jwt_user_ok() {
+    let db = TestSetup::create_db().await;
+    let (app, state) = setup(&db).await;
 
-    let user = create_test_user(&pool, "testuser", false).await;
+    let user = create_test_user(&db, "testuser", false).await;
 
-    let (token, _) = create_test_token(&pool, "Test Token", None, Some(user.id), &["token"]).await;
+    let (token, _) = create_test_token(&db, "Test Token", None, Some(user.id), &["token"]).await;
 
     let request = Request::builder()
         .method("POST")
@@ -132,21 +141,32 @@ async fn test_token_jwt_user_ok(pool: PgPool) {
     assert_eq!(decoded_jwt.claims["aud"].as_str().unwrap(), "guardrail");
     assert_eq!(decoded_jwt.claims["sub"].as_str().unwrap(), user.username);
     assert_eq!(decoded_jwt.claims["username"].as_str().unwrap(), user.username);
+    assert_eq!(decoded_jwt.claims["user_id"].as_str().unwrap(), user.id.to_string());
+    assert_eq!(decoded_jwt.claims["is_admin"].as_bool().unwrap(), false);
     assert_eq!(decoded_jwt.claims["iss"].as_str().unwrap(), state.settings.auth.id);
     assert_eq!(decoded_jwt.claims["role"].as_str().unwrap(), "guardrail_apiuser");
     assert!(decoded_jwt.claims["exp"].is_number());
     assert!(decoded_jwt.claims["iat"].is_number());
+    // SurrealDB record-access claims
+    assert_eq!(decoded_jwt.claims["ac"].as_str().unwrap(), "guardrail_api");
+    assert_eq!(decoded_jwt.claims["ns"].as_str().unwrap(), state.settings.database.namespace);
+    assert_eq!(decoded_jwt.claims["db"].as_str().unwrap(), state.settings.database.database);
+    assert_eq!(
+        decoded_jwt.claims["id"].as_str().unwrap(),
+        format!("users:{}", user.id),
+    );
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_token_jwt_invalid_token(pool: PgPool) {
-    let (app, _state) = setup(&pool).await;
+#[tokio::test]
+async fn test_token_jwt_invalid_token() {
+    let db = TestSetup::create_db().await;
+    let (app, _state) = setup(&db).await;
 
     let product =
-        create_test_product_with_details(&pool, "TestProduct", "Test product description").await;
+        create_test_product_with_details(&db, "TestProduct", "Test product description").await;
 
     let (token_nok, _) = create_test_token(
-        &pool,
+        &db,
         "Test Minidump Token",
         Some(product.id),
         None,
@@ -171,9 +191,10 @@ async fn test_token_jwt_invalid_token(pool: PgPool) {
     assert_eq!(response_json["result"], "failed");
 }
 
-#[sqlx::test(migrations = "../../../migrations")]
-async fn test_token_ok(pool: PgPool) {
-    let (app, _state) = setup(&pool).await;
+#[tokio::test]
+async fn test_token_ok() {
+    let db = TestSetup::create_db().await;
+    let (app, _state) = setup(&db).await;
 
     let request = Request::builder()
         .method("POST")

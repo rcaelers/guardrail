@@ -8,132 +8,119 @@ pub mod product;
 pub mod symbols;
 pub mod user;
 
-use sqlx::{Executor, pool::PoolConnection};
-use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
+use serde::de::DeserializeOwned;
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
+use surrealdb::IndexedResults;
 use tracing::error;
 
-use crate::error::RepoError;
+use crate::error::{RepoError, handle_surreal_error};
 use common::QueryParams;
-
-const ADMIN: &str = "admin";
 
 #[derive(Debug, Clone)]
 pub struct Repo {
-    pub pool: PgPool,
+    pub db: Surreal<Any>,
+}
+
+/// Extract a single optional result from a SurrealDB query response.
+/// Uses serde_json::Value as intermediate to avoid requiring SurrealValue on data types.
+pub fn take_one<T: DeserializeOwned>(
+    result: &mut IndexedResults,
+    index: usize,
+) -> Result<Option<T>, RepoError> {
+    let val: Option<serde_json::Value> = result.take(index).map_err(handle_surreal_error)?;
+    match val {
+        Some(v) => Ok(Some(
+            serde_json::from_value(v)
+                .map_err(|e| RepoError::DatabaseError(e.to_string()))?,
+        )),
+        None => Ok(None),
+    }
+}
+
+/// Extract a vec of results from a SurrealDB query response.
+pub fn take_many<T: DeserializeOwned>(
+    result: &mut IndexedResults,
+    index: usize,
+) -> Result<Vec<T>, RepoError> {
+    let vals: Vec<serde_json::Value> = result.take(index).map_err(handle_surreal_error)?;
+    vals.into_iter()
+        .map(|v| serde_json::from_value(v).map_err(|e| RepoError::DatabaseError(e.to_string())))
+        .collect()
 }
 
 impl Repo {
-    pub fn new(pool: PgPool) -> Repo {
-        Repo { pool }
+    pub fn new(db: Surreal<Any>) -> Repo {
+        Repo { db }
     }
 
-    async fn set_config(
-        &self,
-        conn: impl Executor<'_, Database = Postgres>,
-        auth: &str,
-    ) -> Result<(), RepoError> {
-        sqlx::query("SELECT set_config('request.jwt.claims', json_build_object('username', $1::text)::text, false)")
-                .bind(auth)
-                .execute(conn)
-                .await
-                .map_err(|err| {
-                    error!("Failed to set user to {}: {}", auth, err);
-                    RepoError::TransactionError()
-                }).
-                map(|_| ())
+    /// Create a user-scoped database handle by authenticating with a JWT.
+    ///
+    /// The returned `Surreal<Any>` has its own session (SurrealDB clones create
+    /// independent sessions).  After `authenticate`, the session is treated as a
+    /// *record user* and table permissions are enforced via the `$auth` variable
+    /// populated from the `id` claim in the JWT.
+    pub async fn authenticated(&self, jwt: &str) -> Result<Surreal<Any>, RepoError> {
+        use surrealdb::opt::auth::Token;
+
+        let db = self.db.clone(); // new session id
+        let token = Token::from(jwt);
+        db.authenticate(token)
+            .await
+            .map_err(handle_surreal_error)?;
+        Ok(db)
     }
 
-    pub async fn begin_admin(&self) -> Result<Transaction<'static, Postgres>, RepoError> {
-        let mut transaction = self.pool.begin().await.map_err(|err| {
-            error!("Failed to begin admin transaction: {}", err);
-            RepoError::TransactionError()
-        })?;
-        self.set_config(&mut *transaction, ADMIN).await?;
-        Ok(transaction)
-    }
-
-    pub async fn acquire_admin(&self) -> Result<PoolConnection<Postgres>, RepoError> {
-        let mut con = self.pool.acquire().await.map_err(|err| {
-            error!("Failed to acquire admin connection: {}", err);
-            RepoError::TransactionError()
-        })?;
-        self.set_config(&mut *con, ADMIN).await?;
-        Ok(con)
-    }
-
-    pub async fn acquire(&self, auth: &str) -> Result<PoolConnection<Postgres>, RepoError> {
-        let mut con = self.pool.acquire().await.map_err(|err| {
-            error!("Failed to acquire connection for {}: {}", auth, err);
-            RepoError::TransactionError()
-        })?;
-        self.set_config(&mut *con, auth).await?;
-        Ok(con)
-    }
-
-    pub async fn begin(self, auth: &str) -> Result<Transaction<'static, Postgres>, RepoError> {
-        let mut transaction = self.pool.begin().await.map_err(|err| {
-            error!("Failed to begin transaction for {}: {}", auth, err);
-            RepoError::TransactionError()
-        })?;
-        self.set_config(&mut *transaction, auth).await?;
-        Ok(transaction)
-    }
-
-    pub async fn end(&self, transaction: Transaction<'static, Postgres>) -> Result<(), RepoError> {
-        transaction.commit().await.map_err(|err| {
-            error!("Failed to commit transaction: {}", err);
-            RepoError::TransactionError()
-        })
-    }
-
-    pub fn build_query(
-        builder: &mut QueryBuilder<Postgres>,
+    pub fn build_query_suffix(
         params: &QueryParams,
         allowed_columns: &[&str],
         filter_columns: &[&str],
-    ) -> Result<(), RepoError> {
-        if let Some(filter) = &params.filter {
+    ) -> Result<String, RepoError> {
+        let mut suffix = String::new();
+
+        if let Some(_filter) = &params.filter {
             if filter_columns.is_empty() {
                 error!("No filter columns specified but filter was provided");
-                return Err(RepoError::InvalidColumn("No filter columns specified".to_string()));
+                return Err(RepoError::InvalidColumn(
+                    "No filter columns specified".to_string(),
+                ));
             }
 
-            builder.push(" WHERE ");
-            let mut separated = builder.separated(" OR ");
-            for &col in filter_columns {
-                if !allowed_columns.contains(&col) {
-                    error!("Invalid column specified for filtering: {col}");
-                    return Err(RepoError::InvalidColumn(col.to_string()));
-                }
-                separated.push(col);
-                separated.push_unseparated(" ILIKE ");
-                separated.push_bind_unseparated(format!("%{filter}%"));
-            }
+            suffix.push_str(" WHERE ");
+            let conditions: Vec<String> = filter_columns
+                .iter()
+                .map(|col| {
+                    if !allowed_columns.contains(col) {
+                        return Err(RepoError::InvalidColumn(col.to_string()));
+                    }
+                    Ok(format!(
+                        "string::lowercase({col}) CONTAINS string::lowercase($filter)"
+                    ))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            suffix.push_str(&conditions.join(" OR "));
         }
 
         if !params.sorting.is_empty() {
-            builder.push(" ORDER BY ");
-            let mut separated = builder.separated(", ");
-
-            for (col, col_sort) in &params.sorting {
-                if !allowed_columns.contains(&col.as_str()) {
-                    error!("Invalid column specified for sorting: {col}");
-                    return Err(RepoError::InvalidColumn(col.clone()));
-                }
-
-                separated.push_unseparated(col);
-                separated.push_unseparated(" ");
-                separated.push_unseparated(col_sort.to_sql());
-            }
+            suffix.push_str(" ORDER BY ");
+            let orders: Vec<String> = params
+                .sorting
+                .iter()
+                .map(|(col, order)| {
+                    if !allowed_columns.contains(&col.as_str()) {
+                        error!("Invalid column specified for sorting: {col}");
+                        return Err(RepoError::InvalidColumn(col.clone()));
+                    }
+                    Ok(format!("{col} {}", order.to_sql()))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            suffix.push_str(&orders.join(", "));
         }
 
         if let Some(range) = &params.range {
-            builder.push(" LIMIT ");
-            builder.push_bind(range.len() as i64);
-            builder.push(" OFFSET ");
-            builder.push_bind(range.start as i64);
+            suffix.push_str(&format!(" LIMIT {} START {}", range.len(), range.start));
         }
 
-        Ok(())
+        Ok(suffix)
     }
 }

@@ -1,131 +1,122 @@
-use sqlx::{Postgres, QueryBuilder};
+use surrealdb::Surreal;
+use surrealdb::engine::any::Any;
 
 use crate::{
     Repo,
-    error::{RepoError, handle_sql_error},
+    error::{RepoError, handle_surreal_error},
 };
 use common::QueryParams;
 use data::crash::{Crash, NewCrash};
+
 pub struct CrashRepo {}
 
 impl CrashRepo {
     pub async fn get_by_id(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         id: uuid::Uuid,
     ) -> Result<Option<Crash>, RepoError> {
-        sqlx::query_as!(
-            Crash,
-            r#"
-                SELECT *
-                FROM core.crashes
-                WHERE core.crashes.id = $1
-            "#,
-            id
-        )
-        .fetch_optional(executor)
-        .await
-        .map_err(handle_sql_error)
+        let mut result = db
+            .query("SELECT *, meta::id(id) as id FROM ONLY type::record('crashes', $id)")
+            .bind(("id", id.to_string()))
+            .await
+            .map_err(handle_surreal_error)?;
+        crate::take_one(&mut result, 0)
     }
 
     pub async fn get_all(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         params: QueryParams,
     ) -> Result<Vec<Crash>, RepoError> {
-        let mut builder = QueryBuilder::new("SELECT * from core.crashes");
-        Repo::build_query(
-            &mut builder,
+        let suffix = Repo::build_query_suffix(
             &params,
             &["id", "signature", "state", "created_at", "updated_at"],
             &["signature"],
         )?;
 
-        let query = builder.build_query_as();
+        let query = format!("SELECT *, meta::id(id) as id FROM crashes{suffix}");
+        let mut builder = db.query(&query);
 
-        query.fetch_all(executor).await.map_err(handle_sql_error)
+        if params.filter.is_some() {
+            builder = builder.bind(("filter", params.filter.unwrap()));
+        }
+
+        let mut result = builder.await.map_err(handle_surreal_error)?;
+        crate::take_many(&mut result, 0)
     }
 
     pub async fn create(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         crash: NewCrash,
     ) -> Result<uuid::Uuid, RepoError> {
-        sqlx::query_scalar!(
-            r#"
-                INSERT INTO core.crashes
-                  (
-                    id,
-                    product_id,
-                    minidump,
-                    report,
-                    signature
-                  )
-                VALUES ($1, $2, $3, $4, $5)
-                RETURNING
-                  id
-            "#,
-            match crash.id {
-                Some(id) => id,
-                None => uuid::Uuid::new_v4(),
-            },
-            crash.product_id,
-            crash.minidump,
-            crash.report,
-            crash.signature
-        )
-        .fetch_one(executor)
-        .await
-        .map_err(handle_sql_error)
+        let id = crash.id.unwrap_or_else(uuid::Uuid::new_v4);
+        let _: Option<serde_json::Value> = db
+            .query("CREATE type::record('crashes', $id) CONTENT {
+                product_id: $product_id,
+                minidump: $minidump,
+                report: $report,
+                signature: $signature,
+                created_at: time::now(),
+                updated_at: time::now(),
+            }")
+            .bind(("id", id.to_string()))
+            .bind(("product_id", crash.product_id))
+            .bind(("minidump", crash.minidump))
+            .bind(("report", crash.report))
+            .bind(("signature", crash.signature))
+            .await
+            .map_err(handle_surreal_error)?
+            .take(0)
+            .map_err(handle_surreal_error)?;
+        Ok(id)
     }
 
     pub async fn update(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         crash: Crash,
     ) -> Result<Option<uuid::Uuid>, RepoError> {
-        sqlx::query_scalar!(
-            r#"
-            UPDATE core.crashes
-                SET minidump = $1, report = $2, signature = $3
-                WHERE id = $4
-                RETURNING id
-            "#,
-            crash.minidump,
-            crash.report,
-            crash.signature,
-            crash.id,
-        )
-        .fetch_optional(executor)
-        .await
-        .map_err(handle_sql_error)
+        let mut result = db
+            .query("UPDATE type::record('crashes', $id) SET
+                minidump = $minidump,
+                report = $report,
+                signature = $signature,
+                updated_at = time::now()
+            RETURN meta::id(id) as id")
+            .bind(("id", crash.id.to_string()))
+            .bind(("minidump", crash.minidump))
+            .bind(("report", crash.report))
+            .bind(("signature", crash.signature))
+            .await
+            .map_err(handle_surreal_error)?;
+        let rows: Vec<serde_json::Value> = result.take(0).map_err(handle_surreal_error)?;
+        Ok(rows.first().and_then(|r| {
+            r.get("id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| uuid::Uuid::parse_str(s).ok())
+        }))
     }
 
     pub async fn remove(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
         id: uuid::Uuid,
     ) -> Result<(), RepoError> {
-        sqlx::query!(
-            r#"
-                DELETE FROM core.crashes
-                WHERE id = $1
-            "#,
-            id
-        )
-        .execute(executor)
-        .await
-        .map_err(handle_sql_error)
-        .map(|_| ())
+        db.query("DELETE type::record('crashes', $id)")
+            .bind(("id", id.to_string()))
+            .await
+            .map_err(handle_surreal_error)?;
+        Ok(())
     }
 
     pub async fn count(
-        executor: impl sqlx::Executor<'_, Database = Postgres>,
+        db: &Surreal<Any>,
     ) -> Result<i64, RepoError> {
-        sqlx::query_scalar!(
-            r#"
-                SELECT COUNT(*)
-                FROM core.crashes
-            "#
-        )
-        .fetch_one(executor)
-        .await
-        .map_err(handle_sql_error)
-        .map(|count| count.unwrap_or(0))
+        let mut result = db
+            .query("SELECT count() as count FROM crashes GROUP ALL")
+            .await
+            .map_err(handle_surreal_error)?;
+        let rows: Vec<serde_json::Value> = result.take(0).map_err(handle_surreal_error)?;
+        Ok(rows
+            .first()
+            .and_then(|r| r.get("count").and_then(|v| v.as_i64()))
+            .unwrap_or(0))
     }
 }
