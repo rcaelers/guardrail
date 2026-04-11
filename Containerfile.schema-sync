@@ -2,7 +2,7 @@
 ## Builder
 ##
 
-FROM --platform=$BUILDPLATFORM rust:1.86-alpine AS builder
+FROM --platform=$BUILDPLATFORM rustlang/rust:nightly-alpine AS builder
 
 ARG TARGET
 
