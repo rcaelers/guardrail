@@ -1,0 +1,152 @@
+:root {
+  color-scheme: light;
+  --bg: #f6f3ea;
+  --surface: #fffdf8;
+  --surface-strong: #f1ead8;
+  --text: #1f1c17;
+  --muted: #6d6558;
+  --accent: #1e5f4f;
+  --accent-strong: #114438;
+  --border: #d8cfbf;
+  --shadow: 0 20px 40px rgba(31, 28, 23, 0.08);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+  color: var(--text);
+  background:
+    radial-gradient(circle at top left, rgba(30, 95, 79, 0.08), transparent 30%),
+    linear-gradient(180deg, #efe7d5 0%, var(--bg) 42%, #fbfaf7 100%);
+  min-height: 100vh;
+}
+
+a {
+  color: var(--accent-strong);
+}
+
+button,
+.button {
+  appearance: none;
+  border: 1px solid var(--accent-strong);
+  background: var(--accent);
+  color: #fff;
+  border-radius: 999px;
+  padding: 0.7rem 1.1rem;
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: transparent;
+  color: var(--accent-strong);
+}
+
+input {
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  font: inherit;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.85rem 1rem;
+  margin-bottom: 2rem;
+  border: 1px solid rgba(216, 207, 191, 0.8);
+  border-radius: 20px;
+  background: rgba(255, 253, 248, 0.8);
+  backdrop-filter: blur(12px);
+  box-shadow: var(--shadow);
+}
+
+.brand {
+  font-size: 1.2rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.user {
+  color: var(--muted);
+}
+
+.panel {
+  padding: 2rem;
+  border: 1px solid rgba(216, 207, 191, 0.9);
+  border-radius: 28px;
+  background: rgba(255, 253, 248, 0.92);
+  box-shadow: var(--shadow);
+}
+
+.panel.narrow {
+  max-width: 34rem;
+}
+
+.content h1 {
+  margin-top: 0;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1.05;
+}
+
+.content p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.stack {
+  display: grid;
+  gap: 1rem;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.notice {
+  padding: 0.85rem 1rem;
+  border-radius: 14px;
+  background: var(--surface-strong);
+  color: var(--text);
+}
+
+.error {
+  color: #9f1f1f;
+}
+
+@media (max-width: 640px) {
+  .shell {
+    padding: 1rem;
+  }
+
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+}

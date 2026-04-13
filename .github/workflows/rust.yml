@@ -25,7 +25,6 @@ jobs:
         run: |
           rustup toolchain install nightly
           rustup default nightly
-          rustup target add wasm32-unknown-unknown
           rustup upgrade
 
       - uses: Swatinem/rust-cache@v2
@@ -33,18 +32,10 @@ jobs:
           shared-key: ${{ matrix.os }}
           cache-all-crates: 'true'
 
-      - name: Install cargo-leptos
-        run: cargo install --locked cargo-leptos
-
-      - name: Build CSS
+      - name: Build Svelte islands
         run: |
           npm i
-          npx @tailwindcss/cli -i ./src/web/server/static/input.css -o ./src/web/server/static/css/style.css
-
-      # - name: Build web
-      #   run: |
-      #     cd src/web
-      #     cargo leptos build -vv
+          npm run web:islands:build
 
       - name: Build backend
         run: cargo build --workspace
@@ -59,7 +50,6 @@ jobs:
         run: |
           rustup toolchain install nightly
           rustup default nightly
-          rustup target add wasm32-unknown-unknown
           rustup upgrade
 
       - uses: Swatinem/rust-cache@v2
@@ -67,11 +57,13 @@ jobs:
           shared-key: ubuntu-24.04
           cache-all-crates: 'true'
 
-      - name: Install cargo-leptos
-        run: cargo install --locked cargo-leptos
-
       - name: Install cargo-llvm-cov
         run: cargo install --locked cargo-llvm-cov
 
+      - name: Build Svelte islands
+        run: |
+          npm i
+          npm run web:islands:build
+
       - name: Run tests
-        run: RUST_BACKTRACE=1 cargo test -p api -p repos -p processor -p curator --no-fail-fast
+        run: RUST_BACKTRACE=1 cargo test -p api -p repos -p processor -p curator -p web --no-fail-fast

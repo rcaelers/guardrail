@@ -24,7 +24,7 @@ use repos::product::ProductRepo;
 use repos::symbols::SymbolsRepo;
 
 use testware::{
-    create_settings, create_test_product_with_details, create_test_token, create_webauthn,
+    create_settings, create_test_product_with_details, create_test_token,
 };
 
 async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> (Router, Arc<dyn ObjectStore>, String, String, String, String) {
@@ -37,7 +37,6 @@ async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> (Router,
     let settings = Arc::new(settings);
     let state = AppState {
         repo,
-        webauthn: create_webauthn(settings.clone()),
         settings: settings.clone(),
         storage: store.clone(),
         worker,

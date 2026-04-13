@@ -19,7 +19,6 @@ use common::token::decode_api_token;
 use repos::Repo;
 use testware::{
     create_settings, create_test_product_with_details, create_test_token, create_test_user,
-    create_webauthn,
 };
 
 async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> (Router, AppState) {
@@ -31,7 +30,6 @@ async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> (Router,
     let settings = Arc::new(settings);
     let state = AppState {
         repo,
-        webauthn: create_webauthn(settings.clone()),
         settings: settings.clone(),
         storage: store.clone(),
         worker: worker.clone(),
@@ -87,7 +85,7 @@ async fn test_token_jwt_admin_ok() {
     assert_eq!(decoded_jwt.claims["sub"].as_str().unwrap(), "admin");
     assert_eq!(decoded_jwt.claims["username"].as_str().unwrap(), "admin");
     assert!(decoded_jwt.claims["user_id"].is_null());
-    assert_eq!(decoded_jwt.claims["is_admin"].as_bool().unwrap(), true);
+    assert!(decoded_jwt.claims["is_admin"].as_bool().unwrap());
     assert_eq!(decoded_jwt.claims["iss"].as_str().unwrap(), state.settings.auth.id);
     assert_eq!(decoded_jwt.claims["role"].as_str().unwrap(), "guardrail_apiuser");
     assert!(decoded_jwt.claims["exp"].is_number());
@@ -142,7 +140,7 @@ async fn test_token_jwt_user_ok() {
     assert_eq!(decoded_jwt.claims["sub"].as_str().unwrap(), user.username);
     assert_eq!(decoded_jwt.claims["username"].as_str().unwrap(), user.username);
     assert_eq!(decoded_jwt.claims["user_id"].as_str().unwrap(), user.id.to_string());
-    assert_eq!(decoded_jwt.claims["is_admin"].as_bool().unwrap(), false);
+    assert!(!decoded_jwt.claims["is_admin"].as_bool().unwrap());
     assert_eq!(decoded_jwt.claims["iss"].as_str().unwrap(), state.settings.auth.id);
     assert_eq!(decoded_jwt.claims["role"].as_str().unwrap(), "guardrail_apiuser");
     assert!(decoded_jwt.claims["exp"].is_number());

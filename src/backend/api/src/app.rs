@@ -16,7 +16,6 @@ use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
 use tracing::info;
-use webauthn_rs::prelude::*;
 
 use common::jobs::queue;
 use common::settings::Settings;
@@ -75,14 +74,6 @@ impl GuardrailApiApp {
 
         let store = common::init_s3_object_store(settings.clone()).await;
 
-        let rp_id = settings.auth.id.as_str();
-        let rp_origin =
-            Url::parse(settings.auth.origin.as_str()).expect("Invalid URL");
-        let builder =
-            WebauthnBuilder::new(rp_id, &rp_origin).expect("Invalid configuration");
-        let builder = builder.rp_name(settings.auth.name.as_str());
-        let webauthn = Arc::new(builder.build().expect("Invalid configuration"));
-
         let repo = Repo::new(db);
 
         let redis_symbol = RedisStorage::new_with_config(
@@ -93,7 +84,6 @@ impl GuardrailApiApp {
 
         let state = AppState {
             repo,
-            webauthn,
             settings,
             storage: store,
             worker,

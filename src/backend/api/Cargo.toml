@@ -36,7 +36,6 @@ clap.workspace = true
 # Tower
 tower.workspace = true
 tower-http.workspace = true
-tower-sessions.workspace = true
 
 # Security
 argon2.workspace = true
@@ -55,7 +54,6 @@ rand.workspace = true
 thiserror.workspace = true
 time.workspace = true
 uuid.workspace = true
-webauthn-rs.workspace = true
 jsonwebtoken.workspace = true
 log.workspace = true
 object_store.workspace = true

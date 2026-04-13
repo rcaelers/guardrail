@@ -87,7 +87,6 @@ web_server:
     -----END PRIVATE KEY-----
 api_server:
   port: 80
-  enable_webauthn: true
 ingestion_server:
   port: 81
   public_keyx: |

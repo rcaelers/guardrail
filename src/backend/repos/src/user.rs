@@ -65,8 +65,8 @@ impl UserRepo {
         let query = format!("SELECT *, meta::id(id) as id FROM users{suffix}");
         let mut builder = db.query(&query);
 
-        if params.filter.is_some() {
-            builder = builder.bind(("filter", params.filter.unwrap()));
+        if let Some(filter) = params.filter {
+            builder = builder.bind(("filter", filter));
         }
 
         let mut result = builder.await.map_err(handle_surreal_error)?;

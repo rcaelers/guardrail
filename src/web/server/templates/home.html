@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+  <h1>Guardrail</h1>
+  <p>Rust-rendered pages with Svelte islands for interactive screens.</p>
+
+  {% if auth.is_authenticated() %}
+  <p>You are signed in as <strong>{{ auth.current_username() }}</strong>.</p>
+  {% else %}
+  <p>Start with the basic login island and template shell.</p>
+  <p><a class="button" href="/auth/login">Open login</a></p>
+  {% endif %}
+</section>
+{% endblock %}

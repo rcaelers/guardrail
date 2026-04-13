@@ -18,7 +18,7 @@ use tower_http::trace::TraceLayer;
 use api::state::AppState;
 use api::{routes::routes, worker::TestWorker};
 use repos::Repo;
-use testware::{create_settings, create_webauthn};
+use testware::create_settings;
 
 async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> Router {
     let settings = create_settings();
@@ -29,7 +29,6 @@ async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> Router {
     let settings = Arc::new(settings);
     let state = AppState {
         repo,
-        webauthn: create_webauthn(settings.clone()),
         settings: settings.clone(),
         storage: store.clone(),
         worker: worker.clone(),

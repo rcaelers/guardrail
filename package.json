@@ -3,17 +3,22 @@
     "surrealkit:setup": "surrealkit setup",
     "surrealkit:sync": "surrealkit sync",
     "surrealkit:test": "surrealkit test",
-    "surrealkit:status": "surrealkit rollout status"
+    "surrealkit:status": "surrealkit rollout status",
+    "web:islands:build": "vite build --config src/web/ui/vite.config.mjs",
+    "web:islands:watch": "vite build --watch --config src/web/ui/vite.config.mjs"
   },
   "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^6.2.1",
     "@tailwindcss/typography": "^0.5.19",
     "daisyui": "^5.5.19",
+    "svelte": "^5.38.8",
     "tailwindcss": "^4.2.2"
   },
   "optionalDependencies": {
     "fsevents": "^2.3.3"
   },
   "dependencies": {
-    "@tailwindcss/cli": "^4.2.2"
+    "@tailwindcss/cli": "^4.2.2",
+    "vite": "^7.1.7"
   }
 }

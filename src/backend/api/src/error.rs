@@ -6,7 +6,6 @@ use axum::{
 };
 use thiserror::Error;
 use tracing::error;
-use webauthn_rs::prelude::WebauthnError;
 
 #[derive(Error, Debug)]
 pub enum ApiError {
@@ -42,15 +41,6 @@ pub enum ApiError {
 
     #[error("database error: `{0}`")]
     RepoError(#[from] repos::error::RepoError),
-
-    #[error("Corrupt session")]
-    CorruptSession,
-
-    #[error("Deserialising session failed: {0}")]
-    InvalidSession(#[from] tower_sessions::session::Error),
-
-    #[error("Webauthn error: `{0}`")]
-    WebauthnError(#[from] WebauthnError),
 }
 
 impl IntoResponse for ApiError {
@@ -87,17 +77,6 @@ impl IntoResponse for ApiError {
                 (StatusCode::BAD_REQUEST, err.to_string())
             }
             ApiError::RepoError(err) => (StatusCode::BAD_REQUEST, err.to_string()),
-            ApiError::CorruptSession => {
-                (StatusCode::INTERNAL_SERVER_ERROR, "corrupt session".to_string())
-            }
-            ApiError::InvalidSession(err) => {
-                error!("invalid session: {:?}", err);
-                (StatusCode::INTERNAL_SERVER_ERROR, "invalid session".to_string())
-            }
-            ApiError::WebauthnError(err) => {
-                error!("webauthn error: {:?}", err);
-                (StatusCode::INTERNAL_SERVER_ERROR, format!("webauthn error: {err}"))
-            }
         };
 
         let body = Json(serde_json::json!({

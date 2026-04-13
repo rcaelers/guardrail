@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ title }} · {{ app_name }}</title>
+    <link rel="stylesheet" href="/static/css/site.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="topbar">
+        <div>
+          <a class="brand" href="/">{{ app_name }}</a>
+        </div>
+        <nav class="nav">
+          {% if auth.is_authenticated() %}
+          <span class="user">{{ auth.current_username() }}</span>
+          <form method="post" action="/auth/logout">
+            <button type="submit">Log out</button>
+          </form>
+          {% else %}
+          <a href="/auth/login">Log in</a>
+          {% endif %}
+        </nav>
+      </header>
+      <main class="content">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </body>
+</html>

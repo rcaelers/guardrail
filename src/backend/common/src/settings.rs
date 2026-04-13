@@ -3,10 +3,6 @@ use glob::glob;
 use natord::compare as natord_compare;
 use serde::Deserialize;
 
-fn default_true() -> bool {
-    true
-}
-
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum ValidationScript {
@@ -17,8 +13,6 @@ pub enum ValidationScript {
 #[derive(Debug, Deserialize, Default)]
 pub struct ApiServer {
     pub port: u16,
-    #[serde(default = "default_true")]
-    pub enable_webauthn: bool,
     pub public_key: Option<String>,
     pub private_key: Option<String>,
 }
