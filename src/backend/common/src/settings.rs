@@ -57,6 +57,17 @@ pub struct Auth {
     pub origin: String,
     pub name: String,
     pub jwk: Jwk,
+    pub oidc: Oidc,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct Oidc {
+    pub issuer_url: String,
+    pub client_id: String,
+    pub client_secret: String,
+    pub callback_url: String,
+    pub logout_callback_url: String,
+    pub launch_url: String,
 }
 
 #[derive(Debug, Deserialize, Default)]

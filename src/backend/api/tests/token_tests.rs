@@ -94,7 +94,10 @@ async fn test_token_jwt_admin_ok() {
     assert_eq!(decoded_jwt.claims["ac"].as_str().unwrap(), "guardrail_api");
     assert_eq!(decoded_jwt.claims["ns"].as_str().unwrap(), state.settings.database.namespace);
     assert_eq!(decoded_jwt.claims["db"].as_str().unwrap(), state.settings.database.database);
-    assert!(decoded_jwt.claims.get("id").is_none() || decoded_jwt.claims["id"].is_null(), "admin token should have no id claim");
+    assert!(
+        decoded_jwt.claims.get("id").is_none() || decoded_jwt.claims["id"].is_null(),
+        "admin token should have no id claim"
+    );
 }
 
 #[tokio::test]
@@ -149,10 +152,7 @@ async fn test_token_jwt_user_ok() {
     assert_eq!(decoded_jwt.claims["ac"].as_str().unwrap(), "guardrail_api");
     assert_eq!(decoded_jwt.claims["ns"].as_str().unwrap(), state.settings.database.namespace);
     assert_eq!(decoded_jwt.claims["db"].as_str().unwrap(), state.settings.database.database);
-    assert_eq!(
-        decoded_jwt.claims["id"].as_str().unwrap(),
-        format!("users:{}", user.id),
-    );
+    assert_eq!(decoded_jwt.claims["id"].as_str().unwrap(), format!("users:{}", user.id),);
 }
 
 #[tokio::test]
@@ -163,14 +163,9 @@ async fn test_token_jwt_invalid_token() {
     let product =
         create_test_product_with_details(&db, "TestProduct", "Test product description").await;
 
-    let (token_nok, _) = create_test_token(
-        &db,
-        "Test Minidump Token",
-        Some(product.id),
-        None,
-        &["minidump-upload"],
-    )
-    .await;
+    let (token_nok, _) =
+        create_test_token(&db, "Test Minidump Token", Some(product.id), None, &["minidump-upload"])
+            .await;
 
     let request = Request::builder()
         .method("POST")

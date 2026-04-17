@@ -3,9 +3,9 @@ use axum::body::Bytes;
 use axum::extract::multipart::Field;
 use futures::{Stream, StreamExt, TryStreamExt};
 use object_store::{ObjectStore, path::Path};
+use std::sync::Arc;
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
-use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use tokio::io::{self};
 use tokio_util::io::StreamReader;
@@ -105,7 +105,10 @@ pub async fn get_product(db: &Surreal<Any>, product_name: &str) -> Result<Produc
         })
 }
 
-pub async fn get_product_by_id(db: &Surreal<Any>, product_id: uuid::Uuid) -> Result<Product, ApiError> {
+pub async fn get_product_by_id(
+    db: &Surreal<Any>,
+    product_id: uuid::Uuid,
+) -> Result<Product, ApiError> {
     ProductRepo::get_by_id(db, product_id)
         .await
         .map_err(|_| {

@@ -12,6 +12,7 @@ use surrealdb::opt::auth::Root;
 use tracing::{debug, error, info};
 
 use common::jobs::queue;
+use common::retry_startup;
 use common::settings::Settings;
 use repos::Repo;
 
@@ -58,33 +59,41 @@ impl GuardrailCuratorApp {
 
     /// Bootstrap from settings: connect to SurrealDB, Valkey, and S3, then build internal state.
     pub async fn from_settings(settings: Arc<Settings>) -> Self {
-        let db = surrealdb::engine::any::connect(&settings.database.endpoint)
-            .await
-            .expect("Failed to connect to SurrealDB");
+        let db = retry_startup("SurrealDB", || {
+            let settings = settings.clone();
+            async move {
+                let db = surrealdb::engine::any::connect(&settings.database.endpoint).await?;
 
-        db.signin(Root {
-            username: settings.database.username.clone(),
-            password: settings.database.password.clone(),
+                db.signin(Root {
+                    username: settings.database.username.clone(),
+                    password: settings.database.password.clone(),
+                })
+                .await?;
+
+                db.use_ns(&settings.database.namespace)
+                    .use_db(&settings.database.database)
+                    .await?;
+
+                Ok::<_, surrealdb::Error>(db)
+            }
         })
-        .await
-        .expect("Failed to sign in to SurrealDB");
-
-        db.use_ns(&settings.database.namespace)
-            .use_db(&settings.database.database)
-            .await
-            .expect("Failed to select namespace/database");
+        .await;
 
         info!("Connected to SurrealDB at {}", settings.database.endpoint);
 
-        let conn = apalis_redis::connect(settings.valkey.uri.clone())
-            .await
-            .expect("Failed to connect to Valkey (apalis)");
+        let conn = retry_startup("Valkey (apalis)", || {
+            let uri = settings.valkey.uri.clone();
+            async move { apalis_redis::connect(uri).await }
+        })
+        .await;
 
         let redis_client = redis::Client::open(settings.valkey.uri.as_str())
             .expect("Failed to create Redis client");
-        let redis_manager = redis::aio::ConnectionManager::new(redis_client)
-            .await
-            .expect("Failed to create Redis connection manager");
+        let redis_manager = retry_startup("Valkey (redis)", || {
+            let redis_client = redis_client.clone();
+            async move { redis::aio::ConnectionManager::new(redis_client).await }
+        })
+        .await;
 
         let store = common::init_s3_object_store(settings.clone()).await;
         let repo = Repo::new(db);

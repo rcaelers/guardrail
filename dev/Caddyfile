@@ -1,0 +1,8 @@
+{
+  admin off
+}
+
+https://guardrail.home.krandor.org:1443 {
+  tls internal
+  reverse_proxy pocket-id:1411
+}

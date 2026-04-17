@@ -50,7 +50,8 @@ impl AttachmentsRepo {
     ) -> Result<uuid::Uuid, RepoError> {
         let id = uuid::Uuid::new_v4();
         let _: Option<serde_json::Value> = db
-            .query("CREATE type::record('attachments', $id) CONTENT {
+            .query(
+                "CREATE type::record('attachments', $id) CONTENT {
                 name: $name,
                 mime_type: $mime_type,
                 size: $size,
@@ -60,7 +61,8 @@ impl AttachmentsRepo {
                 product_id: $product_id,
                 created_at: time::now(),
                 updated_at: time::now(),
-            }")
+            }",
+            )
             .bind(("id", id.to_string()))
             .bind(("name", attachment.name.clone()))
             .bind(("mime_type", attachment.mime_type.clone()))
@@ -81,13 +83,15 @@ impl AttachmentsRepo {
         attachment: Attachment,
     ) -> Result<Option<uuid::Uuid>, RepoError> {
         let mut result = db
-            .query("UPDATE type::record('attachments', $id) SET
+            .query(
+                "UPDATE type::record('attachments', $id) SET
                 name = $name,
                 mime_type = $mime_type,
                 size = $size,
                 filename = $filename,
                 updated_at = time::now()
-            RETURN meta::id(id) as id")
+            RETURN meta::id(id) as id",
+            )
             .bind(("id", attachment.id.to_string()))
             .bind(("name", attachment.name.clone()))
             .bind(("mime_type", attachment.mime_type.clone()))
@@ -103,10 +107,7 @@ impl AttachmentsRepo {
         }))
     }
 
-    pub async fn remove(
-        db: &Surreal<Any>,
-        id: uuid::Uuid,
-    ) -> Result<(), RepoError> {
+    pub async fn remove(db: &Surreal<Any>, id: uuid::Uuid) -> Result<(), RepoError> {
         db.query("DELETE type::record('attachments', $id)")
             .bind(("id", id.to_string()))
             .await
@@ -114,9 +115,7 @@ impl AttachmentsRepo {
         Ok(())
     }
 
-    pub async fn count(
-        db: &Surreal<Any>,
-    ) -> Result<i64, RepoError> {
+    pub async fn count(db: &Surreal<Any>) -> Result<i64, RepoError> {
         let mut result = db
             .query("SELECT count() as count FROM attachments GROUP ALL")
             .await

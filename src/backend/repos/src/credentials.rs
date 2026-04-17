@@ -1,6 +1,6 @@
+use chrono::Utc;
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
-use chrono::Utc;
 
 use crate::error::{RepoError, handle_surreal_error};
 use data::credentials::{Credential, NewCredential};
@@ -39,14 +39,16 @@ impl CredentialsRepo {
         let id = uuid::Uuid::new_v4();
         let now = Utc::now();
         let _: Option<serde_json::Value> = db
-            .query("CREATE type::record('credentials', $id) CONTENT {
+            .query(
+                "CREATE type::record('credentials', $id) CONTENT {
                 user_id: $user_id,
                 name: 'fixme',
                 data: $data,
                 last_used: $last_used,
                 created_at: time::now(),
                 updated_at: time::now(),
-            }")
+            }",
+            )
             .bind(("id", id.to_string()))
             .bind(("user_id", credentials.user_id))
             .bind(("data", credentials.data.clone()))
@@ -65,11 +67,13 @@ impl CredentialsRepo {
     ) -> Result<Option<uuid::Uuid>, RepoError> {
         let now = Utc::now();
         let mut result = db
-            .query("UPDATE type::record('credentials', $id) SET
+            .query(
+                "UPDATE type::record('credentials', $id) SET
                 data = $data,
                 last_used = $last_used,
                 updated_at = time::now()
-            RETURN meta::id(id) as id")
+            RETURN meta::id(id) as id",
+            )
             .bind(("id", id.to_string()))
             .bind(("data", data.clone()))
             .bind(("last_used", now))

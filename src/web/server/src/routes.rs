@@ -13,52 +13,41 @@ use crate::{
     AppState,
     auth::AuthSession,
     error::{AppError, AppResult},
-    templates::{HomeTemplate, LoginTemplate},
-    webauthn,
+    oidc,
+    templates::HomeTemplate,
 };
 
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(home))
-        .route("/auth/login", get(login_page))
+        .route("/auth/login", get(oidc::login_start))
+        .route("/auth/login/start", get(oidc::login_start))
+        .route("/auth/oidc/callback", get(oidc::callback))
         .route("/auth/logout", post(logout))
-        .route("/auth/register_start/{username}", post(webauthn::start_register))
-        .route("/auth/register_finish", post(webauthn::finish_register))
-        .route(
-            "/auth/authenticate_start/{username}",
-            post(webauthn::start_authentication),
-        )
-        .route(
-            "/auth/authenticate_finish",
-            post(webauthn::finish_authentication),
-        )
 }
 
-async fn home(State(state): State<AppState>, session: Session) -> AppResult<Html<String>> {
+#[derive(Debug, Deserialize)]
+struct HomeQuery {
+    next: Option<String>,
+    error: Option<String>,
+}
+
+async fn home(
+    State(state): State<AppState>,
+    session: Session,
+    Query(query): Query<HomeQuery>,
+) -> AppResult<Html<String>> {
     let auth = auth_session(&session).await;
+    let next = oidc::sanitize_next(query.next.as_deref());
+    let error = query.error.unwrap_or_default();
+    let has_error = !error.is_empty();
     render(HomeTemplate {
         title: "Guardrail",
         app_name: state.settings.auth.name.as_str(),
         auth,
-    })
-}
-
-#[derive(Debug, Deserialize)]
-struct LoginQuery {
-    next: Option<String>,
-}
-
-async fn login_page(
-    State(state): State<AppState>,
-    session: Session,
-    Query(query): Query<LoginQuery>,
-) -> AppResult<Html<String>> {
-    let auth = auth_session(&session).await;
-    render(LoginTemplate {
-        title: "Sign in",
-        app_name: state.settings.auth.name.as_str(),
-        auth,
-        next: query.next.unwrap_or_else(|| "/".to_string()),
+        error,
+        has_error,
+        login_url: oidc::login_start_path(Some(next.as_str())),
     })
 }
 

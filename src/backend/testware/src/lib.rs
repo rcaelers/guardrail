@@ -379,19 +379,18 @@ pub fn create_e2e_settings() -> Settings {
     // Use a unique database name per test for isolation
     let db_name = format!("e2e_{}", Uuid::new_v4().to_string().replace('-', ""));
 
-    settings.database.endpoint = std::env::var("SURREALDB_ENDPOINT")
-        .unwrap_or_else(|_| "ws://localhost:8000".to_string());
+    settings.database.endpoint =
+        std::env::var("SURREALDB_ENDPOINT").unwrap_or_else(|_| "ws://localhost:8000".to_string());
     settings.database.namespace = "guardrail".to_string();
     settings.database.database = db_name;
     settings.database.username = "root".to_string();
     settings.database.password = "root".to_string();
 
-    settings.valkey.uri = std::env::var("VALKEY_URI")
-        .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    settings.valkey.uri =
+        std::env::var("VALKEY_URI").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
 
     settings.object_storage.endpoint = Some(
-        std::env::var("MINIO_ENDPOINT")
-            .unwrap_or_else(|_| "http://localhost:9000".to_string()),
+        std::env::var("MINIO_ENDPOINT").unwrap_or_else(|_| "http://localhost:9000".to_string()),
     );
     settings.object_storage.bucket = "guardrail".to_string();
     settings.object_storage.region = Some("us-east-1".to_string());

@@ -93,9 +93,8 @@ async fn ensure_default_api_token(repo: &Repo) -> Result<(), Box<dyn std::error:
 #[tokio::main]
 async fn main() {
     let args = CliArgs::parse();
-    let settings = Arc::new(
-        Settings::with_config_dir(&args.config_dir).expect("Failed to load settings"),
-    );
+    let settings =
+        Arc::new(Settings::with_config_dir(&args.config_dir).expect("Failed to load settings"));
 
     init_logging().await;
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();

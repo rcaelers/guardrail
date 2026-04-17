@@ -11,8 +11,8 @@ use std::task::{Context, Poll};
 use tower::{Layer, Service};
 use tracing::{error, info};
 
-use common::token::{decode_api_token, verify_api_secret};
 use crate::state::AppState;
+use common::token::{decode_api_token, verify_api_secret};
 use repos::api_token::ApiTokenRepo;
 
 #[derive(Clone)]
@@ -151,7 +151,8 @@ where
                 }
             };
 
-            let api_token = match ApiTokenRepo::get_by_token_id(&app_state.repo.db, token_id).await {
+            let api_token = match ApiTokenRepo::get_by_token_id(&app_state.repo.db, token_id).await
+            {
                 Ok(Some(api_token)) => api_token,
                 Ok(None) => {
                     return Ok(Response::builder()
@@ -249,7 +250,8 @@ where
                     .unwrap());
             }
 
-            if let Err(err) = ApiTokenRepo::update_last_used(&app_state.repo.db, api_token.id).await {
+            if let Err(err) = ApiTokenRepo::update_last_used(&app_state.repo.db, api_token.id).await
+            {
                 error!("Failed to update last_used_at: {}", err);
             }
 

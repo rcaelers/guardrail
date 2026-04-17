@@ -30,7 +30,9 @@ impl AuthenticatedUser {
     }
 }
 
-use std::{collections::VecDeque, future::Future, io::IsTerminal, ops::Range, sync::Arc, time::Duration};
+use std::{
+    collections::VecDeque, future::Future, io::IsTerminal, ops::Range, sync::Arc, time::Duration,
+};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SortOrder {

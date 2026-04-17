@@ -8,13 +8,7 @@ pub struct HomeTemplate<'a> {
     pub title: &'a str,
     pub app_name: &'a str,
     pub auth: AuthSession,
-}
-
-#[derive(Template)]
-#[template(path = "login.html")]
-pub struct LoginTemplate<'a> {
-    pub title: &'a str,
-    pub app_name: &'a str,
-    pub auth: AuthSession,
-    pub next: String,
+    pub error: String,
+    pub has_error: bool,
+    pub login_url: String,
 }

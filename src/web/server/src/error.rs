@@ -46,7 +46,9 @@ impl IntoResponse for AppError {
             AppError::InternalFailure() => {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal failure".to_string())
             }
-            AppError::Failure(message) => (StatusCode::BAD_REQUEST, format!("general failure: {message}")),
+            AppError::Failure(message) => {
+                (StatusCode::BAD_REQUEST, format!("general failure: {message}"))
+            }
             AppError::NotFound(message) => (StatusCode::NOT_FOUND, format!("not found: {message}")),
             AppError::CorruptSession => (StatusCode::BAD_REQUEST, "corrupt session".to_string()),
         };

@@ -50,7 +50,9 @@ impl TrackedAnnotations {
 
     pub fn get(&self, key: &str) -> Option<AnnotationEntry> {
         match self.data.lock() {
-            Ok(data) => data.modified.get(key)
+            Ok(data) => data
+                .modified
+                .get(key)
                 .or_else(|| data.original.get(key))
                 .cloned(),
             Err(_) => {
@@ -129,7 +131,10 @@ impl TrackedAnnotations {
     pub fn was_modified(&self) -> bool {
         match self.data.lock() {
             Ok(data) => {
-                debug!("Checking if annotations were modified ({} modified entries)", data.modified.len());
+                debug!(
+                    "Checking if annotations were modified ({} modified entries)",
+                    data.modified.len()
+                );
                 !data.modified.is_empty()
             }
             Err(_) => {

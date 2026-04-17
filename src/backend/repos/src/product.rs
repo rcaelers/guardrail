@@ -25,10 +25,7 @@ impl ProductRepo {
         crate::take_one(&mut result, 0)
     }
 
-    pub async fn get_by_name(
-        db: &Surreal<Any>,
-        name: &str,
-    ) -> Result<Option<Product>, RepoError> {
+    pub async fn get_by_name(db: &Surreal<Any>, name: &str) -> Result<Option<Product>, RepoError> {
         let mut result = db
             .query("SELECT *, meta::id(id) as id FROM products WHERE name = $name LIMIT 1")
             .bind(("name", name.to_owned()))
@@ -38,9 +35,7 @@ impl ProductRepo {
         Ok(products.into_iter().next())
     }
 
-    pub async fn get_all_names(
-        db: &Surreal<Any>,
-    ) -> Result<HashSet<String>, RepoError> {
+    pub async fn get_all_names(db: &Surreal<Any>) -> Result<HashSet<String>, RepoError> {
         let mut result = db
             .query("SELECT name FROM products")
             .await
@@ -58,7 +53,15 @@ impl ProductRepo {
     ) -> Result<Vec<Product>, RepoError> {
         let suffix = Repo::build_query_suffix(
             &params,
-            &["id", "name", "description", "accepting_crashes", "metadata", "created_at", "updated_at"],
+            &[
+                "id",
+                "name",
+                "description",
+                "accepting_crashes",
+                "metadata",
+                "created_at",
+                "updated_at",
+            ],
             &["name", "description"],
         )?;
 
@@ -73,20 +76,19 @@ impl ProductRepo {
         crate::take_many(&mut result, 0)
     }
 
-    pub async fn create(
-        db: &Surreal<Any>,
-        product: NewProduct,
-    ) -> Result<uuid::Uuid, RepoError> {
+    pub async fn create(db: &Surreal<Any>, product: NewProduct) -> Result<uuid::Uuid, RepoError> {
         let id = uuid::Uuid::new_v4();
         let _: Option<serde_json::Value> = db
-            .query("CREATE type::record('products', $id) CONTENT {
+            .query(
+                "CREATE type::record('products', $id) CONTENT {
                 name: $name,
                 description: $description,
                 accepting_crashes: true,
                 metadata: $metadata,
                 created_at: time::now(),
                 updated_at: time::now(),
-            }")
+            }",
+            )
             .bind(("id", id.to_string()))
             .bind(("name", product.name.clone()))
             .bind(("description", product.description.clone()))
@@ -103,13 +105,15 @@ impl ProductRepo {
         product: Product,
     ) -> Result<Option<uuid::Uuid>, RepoError> {
         let mut result = db
-            .query("UPDATE type::record('products', $id) SET
+            .query(
+                "UPDATE type::record('products', $id) SET
                 name = $name,
                 description = $description,
                 accepting_crashes = $accepting_crashes,
                 metadata = $metadata,
                 updated_at = time::now()
-            RETURN meta::id(id) as id")
+            RETURN meta::id(id) as id",
+            )
             .bind(("id", product.id.to_string()))
             .bind(("name", product.name.clone()))
             .bind(("description", product.description.clone()))
@@ -125,10 +129,7 @@ impl ProductRepo {
         }))
     }
 
-    pub async fn remove(
-        db: &Surreal<Any>,
-        id: uuid::Uuid,
-    ) -> Result<(), RepoError> {
+    pub async fn remove(db: &Surreal<Any>, id: uuid::Uuid) -> Result<(), RepoError> {
         db.query("DELETE type::record('products', $id)")
             .bind(("id", id.to_string()))
             .await
@@ -136,9 +137,7 @@ impl ProductRepo {
         Ok(())
     }
 
-    pub async fn count(
-        db: &Surreal<Any>,
-    ) -> Result<i64, RepoError> {
+    pub async fn count(db: &Surreal<Any>) -> Result<i64, RepoError> {
         let mut result = db
             .query("SELECT count() as count FROM products GROUP ALL")
             .await

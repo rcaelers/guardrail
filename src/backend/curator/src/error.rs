@@ -20,7 +20,6 @@ pub enum JobError {
 
     // #[error("failed to process minidump: `{0}'")]
     // MinidumpProcessError(#[from] ProcessError),
-
     #[error("Regex error: {0}")]
     Regex(Box<fancy_regex::Error>),
 }

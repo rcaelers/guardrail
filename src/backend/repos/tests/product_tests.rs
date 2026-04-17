@@ -241,8 +241,7 @@ async fn test_update_non_existent() {
 #[tokio::test]
 async fn test_remove() {
     let db = TestSetup::create_db().await;
-    let product =
-        create_test_product_with_details(&db, "DeleteProduct", "Product to delete").await;
+    let product = create_test_product_with_details(&db, "DeleteProduct", "Product to delete").await;
 
     ProductRepo::remove(&db, product.id)
         .await

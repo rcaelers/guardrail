@@ -2,9 +2,9 @@ use apalis::prelude::Data;
 use bytes::Bytes;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path};
 use serde_json::Value;
+use std::sync::Arc;
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
-use std::sync::Arc;
 use tracing::{error, info, instrument};
 
 use crate::error::JobError;
@@ -34,10 +34,7 @@ impl ImportSymbolProcessor {
             .get(&Path::from(path.as_str()))
             .await
             .map_err(|err| {
-                error!(
-                    "Failed to get processed symbol object from {}: {err}",
-                    path
-                );
+                error!("Failed to get processed symbol object from {}: {err}", path);
                 JobError::Failure("Failed to retrieve processed symbol".to_string())
             })?;
         let data = object.bytes().await.map_err(|err| {
@@ -130,10 +127,7 @@ impl ImportSymbolProcessor {
         info!("Incoming import symbol job");
         let processor = ImportSymbolProcessor::new(state.clone());
         processor.handle_job(job.symbol_upload_id).await?;
-        info!(
-            "Successfully imported symbol upload: {}",
-            job.symbol_upload_id
-        );
+        info!("Successfully imported symbol upload: {}", job.symbol_upload_id);
 
         Ok(())
     }

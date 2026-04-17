@@ -17,4 +17,3 @@ pub struct NewCredential {
     pub user_id: uuid::Uuid,
     pub data: serde_json::Value,
 }
-

@@ -31,7 +31,8 @@ fn test_annotation_source_try_from_valid_str() {
 
 #[test]
 fn test_annotation_source_try_from_with_casing() {
-    let system_source = AnnotationSource::try_from("SUBMISSION").expect("Failed to parse 'SUBMISSION'");
+    let system_source =
+        AnnotationSource::try_from("SUBMISSION").expect("Failed to parse 'SUBMISSION'");
     let user_source = AnnotationSource::try_from("User").expect("Failed to parse 'User'");
     let script_source = AnnotationSource::try_from("SCRIPT").expect("Failed to parse 'SCRIPT'");
 
@@ -47,7 +48,9 @@ fn test_annotation_source_try_from_invalid_str() {
     assert_eq!(result.unwrap_err(), "Invalid annotation source: invalid");
 }
 
-async fn create_test_annotation(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> (NewAnnotation, Uuid, Uuid) {
+async fn create_test_annotation(
+    db: &surrealdb::Surreal<surrealdb::engine::any::Any>,
+) -> (NewAnnotation, Uuid, Uuid) {
     let product = create_test_product(db).await;
     let crash = create_test_crash(db, None, Some(product.id)).await;
 

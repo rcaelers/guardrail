@@ -35,14 +35,10 @@ impl ProductCache {
         match &self.backend {
             Backend::Redis(conn) => {
                 let key = product_cache_key(name);
-                let json: Option<String> = conn
-                    .clone()
-                    .get(&key)
-                    .await
-                    .map_err(|e| {
-                        error!(error = ?e, "Failed to get product from Valkey");
-                        ApiError::Failure("failed to get product info".to_string())
-                    })?;
+                let json: Option<String> = conn.clone().get(&key).await.map_err(|e| {
+                    error!(error = ?e, "Failed to get product from Valkey");
+                    ApiError::Failure("failed to get product info".to_string())
+                })?;
 
                 match json {
                     Some(j) => {

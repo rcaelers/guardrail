@@ -9,9 +9,9 @@ pub mod symbols;
 pub mod user;
 
 use serde::de::DeserializeOwned;
+use surrealdb::IndexedResults;
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
-use surrealdb::IndexedResults;
 use tracing::error;
 
 use crate::error::{RepoError, handle_surreal_error};
@@ -31,8 +31,7 @@ pub fn take_one<T: DeserializeOwned>(
     let val: Option<serde_json::Value> = result.take(index).map_err(handle_surreal_error)?;
     match val {
         Some(v) => Ok(Some(
-            serde_json::from_value(v)
-                .map_err(|e| RepoError::DatabaseError(e.to_string()))?,
+            serde_json::from_value(v).map_err(|e| RepoError::DatabaseError(e.to_string()))?,
         )),
         None => Ok(None),
     }
@@ -65,9 +64,7 @@ impl Repo {
 
         let db = self.db.clone(); // new session id
         let token = Token::from(jwt);
-        db.authenticate(token)
-            .await
-            .map_err(handle_surreal_error)?;
+        db.authenticate(token).await.map_err(handle_surreal_error)?;
         Ok(db)
     }
 
@@ -81,9 +78,7 @@ impl Repo {
         if let Some(_filter) = &params.filter {
             if filter_columns.is_empty() {
                 error!("No filter columns specified but filter was provided");
-                return Err(RepoError::InvalidColumn(
-                    "No filter columns specified".to_string(),
-                ));
+                return Err(RepoError::InvalidColumn("No filter columns specified".to_string()));
             }
 
             suffix.push_str(" WHERE ");
@@ -93,9 +88,7 @@ impl Repo {
                     if !allowed_columns.contains(col) {
                         return Err(RepoError::InvalidColumn(col.to_string()));
                     }
-                    Ok(format!(
-                        "string::lowercase({col}) CONTAINS string::lowercase($filter)"
-                    ))
+                    Ok(format!("string::lowercase({col}) CONTAINS string::lowercase($filter)"))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
             suffix.push_str(&conditions.join(" OR "));

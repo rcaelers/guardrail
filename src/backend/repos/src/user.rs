@@ -13,10 +13,7 @@ use data::user::{NewUser, User};
 pub struct UserRepo {}
 
 impl UserRepo {
-    pub async fn get_by_id(
-        db: &Surreal<Any>,
-        id: uuid::Uuid,
-    ) -> Result<Option<User>, RepoError> {
+    pub async fn get_by_id(db: &Surreal<Any>, id: uuid::Uuid) -> Result<Option<User>, RepoError> {
         let mut result = db
             .query("SELECT *, meta::id(id) as id FROM ONLY type::record('users', $id)")
             .bind(("id", id.to_string()))
@@ -25,10 +22,7 @@ impl UserRepo {
         crate::take_one(&mut result, 0)
     }
 
-    pub async fn get_by_name(
-        db: &Surreal<Any>,
-        username: &str,
-    ) -> Result<Option<User>, RepoError> {
+    pub async fn get_by_name(db: &Surreal<Any>, username: &str) -> Result<Option<User>, RepoError> {
         let mut result = db
             .query("SELECT *, meta::id(id) as id FROM users WHERE username = $username LIMIT 1")
             .bind(("username", username.to_owned()))
@@ -38,9 +32,7 @@ impl UserRepo {
         Ok(users.into_iter().next())
     }
 
-    pub async fn get_all_names(
-        db: &Surreal<Any>,
-    ) -> Result<HashSet<String>, RepoError> {
+    pub async fn get_all_names(db: &Surreal<Any>) -> Result<HashSet<String>, RepoError> {
         let mut result = db
             .query("SELECT username FROM users")
             .await
@@ -52,10 +44,7 @@ impl UserRepo {
             .collect())
     }
 
-    pub async fn get_all(
-        db: &Surreal<Any>,
-        params: QueryParams,
-    ) -> Result<Vec<User>, RepoError> {
+    pub async fn get_all(db: &Surreal<Any>, params: QueryParams) -> Result<Vec<User>, RepoError> {
         let suffix = Repo::build_query_suffix(
             &params,
             &["id", "username", "created_at", "updated_at"],
@@ -79,12 +68,14 @@ impl UserRepo {
         username: &str,
     ) -> Result<uuid::Uuid, RepoError> {
         let _: Option<serde_json::Value> = db
-            .query("CREATE type::record('users', $id) CONTENT {
+            .query(
+                "CREATE type::record('users', $id) CONTENT {
                 username: $username,
                 is_admin: false,
                 created_at: time::now(),
                 updated_at: time::now(),
-            }")
+            }",
+            )
             .bind(("id", id.to_string()))
             .bind(("username", username.to_owned()))
             .await
@@ -94,18 +85,17 @@ impl UserRepo {
         Ok(id)
     }
 
-    pub async fn create(
-        db: &Surreal<Any>,
-        user: NewUser,
-    ) -> Result<uuid::Uuid, RepoError> {
+    pub async fn create(db: &Surreal<Any>, user: NewUser) -> Result<uuid::Uuid, RepoError> {
         let id = uuid::Uuid::new_v4();
         let _: Option<serde_json::Value> = db
-            .query("CREATE type::record('users', $id) CONTENT {
+            .query(
+                "CREATE type::record('users', $id) CONTENT {
                 username: $username,
                 is_admin: $is_admin,
                 created_at: time::now(),
                 updated_at: time::now(),
-            }")
+            }",
+            )
             .bind(("id", id.to_string()))
             .bind(("username", user.username.clone()))
             .bind(("is_admin", user.is_admin))
@@ -116,16 +106,15 @@ impl UserRepo {
         Ok(id)
     }
 
-    pub async fn update(
-        db: &Surreal<Any>,
-        user: User,
-    ) -> Result<Option<uuid::Uuid>, RepoError> {
+    pub async fn update(db: &Surreal<Any>, user: User) -> Result<Option<uuid::Uuid>, RepoError> {
         let mut result = db
-            .query("UPDATE type::record('users', $id) SET
+            .query(
+                "UPDATE type::record('users', $id) SET
                 username = $username,
                 is_admin = $is_admin,
                 updated_at = time::now()
-            RETURN meta::id(id) as id")
+            RETURN meta::id(id) as id",
+            )
             .bind(("id", user.id.to_string()))
             .bind(("username", user.username.clone()))
             .bind(("is_admin", user.is_admin))
@@ -139,10 +128,7 @@ impl UserRepo {
         }))
     }
 
-    pub async fn remove(
-        db: &Surreal<Any>,
-        id: uuid::Uuid,
-    ) -> Result<(), RepoError> {
+    pub async fn remove(db: &Surreal<Any>, id: uuid::Uuid) -> Result<(), RepoError> {
         db.query("DELETE type::record('users', $id)")
             .bind(("id", id.to_string()))
             .await
@@ -150,9 +136,7 @@ impl UserRepo {
         Ok(())
     }
 
-    pub async fn count(
-        db: &Surreal<Any>,
-    ) -> Result<i64, RepoError> {
+    pub async fn count(db: &Surreal<Any>) -> Result<i64, RepoError> {
         let mut result = db
             .query("SELECT count() as count FROM users GROUP ALL")
             .await

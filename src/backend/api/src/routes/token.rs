@@ -15,18 +15,18 @@ pub struct JwtClaims {
     pub username: String, // Username
     pub user_id: Option<uuid::Uuid>,
     pub is_admin: bool,
-    pub role: String,     // Role (e.g., "admin")
-    pub sub: String,      // Subject (username)
-    pub iss: String,      // Issuer
-    pub aud: String,      // Audience (product_id if available)
-    pub exp: i64,         // Expiration time
-    pub iat: i64,         // Issued at time
+    pub role: String, // Role (e.g., "admin")
+    pub sub: String,  // Subject (username)
+    pub iss: String,  // Issuer
+    pub aud: String,  // Audience (product_id if available)
+    pub exp: i64,     // Expiration time
+    pub iat: i64,     // Issued at time
     // SurrealDB record-access claims (allow this JWT to authenticate with SurrealDB)
-    pub ac: String,                // Access method name
-    pub ns: String,                // SurrealDB namespace
-    pub db: String,                // SurrealDB database
+    pub ac: String, // Access method name
+    pub ns: String, // SurrealDB namespace
+    pub db: String, // SurrealDB database
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub id: Option<String>,        // SurrealDB record id (e.g. "users:uuid")
+    pub id: Option<String>, // SurrealDB record id (e.g. "users:uuid")
 }
 
 /// The SurrealDB access method name used for JWT-based record authentication.

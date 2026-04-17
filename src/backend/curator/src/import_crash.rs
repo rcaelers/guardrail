@@ -2,13 +2,13 @@ use apalis::prelude::Data;
 use bytes::Bytes;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path};
 use serde_json::Value;
+use std::sync::Arc;
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
-use std::sync::Arc;
 use tracing::{error, info, instrument};
 
-use crate::jobs::ImportCrashJob;
 use crate::error::JobError;
+use crate::jobs::ImportCrashJob;
 use crate::state::AppState;
 use data::{annotation::NewAnnotation, attachment::NewAttachment, crash::NewCrash};
 use repos::{
@@ -160,12 +160,10 @@ impl ImportCrashProcessor {
                 value: value.to_string(),
             };
 
-            AnnotationsRepo::create(db, annotation)
-                .await
-                .map_err(|e| {
-                    error!("Failed to create annotation: {:?}", e);
-                    JobError::Failure("failed to create annotation".to_string())
-                })?;
+            AnnotationsRepo::create(db, annotation).await.map_err(|e| {
+                error!("Failed to create annotation: {:?}", e);
+                JobError::Failure("failed to create annotation".to_string())
+            })?;
         }
 
         Ok(())
@@ -206,12 +204,10 @@ impl ImportCrashProcessor {
                 size: size as i64,
             };
 
-            AttachmentsRepo::create(db, attachment)
-                .await
-                .map_err(|e| {
-                    error!("Failed to create attachment: {:?}", e);
-                    JobError::Failure("failed to create attachment".to_string())
-                })?;
+            AttachmentsRepo::create(db, attachment).await.map_err(|e| {
+                error!("Failed to create attachment: {:?}", e);
+                JobError::Failure("failed to create attachment".to_string())
+            })?;
         }
         Ok(())
     }

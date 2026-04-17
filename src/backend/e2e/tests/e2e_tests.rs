@@ -4,13 +4,13 @@ use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use chrono::Utc;
 use futures::TryStreamExt;
-use object_store::path::Path;
 use object_store::ObjectStore;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::LazyLock;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
+use object_store::path::Path;
 use serde_json::Value;
+use std::sync::Arc;
+use std::sync::LazyLock;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
 use tower::ServiceExt;
@@ -52,8 +52,7 @@ struct TestHarness {
     _cur_handle: tokio::task::JoinHandle<()>,
 }
 
-static TEST_LOCK: LazyLock<tokio::sync::Mutex<()>> =
-    LazyLock::new(|| tokio::sync::Mutex::new(()));
+static TEST_LOCK: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(|| tokio::sync::Mutex::new(()));
 static NEXT_VALKEY_DB: AtomicUsize = AtomicUsize::new(1);
 const PIPELINE_TIMEOUT: Duration = Duration::from_secs(60);
 
@@ -63,7 +62,8 @@ impl TestHarness {
 
         let mut settings = create_e2e_settings();
         let valkey_db = NEXT_VALKEY_DB.fetch_add(1, Ordering::Relaxed);
-        settings.valkey.uri = format!("{}/{}", settings.valkey.uri.trim_end_matches('/'), valkey_db);
+        settings.valkey.uri =
+            format!("{}/{}", settings.valkey.uri.trim_end_matches('/'), valkey_db);
         let settings = Arc::new(settings);
 
         // Verify Docker services are reachable
@@ -81,7 +81,8 @@ impl TestHarness {
         let db = Self::init_db(&settings).await;
 
         let product_name = format!("TestProduct_{}", uuid::Uuid::new_v4().simple());
-        let product = create_test_product_with_details(&db, &product_name, "E2E Test Product").await;
+        let product =
+            create_test_product_with_details(&db, &product_name, "E2E Test Product").await;
         let user = create_test_user(&db, "e2e_tester", false).await;
         let (token, _api_token) = create_test_token(
             &db,
@@ -309,10 +310,7 @@ async fn upload_test_symbols(harness: &TestHarness) {
     let request = Request::builder()
         .method("POST")
         .uri("/api/symbols/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {}", harness.api_token))
         .body(Body::from(body))
         .unwrap();
@@ -375,10 +373,7 @@ fn assert_decoded_report_matches_expected(report: &Value, signature: Option<&str
     assert_eq!(report["crash_info"]["type"], expected["crash_info"]["type"]);
     assert_eq!(report["crash_info"]["address"], expected["crash_info"]["address"]);
     assert_eq!(report["system_info"]["os"], expected["system_info"]["os"]);
-    assert_eq!(
-        report["system_info"]["cpu_arch"],
-        expected["system_info"]["cpu_arch"]
-    );
+    assert_eq!(report["system_info"]["cpu_arch"], expected["system_info"]["cpu_arch"]);
     assert_eq!(report["thread_count"], expected["thread_count"]);
     assert_eq!(
         report["crashing_thread"]["frame_count"],
@@ -409,8 +404,7 @@ fn assert_decoded_report_matches_expected(report: &Value, signature: Option<&str
 
     for frame_index in 0..5 {
         assert_eq!(
-            actual_frames[frame_index]["function"],
-            expected_frames[frame_index]["function"],
+            actual_frames[frame_index]["function"], expected_frames[frame_index]["function"],
             "unexpected function at crashing_thread.frames[{frame_index}]"
         );
         assert_eq!(
@@ -473,10 +467,7 @@ async fn test_e2e_crash_flow() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -522,16 +513,10 @@ async fn test_e2e_crash_flow() {
             .await
             .expect("annotation query failed");
 
-    assert!(
-        !annotations.is_empty(),
-        "expected annotations to be created"
-    );
+    assert!(!annotations.is_empty(), "expected annotations to be created");
 
     let product_annotation = annotations.iter().find(|a| a.key == "product");
-    assert!(
-        product_annotation.is_some(),
-        "expected 'product' annotation"
-    );
+    assert!(product_annotation.is_some(), "expected 'product' annotation");
     assert_eq!(product_annotation.unwrap().value, harness.product_name);
 }
 
@@ -603,10 +588,7 @@ async fn test_e2e_crash_flow_with_attachments() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -656,8 +638,5 @@ async fn test_e2e_crash_flow_with_attachments() {
         .try_collect()
         .await
         .unwrap();
-    assert!(
-        !attachment_objects.is_empty(),
-        "expected attachment files in S3"
-    );
+    assert!(!attachment_objects.is_empty(), "expected attachment files in S3");
 }

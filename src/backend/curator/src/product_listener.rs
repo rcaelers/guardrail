@@ -1,9 +1,9 @@
 use futures::StreamExt;
 use redis::AsyncCommands;
 use redis::aio::ConnectionManager;
+use surrealdb::Notification;
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
-use surrealdb::Notification;
 use tracing::{error, info, warn};
 
 use common::product_info::{ProductInfo, product_cache_key};

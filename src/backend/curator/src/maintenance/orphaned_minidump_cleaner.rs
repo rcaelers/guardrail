@@ -1,8 +1,8 @@
 use futures::stream::TryStreamExt;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path};
+use std::collections::{HashMap, HashSet};
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
-use std::collections::{HashMap, HashSet};
 use tracing::{error, info};
 use uuid::Uuid;
 

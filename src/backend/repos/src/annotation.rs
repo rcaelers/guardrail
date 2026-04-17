@@ -57,7 +57,8 @@ impl AnnotationsRepo {
 
         let id = uuid::Uuid::new_v4();
         let _: Option<serde_json::Value> = db
-            .query("CREATE type::record('annotations', $id) CONTENT {
+            .query(
+                "CREATE type::record('annotations', $id) CONTENT {
                 key: $key,
                 source: $source,
                 value: $value,
@@ -65,7 +66,8 @@ impl AnnotationsRepo {
                 product_id: $product_id,
                 created_at: time::now(),
                 updated_at: time::now(),
-            }")
+            }",
+            )
             .bind(("id", id.to_string()))
             .bind(("key", annotation.key.clone()))
             .bind(("source", annotation.source.clone()))
@@ -91,12 +93,14 @@ impl AnnotationsRepo {
         }
 
         let mut result = db
-            .query("UPDATE type::record('annotations', $id) SET
+            .query(
+                "UPDATE type::record('annotations', $id) SET
                 key = $key,
                 source = $source,
                 value = $value,
                 updated_at = time::now()
-            RETURN meta::id(id) as id")
+            RETURN meta::id(id) as id",
+            )
             .bind(("id", annotation.id.to_string()))
             .bind(("key", annotation.key.clone()))
             .bind(("source", annotation.source.clone()))
@@ -111,10 +115,7 @@ impl AnnotationsRepo {
         }))
     }
 
-    pub async fn remove(
-        db: &Surreal<Any>,
-        id: uuid::Uuid,
-    ) -> Result<(), RepoError> {
+    pub async fn remove(db: &Surreal<Any>, id: uuid::Uuid) -> Result<(), RepoError> {
         db.query("DELETE type::record('annotations', $id)")
             .bind(("id", id.to_string()))
             .await
@@ -122,9 +123,7 @@ impl AnnotationsRepo {
         Ok(())
     }
 
-    pub async fn count(
-        db: &Surreal<Any>,
-    ) -> Result<i64, RepoError> {
+    pub async fn count(db: &Surreal<Any>) -> Result<i64, RepoError> {
         let mut result = db
             .query("SELECT count() as count FROM annotations GROUP ALL")
             .await
@@ -144,11 +143,7 @@ impl AnnotationsRepo {
         let suffix = if !params.sorting.is_empty() || params.range.is_some() {
             let mut p = params.clone();
             p.filter = None;
-            Repo::build_query_suffix(
-                &p,
-                &["id", "key", "source", "value", "created_at"],
-                &[],
-            )?
+            Repo::build_query_suffix(&p, &["id", "key", "source", "value", "created_at"], &[])?
         } else {
             String::new()
         };

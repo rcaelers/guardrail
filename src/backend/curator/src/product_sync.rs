@@ -2,8 +2,8 @@ use redis::AsyncCommands;
 use redis::aio::ConnectionManager;
 use tracing::{error, info};
 
-use common::product_info::{ProductInfo, product_cache_key};
 use common::QueryParams;
+use common::product_info::{ProductInfo, product_cache_key};
 use repos::Repo;
 use repos::product::ProductRepo;
 
@@ -11,11 +11,7 @@ pub async fn sync_products_to_valkey(
     repo: &Repo,
     redis: &mut ConnectionManager,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let products = ProductRepo::get_all(
-        &repo.db,
-        QueryParams::default(),
-    )
-    .await?;
+    let products = ProductRepo::get_all(&repo.db, QueryParams::default()).await?;
 
     for product in &products {
         let info = ProductInfo {

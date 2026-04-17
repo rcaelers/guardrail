@@ -1,20 +1,19 @@
 mod auth;
 mod error;
+mod oidc;
 mod routes;
 mod templates;
-mod webauthn;
 
 use std::{net::SocketAddr, sync::Arc};
 
 use axum::{Router, extract::DefaultBodyLimit, routing::get};
 use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
-use common::{init_logging, settings::Settings};
+use common::{init_logging, retry_startup, settings::Settings};
 use repos::Repo;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer, cookie::SameSite};
 use tracing::info;
-use webauthn_rs::prelude::*;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -27,7 +26,7 @@ struct CliArgs {
 pub struct AppState {
     repo: Repo,
     settings: Arc<Settings>,
-    webauthn: Arc<Webauthn>,
+    http_client: reqwest::Client,
 }
 
 #[tokio::main]
@@ -39,42 +38,45 @@ async fn main() {
     init_logging().await;
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-    let db = surrealdb::engine::any::connect(&settings.database.endpoint)
-        .await
-        .expect("Failed to connect to SurrealDB");
+    let db = retry_startup("SurrealDB", || {
+        let settings = settings.clone();
+        async move {
+            let db = surrealdb::engine::any::connect(&settings.database.endpoint).await?;
 
-    db.signin(surrealdb::opt::auth::Root {
-        username: settings.database.username.clone(),
-        password: settings.database.password.clone(),
+            db.signin(surrealdb::opt::auth::Root {
+                username: settings.database.username.clone(),
+                password: settings.database.password.clone(),
+            })
+            .await?;
+
+            db.use_ns(&settings.database.namespace)
+                .use_db(&settings.database.database)
+                .await?;
+
+            Ok::<_, surrealdb::Error>(db)
+        }
     })
-    .await
-    .expect("Failed to sign in to SurrealDB");
-
-    db.use_ns(&settings.database.namespace)
-        .use_db(&settings.database.database)
-        .await
-        .expect("Failed to select namespace/database");
-
-    let rp_origin = Url::parse(settings.auth.origin.as_str()).expect("Invalid auth origin");
-    let webauthn = Arc::new(
-        WebauthnBuilder::new(settings.auth.id.as_str(), &rp_origin)
-            .expect("Invalid WebAuthn configuration")
-            .rp_name(settings.auth.name.as_str())
-            .build()
-            .expect("Invalid WebAuthn configuration"),
-    );
+    .await;
 
     let state = AppState {
         repo: Repo::new(db),
         settings: settings.clone(),
-        webauthn,
+        http_client: reqwest::Client::builder()
+            .build()
+            .expect("Failed to build HTTP client"),
     };
+
+    let use_secure_cookies = settings
+        .web_server
+        .public_key
+        .as_deref()
+        .is_some_and(|pem| !pem.is_empty());
 
     let session_layer = SessionManagerLayer::new(MemoryStore::default())
         .with_name("guardrail")
         .with_same_site(SameSite::Lax)
         .with_expiry(Expiry::OnInactivity(time::Duration::hours(4)))
-        .with_secure(false);
+        .with_secure(use_secure_cookies);
 
     let app = Router::new()
         .merge(routes::router())
@@ -88,10 +90,9 @@ async fn main() {
     info!("Starting web server on port {}", settings.web_server.port);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], settings.web_server.port));
-    if let (Some(public_key), Some(private_key)) = (
-        settings.web_server.public_key.clone(),
-        settings.web_server.private_key.clone(),
-    ) && !public_key.is_empty()
+    if let (Some(public_key), Some(private_key)) =
+        (settings.web_server.public_key.clone(), settings.web_server.private_key.clone())
+        && !public_key.is_empty()
         && !private_key.is_empty()
     {
         let tls = RustlsConfig::from_pem(public_key.into_bytes(), private_key.into_bytes())

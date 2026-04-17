@@ -4,11 +4,11 @@ use axum::extract::DefaultBodyLimit;
 use axum::http::{Request, StatusCode};
 use axum::{Router, body::Body};
 use chrono::Utc;
-use object_store::{ObjectStore, ObjectStoreExt};
 use object_store::path::Path;
+use object_store::{ObjectStore, ObjectStoreExt};
 use serde_json::json;
-use testware::setup::TestSetup;
 use std::sync::Arc;
+use testware::setup::TestSetup;
 use tower::ServiceExt;
 use tower_http::trace::TraceLayer;
 
@@ -23,11 +23,11 @@ use repos::api_token::ApiTokenRepo;
 use repos::product::ProductRepo;
 use repos::symbols::SymbolsRepo;
 
-use testware::{
-    create_settings, create_test_product_with_details, create_test_token,
-};
+use testware::{create_settings, create_test_product_with_details, create_test_token};
 
-async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> (Router, Arc<dyn ObjectStore>, String, String, String, String) {
+async fn setup(
+    db: &surrealdb::Surreal<surrealdb::engine::any::Any>,
+) -> (Router, Arc<dyn ObjectStore>, String, String, String, String) {
     let settings = create_settings();
 
     let repo = Repo::new(db.clone());

@@ -59,13 +59,11 @@ impl SymbolsRepo {
         crate::take_many(&mut result, 0)
     }
 
-    pub async fn create(
-        db: &Surreal<Any>,
-        symbols: NewSymbols,
-    ) -> Result<uuid::Uuid, RepoError> {
+    pub async fn create(db: &Surreal<Any>, symbols: NewSymbols) -> Result<uuid::Uuid, RepoError> {
         let id = uuid::Uuid::new_v4();
         let _: Option<serde_json::Value> = db
-            .query("CREATE type::record('symbols', $id) CONTENT {
+            .query(
+                "CREATE type::record('symbols', $id) CONTENT {
                 os: $os,
                 arch: $arch,
                 build_id: $build_id,
@@ -74,7 +72,8 @@ impl SymbolsRepo {
                 product_id: $product_id,
                 created_at: time::now(),
                 updated_at: time::now(),
-            }")
+            }",
+            )
             .bind(("id", id.to_string()))
             .bind(("os", symbols.os.clone()))
             .bind(("arch", symbols.arch.clone()))
@@ -94,14 +93,16 @@ impl SymbolsRepo {
         symbols: Symbols,
     ) -> Result<Option<uuid::Uuid>, RepoError> {
         let mut result = db
-            .query("UPDATE type::record('symbols', $id) SET
+            .query(
+                "UPDATE type::record('symbols', $id) SET
                 os = $os,
                 arch = $arch,
                 build_id = $build_id,
                 module_id = $module_id,
                 storage_path = $storage_path,
                 updated_at = time::now()
-            RETURN meta::id(id) as id")
+            RETURN meta::id(id) as id",
+            )
             .bind(("id", symbols.id.to_string()))
             .bind(("os", symbols.os.clone()))
             .bind(("arch", symbols.arch.clone()))
@@ -118,10 +119,7 @@ impl SymbolsRepo {
         }))
     }
 
-    pub async fn remove(
-        db: &Surreal<Any>,
-        id: uuid::Uuid,
-    ) -> Result<(), RepoError> {
+    pub async fn remove(db: &Surreal<Any>, id: uuid::Uuid) -> Result<(), RepoError> {
         db.query("DELETE type::record('symbols', $id)")
             .bind(("id", id.to_string()))
             .await
@@ -129,9 +127,7 @@ impl SymbolsRepo {
         Ok(())
     }
 
-    pub async fn count(
-        db: &Surreal<Any>,
-    ) -> Result<i64, RepoError> {
+    pub async fn count(db: &Surreal<Any>) -> Result<i64, RepoError> {
         let mut result = db
             .query("SELECT count() as count FROM symbols GROUP ALL")
             .await

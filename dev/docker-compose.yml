@@ -2,6 +2,9 @@ volumes:
   surrealdb-storage:
   minio-storage:
   valkey-storage:
+  pocket-id-storage:
+  caddy-data:
+  caddy-config:
 
 services:
   valkey:
@@ -60,6 +63,69 @@ services:
       minio:
         condition: service_healthy
     volumes:
-      - ./minio-setup.sh:/minio-setup.sh
-    entrypoint: ['/bin/sh', '-c', 'chmod +x /minio-setup.sh && /minio-setup.sh']
+      - ./minio-setup.sh:/minio-setup.sh:ro
+    entrypoint: ['/bin/sh', '-c', '/bin/sh /minio-setup.sh']
+    restart: 'no'
+
+  pocket-id:
+    image: ghcr.io/pocket-id/pocket-id:v2
+    container_name: pocket-id
+    environment:
+      APP_URL: https://guardrail.home.krandor.org:1443
+      ENCRYPTION_KEY: GuardrailPocketIdDevEncryptionKey0123456789
+      STATIC_API_KEY: GuardrailPocketIdStaticApiKey0123456789
+      TRUST_PROXY: 'true'
+      UI_CONFIG_DISABLED: 'true'
+      ALLOW_USER_SIGNUPS: withToken
+    volumes:
+      - pocket-id-storage:/app/data
+    healthcheck:
+      test: ['CMD', '/app/pocket-id', 'healthcheck']
+      interval: 90s
+      timeout: 5s
+      retries: 2
+      start_period: 10s
+    restart: unless-stopped
+
+  pocket-id-proxy:
+    image: caddy:2
+    container_name: pocket-id-proxy
+    depends_on:
+      pocket-id:
+        condition: service_healthy
+    ports:
+      - '1443:1443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+  pocket-id-setup:
+    image: alpine:3.22
+    container_name: pocket-id-setup
+    depends_on:
+      pocket-id:
+        condition: service_healthy
+    environment:
+      POCKET_ID_URL: http://pocket-id:1411
+      POCKET_ID_PUBLIC_URL: https://guardrail.home.krandor.org:1443
+      POCKET_ID_API_KEY: GuardrailPocketIdStaticApiKey0123456789
+      POCKET_ID_ADMIN_USERNAME: admin
+      POCKET_ID_ADMIN_EMAIL: admin@localhost
+      POCKET_ID_ADMIN_FIRST_NAME: Guardrail
+      POCKET_ID_ADMIN_LAST_NAME: Admin
+      GUARDRAIL_AUTH_OIDC_CLIENT_ID: guardrail
+      GUARDRAIL_AUTH_OIDC_CLIENT_NAME: Guardrail
+      GUARDRAIL_AUTH_OIDC_CALLBACK_URL: https://guardrail.home.krandor.org:4433/auth/oidc/callback
+      GUARDRAIL_AUTH_OIDC_LOGOUT_CALLBACK_URL: https://guardrail.home.krandor.org:4433/
+      GUARDRAIL_AUTH_OIDC_LAUNCH_URL: https://guardrail.home.krandor.org:4433/
+      POCKET_ID_OUTPUT_DIR: /bootstrap-output
+    volumes:
+      - ./pocket-id-init.sh:/pocket-id-init.sh:ro
+      - ./_private/pocket-id:/bootstrap-output
+    entrypoint:
+      - /bin/sh
+      - -c
+      - apk add --no-cache curl jq >/dev/null && /bin/sh /pocket-id-init.sh
     restart: 'no'

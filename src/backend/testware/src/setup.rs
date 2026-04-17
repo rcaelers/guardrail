@@ -34,15 +34,19 @@ impl TestSetup {
     pub async fn create_db() -> Surreal<Any> {
         Self::init();
 
-        let db = surrealdb::engine::any::connect("mem://").await
+        let db = surrealdb::engine::any::connect("mem://")
+            .await
             .expect("Failed to connect to in-memory SurrealDB");
 
-        db.use_ns("test").use_db("test").await
+        db.use_ns("test")
+            .use_db("test")
+            .await
             .expect("Failed to select namespace/database");
 
         // Apply schema
         let schema = include_str!("../../../../database/schema/guardrail.surql");
-        db.query(schema).await
+        db.query(schema)
+            .await
             .expect("Failed to apply SurrealDB schema");
 
         // Define the JWT-based record access method (mirrors init_guardrail_db)

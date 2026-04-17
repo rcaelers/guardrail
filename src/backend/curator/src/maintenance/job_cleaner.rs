@@ -7,8 +7,8 @@ use std::collections::HashSet;
 use tracing::{error, info};
 use uuid::Uuid;
 
-use crate::jobs::ImportCrashJob;
 use crate::error::JobError;
+use crate::jobs::ImportCrashJob;
 use crate::state::AppState;
 
 pub struct JobCleaner;

@@ -18,6 +18,7 @@ use tower_http::trace::TraceLayer;
 use tracing::info;
 
 use common::jobs::queue;
+use common::retry_startup;
 use common::settings::Settings;
 use repos::Repo;
 
@@ -38,21 +39,25 @@ impl GuardrailApiApp {
 
     /// Bootstrap from settings: connect to SurrealDB, Valkey, S3, build internal state.
     pub async fn from_settings(settings: Arc<Settings>) -> Self {
-        let db = surrealdb::engine::any::connect(&settings.database.endpoint)
-            .await
-            .expect("Failed to connect to SurrealDB");
+        let db = retry_startup("SurrealDB", || {
+            let settings = settings.clone();
+            async move {
+                let db = surrealdb::engine::any::connect(&settings.database.endpoint).await?;
 
-        db.signin(Root {
-            username: settings.database.username.clone(),
-            password: settings.database.password.clone(),
+                db.signin(Root {
+                    username: settings.database.username.clone(),
+                    password: settings.database.password.clone(),
+                })
+                .await?;
+
+                db.use_ns(&settings.database.namespace)
+                    .use_db(&settings.database.database)
+                    .await?;
+
+                Ok::<_, surrealdb::Error>(db)
+            }
         })
-        .await
-        .expect("Failed to sign in to SurrealDB");
-
-        db.use_ns(&settings.database.namespace)
-            .use_db(&settings.database.database)
-            .await
-            .expect("Failed to select namespace/database");
+        .await;
 
         let public_key = &settings.auth.jwk.public_key;
         db.query(format!(
@@ -63,23 +68,20 @@ impl GuardrailApiApp {
         .await
         .expect("Failed to define JWT access method");
 
-        info!(
-            "Connected to SurrealDB at {}",
-            settings.database.endpoint
-        );
+        info!("Connected to SurrealDB at {}", settings.database.endpoint);
 
-        let redis_conn = apalis_redis::connect(settings.valkey.uri.clone())
-            .await
-            .expect("Failed to connect to Valkey (apalis)");
+        let redis_conn = retry_startup("Valkey (apalis)", || {
+            let uri = settings.valkey.uri.clone();
+            async move { apalis_redis::connect(uri).await }
+        })
+        .await;
 
         let store = common::init_s3_object_store(settings.clone()).await;
 
         let repo = Repo::new(db);
 
-        let redis_symbol = RedisStorage::new_with_config(
-            redis_conn.clone(),
-            RedisConfig::new(queue::SYMBOL_JOBS),
-        );
+        let redis_symbol =
+            RedisStorage::new_with_config(redis_conn.clone(), RedisConfig::new(queue::SYMBOL_JOBS));
         let worker = Arc::new(WorkQueue::new(redis_symbol));
 
         let state = AppState {

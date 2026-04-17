@@ -280,10 +280,7 @@ async fn test_minidump_upload_ok() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -339,10 +336,7 @@ async fn test_minidump_upload_ok() {
         expected_build_date
     );
     assert_eq!(crash_info["attachments"].as_array().unwrap().len(), 0);
-    assert_eq!(
-        crash_info["minidump"]["filename"].as_str().unwrap(),
-        "test.dmp"
-    );
+    assert_eq!(crash_info["minidump"]["filename"].as_str().unwrap(), "test.dmp");
 
     let minidump = crash_info["minidump"]["storage_path"]
         .as_str()
@@ -370,10 +364,7 @@ async fn test_minidump_upload_ok_without_filename() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -392,10 +383,7 @@ async fn test_minidump_upload_ok_without_filename() {
         serde_json::from_slice(&crash_info).expect("Failed to parse crash info JSON");
 
     assert_eq!(crash_info["annotations"].as_object().unwrap().len(), 6);
-    assert_eq!(
-        crash_info["minidump"]["filename"].as_str().unwrap(),
-        "unnamed_minidump"
-    );
+    assert_eq!(crash_info["minidump"]["filename"].as_str().unwrap(), "unnamed_minidump");
 
     assert_count_crashes(store.clone(), 1).await;
     assert_count_minidumps(store.clone(), 1).await;
@@ -422,10 +410,7 @@ async fn test_minidump_upload_with_attachments_ok() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -507,10 +492,7 @@ async fn test_minidump_upload_with_attachments_no_name() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -543,10 +525,7 @@ async fn test_minidump_upload_with_annotations_ok() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -578,16 +557,8 @@ async fn test_minidump_upload_with_annotations_ok() {
             .unwrap(),
         "submission"
     );
-    assert_eq!(
-        crash_info["annotations"]["ui"]["value"].as_str().unwrap(),
-        "Qt"
-    );
-    assert_eq!(
-        crash_info["annotations"]["ui"]["source"]
-            .as_str()
-            .unwrap(),
-        "submission"
-    );
+    assert_eq!(crash_info["annotations"]["ui"]["value"].as_str().unwrap(), "Qt");
+    assert_eq!(crash_info["annotations"]["ui"]["source"].as_str().unwrap(), "submission");
     assert_eq!(
         crash_info["annotations"]["build_date"]["value"]
             .as_str()
@@ -613,10 +584,7 @@ async fn test_minidump_upload_empty_version() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -645,10 +613,7 @@ async fn test_minidump_upload_empty_product() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -679,10 +644,7 @@ async fn test_minidump_annotation_no_name() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -713,10 +675,7 @@ async fn test_minidump_annotation_no_value() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -742,10 +701,7 @@ async fn test_minidump_upload_invalid_content_type() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -778,10 +734,7 @@ async fn test_minidump_upload_invalid_multipart() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -811,10 +764,7 @@ async fn test_minidump_upload_invalid_boundary() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -844,10 +794,7 @@ async fn test_symbol_no_version() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload?product=TestProduct")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -877,10 +824,7 @@ async fn test_symbol_no_product() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -904,10 +848,7 @@ async fn test_minidump_upload_empty() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(""))
         .unwrap();
 
@@ -933,10 +874,7 @@ async fn test_minidump_upload_wrong_name() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -966,10 +904,7 @@ async fn test_minidump_upload_product_too_old() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -1003,10 +938,7 @@ async fn test_minidump_upload_product_not_accepting() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -1037,10 +969,7 @@ async fn test_minidump_upload_unknown_product() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -1097,10 +1026,7 @@ async fn test_minidump_upload_per_product_validation_script() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -1148,10 +1074,7 @@ async fn test_minidump_upload_per_product_validation_script_missing() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -1209,10 +1132,7 @@ async fn test_minidump_upload_validation_script_regex_patterns() {
     let request = Request::builder()
         .method("POST")
         .uri("/api/minidump/upload")
-        .header(
-            "Content-Type",
-            format!("multipart/form-data; boundary={boundary}"),
-        )
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 

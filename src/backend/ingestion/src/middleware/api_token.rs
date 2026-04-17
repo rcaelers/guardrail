@@ -11,8 +11,8 @@ use std::task::{Context, Poll};
 use tower::{Layer, Service};
 use tracing::{error, info};
 
-use common::token::{decode_api_token, verify_api_secret};
 use crate::state::AppState;
+use common::token::{decode_api_token, verify_api_secret};
 use repos::api_token::ApiTokenRepo;
 
 #[derive(Clone)]

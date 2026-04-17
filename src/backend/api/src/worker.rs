@@ -25,12 +25,8 @@ impl std::fmt::Debug for WorkQueue {
 }
 
 impl WorkQueue {
-    pub fn new(
-        symbol_storage: RedisStorage<SymbolJob>,
-    ) -> Self {
-        WorkQueue {
-            symbol_storage,
-        }
+    pub fn new(symbol_storage: RedisStorage<SymbolJob>) -> Self {
+        WorkQueue { symbol_storage }
     }
 }
 
