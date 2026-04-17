@@ -1,7 +1,8 @@
 use argon2::{
     Algorithm, Argon2, Params, Version,
-    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
 };
+
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use rand::Rng;
 use rand::rng;
@@ -13,7 +14,10 @@ const TOKEN_LEN: usize = UUID_LEN + SECRET_LEN;
 const MIN_TOKEN_LEN: usize = UUID_LEN + 16;
 
 fn hash_secret(secret: &[u8]) -> Result<String, argon2::password_hash::Error> {
-    let salt = SaltString::generate(&mut OsRng);
+    let mut salt_bytes = [0u8; 16];
+    rng().fill_bytes(&mut salt_bytes);
+    let salt = SaltString::encode_b64(&salt_bytes)
+        .map_err(|_| argon2::password_hash::Error::PhcStringField)?;
 
     let params =
         Params::new(32768, 2, 2, None).map_err(|_| argon2::password_hash::Error::PhcStringField)?;
