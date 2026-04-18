@@ -68,6 +68,9 @@ pub struct Oidc {
     pub callback_url: String,
     pub logout_callback_url: String,
     pub launch_url: String,
+    pub self_service_url: String,
+    pub pkce: Option<bool>,
+    pub allow_insecure_tls: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, Default)]

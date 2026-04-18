@@ -216,8 +216,8 @@ client_payload=$(jq -nc \
     callbackURLs: [$callback],
     logoutCallbackURLs: [$logout],
     isPublic: false,
-    pkceEnabled: false,
-    requiresReauthentication: false,
+    pkceEnabled: true,
+    requiresReauthentication: true,
     credentials: {
       federatedIdentities: []
     },
@@ -243,13 +243,23 @@ case "$client_status" in
 esac
 rm -f "$client_tmp"
 
-log "Generating Guardrail OIDC client secret..."
-secret_json=$(request_json POST "$POCKET_ID_URL/api/oidc/clients/$GUARDRAIL_AUTH_OIDC_CLIENT_ID/secret")
-client_secret=$(printf '%s' "$secret_json" | jq -r '.secret // empty')
+existing_secret=""
+if [ -f "$OIDC_ENV_FILE" ]; then
+  existing_secret=$(grep '^GUARDRAIL_AUTH_OIDC_CLIENT_SECRET=' "$OIDC_ENV_FILE" | cut -d= -f2- || true)
+fi
 
-if [ -z "$client_secret" ]; then
-  log "Pocket ID did not return a client secret for $GUARDRAIL_AUTH_OIDC_CLIENT_ID"
-  exit 1
+if [ -n "$existing_secret" ] && [ "$client_status" = "200" ]; then
+  log "Reusing existing OIDC client secret from $OIDC_ENV_FILE"
+  client_secret="$existing_secret"
+else
+  log "Generating Guardrail OIDC client secret..."
+  secret_json=$(request_json POST "$POCKET_ID_URL/api/oidc/clients/$GUARDRAIL_AUTH_OIDC_CLIENT_ID/secret")
+  client_secret=$(printf '%s' "$secret_json" | jq -r '.secret // empty')
+
+  if [ -z "$client_secret" ]; then
+    log "Pocket ID did not return a client secret for $GUARDRAIL_AUTH_OIDC_CLIENT_ID"
+    exit 1
+  fi
 fi
 
 oidc_env_tmp=$(mktemp)

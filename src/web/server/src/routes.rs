@@ -47,6 +47,13 @@ async fn home(
     let error = query.error.unwrap_or_default();
     let has_error = !error.is_empty();
     let oidc_enabled = state.settings.auth.oidc.is_some();
+    let self_service_url = state
+        .settings
+        .auth
+        .oidc
+        .as_ref()
+        .map(|o| o.self_service_url.clone())
+        .unwrap_or_default();
     render(HomeTemplate {
         title: "Guardrail",
         app_name: state.settings.auth.name.as_str(),
@@ -55,6 +62,7 @@ async fn home(
         has_error,
         login_url: oidc::login_start_path(Some(next.as_str())),
         oidc_enabled,
+        self_service_url,
     })
 }
 

@@ -14,7 +14,11 @@
         </div>
         <nav class="nav">
           {% if auth.is_authenticated() %}
+          {% if !self_service_url.is_empty() %}
+          <a class="user" href="{{ self_service_url }}" target="_blank" rel="noopener noreferrer">{{ auth.current_username() }}</a>
+          {% else %}
           <span class="user">{{ auth.current_username() }}</span>
+          {% endif %}
           <form method="post" action="/auth/logout">
             <button type="submit">Log out</button>
           </form>

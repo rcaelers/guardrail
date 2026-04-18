@@ -1,12 +1,15 @@
-use axum::{
-    extract::{Query, State},
+use axum::{{
+    extract::{{Query, State}},
     response::Redirect,
-};
-use common::{AuthenticatedUser, settings::Oidc};
+}};
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use common::{{AuthenticatedUser, settings::Oidc}};
 use data::user::NewUser;
-use serde::{Deserialize, Serialize};
+use rand::RngExt;
+use serde::{{Deserialize, Serialize}};
+use sha2::{{Digest, Sha256}};
 use tower_sessions::Session;
-use url::{Url, form_urlencoded};
+use url::{{Url, form_urlencoded}};
 use uuid::Uuid;
 
 use crate::{
@@ -55,6 +58,7 @@ struct OidcUserInfo {
 struct OidcLoginState {
     csrf_state: String,
     next: String,
+    code_verifier: Option<String>,
 }
 
 pub async fn login_start(
@@ -75,9 +79,18 @@ pub async fn login_start(
     let discovery = fetch_discovery(&state, oidc).await?;
     let next = sanitize_next(query.next.as_deref());
     let csrf_state = Uuid::new_v4().to_string();
+    let pkce = oidc.pkce.unwrap_or(true);
+    let (code_verifier, code_challenge) = if pkce {
+        let verifier = generate_code_verifier();
+        let challenge = derive_code_challenge(&verifier);
+        (Some(verifier), Some(challenge))
+    } else {
+        (None, None)
+    };
     let session_state = OidcLoginState {
         csrf_state: csrf_state.clone(),
         next,
+        code_verifier,
     };
 
     session
@@ -85,7 +98,8 @@ pub async fn login_start(
         .await
         .map_err(AppError::internal)?;
 
-    let authorize_url = build_authorize_url(&discovery.authorization_endpoint, oidc, &csrf_state)?;
+    let authorize_url =
+        build_authorize_url(&discovery.authorization_endpoint, oidc, &csrf_state, code_challenge.as_deref())?;
     Ok(Redirect::to(authorize_url.as_str()))
 }
 
@@ -127,12 +141,16 @@ pub async fn callback(
         .ok_or_else(|| AppError::failure("missing authorization code"))?;
 
     let discovery = fetch_discovery(&state, oidc).await?;
-    let token = exchange_code(&state, &discovery.token_endpoint, oidc, code).await?;
+    let token = exchange_code(&state, &discovery.token_endpoint, oidc, code, login_state.code_verifier.as_deref()).await?;
     let userinfo =
         fetch_userinfo(&state, &discovery.userinfo_endpoint, &token.access_token).await?;
     let username = resolve_username(&userinfo);
 
-    let authenticated_user = get_or_create_local_user(&state, &username).await?;
+    let authenticated_user = get_or_create_local_user(&state, &username)
+        .await
+        .map_err(|e| {
+            AppError::internal(format!("failed to get or create user '{username}': {e}"))
+        })?;
     session
         .insert(AUTHENTICATED_USER_SESSION_KEY, authenticated_user)
         .await
@@ -163,31 +181,46 @@ fn oidc_settings(state: &AppState) -> AppResult<&Oidc> {
 async fn fetch_discovery(state: &AppState, oidc: &Oidc) -> AppResult<OidcDiscoveryDocument> {
     let issuer = oidc.issuer_url.trim_end_matches('/');
     let discovery_url = format!("{issuer}/.well-known/openid-configuration");
-    state
+    let response = state
         .http_client
-        .get(discovery_url)
+        .get(&discovery_url)
         .send()
         .await
-        .map_err(AppError::internal)?
-        .error_for_status()
-        .map_err(AppError::internal)?
+        .map_err(|e| AppError::internal(format!("OIDC discovery request to {discovery_url} failed: {e}")))?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(AppError::internal(format!(
+            "OIDC discovery at {discovery_url} returned {status}: {body}"
+        )));
+    }
+    response
         .json::<OidcDiscoveryDocument>()
         .await
-        .map_err(AppError::internal)
+        .map_err(|e| AppError::internal(format!("OIDC discovery response parse error: {e}")))
 }
 
 fn build_authorize_url(
     authorization_endpoint: &str,
     oidc: &Oidc,
     csrf_state: &str,
+    code_challenge: Option<&str>,
 ) -> AppResult<Url> {
     let mut url = Url::parse(authorization_endpoint).map_err(AppError::internal)?;
-    url.query_pairs_mut()
-        .append_pair("response_type", "code")
-        .append_pair("client_id", oidc.client_id.as_str())
-        .append_pair("redirect_uri", oidc.callback_url.as_str())
-        .append_pair("scope", OIDC_SCOPE)
-        .append_pair("state", csrf_state);
+    {
+        let mut pairs = url.query_pairs_mut();
+        pairs
+            .append_pair("response_type", "code")
+            .append_pair("client_id", oidc.client_id.as_str())
+            .append_pair("redirect_uri", oidc.callback_url.as_str())
+            .append_pair("scope", OIDC_SCOPE)
+            .append_pair("state", csrf_state);
+        if let Some(challenge) = code_challenge {
+            pairs
+                .append_pair("code_challenge", challenge)
+                .append_pair("code_challenge_method", "S256");
+        }
+    }
     Ok(url)
 }
 
@@ -196,25 +229,36 @@ async fn exchange_code(
     token_endpoint: &str,
     oidc: &Oidc,
     code: &str,
+    code_verifier: Option<&str>,
 ) -> AppResult<OidcTokenResponse> {
-    state
+    let mut params = vec![
+        ("grant_type", "authorization_code"),
+        ("code", code),
+        ("redirect_uri", oidc.callback_url.as_str()),
+        ("client_id", oidc.client_id.as_str()),
+        ("client_secret", oidc.client_secret.as_str()),
+    ];
+    if let Some(verifier) = code_verifier {
+        params.push(("code_verifier", verifier));
+    }
+    let response = state
         .http_client
         .post(token_endpoint)
-        .form(&[
-            ("grant_type", "authorization_code"),
-            ("code", code),
-            ("redirect_uri", oidc.callback_url.as_str()),
-            ("client_id", oidc.client_id.as_str()),
-            ("client_secret", oidc.client_secret.as_str()),
-        ])
+        .form(&params)
         .send()
         .await
-        .map_err(AppError::internal)?
-        .error_for_status()
-        .map_err(AppError::internal)?
+        .map_err(|e| AppError::internal(format!("OIDC token exchange request to {token_endpoint} failed: {e}")))?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(AppError::internal(format!(
+            "OIDC token exchange at {token_endpoint} returned {status}: {body}"
+        )));
+    }
+    response
         .json::<OidcTokenResponse>()
         .await
-        .map_err(AppError::internal)
+        .map_err(|e| AppError::internal(format!("OIDC token response parse error: {e}")))
 }
 
 async fn fetch_userinfo(
@@ -222,18 +266,34 @@ async fn fetch_userinfo(
     userinfo_endpoint: &str,
     access_token: &str,
 ) -> AppResult<OidcUserInfo> {
-    state
+    let response = state
         .http_client
         .get(userinfo_endpoint)
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(AppError::internal)?
-        .error_for_status()
-        .map_err(AppError::internal)?
+        .map_err(|e| AppError::internal(format!("OIDC userinfo request to {userinfo_endpoint} failed: {e}")))?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        return Err(AppError::internal(format!(
+            "OIDC userinfo at {userinfo_endpoint} returned {status}: {body}"
+        )));
+    }
+    response
         .json::<OidcUserInfo>()
         .await
-        .map_err(AppError::internal)
+        .map_err(|e| AppError::internal(format!("OIDC userinfo response parse error: {e}")))
+}
+
+fn generate_code_verifier() -> String {
+    let bytes: [u8; 32] = rand::rng().random();
+    URL_SAFE_NO_PAD.encode(bytes)
+}
+
+fn derive_code_challenge(code_verifier: &str) -> String {
+    let hash = Sha256::digest(code_verifier.as_bytes());
+    URL_SAFE_NO_PAD.encode(hash)
 }
 
 fn resolve_username(userinfo: &OidcUserInfo) -> String {

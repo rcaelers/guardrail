@@ -74,9 +74,19 @@ async fn main() {
     let state = AppState {
         repo: Repo::new(db),
         settings: settings.clone(),
-        http_client: reqwest::Client::builder()
-            .build()
-            .expect("Failed to build HTTP client"),
+        http_client: {
+            let mut builder = reqwest::Client::builder();
+            if settings
+                .auth
+                .oidc
+                .as_ref()
+                .and_then(|oidc| oidc.allow_insecure_tls)
+                .unwrap_or(false)
+            {
+                builder = builder.danger_accept_invalid_certs(true);
+            }
+            builder.build().expect("Failed to build HTTP client")
+        },
         webauthn,
     };
 

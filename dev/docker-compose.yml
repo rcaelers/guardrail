@@ -97,6 +97,8 @@ services:
       - '1443:1443'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./_private/certs/guardrail.home.krandor.org.crt:/certs/guardrail.home.krandor.org.crt:ro
+      - ./_private/certs/guardrail.home.krandor.org.key:/certs/guardrail.home.krandor.org.key:ro
       - caddy-data:/data
       - caddy-config:/config
     restart: unless-stopped
