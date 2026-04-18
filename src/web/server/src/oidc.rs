@@ -142,7 +142,11 @@ pub async fn callback(
 }
 
 fn oidc_settings(state: &AppState) -> AppResult<&Oidc> {
-    let oidc = &state.settings.auth.oidc;
+    let oidc = state.settings.auth.oidc.as_ref().ok_or_else(|| {
+        AppError::failure(
+            "OIDC settings are missing. Set the GUARDRAIL_AUTH_OIDC_* environment variables first.",
+        )
+    })?;
     if oidc.issuer_url.is_empty()
         || oidc.client_id.is_empty()
         || oidc.client_secret.is_empty()

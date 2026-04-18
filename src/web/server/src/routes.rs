@@ -15,6 +15,7 @@ use crate::{
     error::{AppError, AppResult},
     oidc,
     templates::HomeTemplate,
+    webauthn,
 };
 
 pub fn router() -> Router<AppState> {
@@ -24,6 +25,10 @@ pub fn router() -> Router<AppState> {
         .route("/auth/login/start", get(oidc::login_start))
         .route("/auth/oidc/callback", get(oidc::callback))
         .route("/auth/logout", post(logout))
+        .route("/auth/register_start/{username}", post(webauthn::start_register))
+        .route("/auth/register_finish", post(webauthn::finish_register))
+        .route("/auth/authenticate_start/{username}", post(webauthn::start_authentication))
+        .route("/auth/authenticate_finish", post(webauthn::finish_authentication))
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,6 +46,7 @@ async fn home(
     let next = oidc::sanitize_next(query.next.as_deref());
     let error = query.error.unwrap_or_default();
     let has_error = !error.is_empty();
+    let oidc_enabled = state.settings.auth.oidc.is_some();
     render(HomeTemplate {
         title: "Guardrail",
         app_name: state.settings.auth.name.as_str(),
@@ -48,6 +54,7 @@ async fn home(
         error,
         has_error,
         login_url: oidc::login_start_path(Some(next.as_str())),
+        oidc_enabled,
     })
 }
 

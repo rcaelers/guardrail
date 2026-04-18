@@ -57,7 +57,7 @@ pub struct Auth {
     pub origin: String,
     pub name: String,
     pub jwk: Jwk,
-    pub oidc: Oidc,
+    pub oidc: Option<Oidc>,
 }
 
 #[derive(Debug, Deserialize, Default)]

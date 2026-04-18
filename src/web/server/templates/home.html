@@ -12,8 +12,13 @@
   {% if auth.is_authenticated() %}
   <p>You are signed in as <strong>{{ auth.current_username() }}</strong>.</p>
   {% else %}
+  {% if oidc_enabled %}
   <p>Sign in with OpenID Connect to access the web UI.</p>
   <p><a class="button" href="{{ login_url }}">Open login</a></p>
+  {% else %}
+  <div id="passkey-login-island" data-authenticated="false"></div>
+  <script type="module" src="/static/assets/passkey-login.js"></script>
+  {% endif %}
   {% endif %}
 </section>
 {% endblock %}

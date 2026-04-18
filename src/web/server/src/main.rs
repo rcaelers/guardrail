@@ -3,6 +3,7 @@ mod error;
 mod oidc;
 mod routes;
 mod templates;
+mod webauthn;
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -14,6 +15,7 @@ use repos::Repo;
 use tower_http::{services::ServeDir, trace::TraceLayer};
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer, cookie::SameSite};
 use tracing::info;
+use webauthn_rs::prelude::*;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -27,6 +29,7 @@ pub struct AppState {
     repo: Repo,
     settings: Arc<Settings>,
     http_client: reqwest::Client,
+    webauthn: Arc<Webauthn>,
 }
 
 #[tokio::main]
@@ -58,12 +61,23 @@ async fn main() {
     })
     .await;
 
+    let rp_id = settings.auth.id.clone();
+    let rp_origin = Url::parse(&settings.auth.origin).expect("Invalid auth origin URL");
+    let webauthn = Arc::new(
+        WebauthnBuilder::new(&rp_id, &rp_origin)
+            .expect("Failed to build Webauthn")
+            .rp_name(&settings.auth.name)
+            .build()
+            .expect("Failed to build Webauthn"),
+    );
+
     let state = AppState {
         repo: Repo::new(db),
         settings: settings.clone(),
         http_client: reqwest::Client::builder()
             .build()
             .expect("Failed to build HTTP client"),
+        webauthn,
     };
 
     let use_secure_cookies = settings
