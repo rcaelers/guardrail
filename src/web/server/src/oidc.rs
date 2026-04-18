@@ -214,7 +214,8 @@ fn build_authorize_url(
             .append_pair("client_id", oidc.client_id.as_str())
             .append_pair("redirect_uri", oidc.callback_url.as_str())
             .append_pair("scope", OIDC_SCOPE)
-            .append_pair("state", csrf_state);
+            .append_pair("state", csrf_state)
+            .append_pair("prompt", "login");
         if let Some(challenge) = code_challenge {
             pairs
                 .append_pair("code_challenge", challenge)
