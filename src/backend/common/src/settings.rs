@@ -202,9 +202,7 @@ impl Settings {
             .add_source(files.into_iter().map(File::from).collect::<Vec<_>>())
             .add_source(
                 config::Environment::with_prefix("GUARDRAIL")
-                    .try_parsing(true)
                     .separator("_")
-                    .list_separator(",")
                     .ignore_empty(true),
             );
 
