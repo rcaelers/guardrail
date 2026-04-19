@@ -12,7 +12,7 @@ RUN apk add --no-cache \
   openssl-dev \
   pkgconfig
 
-RUN cargo install --locked surrealkit
+RUN cargo install --locked --version 0.5.6 surrealkit
 
 ##
 ## Runtime
