@@ -124,10 +124,10 @@ services:
       GUARDRAIL_AUTH_OIDC_LAUNCH_URL: https://guardrail.home.krandor.org:4433/
       POCKET_ID_OUTPUT_DIR: /bootstrap-output
     volumes:
-      - ./pocket-id-init.sh:/pocket-id-init.sh:ro
+      - ./guardrail-auth-setup.sh:/guardrail-auth-setup.sh:ro
       - ./_private/pocket-id:/bootstrap-output
     entrypoint:
       - /bin/sh
       - -c
-      - apk add --no-cache curl jq >/dev/null && /bin/sh /pocket-id-init.sh
+      - apk add --no-cache curl jq >/dev/null && /bin/sh /guardrail-auth-setup.sh
     restart: 'no'

@@ -135,7 +135,7 @@ where
             let (token_id, token_secret) = match decode_api_token(&token_str) {
                 Ok((id, secret)) => (id, secret),
                 Err(err) => {
-                    error!("Failed to get decode api key {}: {}", token_str, err);
+                    error!("Failed to decode api key: {}", err);
                     return Ok(Response::builder()
                         .status(StatusCode::UNAUTHORIZED)
                         .header(header::CONTENT_TYPE, "application/json")

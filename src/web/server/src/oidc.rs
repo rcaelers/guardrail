@@ -1,15 +1,15 @@
-use axum::{{
-    extract::{{Query, State}},
+use axum::{
+    extract::{Query, State},
     response::Redirect,
-}};
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use common::{{AuthenticatedUser, settings::Oidc}};
+};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+use common::{AuthenticatedUser, settings::Oidc};
 use data::user::NewUser;
 use rand::RngExt;
-use serde::{{Deserialize, Serialize}};
-use sha2::{{Digest, Sha256}};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tower_sessions::Session;
-use url::{{Url, form_urlencoded}};
+use url::{Url, form_urlencoded};
 use uuid::Uuid;
 
 use crate::{
@@ -98,8 +98,12 @@ pub async fn login_start(
         .await
         .map_err(AppError::internal)?;
 
-    let authorize_url =
-        build_authorize_url(&discovery.authorization_endpoint, oidc, &csrf_state, code_challenge.as_deref())?;
+    let authorize_url = build_authorize_url(
+        &discovery.authorization_endpoint,
+        oidc,
+        &csrf_state,
+        code_challenge.as_deref(),
+    )?;
     Ok(Redirect::to(authorize_url.as_str()))
 }
 
@@ -141,7 +145,14 @@ pub async fn callback(
         .ok_or_else(|| AppError::failure("missing authorization code"))?;
 
     let discovery = fetch_discovery(&state, oidc).await?;
-    let token = exchange_code(&state, &discovery.token_endpoint, oidc, code, login_state.code_verifier.as_deref()).await?;
+    let token = exchange_code(
+        &state,
+        &discovery.token_endpoint,
+        oidc,
+        code,
+        login_state.code_verifier.as_deref(),
+    )
+    .await?;
     let userinfo =
         fetch_userinfo(&state, &discovery.userinfo_endpoint, &token.access_token).await?;
     let username = resolve_username(&userinfo);
@@ -186,7 +197,9 @@ async fn fetch_discovery(state: &AppState, oidc: &Oidc) -> AppResult<OidcDiscove
         .get(&discovery_url)
         .send()
         .await
-        .map_err(|e| AppError::internal(format!("OIDC discovery request to {discovery_url} failed: {e}")))?;
+        .map_err(|e| {
+            AppError::internal(format!("OIDC discovery request to {discovery_url} failed: {e}"))
+        })?;
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
@@ -248,7 +261,11 @@ async fn exchange_code(
         .form(&params)
         .send()
         .await
-        .map_err(|e| AppError::internal(format!("OIDC token exchange request to {token_endpoint} failed: {e}")))?;
+        .map_err(|e| {
+            AppError::internal(format!(
+                "OIDC token exchange request to {token_endpoint} failed: {e}"
+            ))
+        })?;
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();
@@ -273,7 +290,9 @@ async fn fetch_userinfo(
         .bearer_auth(access_token)
         .send()
         .await
-        .map_err(|e| AppError::internal(format!("OIDC userinfo request to {userinfo_endpoint} failed: {e}")))?;
+        .map_err(|e| {
+            AppError::internal(format!("OIDC userinfo request to {userinfo_endpoint} failed: {e}"))
+        })?;
     let status = response.status();
     if !status.is_success() {
         let body = response.text().await.unwrap_or_default();

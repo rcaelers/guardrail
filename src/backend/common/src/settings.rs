@@ -2,6 +2,7 @@ use config::{Config, ConfigError, File};
 use glob::glob;
 use natord::compare as natord_compare;
 use serde::Deserialize;
+use std::fmt;
 
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
@@ -60,7 +61,7 @@ pub struct Auth {
     pub oidc: Option<Oidc>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Deserialize, Default)]
 pub struct Oidc {
     pub issuer_url: String,
     pub client_id: String,
@@ -73,14 +74,40 @@ pub struct Oidc {
     pub allow_insecure_tls: Option<bool>,
 }
 
-#[derive(Debug, Deserialize, Default)]
+impl fmt::Debug for Oidc {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Oidc")
+            .field("issuer_url", &self.issuer_url)
+            .field("client_id", &self.client_id)
+            .field("client_secret", &"[REDACTED]")
+            .field("callback_url", &self.callback_url)
+            .field("logout_callback_url", &self.logout_callback_url)
+            .field("launch_url", &self.launch_url)
+            .field("self_service_url", &self.self_service_url)
+            .field("pkce", &self.pkce)
+            .field("allow_insecure_tls", &self.allow_insecure_tls)
+            .finish()
+    }
+}
+
+#[derive(Deserialize, Default)]
 pub struct Jwk {
     pub token_validity_in_minutes: i64,
     pub public_key: String,
     pub private_key: String,
 }
 
-#[derive(Debug, Deserialize)]
+impl fmt::Debug for Jwk {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Jwk")
+            .field("token_validity_in_minutes", &self.token_validity_in_minutes)
+            .field("public_key", &self.public_key)
+            .field("private_key", &"[REDACTED]")
+            .finish()
+    }
+}
+
+#[derive(Deserialize)]
 #[serde(default)]
 pub struct Database {
     pub endpoint: String,
@@ -88,6 +115,18 @@ pub struct Database {
     pub database: String,
     pub username: String,
     pub password: String,
+}
+
+impl fmt::Debug for Database {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Database")
+            .field("endpoint", &self.endpoint)
+            .field("namespace", &self.namespace)
+            .field("database", &self.database)
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .finish()
+    }
 }
 
 impl Default for Database {
@@ -102,7 +141,7 @@ impl Default for Database {
     }
 }
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Deserialize, Default)]
 pub struct ObjectStorage {
     pub bucket: String,
     pub region: Option<String>,
@@ -110,6 +149,19 @@ pub struct ObjectStorage {
     pub access_key_id: Option<String>,
     pub secret_access_key: Option<String>,
     pub allow_http: Option<bool>,
+}
+
+impl fmt::Debug for ObjectStorage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ObjectStorage")
+            .field("bucket", &self.bucket)
+            .field("region", &self.region)
+            .field("endpoint", &self.endpoint)
+            .field("access_key_id", &self.access_key_id)
+            .field("secret_access_key", &self.secret_access_key.as_deref().map(|_| "[REDACTED]"))
+            .field("allow_http", &self.allow_http)
+            .finish()
+    }
 }
 
 #[derive(Debug, Deserialize, Default)]
