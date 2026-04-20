@@ -37,7 +37,7 @@ jobs:
           npm run web:islands:build
 
       - name: Build backend
-        run: cargo build --workspace
+        run: cargo +stable build --workspace
 
   test:
     runs-on: ubuntu-24.04
@@ -56,7 +56,7 @@ jobs:
           cache-all-crates: 'true'
 
       - name: Install cargo-llvm-cov
-        run: cargo install --locked cargo-llvm-cov
+        run: cargo +stable install --locked cargo-llvm-cov
 
       - name: Build Svelte islands
         run: |
@@ -64,4 +64,4 @@ jobs:
           npm run web:islands:build
 
       - name: Run tests
-        run: RUST_BACKTRACE=1 cargo test -p api -p repos -p processor -p curator -p web --no-fail-fast
+        run: RUST_BACKTRACE=1 cargo +stable test -p api -p repos -p processor -p curator -p web --no-fail-fast

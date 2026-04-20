@@ -5,6 +5,7 @@
 FROM --platform=$BUILDPLATFORM rust:alpine3.23 AS builder
 
 ENV RUSTUP_PERMIT_COPY_RENAME=true
+ENV RUSTUP_TOOLCHAIN=stable
 
 RUN apk add --no-cache \
     clang \
@@ -26,7 +27,7 @@ RUN npm run web:islands:build
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=target-web,target=/app/target \
-    cargo build --release -p web && \
+    cargo +stable build --release -p web && \
     cp /app/target/release/web /app/web-bin
 
 #
