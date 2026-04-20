@@ -12,7 +12,9 @@ RUN apk add --no-cache \
   openssl-dev \
   pkgconfig
 
-RUN cargo install --locked --version 0.5.6 surrealkit
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    cargo install --locked --version 0.5.6 surrealkit
 
 ##
 ## Runtime

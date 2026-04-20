@@ -19,7 +19,11 @@ RUN mkdir -p /app
 WORKDIR /app
 COPY . .
 
-RUN cargo build --release -p curator
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+  --mount=type=cache,target=/usr/local/cargo/git \
+  --mount=type=cache,target=/app/target \
+  cargo build --release -p curator && \
+  cp /app/target/release/curator /app/curator-bin
 
 #
 # Runtime
@@ -34,7 +38,7 @@ WORKDIR /app
 RUN apk add --no-cache openssl ca-certificates tzdata tini && \
   rm -rf /var/cache/apk/*
 
-COPY --from=builder /app/target/release/curator /app/
+COPY --from=builder /app/curator-bin /app/curator
 
 RUN mkdir -p /app/config /tmp/guardrail && \
   chown -R guardrail:guardrail /app /tmp/guardrail

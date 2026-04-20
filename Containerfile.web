@@ -23,7 +23,11 @@ COPY . .
 
 RUN npm install
 RUN npm run web:islands:build
-RUN cargo build --release -p web
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/app/target \
+    cargo build --release -p web && \
+    cp /app/target/release/web /app/web-bin
 
 #
 # Runtime
@@ -38,7 +42,7 @@ WORKDIR /app
 RUN apk add --no-cache openssl ca-certificates tzdata tini && \
     rm -rf /var/cache/apk/*
 
-COPY --from=builder /app/target/release/web /app/
+COPY --from=builder /app/web-bin /app/web
 COPY --from=builder /app/src/web/server/static /app/static
 
 RUN mkdir -p /app/config && \
