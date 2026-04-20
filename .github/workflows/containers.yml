@@ -140,7 +140,7 @@ jobs:
     needs: build
     strategy:
       matrix:
-        name: [api, web, processor, curator, ingestion, schema-sync]
+        name: [ api, web, processor, curator, ingestion, schema-sync ]
 
     steps:
       - name: Set up Cosign
