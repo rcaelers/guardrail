@@ -21,7 +21,7 @@ echo "Selected rollout manifest: $ROLLOUT_ID"
 surrealkit rollout lint "$ROLLOUT_ID"
 
 STATUS_OUTPUT="$(surrealkit rollout status "$ROLLOUT_ID" 2>&1 || true)"
-STATUS_LINE="$(printf '%s\n' "$STATUS_OUTPUT" | grep "^$ROLLOUT_ID " | head -n 1 || true)"
+STATUS_LINE="$(printf '%s\n' "$STATUS_OUTPUT" | grep "$ROLLOUT_ID " | head -n 1 || true)"
 
 if [ -z "$STATUS_LINE" ]; then
     if printf '%s\n' "$STATUS_OUTPUT" | grep -q "No rollout records found."; then

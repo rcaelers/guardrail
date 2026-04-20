@@ -81,7 +81,7 @@ async fn ensure_default_api_token(repo: &Repo) -> Result<(), Box<dyn std::error:
     };
 
     let _token_id = ApiTokenRepo::create(&repo.db, new_token).await?;
-    info!("Created default API token: {}", token);
+    info!("Created default API token");
 
     if let Err(err) = create_k8s_initial_token_secret(&token).await {
         tracing::warn!("Failed to create initial token secret: {}", err);
