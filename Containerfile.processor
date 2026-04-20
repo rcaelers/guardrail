@@ -2,7 +2,7 @@
 ## Builder
 ##
 
-FROM --platform=$BUILDPLATFORM rustlang/rust:stable-alpine AS builder
+FROM --platform=$BUILDPLATFORM rust:alpine3.23 AS builder
 
 ENV RUSTUP_PERMIT_COPY_RENAME=true
 
