@@ -2,7 +2,7 @@
 ## Builder
 ##
 
-FROM --platform=$BUILDPLATFORM rustlang/rust:nightly-alpine AS builder
+FROM --platform=$BUILDPLATFORM rustlang/rust:stable-alpine AS builder
 
 ENV RUSTUP_PERMIT_COPY_RENAME=true
 
@@ -19,9 +19,9 @@ RUN mkdir -p /app
 WORKDIR /app
 COPY . .
 
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-  --mount=type=cache,target=/usr/local/cargo/git \
-  --mount=type=cache,target=/app/target \
+RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
+  --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
+  --mount=type=cache,id=target-curator,target=/app/target \
   cargo build --release -p curator && \
   cp /app/target/release/curator /app/curator-bin
 

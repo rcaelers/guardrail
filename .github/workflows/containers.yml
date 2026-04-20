@@ -28,6 +28,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             runner: ubuntu-24.04
             platform: linux/amd64
+            cache_scope: rust-amd64
 
           - name: api
             file: Containerfile.api
@@ -35,6 +36,7 @@ jobs:
             target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
             platform: linux/arm64
+            cache_scope: rust-arm64
 
           - name: web
             file: Containerfile.web
@@ -42,6 +44,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             runner: ubuntu-24.04
             platform: linux/amd64
+            cache_scope: rust-amd64
 
           - name: web
             file: Containerfile.web
@@ -49,6 +52,7 @@ jobs:
             target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
             platform: linux/arm64
+            cache_scope: rust-arm64
 
           - name: processor
             file: Containerfile.processor
@@ -56,6 +60,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             runner: ubuntu-24.04
             platform: linux/amd64
+            cache_scope: rust-amd64
 
           - name: processor
             file: Containerfile.processor
@@ -63,6 +68,7 @@ jobs:
             target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
             platform: linux/arm64
+            cache_scope: rust-arm64
 
           - name: curator
             file: Containerfile.curator
@@ -70,6 +76,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             runner: ubuntu-24.04
             platform: linux/amd64
+            cache_scope: rust-amd64
 
           - name: curator
             file: Containerfile.curator
@@ -77,6 +84,7 @@ jobs:
             target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
             platform: linux/arm64
+            cache_scope: rust-arm64
 
           - name: ingestion
             file: Containerfile.ingestion
@@ -84,6 +92,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             runner: ubuntu-24.04
             platform: linux/amd64
+            cache_scope: rust-amd64
 
           - name: ingestion
             file: Containerfile.ingestion
@@ -91,6 +100,7 @@ jobs:
             target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
             platform: linux/arm64
+            cache_scope: rust-arm64
 
           - name: schema-sync
             file: Containerfile.schema-sync
@@ -98,6 +108,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
             runner: ubuntu-24.04
             platform: linux/amd64
+            cache_scope: rust-amd64
 
           - name: schema-sync
             file: Containerfile.schema-sync
@@ -105,6 +116,7 @@ jobs:
             target: aarch64-unknown-linux-gnu
             runner: ubuntu-24.04-arm
             platform: linux/arm64
+            cache_scope: rust-arm64
 
     steps:
       - uses: actions/checkout@v5
@@ -125,8 +137,8 @@ jobs:
             --platform ${{ matrix.platform }} \
             --build-arg TARGET=${{ matrix.target }} \
             --file ${{ matrix.file }} \
-            --cache-from type=gha,scope=${{ matrix.name }}-${{ matrix.arch }} \
-            --cache-to type=gha,mode=max,scope=${{ matrix.name }}-${{ matrix.arch }} \
+            --cache-from type=gha,scope=${{ matrix.cache_scope }} \
+            --cache-to type=gha,mode=max,scope=${{ matrix.cache_scope }} \
             --tag ${{ env.GHCR }}-${{ matrix.name }}:${{ matrix.arch }}-${{ github.sha }} \
             --push .
 
