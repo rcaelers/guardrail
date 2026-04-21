@@ -14,7 +14,8 @@ use tower_http::compression::CompressionLayer;
 use tower_http::decompression::RequestDecompressionLayer;
 use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
 use tower_http::timeout::TimeoutLayer;
-use tower_http::trace::TraceLayer;
+use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
+use tracing::Level;
 use tracing::info;
 
 use common::jobs::queue;
@@ -110,7 +111,11 @@ impl GuardrailApiApp {
                 StatusCode::REQUEST_TIMEOUT,
                 Duration::from_secs(60),
             ))
-            .layer(TraceLayer::new_for_http())
+            .layer(
+                TraceLayer::new_for_http()
+                    .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                    .on_response(DefaultOnResponse::new().level(Level::INFO)),
+            )
             .with_state(self.state.clone())
     }
 

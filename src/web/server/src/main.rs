@@ -12,7 +12,11 @@ use axum_server::tls_rustls::RustlsConfig;
 use clap::Parser;
 use common::{init_logging, retry_startup, settings::Settings};
 use repos::Repo;
-use tower_http::{services::ServeDir, trace::TraceLayer};
+use tower_http::{
+    services::ServeDir,
+    trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
+};
+use tracing::Level;
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer, cookie::SameSite};
 use tracing::info;
 use webauthn_rs::prelude::*;
@@ -107,7 +111,11 @@ async fn main() {
         .nest_service("/static", ServeDir::new("src/web/server/static"))
         .route("/healthz", get(|| async { "ok" }))
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        )
         .layer(session_layer)
         .with_state(state);
 
