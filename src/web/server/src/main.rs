@@ -1,5 +1,7 @@
 mod auth;
+mod db_api;
 mod error;
+mod mock_api;
 mod oidc;
 mod routes;
 mod templates;
@@ -106,8 +108,11 @@ async fn main() {
         .with_expiry(Expiry::OnInactivity(time::Duration::hours(4)))
         .with_secure(use_secure_cookies);
 
+    let db_state = db_api::DbState { db: Arc::new(state.repo.db.clone()) };
+
     let app = Router::new()
         .merge(routes::router())
+        .nest("/api/v1", db_api::router().with_state(db_state))
         .nest_service("/static", ServeDir::new("src/web/server/static"))
         .route("/healthz", get(|| async { "ok" }))
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024))

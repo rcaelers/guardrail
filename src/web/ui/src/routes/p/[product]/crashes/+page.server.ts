@@ -18,9 +18,15 @@ export const load: PageServerLoad = async ({ url, parent }) => {
   const status = (url.searchParams.get('status') ?? 'all') as Status | 'all';
   const search = url.searchParams.get('q') ?? '';
   const sort = (url.searchParams.get('sort') ?? 'count') as 'count' | 'recent' | 'similarity' | 'version';
-  const selectedId = url.searchParams.get('id');
 
-  const list = await adapter.listGroups({
+  // Selection model: `crash` is the source of truth for what's shown in the
+  // detail pane. `id` (group) is supported for back-compat / convenience —
+  // resolves to that group's first crash. Defaults to the first group's
+  // first crash so something is always visible.
+  const crashId = url.searchParams.get('crash');
+  const groupId = url.searchParams.get('id');
+
+  const listPromise = adapter.listGroups({
     productId: product.id,
     version: version === 'all' ? undefined : version,
     status: status === 'all' ? undefined : (status as Status),
@@ -28,18 +34,43 @@ export const load: PageServerLoad = async ({ url, parent }) => {
     sort
   });
 
-  const selected = selectedId
-    ? await adapter.getGroup(selectedId)
-    : list.groups[0]
-      ? await adapter.getGroup(list.groups[0].id)
-      : null;
+  // Resolve the selected crash. If the URL gives us a crash id, fetch
+  // the list and the crash in parallel. If only a group id (or nothing)
+  // is provided, we need the list first to pick a default group; then
+  // one getGroup to find its first crash id, then getCrash for the
+  // detail. Going through getCrash means getGroup can return lightweight
+  // crash summaries (no full minidump blob per member crash).
+  let selectedGroup = null;
+  let selectedCrash = null;
+
+  let list;
+  if (crashId) {
+    const [l, bundle] = await Promise.all([listPromise, adapter.getCrash(crashId)]);
+    list = l;
+    if (bundle) { selectedGroup = bundle.group; selectedCrash = bundle.crash; }
+  } else {
+    list = await listPromise;
+    const targetGroupId = groupId ?? list.groups[0]?.id ?? null;
+    if (targetGroupId) {
+      const g = await adapter.getGroup(targetGroupId);
+      const targetCrashId = g?.crashes[0]?.id ?? null;
+      if (targetCrashId) {
+        const bundle = await adapter.getCrash(targetCrashId);
+        if (bundle) { selectedGroup = bundle.group; selectedCrash = bundle.crash; }
+      }
+    }
+  }
 
   // Guard: if caller passed an id from a different product, drop it.
-  const safeSelected = selected && selected.productId === product.id ? selected : null;
+  if (selectedGroup && selectedGroup.productId !== product.id) {
+    selectedGroup = null;
+    selectedCrash = null;
+  }
 
   return {
     list,
-    selected: safeSelected,
+    selectedGroup,
+    selectedCrash,
     filters: { version, status, search, sort }
   };
 };

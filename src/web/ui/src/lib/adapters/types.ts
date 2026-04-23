@@ -188,19 +188,62 @@ export interface Derived {
   symbolCoverage: number;
 }
 
-export interface CrashGroup extends CrashGroupSummary {
-  occurrences: Occurrence[];
+// One crash event. The detail pane renders this — `Crash` is what the user
+// is looking at. Multiple crashes with the same fingerprint share a group.
+export interface Crash {
+  id: string;
+  groupId: string;
+  productId: string;
+
+  // Per-crash metadata
+  version: string;
+  os: string;
+  at: string;
+  user: string;
+  similarity: number;
+  commit: string;
+
+  // Per-crash summary (what shows in the detail header for THIS crash)
+  signal: Signal;
+  title: string;
+  topFrame: string;
+  file: string;
+  line: number;
+  address?: string;
+  platform?: 'windows' | 'macos' | 'linux' | string;
+  exceptionType?: string;
+  exceptionTypeShort?: string;
+  build: string;
+
+  // Detail blobs
   stack: StackFrame[];
   threads: Thread[];
   modules: Module[];
+  env: Environment;
   breadcrumbs: Breadcrumb[];
   logs: LogFile[];
   userDescription: UserDescription | null;
-  notes: Note[];
-  related: RelatedRef[];
-  env: Environment;
   dump?: Dump;
   derived?: Derived;
+}
+
+// Lightweight crash summary used in the expanded group row.
+export interface CrashSummary {
+  id: string;
+  version: string;
+  os: string;
+  at: string;
+  user: string;
+  similarity: number;
+  commit: string;
+}
+
+// A group is the workflow + aggregation entity. List/header summary fields
+// come from a canonical crash (the first one); detail comes from `crashes`.
+export interface CrashGroup extends CrashGroupSummary {
+  crashes: Crash[];
+  notes: Note[];
+  related: RelatedRef[];
 }
 
 // ------------------------------------------------------------------
@@ -318,6 +361,8 @@ export interface GuardrailAdapter {
   // --- crashes ---
   listGroups(q: ListQuery): Promise<ListResult>;
   getGroup(id: string): Promise<CrashGroup | null>;
+  /** Returns a single crash plus its parent group, or null. */
+  getCrash(id: string): Promise<{ crash: Crash; group: CrashGroup } | null>;
   setStatus(id: string, status: Status): Promise<void>;
   addNote(id: string, body: string, author: string): Promise<Note>;
   mergeGroups(primaryId: string, mergedId: string): Promise<void>;

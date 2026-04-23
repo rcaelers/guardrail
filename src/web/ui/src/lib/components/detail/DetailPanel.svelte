@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CrashGroup, Status } from '$lib/adapters/types';
+  import type { Crash, CrashGroup, Status } from '$lib/adapters/types';
   import StatusPill from '../StatusPill.svelte';
   import SignalChip from '../SignalChip.svelte';
   import StackTab from './StackTab.svelte';
@@ -15,6 +15,7 @@
 
   interface Props {
     group: CrashGroup;
+    crash: Crash;
     onStatusChange: (s: Status) => void;
     onMerge: (mergedId: string) => void;
     onAddNote: (body: string) => void;
@@ -26,6 +27,7 @@
   }
   let {
     group,
+    crash,
     onStatusChange,
     onMerge,
     onAddNote,
@@ -54,8 +56,9 @@
   <!-- Header -->
   <div class="shrink-0 border-b border-line dark:border-line-dark px-7 pb-4 pt-5">
     <div class="mb-3 flex items-center gap-3">
-      <span class="font-mono text-[11px] text-ink-muted dark:text-ink-mutedDark">{group.id}</span>
-      <SignalChip signal={group.signal} />
+      <span class="font-mono text-[11px] text-ink-muted dark:text-ink-mutedDark">{crash.id}</span>
+      <span class="font-mono text-[10.5px] text-ink-muted dark:text-ink-mutedDark">in {group.id}</span>
+      <SignalChip signal={crash.signal} />
       <StatusPill status={group.status} />
       <span class="flex-1"></span>
       {#if onClose}
@@ -68,16 +71,16 @@
         >×</button>
       {/if}
     </div>
-    <h2 class="mb-2 text-[19px] font-semibold leading-[1.3] text-ink dark:text-ink-dark">{group.title}</h2>
+    <h2 class="mb-2 text-[19px] font-semibold leading-[1.3] text-ink dark:text-ink-dark">{crash.title}</h2>
     <div class="font-mono text-xs text-ink-muted dark:text-ink-mutedDark">
-      {group.topFrame}  ·  {group.file}:{group.line}
+      {crash.topFrame}  ·  {crash.file}:{crash.line}
     </div>
     <div class="mt-3.5 grid gap-4 text-[11px] text-ink-muted dark:text-ink-mutedDark" style:grid-template-columns="repeat(4, 1fr)">
       {#each [
-        ['Occurrences', fmtInt(group.count)],
-        ['First seen', fmtDate(group.firstSeen)],
-        ['Last seen', fmtDate(group.lastSeen)],
-        ['Version', group.version]
+        ['Occurred', fmtDate(crash.at)],
+        ['Version', crash.version],
+        ['OS', crash.os],
+        ['Group events', `${fmtInt(group.count)} (last ${fmtDate(group.lastSeen)})`]
       ] as [label, value]}
         <div>
           <div class="mb-0.5 uppercase tracking-wider text-[10px]">{label}</div>
@@ -137,13 +140,13 @@
 
   <!-- Body -->
   <div class="scroll-clean flex-1 overflow-auto px-7 py-5">
-    {#if tab === 'stack'}<StackTab stack={group.stack} />{/if}
-    {#if tab === 'threads'}<ThreadsTab threads={group.threads} />{/if}
-    {#if tab === 'modules'}<ModulesTab modules={group.modules} />{/if}
-    {#if tab === 'env'}<EnvTab env={group.env} />{/if}
-    {#if tab === 'crumbs'}<BreadcrumbsTab breadcrumbs={group.breadcrumbs} />{/if}
-    {#if tab === 'logs'}<LogsTab logs={group.logs} />{/if}
-    {#if tab === 'user'}<UserContextTab user={group.userDescription} />{/if}
+    {#if tab === 'stack'}<StackTab stack={crash.stack} />{/if}
+    {#if tab === 'threads'}<ThreadsTab threads={crash.threads} />{/if}
+    {#if tab === 'modules'}<ModulesTab modules={crash.modules} />{/if}
+    {#if tab === 'env'}<EnvTab env={crash.env} />{/if}
+    {#if tab === 'crumbs'}<BreadcrumbsTab breadcrumbs={crash.breadcrumbs} />{/if}
+    {#if tab === 'logs'}<LogsTab logs={crash.logs} />{/if}
+    {#if tab === 'user'}<UserContextTab user={crash.userDescription} />{/if}
     {#if tab === 'related'}<RelatedTab related={group.related} {onMerge} canMerge={canMerge && !readOnly} />{/if}
     {#if tab === 'notes'}<NotesTab notes={group.notes} onAdd={onAddNote} {readOnly} />{/if}
   </div>

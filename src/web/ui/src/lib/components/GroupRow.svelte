@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CrashGroupSummary } from '$lib/adapters/types';
+  import type { Crash, CrashGroupSummary } from '$lib/adapters/types';
   import SignalChip from './SignalChip.svelte';
   import StatusPill from './StatusPill.svelte';
   import Sparkline from './Sparkline.svelte';
@@ -9,11 +9,24 @@
     g: CrashGroupSummary;
     selected: boolean;
     expanded: boolean;
-    occurrences?: { id: string; os: string; version: string; at: string; similarity: number }[];
+    /** Member crashes shown under the group row when expanded. */
+    crashes?: Crash[];
+    /** The crash id currently shown in the detail pane, if any. */
+    selectedCrashId?: string | null;
     onSelect: (id: string) => void;
     onToggle: (id: string) => void;
+    onSelectCrash: (crashId: string, groupId: string) => void;
   }
-  let { g, selected, expanded, occurrences = [], onSelect, onToggle }: Props = $props();
+  let {
+    g,
+    selected,
+    expanded,
+    crashes = [],
+    selectedCrashId = null,
+    onSelect,
+    onToggle,
+    onSelectCrash
+  }: Props = $props();
 
   const COLS = '28px 1fr 80px 72px 80px 110px 90px';
 </script>
@@ -54,23 +67,34 @@
 </div>
 
 {#if expanded}
-  {#each occurrences.slice(0, 6) as occ}
+  {#each crashes.slice(0, 6) as c (c.id)}
+    {@const isActive = selectedCrashId === c.id}
     <div
-      class="grid items-center gap-4 border-b border-line dark:border-line-dark bg-[#fbfbfc] dark:bg-[#18181a] py-2 pl-12 pr-5 font-mono text-xs text-ink-muted dark:text-ink-mutedDark"
+      role="button"
+      tabindex="0"
+      onclick={(e) => { e.stopPropagation(); onSelectCrash(c.id, g.id); }}
+      onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onSelectCrash(c.id, g.id); } }}
+      class="grid cursor-pointer items-center gap-4 border-b border-line dark:border-line-dark py-2 pl-12 pr-5 font-mono text-xs text-ink-muted dark:text-ink-mutedDark transition-colors"
+      class:bg-accent-soft={isActive}
+      class:dark:bg-accent-softDark={isActive}
+      class:bg-[#fbfbfc]={!isActive}
+      class:dark:bg-[#18181a]={!isActive}
+      class:hover:bg-[#f2f2f4]={!isActive}
+      class:dark:hover:bg-[#212124]={!isActive}
       style:grid-template-columns={COLS}
     >
       <span></span>
-      <span>{occ.id}  ·  {occ.os}</span>
+      <span class:text-ink={isActive} class:dark:text-ink-dark={isActive}>{c.id}  ·  {c.os}</span>
       <span></span>
-      <span>{occ.version}</span>
+      <span>{c.version}</span>
       <span></span>
-      <span>{fmtDate(occ.at)}</span>
-      <span>{(occ.similarity * 100).toFixed(1)}%</span>
+      <span>{fmtDate(c.at)}</span>
+      <span>{(c.similarity * 100).toFixed(1)}%</span>
     </div>
   {/each}
   {#if g.count > 6}
     <div class="border-b border-line dark:border-line-dark bg-[#fbfbfc] dark:bg-[#18181a] py-2 pl-12 pr-5 text-[11px] text-ink-muted dark:text-ink-mutedDark">
-      + {fmtInt(g.count - 6)} more occurrences
+      + {fmtInt(g.count - 6)} more crashes
     </div>
   {/if}
 {/if}

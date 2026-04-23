@@ -13,11 +13,17 @@ function canWrite(role: string | null | undefined): boolean {
 
 export const load: PageServerLoad = async ({ params, parent }) => {
   const { product } = await parent();
+  // Load the group (with lightweight crash summaries) to find the first
+  // crash id, then fetch that crash's full detail.
   const group = await adapter.getGroup(params.id);
   if (!group) throw error(404, `Group ${params.id} not found`);
   if (group.productId !== product.id)
     throw error(404, `Group ${params.id} is not in ${product.name}`);
-  return { group };
+  const firstId = group.crashes[0]?.id;
+  if (!firstId) throw error(404, `Group ${params.id} has no crashes`);
+  const bundle = await adapter.getCrash(firstId);
+  if (!bundle) throw error(404, `Crash ${firstId} not found`);
+  return { group: bundle.group, crash: bundle.crash };
 };
 
 export const actions: Actions = {

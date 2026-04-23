@@ -26,7 +26,7 @@
 //   DEL  /symbols/:id
 
 import type {
-  GuardrailAdapter, CrashGroup, ListQuery, ListResult, Note, Status,
+  GuardrailAdapter, Crash, CrashGroup, ListQuery, ListResult, Note, Status,
   User, Product, Role, MembershipWithUser, MembershipWithProduct,
   Symbol as SymbolRow, SymbolQuery
 } from './types';
@@ -131,13 +131,18 @@ export function httpAdapter(baseUrl: string): GuardrailAdapter {
 
     // --- crashes ---
     async listGroups(q: ListQuery): Promise<ListResult> {
-      const r = await fetch(`${baseUrl}/crashes?${qs(q as Record<string, unknown>)}`);
+      const r = await fetch(`${baseUrl}/crashes?${qs(q as unknown as Record<string, unknown>)}`);
       return json<ListResult>(r, 'listGroups');
     },
     async getGroup(id) {
       const r = await fetch(`${baseUrl}/crashes/${encodeURIComponent(id)}`);
       if (r.status === 404) return null;
       return json<CrashGroup>(r, 'getGroup');
+    },
+    async getCrash(id) {
+      const r = await fetch(`${baseUrl}/crashes/by-crash/${encodeURIComponent(id)}`);
+      if (r.status === 404) return null;
+      return json<{ crash: Crash; group: CrashGroup }>(r, 'getCrash');
     },
     async setStatus(id, status: Status) {
       const r = await jpost(`/crashes/${encodeURIComponent(id)}/status`, { status });
@@ -155,7 +160,7 @@ export function httpAdapter(baseUrl: string): GuardrailAdapter {
     // --- symbols ---
     async listSymbols(productId, q: SymbolQuery = {}) {
       const r = await fetch(
-        `${baseUrl}/products/${encodeURIComponent(productId)}/symbols?${qs(q as Record<string, unknown>)}`
+        `${baseUrl}/products/${encodeURIComponent(productId)}/symbols?${qs(q as unknown as Record<string, unknown>)}`
       );
       return json<SymbolRow[]>(r, 'listSymbols');
     },

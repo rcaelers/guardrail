@@ -12,7 +12,7 @@
 //      seeded inline below the dataset so they live alongside the crash DB.
 
 import type {
-  GuardrailAdapter, CrashGroup, CrashGroupSummary, Dump, DumpThread, DumpModule,
+  GuardrailAdapter, Crash, CrashGroup, CrashGroupSummary, Dump, DumpThread, DumpModule,
   Derived, ListQuery, ListResult, Note, Status,
   User, Product, Membership, MembershipWithUser, MembershipWithProduct,
   Role, Symbol as SymbolRow, SymbolQuery
@@ -372,103 +372,146 @@ const USER_DESCRIPTIONS = [
 // Build the 60-group dataset.
 // ------------------------------------------------------------------
 
+// Build a Crash from a freshly-ingested archetype. Each call regenerates
+// the dump (so randomized fields like offsets vary per crash), giving every
+// crash in a group its own concrete detail blobs.
+function makeCrash(opts: {
+  i: number;
+  j: number;
+  archIdx: number;
+  groupId: string;
+  productId: string;
+  build: string;
+  version: string;
+  firstSeenDays: number;
+}): Crash {
+  const arch = ARCHETYPES[opts.archIdx];
+  const ingested = ingest(arch.make());
+  const { dump, derived } = ingested;
+  const ct = dump.threads.find((t) => t.thread_id === dump.crash_info.crashing_thread)!;
+  const mainMod = dump.modules[dump.main_module]?.filename || '';
+  const userCtx = USER_DESCRIPTIONS[(opts.i + opts.j) % USER_DESCRIPTIONS.length];
+  return {
+    id: `CR-${String(opts.i + 1).padStart(4, '0')}-${String(opts.j + 1).padStart(3, '0')}`,
+    groupId: opts.groupId,
+    productId: opts.productId,
+
+    version: opts.j === 0 ? opts.version : rnd() < 0.7 ? opts.version : pick(VERSIONS),
+    os: `${dump.system_info.os} ${dump.system_info.os_ver}`,
+    at: relTime(randInt(0, opts.firstSeenDays), randInt(0, 23)),
+    user: 'u_' + hex(6),
+    similarity: 1 - rnd() * 0.05,
+    commit: hex(7),
+
+    signal: derived.exceptionTypeShort,
+    title: derived.title,
+    topFrame: derived.topSymbol,
+    file: derived.topFile || '<no source>',
+    line: derived.topLine || 0,
+    address: derived.address,
+    platform: derived.platform,
+    exceptionType: derived.exceptionType,
+    exceptionTypeShort: derived.exceptionTypeShort,
+    build: opts.j === 0 ? opts.build : hex(7),
+
+    stack: ct.frames.map((f) => ({
+      fn: f.function || `<${f.module}+${f.module_offset}>`,
+      file: f.file
+        ? f.file.replace(/^\\\\\?\\/, '').split(/[\\/]/).slice(-2).join('/')
+        : (f.module || ''),
+      line: f.line || 0,
+      addr: f.offset,
+      inApp: f.module === mainMod,
+      trust: f.trust
+    })),
+    threads: dump.threads.map((th) => ({
+      id: th.thread_id,
+      name: th.thread_name
+        || (th.thread_id === dump.crash_info.crashing_thread ? 'crashing thread' : `thread ${th.thread_id}`),
+      crashed: th.thread_id === dump.crash_info.crashing_thread,
+      frames: th.frame_count
+    })),
+    modules: dump.modules.slice(0, 18).map((m) => ({
+      name: m.filename,
+      version: m.version !== '0.0.0.0' ? m.version : '',
+      addr: m.base_addr,
+      size: humanSize(parseInt(m.end_addr, 16) - parseInt(m.base_addr, 16)),
+      inApp: m.filename === mainMod
+    })),
+    env: {
+      os: `${dump.system_info.os} ${dump.system_info.os_ver}`,
+      arch: dump.system_info.cpu_arch,
+      cpu: `${dump.system_info.cpu_info} (${dump.system_info.cpu_count} cores)`,
+      ram: pick(['16 GB', '32 GB', '64 GB']),
+      gpu: pick(['Apple M3 Pro (integrated)', 'NVIDIA RTX 4070', 'AMD Radeon 7900 XT', 'Intel Arc A770']),
+      locale: pick(['en-US', 'en-GB', 'de-DE', 'ja-JP', 'es-ES'])
+    },
+    breadcrumbs: buildBreadcrumbs(ingested),
+    logs: buildLogs(ingested),
+    userDescription: userCtx.body
+      ? { author: userCtx.author, at: relTime(0, randInt(1, 48)), body: userCtx.body }
+      : null,
+    dump,
+    derived
+  };
+}
+
 function buildDataset(): CrashGroup[] {
   const groups: CrashGroup[] = [];
   for (let i = 0; i < 60; i++) {
-    const arch = ARCHETYPES[i % ARCHETYPES.length];
-    const ingested = ingest(arch.make());
-    const { dump, derived } = ingested;
-
+    const archIdx = i % ARCHETYPES.length;
+    const groupId = `GR-${String(i + 1).padStart(4, '0')}`;
     const count = randInt(2, i < 6 ? 420 : i < 20 ? 80 : 30);
     const firstSeenDays = randInt(1, 60);
     const lastSeenHours = randInt(0, 72);
     const version = pick(VERSIONS);
+    const build = hex(7);
     const similarity = 1 - (i === 0 ? 0 : rnd() * 0.08);
     const roll = rnd();
     const status: Status = roll < 0.55 ? 'new' : roll < 0.85 ? 'triaged' : 'resolved';
     const assignee = status === 'new' ? null : pick(ASSIGNEES);
 
-    const occurrences = [];
     const N = Math.min(count, 12);
+    const crashes: Crash[] = [];
     for (let j = 0; j < N; j++) {
-      occurrences.push({
-        id: `CR-${String(i + 1).padStart(4, '0')}-${String(j + 1).padStart(3, '0')}`,
-        version: j === 0 ? version : rnd() < 0.7 ? version : pick(VERSIONS),
-        os: `${dump.system_info.os} ${dump.system_info.os_ver}`,
-        at: relTime(randInt(0, firstSeenDays), randInt(0, 23)),
-        user: 'u_' + hex(6),
-        similarity: 1 - rnd() * 0.05,
-        commit: hex(7)
-      });
+      crashes.push(makeCrash({
+        i, j, archIdx, groupId, productId: '', build, version, firstSeenDays
+      }));
     }
-    occurrences.sort((a, b) => (a.at < b.at ? 1 : -1));
+    crashes.sort((a, b) => (a.at < b.at ? 1 : -1));
 
-    const userCtx = USER_DESCRIPTIONS[(i + 1) % USER_DESCRIPTIONS.length];
-    const ct = dump.threads.find((t) => t.thread_id === dump.crash_info.crashing_thread)!;
-    const mainMod = dump.modules[dump.main_module]?.filename;
+    // Group's display fields come from the canonical (most-recent / first)
+    // crash. They drive the list row, not the detail pane.
+    const canonical = crashes[0];
 
     const group: CrashGroup = {
-      id: `GR-${String(i + 1).padStart(4, '0')}`,
+      id: groupId,
       productId: '', // assigned below once PRODUCTS exist
-      signal: derived.exceptionTypeShort,
-      exceptionType: derived.exceptionType,
-      exceptionTypeShort: derived.exceptionTypeShort,
-      title: derived.title,
-      topFrame: derived.topSymbol,
-      file: derived.topFile || '<no source>',
-      line: derived.topLine || 0,
-      address: derived.address,
-      platform: derived.platform,
+      signal: canonical.signal,
+      exceptionType: canonical.exceptionType,
+      exceptionTypeShort: canonical.exceptionTypeShort,
+      title: canonical.title,
+      topFrame: canonical.topFrame,
+      file: canonical.file,
+      line: canonical.line,
+      address: canonical.address,
+      platform: canonical.platform,
       version,
-      build: hex(7),
+      build,
       count,
       similarity,
       status,
       assignee,
       firstSeen: relTime(firstSeenDays),
       lastSeen: relTime(0, lastSeenHours),
-      dump,
-      derived,
-      occurrences,
-      stack: ct.frames.map((f) => ({
-        fn: f.function || `<${f.module}+${f.module_offset}>`,
-        file: f.file ? f.file.replace(/^\\\\\?\\/, '').split(/[\\/]/).slice(-2).join('/') : (f.module || ''),
-        line: f.line || 0,
-        addr: f.offset,
-        inApp: f.module === mainMod,
-        trust: f.trust
-      })),
-      threads: dump.threads.map((th) => ({
-        id: th.thread_id,
-        name: th.thread_name || (th.thread_id === dump.crash_info.crashing_thread ? 'crashing thread' : `thread ${th.thread_id}`),
-        crashed: th.thread_id === dump.crash_info.crashing_thread,
-        frames: th.frame_count
-      })),
-      modules: dump.modules.slice(0, 18).map((m) => ({
-        name: m.filename,
-        version: m.version !== '0.0.0.0' ? m.version : '',
-        addr: m.base_addr,
-        size: humanSize(parseInt(m.end_addr, 16) - parseInt(m.base_addr, 16)),
-        inApp: m.filename === mainMod
-      })),
-      breadcrumbs: buildBreadcrumbs(ingested),
-      logs: buildLogs(ingested),
-      userDescription: userCtx.body ? { author: userCtx.author, at: relTime(0, randInt(1, 48)), body: userCtx.body } : null,
+      crashes,
       notes: i === 0 ? [
         { author: 'mlin',  at: relTime(0, 6), body: 'Repro is reliable — null write in renderer, rax/rdx both zero at the trap site. Looks like a missing null-check on the object returned from lookup.' },
         { author: 'rwang', at: relTime(0, 3), body: 'Scan frames beyond #4 are into unsymbolicated Kernel32 — ignore those for root-cause.' }
       ] : i === 1 ? [
         { author: 'tkowalski', at: relTime(1, 2), body: 'Likely fixed by #4821 on main. Will verify after next beta cut.' }
       ] : [],
-      related: [],
-      env: {
-        os: `${dump.system_info.os} ${dump.system_info.os_ver}`,
-        arch: dump.system_info.cpu_arch,
-        cpu: `${dump.system_info.cpu_info} (${dump.system_info.cpu_count} cores)`,
-        ram: pick(['16 GB', '32 GB', '64 GB']),
-        gpu: pick(['Apple M3 Pro (integrated)', 'NVIDIA RTX 4070', 'AMD Radeon 7900 XT', 'Intel Arc A770']),
-        locale: pick(['en-US', 'en-GB', 'de-DE', 'ja-JP', 'es-ES'])
-      }
+      related: []
     };
     groups.push(group);
   }
@@ -532,12 +575,15 @@ const MEMBERSHIPS: Membership[] = [
 const DB: CrashGroup[] = buildDataset();
 
 // Assign groups to products round-robin (stable, by index).
-DB.forEach((g, i) => { g.productId = PRODUCTS[i % PRODUCTS.length].id; });
+DB.forEach((g, i) => {
+  g.productId = PRODUCTS[i % PRODUCTS.length].id;
+  for (const c of g.crashes) c.productId = g.productId;
+});
 // Re-link "related" within the same product.
 for (const g of DB) {
   g.related = DB
     .filter((o) => o.id !== g.id && o.productId === g.productId
-      && o.derived?.exceptionTypeShort === g.derived?.exceptionTypeShort)
+      && o.exceptionTypeShort === g.exceptionTypeShort)
     .slice(0, 3)
     .map((o) => ({ id: o.id, title: o.title, count: o.count }));
 }
@@ -607,10 +653,7 @@ const SYMBOLS: SymbolRow[] = buildSymbols();
 // ------------------------------------------------------------------
 
 function toSummary(g: CrashGroup): CrashGroupSummary {
-  const {
-    occurrences, stack, threads, modules, breadcrumbs, logs, userDescription,
-    notes, related, env, dump, derived, ...s
-  } = g;
+  const { crashes, notes, related, ...s } = g;
   return s;
 }
 
@@ -719,6 +762,13 @@ export const mockAdapter: GuardrailAdapter = {
     return { total, versions: VERSIONS, groups: r.slice(off, off + lim).map(toSummary) };
   },
   async getGroup(id) { return DB.find((g) => g.id === id) ?? null; },
+  async getCrash(id) {
+    for (const g of DB) {
+      const crash = g.crashes.find((c) => c.id === id);
+      if (crash) return { crash, group: g };
+    }
+    return null;
+  },
   async setStatus(id, status) {
     const g = DB.find((x) => x.id === id);
     if (g) g.status = status;
@@ -734,8 +784,9 @@ export const mockAdapter: GuardrailAdapter = {
     const merged = DB.find((x) => x.id === mergedId);
     if (!primary || !merged) return;
     primary.count += merged.count;
-    primary.occurrences = [...primary.occurrences, ...merged.occurrences]
+    primary.crashes = [...primary.crashes, ...merged.crashes]
       .sort((a, b) => (a.at < b.at ? 1 : -1));
+    for (const c of primary.crashes) c.groupId = primary.id;
     const i = DB.indexOf(merged);
     if (i >= 0) DB.splice(i, 1);
   },

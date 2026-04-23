@@ -1,7 +1,7 @@
 <script lang="ts">
   import UserMenu from '$lib/components/UserMenu.svelte';
-  import type { LayoutData } from './$types';
-  let { data }: { data: LayoutData } = $props();
+  import type { PageData } from './$types';
+  let { data }: { data: PageData } = $props();
 </script>
 
 <svelte:head><title>No access · Guardrail</title></svelte:head>

@@ -6,7 +6,7 @@ Svelte 5 + SvelteKit + Tailwind port of the `Crashdumps.html` prototype in the p
 
 - **Svelte 5** (runes: `$state`, `$derived`, `$effect`, `$props`)
 - **SvelteKit 2** (file-based routes, server `load`, form actions, cookie session)
-- **Tailwind CSS 3** (design tokens mirror the prototype's `aTheme` in `tailwind.config.js`)
+- **Tailwind CSS 4.2.4** (design tokens mirror the prototype's `aTheme` in `tailwind.config.js`)
 - **TypeScript**
 
 ## Route map
@@ -102,30 +102,44 @@ Platform-wide administrators (`user.isAdmin`) additionally get:
 
 ## Swap the data source
 
-`src/lib/adapters/index.ts` picks the adapter. Wire a real backend:
+`src/lib/adapters/index.ts` picks the adapter at boot. Three options, in
+increasing realism:
 
-```
-# .env
-GUARDRAIL_API_URL=https://api.example.com/v1
-```
+1. **TypeScript mock** (default). No env var set → the in-memory mock from
+   `src/lib/adapters/mock.ts` is used directly inside SvelteKit's server.
+2. **Rust `mock_server`** — same JSON, served over HTTP from an in-memory
+   copy of `src/web/server/mock/seed.json`. Set
+   `GUARDRAIL_API_URL=http://127.0.0.1:4500/api/v1`.
+3. **Real SurrealDB + `db_server`** — import the seed once, then serve via
+   SurrealDB queries. Same `GUARDRAIL_API_URL`.
 
-Or implement your own — conform to `GuardrailAdapter` in `types.ts` and export
-it from `index.ts`. Every route loader and form action goes through
-`adapter.*`; there are no hard-coded data paths.
+Setup and commands for options 2 and 3 are documented in the repo-root
+`README.md` under "Web UI + mock data".
+
+Or implement your own adapter — conform to `GuardrailAdapter` in `types.ts`
+and export it from `index.ts`. Every route loader and form action goes
+through `adapter.*`; there are no hard-coded data paths.
 
 ## Data shape
 
-`CrashGroup` is modeled on minidump-stackwalk JSON output. Each group carries:
+The list view works on `CrashGroupSummary` rows: `id`, `signal`, `title`,
+`topFrame`, `file`, `line`, `address`, `platform`, `version`, `build`,
+`count`, `status`, `firstSeen`, `lastSeen`, `productId`.
 
-- **Summary fields** (`signal`, `title`, `topFrame`, `file`, `line`, `address`, `platform`, `version`, `build`, counts, status, timestamps, plus `productId`) — the flat projection the list row and detail header render directly.
-- **`dump`** (optional) — the raw report.
-- **`derived`** (optional) — normalized facts pulled out of the dump.
-- **UI-projected views** (`stack`, `threads`, `modules`, `env`) — flattened, renderable shapes so tab components stay simple.
-- Plus the usual `occurrences`, `breadcrumbs`, `logs`, `notes`, `related`, `userDescription`.
+Opening a group loads a full `CrashGroup`, which adds:
 
-`User`, `Product`, `Membership`, and `Symbol` live alongside in the mock
-adapter and are seeded with sensible cross-references (you're a maintainer of
-Guardrail, a readwrite on Harpoon, and readonly on Rivet).
+- `crashes: Crash[]` — the member crashes. Each `Crash` carries its own
+  per-event metadata (`version`, `os`, `at`, `user`, `commit`,
+  `similarity`) and the detail blobs the tabs render: `stack`, `threads`,
+  `modules`, `env`, `breadcrumbs`, `logs`, `userDescription`, and the raw
+  `dump` + `derived`. The detail pane picks one crash at a time;
+  selecting a different crash in the expanded row swaps the tabs.
+- `notes: Note[]` — group-level user comments.
+- `related: RelatedRef[]` — other groups with the same exception kind.
+
+`User`, `Product`, `Membership`, and `Symbol` are seeded with sensible
+cross-references (you're a maintainer of Guardrail, a readwrite on
+Harpoon, and readonly on Rivet).
 
 ## Run
 

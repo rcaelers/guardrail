@@ -38,6 +38,7 @@
   <div class="min-h-0 flex-1">
     <DetailPanel
       group={data.group}
+      crash={data.crash}
       onStatusChange={setStatus}
       onMerge={merge}
       onAddNote={addNote}

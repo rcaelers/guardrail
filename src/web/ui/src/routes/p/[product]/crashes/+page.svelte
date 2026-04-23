@@ -27,13 +27,32 @@
     const url = new URL($page.url);
     if (!value || value === 'all' || value === '') url.searchParams.delete(key);
     else url.searchParams.set(key, value);
-    if (reset) url.searchParams.delete('id');
+    if (reset) {
+      url.searchParams.delete('id');
+      url.searchParams.delete('crash');
+    }
     await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
   }
 
-  function selectGroup(id: string) {
-    updateParam('id', id);
+  // Selecting a group selects its first crash for the detail pane and
+  // expands the row so the user can see the other crashes available to pick.
+  async function selectGroup(id: string) {
+    const url = new URL($page.url);
+    url.searchParams.delete('crash');
+    url.searchParams.set('id', id);
     pane.open = true;
+    if (!expanded.has(id)) toggleExpanded(id);
+    await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
+  }
+
+  // Selecting a specific crash within an (expanded) group.
+  async function selectCrash(crashId: string, groupId: string) {
+    const url = new URL($page.url);
+    url.searchParams.delete('id');
+    url.searchParams.set('crash', crashId);
+    pane.open = true;
+    if (!expanded.has(groupId)) toggleExpanded(groupId);
+    await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
   }
 
   // ---- Resizable split-pane ----
@@ -62,26 +81,26 @@
 
   // ---- Form actions ----
   async function setStatus(s: Status) {
-    if (!data.selected) return;
+    if (!data.selectedGroup) return;
     const body = new FormData();
-    body.set('id', data.selected.id);
+    body.set('id', data.selectedGroup.id);
     body.set('status', s);
     await fetch('?/setStatus', { method: 'POST', body });
     await invalidateAll();
   }
   async function addNote(noteBody: string) {
-    if (!data.selected) return;
+    if (!data.selectedGroup) return;
     const body = new FormData();
-    body.set('id', data.selected.id);
+    body.set('id', data.selectedGroup.id);
     body.set('body', noteBody);
     body.set('author', 'you');
     await fetch('?/addNote', { method: 'POST', body });
     await invalidateAll();
   }
   async function merge(mergedId: string) {
-    if (!data.selected) return;
+    if (!data.selectedGroup) return;
     const body = new FormData();
-    body.set('primaryId', data.selected.id);
+    body.set('primaryId', data.selectedGroup.id);
     body.set('mergedId', mergedId);
     await fetch('?/merge', { method: 'POST', body });
     await invalidateAll();
@@ -146,18 +165,20 @@
       {#each data.list.groups as g (g.id)}
         <GroupRow
           {g}
-          selected={data.selected?.id === g.id}
+          selected={data.selectedGroup?.id === g.id}
           expanded={expanded.has(g.id)}
-          occurrences={data.selected?.id === g.id ? data.selected.occurrences : []}
+          crashes={data.selectedGroup?.id === g.id ? data.selectedGroup.crashes : []}
+          selectedCrashId={data.selectedCrash?.id ?? null}
           onSelect={selectGroup}
           onToggle={toggleExpanded}
+          onSelectCrash={selectCrash}
         />
       {/each}
     </div>
   </div>
 
   <!-- RESIZER -->
-  {#if pane.open && data.selected}
+  {#if pane.open && data.selectedGroup && data.selectedCrash}
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
@@ -186,12 +207,13 @@
   <div
     bind:this={splitEl}
     class="min-w-0 shrink-0"
-    style:flex-basis={pane.open && data.selected ? `${pane.pct}%` : '0%'}
-    style:display={pane.open && data.selected ? 'block' : 'none'}
+    style:flex-basis={pane.open && data.selectedCrash ? `${pane.pct}%` : '0%'}
+    style:display={pane.open && data.selectedCrash ? 'block' : 'none'}
   >
-    {#if data.selected}
+    {#if data.selectedGroup && data.selectedCrash}
       <DetailPanel
-        group={data.selected}
+        group={data.selectedGroup}
+        crash={data.selectedCrash}
         onStatusChange={setStatus}
         onMerge={merge}
         onAddNote={addNote}
@@ -203,7 +225,7 @@
   </div>
 
   <!-- Collapsed detail rail -->
-  {#if !pane.open && data.selected}
+  {#if !pane.open && data.selectedCrash}
     <button
       type="button"
       onclick={() => (pane.open = true)}

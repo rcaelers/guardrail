@@ -10,66 +10,154 @@
 DEFINE TABLE products SCHEMAFULL;
 
 DEFINE FIELD name ON TABLE products TYPE string ASSERT $value != NONE AND $value != "";
-DEFINE FIELD description ON TABLE products TYPE string;
+DEFINE FIELD slug ON TABLE products TYPE string ASSERT $value != NONE AND $value != "";
+DEFINE FIELD description ON TABLE products TYPE string DEFAULT "";
+DEFINE FIELD color ON TABLE products TYPE string DEFAULT "#6b7280";
 DEFINE FIELD accepting_crashes ON TABLE products TYPE bool DEFAULT true;
 DEFINE FIELD metadata ON TABLE products TYPE object FLEXIBLE DEFAULT {};
 DEFINE FIELD created_at ON TABLE products TYPE datetime DEFAULT time::now();
 DEFINE FIELD updated_at ON TABLE products TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_products_name ON TABLE products COLUMNS name UNIQUE;
+DEFINE INDEX idx_products_slug ON TABLE products COLUMNS slug UNIQUE;
 
 -- ============================================================
 -- Users
 -- ============================================================
+-- `username` is the JWT subject and the auth identity used by fn::auth::*.
+-- `email` is the human-friendly sign-in identifier surfaced by the website.
 DEFINE TABLE users SCHEMAFULL;
 
 DEFINE FIELD username ON TABLE users TYPE string ASSERT $value != NONE AND $value != "";
+DEFINE FIELD email ON TABLE users TYPE string ASSERT $value != NONE AND $value != "";
+DEFINE FIELD name ON TABLE users TYPE string DEFAULT "";
+DEFINE FIELD avatar ON TABLE users TYPE string DEFAULT "";
 DEFINE FIELD is_admin ON TABLE users TYPE bool DEFAULT false;
 DEFINE FIELD last_login_at ON TABLE users TYPE option<datetime>;
 DEFINE FIELD created_at ON TABLE users TYPE datetime DEFAULT time::now();
 DEFINE FIELD updated_at ON TABLE users TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_users_username ON TABLE users COLUMNS username UNIQUE;
+DEFINE INDEX idx_users_email ON TABLE users COLUMNS email UNIQUE;
 
 -- ============================================================
--- User Access (access control per product)
+-- User Access (per-product role membership)
 -- ============================================================
+-- Roles align with the website vocabulary:
+--   readonly   - view crashes & symbols
+--   readwrite  - + change crash status, add notes, upload symbols
+--   maintainer - + merge groups, manage members, delete the product
 DEFINE TABLE user_access SCHEMAFULL;
 
-DEFINE FIELD user_id ON TABLE user_access TYPE uuid;
-DEFINE FIELD product_id ON TABLE user_access TYPE uuid;
-DEFINE FIELD role ON TABLE user_access TYPE string ASSERT $value INSIDE ["read", "write", "admin"];
+DEFINE FIELD user_id ON TABLE user_access TYPE record<users>;
+DEFINE FIELD product_id ON TABLE user_access TYPE record<products>;
+DEFINE FIELD role ON TABLE user_access TYPE string
+    ASSERT $value INSIDE ["readonly", "readwrite", "maintainer"];
 DEFINE FIELD created_at ON TABLE user_access TYPE datetime DEFAULT time::now();
 DEFINE FIELD updated_at ON TABLE user_access TYPE datetime DEFAULT time::now();
 
 DEFINE INDEX idx_user_access_pk ON TABLE user_access COLUMNS user_id, product_id UNIQUE;
 
 -- ============================================================
--- Crashes
+-- Crashes (raw ingest)
 -- ============================================================
+-- Each row is one crash event. `report` holds the full minidump-stackwalk
+-- JSON (modules, threads, frames, system info, etc.) and is the single
+-- source of truth for everything the detail pane renders.
+--
+-- `fingerprint` is computed by the processor and is what binds crashes into
+-- a group: all crashes with the same fingerprint (within a product) belong
+-- to the same `crash_groups` row. `group_id` denormalizes that link for
+-- fast lookup; the processor writes both.
 DEFINE TABLE crashes SCHEMAFULL;
 
-DEFINE FIELD product_id ON TABLE crashes TYPE uuid;
+DEFINE FIELD product_id ON TABLE crashes TYPE record<products>;
+DEFINE FIELD group_id ON TABLE crashes TYPE option<record<crash_groups>>;
+DEFINE FIELD fingerprint ON TABLE crashes TYPE option<string>;
 DEFINE FIELD report ON TABLE crashes TYPE option<object> FLEXIBLE;
-DEFINE FIELD signature ON TABLE crashes TYPE option<string>;
 DEFINE FIELD minidump ON TABLE crashes TYPE option<uuid>;
 DEFINE FIELD created_at ON TABLE crashes TYPE datetime DEFAULT time::now();
 DEFINE FIELD updated_at ON TABLE crashes TYPE datetime DEFAULT time::now();
 
+DEFINE INDEX idx_crashes_group ON TABLE crashes COLUMNS group_id;
+DEFINE INDEX idx_crashes_product ON TABLE crashes COLUMNS product_id;
+DEFINE INDEX idx_crashes_fingerprint ON TABLE crashes COLUMNS product_id, fingerprint;
+
 -- ============================================================
--- Annotations
+-- Crash groups (workflow buckets keyed by processor fingerprint)
 -- ============================================================
+-- Crashes that share a `fingerprint` (per product) belong to the same group.
+-- The group carries no per-crash data: signal + count + status + workflow
+-- only. The detail pane lists the crashes in the group (via crashes.group_id)
+-- and renders whichever one the user selects.
+--
+--   crashes in group = SELECT FROM crashes WHERE group_id = $g ORDER BY created_at DESC
+--   notes on group   = SELECT FROM annotations WHERE group_id = $g AND source = "user"
+--
+-- `signal` is duplicated from the crashes for fast list filtering; it's
+-- expected to be identical across all crashes in the group (same fingerprint
+-- = same crash kind).
+DEFINE TABLE crash_groups SCHEMAFULL;
+
+DEFINE FIELD product_id ON TABLE crash_groups TYPE record<products>;
+DEFINE FIELD fingerprint ON TABLE crash_groups TYPE string
+    ASSERT $value != NONE AND $value != "";
+DEFINE FIELD signal ON TABLE crash_groups TYPE string DEFAULT "";
+
+-- Aggregations over the underlying crashes
+DEFINE FIELD count ON TABLE crash_groups TYPE int DEFAULT 0;
+DEFINE FIELD first_seen ON TABLE crash_groups TYPE datetime DEFAULT time::now();
+DEFINE FIELD last_seen ON TABLE crash_groups TYPE datetime DEFAULT time::now();
+
+-- Workflow state
+DEFINE FIELD status ON TABLE crash_groups TYPE string
+    ASSERT $value INSIDE ["new", "triaged", "resolved"]
+    DEFAULT "new";
+DEFINE FIELD assignee ON TABLE crash_groups TYPE option<record<users>>;
+
+DEFINE FIELD created_at ON TABLE crash_groups TYPE datetime DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE crash_groups TYPE datetime DEFAULT time::now();
+
+DEFINE INDEX idx_crash_groups_fingerprint ON TABLE crash_groups
+    COLUMNS product_id, fingerprint UNIQUE;
+DEFINE INDEX idx_crash_groups_status ON TABLE crash_groups COLUMNS product_id, status;
+DEFINE INDEX idx_crash_groups_last_seen ON TABLE crash_groups COLUMNS product_id, last_seen;
+
+-- ============================================================
+-- Annotations (system- or user-generated context on crashes / groups)
+-- ============================================================
+-- A single table for everything that reads like "a string attached to a
+-- crash": submission metadata, post-processing script output, and free-form
+-- user comments.
+--
+--   source = "submission"  system    key required, attached to a raw crash
+--   source = "script"      system    key required, attached to a raw crash
+--   source = "user"        user      append-only note, optional key, `author` set
+--
+-- Either `crash_id` (raw crash) or `group_id` (aggregated group) must be set.
+-- `product_id` is always set so permission checks stay cheap.
 DEFINE TABLE annotations SCHEMAFULL;
 
-DEFINE FIELD key ON TABLE annotations TYPE string ASSERT $value != NONE AND $value != "";
-DEFINE FIELD source ON TABLE annotations TYPE string ASSERT $value INSIDE ["submission", "script", "user"];
+DEFINE FIELD source ON TABLE annotations TYPE string
+    ASSERT $value INSIDE ["submission", "script", "user"];
+DEFINE FIELD key ON TABLE annotations TYPE option<string>;
 DEFINE FIELD value ON TABLE annotations TYPE string;
-DEFINE FIELD crash_id ON TABLE annotations TYPE uuid;
-DEFINE FIELD product_id ON TABLE annotations TYPE uuid;
+DEFINE FIELD author ON TABLE annotations TYPE option<string>;
+
+DEFINE FIELD crash_id ON TABLE annotations TYPE option<record<crashes>>;
+DEFINE FIELD group_id ON TABLE annotations TYPE option<record<crash_groups>>;
+DEFINE FIELD product_id ON TABLE annotations TYPE record<products>;
+
 DEFINE FIELD created_at ON TABLE annotations TYPE datetime DEFAULT time::now();
 DEFINE FIELD updated_at ON TABLE annotations TYPE datetime DEFAULT time::now();
 
-DEFINE INDEX idx_annotations_unique ON TABLE annotations COLUMNS key, crash_id, source UNIQUE;
+-- Lookup indexes. Uniqueness for keyed annotations (submission / script) is
+-- the app layer's job: SurrealDB doesn't support WHERE-filtered unique
+-- indexes, and a blanket unique on (key, crash_id, source) would forbid
+-- multiple user notes on the same crash.
+DEFINE INDEX idx_annotations_crash ON TABLE annotations COLUMNS crash_id;
+DEFINE INDEX idx_annotations_group ON TABLE annotations COLUMNS group_id;
+DEFINE INDEX idx_annotations_source ON TABLE annotations COLUMNS source;
 
 -- ============================================================
 -- Attachments
@@ -81,8 +169,8 @@ DEFINE FIELD mime_type ON TABLE attachments TYPE string;
 DEFINE FIELD size ON TABLE attachments TYPE int;
 DEFINE FIELD filename ON TABLE attachments TYPE string;
 DEFINE FIELD storage_path ON TABLE attachments TYPE string;
-DEFINE FIELD crash_id ON TABLE attachments TYPE uuid;
-DEFINE FIELD product_id ON TABLE attachments TYPE uuid;
+DEFINE FIELD crash_id ON TABLE attachments TYPE record<crashes>;
+DEFINE FIELD product_id ON TABLE attachments TYPE record<products>;
 DEFINE FIELD created_at ON TABLE attachments TYPE datetime DEFAULT time::now();
 DEFINE FIELD updated_at ON TABLE attachments TYPE datetime DEFAULT time::now();
 
@@ -91,16 +179,39 @@ DEFINE INDEX idx_attachments_unique ON TABLE attachments COLUMNS name, crash_id 
 -- ============================================================
 -- Symbols
 -- ============================================================
+-- The original `os/arch/build_id/module_id/storage_path` shape is preserved
+-- for the ingest pipeline. The website-facing fields (name, version, format,
+-- size, debug_id, code_id, uploaded_by, referenced_by, uploaded_at) are added
+-- alongside. `external_id` is the human-readable id used in URLs / tables.
 DEFINE TABLE symbols SCHEMAFULL;
 
-DEFINE FIELD os ON TABLE symbols TYPE string;
-DEFINE FIELD arch ON TABLE symbols TYPE string;
-DEFINE FIELD build_id ON TABLE symbols TYPE string;
-DEFINE FIELD module_id ON TABLE symbols TYPE string;
-DEFINE FIELD storage_path ON TABLE symbols TYPE string;
-DEFINE FIELD product_id ON TABLE symbols TYPE uuid;
+DEFINE FIELD external_id ON TABLE symbols TYPE string
+    ASSERT $value != NONE AND $value != "";
+DEFINE FIELD product_id ON TABLE symbols TYPE record<products>;
+
+DEFINE FIELD name ON TABLE symbols TYPE string DEFAULT "";
+DEFINE FIELD version ON TABLE symbols TYPE string DEFAULT "";
+DEFINE FIELD os ON TABLE symbols TYPE string DEFAULT "";
+DEFINE FIELD arch ON TABLE symbols TYPE string DEFAULT "";
+DEFINE FIELD format ON TABLE symbols TYPE string DEFAULT "";
+DEFINE FIELD size ON TABLE symbols TYPE string DEFAULT "";
+
+DEFINE FIELD build_id ON TABLE symbols TYPE string DEFAULT "";
+DEFINE FIELD module_id ON TABLE symbols TYPE string DEFAULT "";
+DEFINE FIELD debug_id ON TABLE symbols TYPE string DEFAULT "";
+DEFINE FIELD code_id ON TABLE symbols TYPE string DEFAULT "";
+
+DEFINE FIELD storage_path ON TABLE symbols TYPE string DEFAULT "";
+DEFINE FIELD uploaded_by ON TABLE symbols TYPE option<record<users>>;
+DEFINE FIELD uploaded_at ON TABLE symbols TYPE datetime DEFAULT time::now();
+DEFINE FIELD referenced_by ON TABLE symbols TYPE int DEFAULT 0;
+
 DEFINE FIELD created_at ON TABLE symbols TYPE datetime DEFAULT time::now();
 DEFINE FIELD updated_at ON TABLE symbols TYPE datetime DEFAULT time::now();
+
+DEFINE INDEX idx_symbols_external_id ON TABLE symbols COLUMNS external_id UNIQUE;
+DEFINE INDEX idx_symbols_product ON TABLE symbols COLUMNS product_id;
+DEFINE INDEX idx_symbols_debug_id ON TABLE symbols COLUMNS debug_id;
 
 -- ============================================================
 -- API Tokens
@@ -110,8 +221,8 @@ DEFINE TABLE api_tokens SCHEMAFULL;
 DEFINE FIELD description ON TABLE api_tokens TYPE string;
 DEFINE FIELD token_id ON TABLE api_tokens TYPE uuid;
 DEFINE FIELD token_hash ON TABLE api_tokens TYPE string;
-DEFINE FIELD product_id ON TABLE api_tokens TYPE option<uuid>;
-DEFINE FIELD user_id ON TABLE api_tokens TYPE option<uuid>;
+DEFINE FIELD product_id ON TABLE api_tokens TYPE option<record<products>>;
+DEFINE FIELD user_id ON TABLE api_tokens TYPE option<record<users>>;
 DEFINE FIELD entitlements ON TABLE api_tokens TYPE array<string>;
 DEFINE FIELD last_used_at ON TABLE api_tokens TYPE option<datetime>;
 DEFINE FIELD expires_at ON TABLE api_tokens TYPE option<datetime>;
@@ -129,7 +240,7 @@ DEFINE INDEX idx_api_tokens_user ON TABLE api_tokens COLUMNS user_id;
 -- ============================================================
 DEFINE TABLE credentials SCHEMAFULL;
 
-DEFINE FIELD user_id ON TABLE credentials TYPE uuid;
+DEFINE FIELD user_id ON TABLE credentials TYPE record<users>;
 DEFINE FIELD name ON TABLE credentials TYPE string;
 DEFINE FIELD data ON TABLE credentials TYPE object FLEXIBLE;
 DEFINE FIELD last_used ON TABLE credentials TYPE datetime;
@@ -152,7 +263,7 @@ DEFINE FUNCTION fn::auth::username() -> option<string> {
 	RETURN $auth.username;
 };
 
-DEFINE FUNCTION fn::auth::user_id() -> option<uuid> {
+DEFINE FUNCTION fn::auth::user_id() -> option<record<users>> {
 	RETURN (SELECT VALUE id FROM users WHERE username = fn::auth::username() LIMIT 1)[0];
 };
 
@@ -168,19 +279,24 @@ DEFINE FUNCTION fn::auth::is_admin() -> bool {
 		)) > 0;
 };
 
-DEFINE FUNCTION fn::auth::is_product_admin($product_id: uuid) -> bool {
+-- A "product admin" is anyone with the `maintainer` role on that product
+-- (or a global admin).
+DEFINE FUNCTION fn::auth::is_product_admin($product_id: record<products>) -> bool {
 	RETURN fn::auth::is_admin()
 		OR array::len((
 			SELECT VALUE product_id
 			FROM user_access
 			WHERE user_id = fn::auth::user_id()
 			  AND product_id = $product_id
-			  AND role = "admin"
+			  AND role = "maintainer"
 			LIMIT 1
 		)) > 0;
 };
 
-DEFINE FUNCTION fn::auth::has_product_role($product_id: uuid, $required_role: string) -> bool {
+-- Required role hierarchy: maintainer > readwrite > readonly. Asking for
+-- "readonly" is satisfied by any role; "readwrite" needs readwrite or
+-- maintainer; "maintainer" needs maintainer.
+DEFINE FUNCTION fn::auth::has_product_role($product_id: record<products>, $required_role: string) -> bool {
 	RETURN fn::auth::is_admin()
 		OR array::len((
 			SELECT VALUE product_id
@@ -188,15 +304,15 @@ DEFINE FUNCTION fn::auth::has_product_role($product_id: uuid, $required_role: st
 			WHERE user_id = fn::auth::user_id()
 			  AND product_id = $product_id
 			  AND (
-					role = "admin"
-				 OR (role = "write" AND $required_role INSIDE ["read", "write"])
-				 OR (role = "read" AND $required_role = "read")
+					role = "maintainer"
+				 OR (role = "readwrite" AND $required_role INSIDE ["readonly", "readwrite"])
+				 OR (role = "readonly" AND $required_role = "readonly")
 			  )
 			LIMIT 1
 		)) > 0;
 };
 
-DEFINE FUNCTION fn::auth::shares_admin_product_with_user($user_id: uuid) -> bool {
+DEFINE FUNCTION fn::auth::shares_admin_product_with_user($user_id: record<users>) -> bool {
 	RETURN fn::auth::is_admin()
 		OR array::len((
 			SELECT VALUE product_id
@@ -206,7 +322,7 @@ DEFINE FUNCTION fn::auth::shares_admin_product_with_user($user_id: uuid) -> bool
 					SELECT VALUE product_id
 					FROM user_access
 					WHERE user_id = fn::auth::user_id()
-					  AND role = "admin"
+					  AND role = "maintainer"
 			  )
 			LIMIT 1
 		)) > 0;
@@ -218,7 +334,7 @@ DEFINE FUNCTION fn::auth::shares_admin_product_with_user($user_id: uuid) -> bool
 
 DEFINE TABLE OVERWRITE products SCHEMAFULL
 	PERMISSIONS
-		FOR select WHERE fn::auth::has_product_role(id, "read")
+		FOR select WHERE fn::auth::has_product_role(id, "readonly")
 		FOR create WHERE fn::auth::is_admin()
 		FOR update WHERE fn::auth::is_admin()
 		FOR delete WHERE fn::auth::is_admin();
@@ -242,23 +358,29 @@ DEFINE TABLE OVERWRITE user_access SCHEMAFULL
 
 DEFINE TABLE OVERWRITE crashes SCHEMAFULL
 	PERMISSIONS
-		FOR select WHERE fn::auth::has_product_role(product_id, "read")
-		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "write");
+		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
+		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
+
+DEFINE TABLE OVERWRITE crash_groups SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
+		FOR create, update WHERE fn::auth::has_product_role(product_id, "readwrite")
+		FOR delete WHERE fn::auth::is_product_admin(product_id);
 
 DEFINE TABLE OVERWRITE annotations SCHEMAFULL
 	PERMISSIONS
-		FOR select WHERE fn::auth::has_product_role(product_id, "read")
-		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "write");
+		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
+		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE TABLE OVERWRITE attachments SCHEMAFULL
 	PERMISSIONS
-		FOR select WHERE fn::auth::has_product_role(product_id, "read")
-		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "write");
+		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
+		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE TABLE OVERWRITE symbols SCHEMAFULL
 	PERMISSIONS
-		FOR select WHERE fn::auth::has_product_role(product_id, "read")
-		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "write");
+		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
+		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE TABLE OVERWRITE api_tokens SCHEMAFULL
 	PERMISSIONS
