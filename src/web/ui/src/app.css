@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body { height: 100%; }
+  body { font-family: 'Inter', system-ui, sans-serif; }
+}
+
+/* Hide scrollbars inside the crash detail panes on webkit for that clean prototype feel */
+.scroll-clean::-webkit-scrollbar { width: 10px; height: 10px; }
+.scroll-clean::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 10px; }
+.scroll-clean::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.22); }
+.dark .scroll-clean::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); }
+.dark .scroll-clean::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.16); }
