@@ -36,6 +36,12 @@ jobs:
           npm i
           npm run web:islands:build
 
+      - name: Check SvelteKit UI
+        working-directory: src/web/ui
+        run: |
+          npm ci
+          npm run check
+
       - name: Build backend
         run: cargo +stable build --workspace
 
@@ -62,6 +68,12 @@ jobs:
         run: |
           npm i
           npm run web:islands:build
+
+      - name: Check SvelteKit UI
+        working-directory: src/web/ui
+        run: |
+          npm ci
+          npm run check
 
       - name: Run tests
         run: RUST_BACKTRACE=1 cargo +stable test -p api -p repos -p processor -p curator -p web --no-fail-fast
