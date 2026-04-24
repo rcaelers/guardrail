@@ -36,6 +36,9 @@ pub struct WebServer {
     pub port: u16,
     pub public_key: Option<String>,
     pub private_key: Option<String>,
+    /// When set, unknown routes are reverse-proxied to this URL (e.g. the
+    /// SvelteKit dev server at http://localhost:5173 during development).
+    pub dev_proxy_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Default)]

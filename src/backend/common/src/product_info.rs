@@ -1,9 +1,8 @@
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProductInfo {
-    pub id: Uuid,
+    pub id: String,
     pub name: String,
     pub accepting_crashes: bool,
     #[serde(default)]

@@ -25,7 +25,7 @@ impl SymbolProcessor {
     #[instrument(skip(self, symbol_info, redis_storage), fields(storage_path))]
     async fn handle_job(
         &self,
-        symbol_upload_id: uuid::Uuid,
+        symbol_upload_id: String,
         symbol_info: serde_json::Value,
         redis_storage: &RedisStorage<ImportSymbolJob>,
     ) -> Result<(), JobError> {
@@ -47,12 +47,14 @@ impl SymbolProcessor {
         info!("Symbol file validated successfully: {}", storage_path);
 
         // Write processed symbol info to S3
-        self.write_processed_symbol(symbol_upload_id, &symbol_info)
+        self.write_processed_symbol(&symbol_upload_id, &symbol_info)
             .await?;
         info!("Wrote processed symbol info to S3: {}", symbol_upload_id);
 
         // Enqueue ImportSymbolJob for the curator to import into database
-        let import_job = ImportSymbolJob { symbol_upload_id };
+        let import_job = ImportSymbolJob {
+            symbol_upload_id: symbol_upload_id.clone(),
+        };
         redis_storage.clone().push(import_job).await.map_err(|e| {
             error!(error = ?e, "Failed to enqueue ImportSymbolJob");
             JobError::ApalisError(format!("failed to enqueue ImportSymbolJob: {:?}", e))
@@ -78,7 +80,7 @@ impl SymbolProcessor {
     #[instrument(skip(self, symbol_info), fields(symbol_upload_id = %symbol_upload_id))]
     async fn write_processed_symbol(
         &self,
-        symbol_upload_id: uuid::Uuid,
+        symbol_upload_id: &str,
         symbol_info: &serde_json::Value,
     ) -> Result<(), JobError> {
         let json_bytes = serde_json::to_vec_pretty(symbol_info).map_err(|e| {
@@ -111,15 +113,11 @@ impl SymbolProcessor {
                 error!("symbol_upload_id is missing in job");
                 JobError::Failure("symbol_upload_id is missing".to_string())
             })?
-            .parse::<uuid::Uuid>()
-            .map_err(|_| {
-                error!("Invalid symbol_upload_id format in job");
-                JobError::Failure("invalid symbol_upload_id format".to_string())
-            })?;
+            .to_string();
         info!("Process symbol: {}", symbol_upload_id);
         let processor = SymbolProcessor::new(state.clone());
         processor
-            .handle_job(symbol_upload_id, job.symbol_info.clone(), &redis_storage)
+            .handle_job(symbol_upload_id.clone(), job.symbol_info.clone(), &redis_storage)
             .await?;
         info!("Successfully processed symbol for upload ID: {}", symbol_upload_id);
 

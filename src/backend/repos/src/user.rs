@@ -6,6 +6,7 @@ use surrealdb::engine::any::Any;
 use crate::{
     Repo,
     error::{RepoError, handle_surreal_error},
+    record_key,
 };
 use common::QueryParams;
 use data::user::{NewUser, User};
@@ -13,10 +14,13 @@ use data::user::{NewUser, User};
 pub struct UserRepo {}
 
 impl UserRepo {
-    pub async fn get_by_id(db: &Surreal<Any>, id: uuid::Uuid) -> Result<Option<User>, RepoError> {
+    pub async fn get_by_id(
+        db: &Surreal<Any>,
+        id: impl ToString,
+    ) -> Result<Option<User>, RepoError> {
         let mut result = db
             .query("SELECT *, meta::id(id) as id FROM ONLY type::record('users', $id)")
-            .bind(("id", id.to_string()))
+            .bind(("id", record_key(id.to_string())))
             .await
             .map_err(handle_surreal_error)?;
         crate::take_one(&mut result, 0)
@@ -64,20 +68,23 @@ impl UserRepo {
 
     pub async fn create_with_id(
         db: &Surreal<Any>,
-        id: uuid::Uuid,
+        id: impl ToString,
         username: &str,
-    ) -> Result<uuid::Uuid, RepoError> {
+    ) -> Result<String, RepoError> {
+        let id = record_key(id.to_string());
         let _: Option<serde_json::Value> = db
             .query(
                 "CREATE type::record('users', $id) CONTENT {
                 username: $username,
+                email: $email,
                 is_admin: false,
                 created_at: time::now(),
                 updated_at: time::now(),
             }",
             )
-            .bind(("id", id.to_string()))
+            .bind(("id", id.clone()))
             .bind(("username", username.to_owned()))
+            .bind(("email", format!("{username}@test.local")))
             .await
             .map_err(handle_surreal_error)?
             .take(0)
@@ -85,19 +92,22 @@ impl UserRepo {
         Ok(id)
     }
 
-    pub async fn create(db: &Surreal<Any>, user: NewUser) -> Result<uuid::Uuid, RepoError> {
-        let id = uuid::Uuid::new_v4();
+    pub async fn create(db: &Surreal<Any>, user: NewUser) -> Result<String, RepoError> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let email = format!("{}@test.local", user.username);
         let _: Option<serde_json::Value> = db
             .query(
                 "CREATE type::record('users', $id) CONTENT {
                 username: $username,
+                email: $email,
                 is_admin: $is_admin,
                 created_at: time::now(),
                 updated_at: time::now(),
             }",
             )
-            .bind(("id", id.to_string()))
+            .bind(("id", id.clone()))
             .bind(("username", user.username.clone()))
+            .bind(("email", email))
             .bind(("is_admin", user.is_admin))
             .await
             .map_err(handle_surreal_error)?
@@ -106,7 +116,7 @@ impl UserRepo {
         Ok(id)
     }
 
-    pub async fn update(db: &Surreal<Any>, user: User) -> Result<Option<uuid::Uuid>, RepoError> {
+    pub async fn update(db: &Surreal<Any>, user: User) -> Result<Option<String>, RepoError> {
         let mut result = db
             .query(
                 "UPDATE type::record('users', $id) SET
@@ -115,22 +125,22 @@ impl UserRepo {
                 updated_at = time::now()
             RETURN meta::id(id) as id",
             )
-            .bind(("id", user.id.to_string()))
+            .bind(("id", user.id.clone()))
             .bind(("username", user.username.clone()))
             .bind(("is_admin", user.is_admin))
             .await
             .map_err(handle_surreal_error)?;
         let rows: Vec<serde_json::Value> = result.take(0).map_err(handle_surreal_error)?;
-        Ok(rows.first().and_then(|r| {
-            r.get("id")
-                .and_then(|v| v.as_str())
-                .and_then(|s| uuid::Uuid::parse_str(s).ok())
-        }))
+        Ok(rows
+            .first()
+            .and_then(|r| r.get("id"))
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string))
     }
 
-    pub async fn remove(db: &Surreal<Any>, id: uuid::Uuid) -> Result<(), RepoError> {
+    pub async fn remove(db: &Surreal<Any>, id: impl ToString) -> Result<(), RepoError> {
         db.query("DELETE type::record('users', $id)")
-            .bind(("id", id.to_string()))
+            .bind(("id", record_key(id.to_string())))
             .await
             .map_err(handle_surreal_error)?;
         Ok(())

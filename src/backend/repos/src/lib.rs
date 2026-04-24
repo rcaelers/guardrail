@@ -48,6 +48,13 @@ pub fn take_many<T: DeserializeOwned>(
         .collect()
 }
 
+pub fn record_key(id: impl AsRef<str>) -> String {
+    let id = id.as_ref();
+    id.split_once(':')
+        .map(|(_, rest)| rest.to_string())
+        .unwrap_or_else(|| id.to_string())
+}
+
 impl Repo {
     pub fn new(db: Surreal<Any>) -> Repo {
         Repo { db }

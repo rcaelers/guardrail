@@ -18,14 +18,14 @@ pub struct SymbolJob {
 /// Consumed by the curator to import into the database.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ImportCrashJob {
-    pub crash_id: uuid::Uuid,
+    pub crash_id: String,
 }
 
 /// Job queued by the processor after validating symbols.
 /// Consumed by the curator to import metadata into the database.
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ImportSymbolJob {
-    pub symbol_upload_id: uuid::Uuid,
+    pub symbol_upload_id: String,
 }
 
 pub mod queue {

@@ -75,6 +75,22 @@ export interface Note {
   body: string;
 }
 
+export interface CrashAttachment {
+  id: string;
+  name: string;
+  filename: string;
+  mimeType: string;
+  size: number;
+  createdAt: string;
+}
+
+export interface CrashUserText {
+  attachmentId: string;
+  body: string;
+  filename: string;
+  createdAt: string;
+}
+
 export interface RelatedRef {
   id: string;
   title: string;
@@ -136,6 +152,7 @@ export interface DumpThread {
   thread_name: string | null;
   frame_count: number;
   last_error_value: string;
+  threads_index?: number;
   frames: DumpFrame[];
 }
 
@@ -150,6 +167,12 @@ export interface DumpModule {
   loaded_symbols: boolean;
   corrupt_symbols: boolean;
   missing_symbols: boolean;
+}
+
+export interface CrashHandle {
+  handle: number;
+  type_name: string | null;
+  object_name: string | null;
 }
 
 export interface Dump {
@@ -175,6 +198,24 @@ export interface Dump {
   unloaded_modules: unknown[];
 }
 
+export interface CrashReport extends Dump {
+  crash_info: Dump['crash_info'] & {
+    assertion?: string | null;
+    instruction?: string | null;
+    memory_accesses?: unknown;
+    adjusted_address?: string | null;
+    possible_bit_flips?: unknown;
+  };
+  crashing_thread?: DumpThread | null;
+  handles?: CrashHandle[];
+  linux_memory_map_count?: number | null;
+  lsb_release?: string | null;
+  mac_boot_args?: string | null;
+  mac_crash_info?: unknown;
+  modules_contains_cert_info?: boolean;
+  proc_limits?: unknown;
+}
+
 export interface Derived {
   title: string;
   exceptionType: string;
@@ -190,7 +231,7 @@ export interface Derived {
 
 // One crash event. The detail pane renders this — `Crash` is what the user
 // is looking at. Multiple crashes with the same fingerprint share a group.
-export interface Crash {
+export interface Crash extends Partial<CrashReport> {
   id: string;
   groupId: string;
   productId: string;
@@ -204,27 +245,18 @@ export interface Crash {
   commit: string;
 
   // Per-crash summary (what shows in the detail header for THIS crash)
-  signal: Signal;
-  title: string;
-  topFrame: string;
-  file: string;
-  line: number;
+  signal?: Signal;
+  title?: string;
+  topFrame?: string;
+  file?: string;
+  line?: number;
   address?: string;
   platform?: 'windows' | 'macos' | 'linux' | string;
   exceptionType?: string;
   exceptionTypeShort?: string;
   build: string;
-
-  // Detail blobs
-  stack: StackFrame[];
-  threads: Thread[];
-  modules: Module[];
-  env: Environment;
-  breadcrumbs: Breadcrumb[];
-  logs: LogFile[];
-  userDescription: UserDescription | null;
-  dump?: Dump;
-  derived?: Derived;
+  attachments?: CrashAttachment[];
+  userText?: CrashUserText | null;
 }
 
 // Lightweight crash summary used in the expanded group row.
@@ -265,6 +297,7 @@ export interface Product {
   slug: string;
   description: string;
   color: string; // hex
+  public: boolean;
 }
 
 export interface Membership {
@@ -340,14 +373,21 @@ export interface GuardrailAdapter {
   getUser(id: string): Promise<User | null>;
 
   // --- products ---
-  listProducts(scope?: 'all' | 'mine', userId?: string): Promise<Product[]>;
+  listProducts(scope?: 'all' | 'mine' | 'public', userId?: string): Promise<Product[]>;
   getProduct(id: string): Promise<Product | null>;
   createProduct(spec: { name: string; slug?: string; description?: string }): Promise<Product>;
+  updateProduct(id: string, patch: {
+    name?: string;
+    slug?: string;
+    description?: string;
+    color?: string;
+  }): Promise<Product>;
   deleteProduct(id: string): Promise<void>;
 
   // --- users ---
   listUsers(): Promise<User[]>;
   createUser(spec: { email: string; name?: string }): Promise<User>;
+  updateUser(id: string, patch: { email?: string; name?: string }): Promise<User>;
   deleteUser(id: string): Promise<void>;
   setAdmin(id: string, isAdmin: boolean): Promise<void>;
 
@@ -363,6 +403,7 @@ export interface GuardrailAdapter {
   getGroup(id: string): Promise<CrashGroup | null>;
   /** Returns a single crash plus its parent group, or null. */
   getCrash(id: string): Promise<{ crash: Crash; group: CrashGroup } | null>;
+  downloadAttachment(id: string): Promise<Response | null>;
   setStatus(id: string, status: Status): Promise<void>;
   addNote(id: string, body: string, author: string): Promise<Note>;
   mergeGroups(primaryId: string, mergedId: string): Promise<void>;

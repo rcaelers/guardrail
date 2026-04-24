@@ -9,11 +9,12 @@ use tracing::{error, info};
 
 use crate::{error::ApiError, state::AppState};
 use data::api_token::ApiToken;
+use repos::user::UserRepo;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JwtClaims {
     pub username: String, // Username
-    pub user_id: Option<uuid::Uuid>,
+    pub user_id: Option<String>,
     pub is_admin: bool,
     pub role: String, // Role (e.g., "admin")
     pub sub: String,  // Subject (username)
@@ -41,18 +42,18 @@ pub async fn generate_jwt_token(
         Utc::now() + Duration::minutes(settings.clone().auth.jwk.token_validity_in_minutes);
     let expiration_timestamp = expiration.timestamp();
 
-    let (username, user_id, is_admin) = if let Some(user_id) = api_token.user_id {
-        match repos::user::UserRepo::get_by_id(&state.repo.db, user_id).await {
-            Ok(Some(user)) => (user.username, Some(user.id), user.is_admin),
-            Ok(None) => {
-                error!("User not found for API token: {}", api_token.id);
-                return Err(ApiError::Failure("invalid API token".to_string()));
-            }
-            Err(err) => {
-                error!("Failed to retrieve user: {}", err);
-                return Err(ApiError::Failure("invalid API token".to_string()));
-            }
-        }
+    let (username, user_id, is_admin) = if let Some(user_id_raw) = api_token.user_id.as_deref() {
+        let Some(user) = UserRepo::get_by_id(&state.repo.db, user_id_raw)
+            .await
+            .map_err(|err| {
+                error!("Failed to retrieve user {}: {}", user_id_raw, err);
+                ApiError::Failure("invalid API token".to_string())
+            })?
+        else {
+            error!("User not found for API token: {}", api_token.id);
+            return Err(ApiError::Failure("invalid API token".to_string()));
+        };
+        (user.username, Some(user.id), user.is_admin)
     } else {
         info!("API token {} has no associated user, using 'admin'", api_token.id);
         ("admin".to_string(), None, true)
@@ -60,7 +61,7 @@ pub async fn generate_jwt_token(
 
     let claims = JwtClaims {
         username: username.clone(),
-        user_id,
+        user_id: user_id.clone(),
         is_admin,
         role: "guardrail_apiuser".to_string(),
         sub: username.clone(),
@@ -71,7 +72,7 @@ pub async fn generate_jwt_token(
         ac: SURREAL_ACCESS_METHOD.to_string(),
         ns: settings.database.namespace.clone(),
         db: settings.database.database.clone(),
-        id: user_id.map(|uid| format!("users:{uid}")),
+        id: user_id.clone(),
     };
 
     let private_key = &settings.clone().auth.jwk.private_key;

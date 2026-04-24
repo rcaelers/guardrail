@@ -15,7 +15,7 @@ import type {
   GuardrailAdapter, Crash, CrashGroup, CrashGroupSummary, Dump, DumpThread, DumpModule,
   Derived, ListQuery, ListResult, Note, Status,
   User, Product, Membership, MembershipWithUser, MembershipWithProduct,
-  Role, Symbol as SymbolRow, SymbolQuery
+  Role, Symbol as SymbolRow, SymbolQuery, CrashAttachment, CrashUserText
 } from './types';
 
 const VERSIONS = ['2.14.0', '2.13.4', '2.13.3', '2.13.2', '2.12.9', '2.12.7'];
@@ -52,6 +52,108 @@ function humanSize(bytes: number) {
   let u = 0, v = bytes;
   while (v >= 1024 && u < units.length - 1) { v /= 1024; u++; }
   return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[u]}`;
+}
+
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .map((word) => word[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'U';
+}
+
+function mockAttachmentBase(crash: Crash) {
+  const stem = crash.id.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+  return {
+    userText: {
+      attachmentId: `${stem}-user-text`,
+      filename: 'user-text.txt',
+      createdAt: crash.at
+    },
+    logs: [
+      {
+        id: `${stem}-session-log`,
+        name: 'session-log',
+        filename: `${stem}.log`,
+        mimeType: 'text/plain',
+        size: 24_576,
+        createdAt: crash.at
+      },
+      {
+        id: `${stem}-diagnostics-json`,
+        name: 'diagnostics-json',
+        filename: `${stem}.json`,
+        mimeType: 'application/json',
+        size: 3_072,
+        createdAt: crash.at
+      }
+    ] satisfies CrashAttachment[]
+  };
+}
+
+function mockUserText(crash: Crash): CrashUserText {
+  const base = mockAttachmentBase(crash).userText;
+  return {
+    ...base,
+    body: [
+      'The app froze for a few seconds before it disappeared.',
+      `I was using version ${crash.version} on ${crash.os}.`,
+      'This started after resuming from sleep and happened twice today.'
+    ].join(' ')
+  };
+}
+
+function mockAttachments(crash: Crash): CrashAttachment[] {
+  return mockAttachmentBase(crash).logs;
+}
+
+function withMockAttachments(crash: Crash): Crash {
+  return {
+    ...crash,
+    attachments: crash.attachments ?? mockAttachments(crash),
+    userText: crash.userText ?? mockUserText(crash)
+  };
+}
+
+function mockAttachmentContent(crash: Crash, attachmentId: string): { body: string; type: string; filename: string } | null {
+  const enriched = withMockAttachments(crash);
+  if (enriched.userText?.attachmentId === attachmentId) {
+    return {
+      body: enriched.userText.body,
+      type: 'text/plain; charset=utf-8',
+      filename: enriched.userText.filename
+    };
+  }
+  const attachment = enriched.attachments?.find((item) => item.id === attachmentId);
+  if (!attachment) return null;
+  if (attachment.name === 'diagnostics-json') {
+    return {
+      body: JSON.stringify(
+        {
+          crashId: crash.id,
+          groupId: crash.groupId,
+          signal: crash.signal,
+          version: crash.version,
+          platform: crash.platform
+        },
+        null,
+        2
+      ),
+      type: attachment.mimeType,
+      filename: attachment.filename
+    };
+  }
+  return {
+    body: [
+      `[${crash.at}] crash_id=${crash.id}`,
+      `[${crash.at}] signal=${crash.signal ?? crash.exceptionTypeShort ?? 'unknown'}`,
+      `[${crash.at}] top_frame=${crash.topFrame ?? 'n/a'}`
+    ].join('\n'),
+    type: attachment.mimeType,
+    filename: attachment.filename
+  };
 }
 
 // ------------------------------------------------------------------
@@ -374,7 +476,7 @@ const USER_DESCRIPTIONS = [
 
 // Build a Crash from a freshly-ingested archetype. Each call regenerates
 // the dump (so randomized fields like offsets vary per crash), giving every
-// crash in a group its own concrete detail blobs.
+// crash in a group its own concrete raw report.
 function makeCrash(opts: {
   i: number;
   j: number;
@@ -388,9 +490,8 @@ function makeCrash(opts: {
   const arch = ARCHETYPES[opts.archIdx];
   const ingested = ingest(arch.make());
   const { dump, derived } = ingested;
-  const ct = dump.threads.find((t) => t.thread_id === dump.crash_info.crashing_thread)!;
-  const mainMod = dump.modules[dump.main_module]?.filename || '';
-  const userCtx = USER_DESCRIPTIONS[(opts.i + opts.j) % USER_DESCRIPTIONS.length];
+  const crashThreadIndex = dump.threads.findIndex((t) => t.thread_id === dump.crash_info.crashing_thread);
+  const crashingThread = dump.threads[crashThreadIndex] ?? dump.threads[0];
   return {
     id: `CR-${String(opts.i + 1).padStart(4, '0')}-${String(opts.j + 1).padStart(3, '0')}`,
     groupId: opts.groupId,
@@ -414,45 +515,25 @@ function makeCrash(opts: {
     exceptionTypeShort: derived.exceptionTypeShort,
     build: opts.j === 0 ? opts.build : hex(7),
 
-    stack: ct.frames.map((f) => ({
-      fn: f.function || `<${f.module}+${f.module_offset}>`,
-      file: f.file
-        ? f.file.replace(/^\\\\\?\\/, '').split(/[\\/]/).slice(-2).join('/')
-        : (f.module || ''),
-      line: f.line || 0,
-      addr: f.offset,
-      inApp: f.module === mainMod,
-      trust: f.trust
-    })),
-    threads: dump.threads.map((th) => ({
-      id: th.thread_id,
-      name: th.thread_name
-        || (th.thread_id === dump.crash_info.crashing_thread ? 'crashing thread' : `thread ${th.thread_id}`),
-      crashed: th.thread_id === dump.crash_info.crashing_thread,
-      frames: th.frame_count
-    })),
-    modules: dump.modules.slice(0, 18).map((m) => ({
-      name: m.filename,
-      version: m.version !== '0.0.0.0' ? m.version : '',
-      addr: m.base_addr,
-      size: humanSize(parseInt(m.end_addr, 16) - parseInt(m.base_addr, 16)),
-      inApp: m.filename === mainMod
-    })),
-    env: {
-      os: `${dump.system_info.os} ${dump.system_info.os_ver}`,
-      arch: dump.system_info.cpu_arch,
-      cpu: `${dump.system_info.cpu_info} (${dump.system_info.cpu_count} cores)`,
-      ram: pick(['16 GB', '32 GB', '64 GB']),
-      gpu: pick(['Apple M3 Pro (integrated)', 'NVIDIA RTX 4070', 'AMD Radeon 7900 XT', 'Intel Arc A770']),
-      locale: pick(['en-US', 'en-GB', 'de-DE', 'ja-JP', 'es-ES'])
-    },
-    breadcrumbs: buildBreadcrumbs(ingested),
-    logs: buildLogs(ingested),
-    userDescription: userCtx.body
-      ? { author: userCtx.author, at: relTime(0, randInt(1, 48)), body: userCtx.body }
+    pid: dump.pid,
+    status: dump.status,
+    thread_count: dump.thread_count,
+    main_module: dump.main_module,
+    crash_info: { ...dump.crash_info, crashing_thread: Math.max(crashThreadIndex, 0) },
+    crashing_thread: crashingThread
+      ? { ...crashingThread, threads_index: Math.max(crashThreadIndex, 0) }
       : null,
-    dump,
-    derived
+    system_info: dump.system_info,
+    modules: dump.modules,
+    threads: dump.threads,
+    unloaded_modules: dump.unloaded_modules,
+    handles: [],
+    linux_memory_map_count: null,
+    lsb_release: null,
+    mac_boot_args: null,
+    mac_crash_info: null,
+    modules_contains_cert_info: false,
+    proc_limits: null
   };
 }
 
@@ -487,13 +568,13 @@ function buildDataset(): CrashGroup[] {
     const group: CrashGroup = {
       id: groupId,
       productId: '', // assigned below once PRODUCTS exist
-      signal: canonical.signal,
+      signal: canonical.signal ?? 'unknown',
       exceptionType: canonical.exceptionType,
       exceptionTypeShort: canonical.exceptionTypeShort,
-      title: canonical.title,
-      topFrame: canonical.topFrame,
-      file: canonical.file,
-      line: canonical.line,
+      title: canonical.title ?? 'unknown crash',
+      topFrame: canonical.topFrame ?? '<unknown frame>',
+      file: canonical.file ?? '<no source>',
+      line: canonical.line ?? 0,
       address: canonical.address,
       platform: canonical.platform,
       version,
@@ -538,10 +619,10 @@ function buildDataset(): CrashGroup[] {
 // ------------------------------------------------------------------
 
 const PRODUCTS: Product[] = [
-  { id: 'guardrail', name: 'Guardrail',      slug: 'guardrail', color: '#3b6fd4', description: 'Main desktop app' },
-  { id: 'harpoon',   name: 'Harpoon',        slug: 'harpoon',   color: '#0f766e', description: 'Shared injection library (Windows)' },
-  { id: 'rivet',     name: 'Rivet',          slug: 'rivet',     color: '#b45309', description: 'CLI build tooling' },
-  { id: 'workrave',  name: 'Workrave Agent', slug: 'workrave',  color: '#9333ea', description: 'Background service' }
+  { id: 'guardrail', name: 'Guardrail',      slug: 'guardrail', color: '#3b6fd4', description: 'Main desktop app',                   public: false },
+  { id: 'harpoon',   name: 'Harpoon',        slug: 'harpoon',   color: '#0f766e', description: 'Shared injection library (Windows)', public: false },
+  { id: 'rivet',     name: 'Rivet',          slug: 'rivet',     color: '#b45309', description: 'CLI build tooling',                  public: false },
+  { id: 'workrave',  name: 'Workrave Agent', slug: 'workrave',  color: '#9333ea', description: 'Background service',                 public: true  }
 ];
 
 const USERS: User[] = [
@@ -667,6 +748,7 @@ export const mockAdapter: GuardrailAdapter = {
   // --- products ---
   async listProducts(scope = 'all', userId) {
     if (scope === 'all') return PRODUCTS.slice();
+    if (scope === 'public') return PRODUCTS.filter((p) => p.public);
     if (!userId) return [];
     const ids = new Set(MEMBERSHIPS.filter((m) => m.userId === userId).map((m) => m.productId));
     return PRODUCTS.filter((p) => ids.has(p.id));
@@ -675,9 +757,26 @@ export const mockAdapter: GuardrailAdapter = {
   async createProduct({ name, slug, description }) {
     const id = (slug || name.toLowerCase().replace(/[^a-z0-9]+/g, '-')).trim();
     if (PRODUCTS.some((p) => p.id === id)) throw new Error(`Product "${id}" already exists`);
-    const p: Product = { id, name, slug: id, description: description || '', color: '#6b7280' };
+    const p: Product = { id, name, slug: id, description: description || '', color: '#6b7280', public: false };
     PRODUCTS.push(p);
     return p;
+  },
+  async updateProduct(id, patch) {
+    const product = PRODUCTS.find((p) => p.id === id);
+    if (!product) throw new Error(`Product "${id}" not found`);
+    const name = patch.name?.trim();
+    const slug = patch.slug?.trim();
+    const description = patch.description?.trim();
+    const color = patch.color?.trim();
+    if (name !== undefined && !name) throw new Error('Name required.');
+    if (slug !== undefined && !slug) throw new Error('Slug required.');
+    if (slug && PRODUCTS.some((p) => p.id !== id && p.slug === slug))
+      throw new Error(`Product slug "${slug}" already exists`);
+    if (name !== undefined) product.name = name;
+    if (slug !== undefined) product.slug = slug;
+    if (description !== undefined) product.description = description;
+    if (color !== undefined) product.color = color || product.color;
+    return product;
   },
   async deleteProduct(id) {
     const i = PRODUCTS.findIndex((p) => p.id === id); if (i >= 0) PRODUCTS.splice(i, 1);
@@ -699,11 +798,27 @@ export const mockAdapter: GuardrailAdapter = {
     const finalName = (name || '').trim() || email;
     const u: User = {
       id, email, name: finalName,
-      avatar: finalName.split(/\s+/).map((w) => w[0]).slice(0, 2).join('').toUpperCase() || 'U',
+      avatar: initials(finalName),
       isAdmin: false, joinedAt: new Date().toISOString()
     };
     USERS.push(u);
     return u;
+  },
+  async updateUser(id, patch) {
+    const user = USERS.find((u) => u.id === id);
+    if (!user) throw new Error(`User "${id}" not found`);
+    const email = patch.email?.trim().toLowerCase();
+    const name = patch.name?.trim();
+    if (email !== undefined && !email) throw new Error('Email required.');
+    if (name !== undefined && !name) throw new Error('Name required.');
+    if (email && USERS.some((u) => u.id !== id && u.email.toLowerCase() === email))
+      throw new Error(`A user with email "${email}" already exists`);
+    if (email !== undefined) user.email = email;
+    if (name !== undefined) {
+      user.name = name;
+      user.avatar = initials(name);
+    }
+    return user;
   },
   async deleteUser(id) {
     const i = USERS.findIndex((u) => u.id === id); if (i >= 0) USERS.splice(i, 1);
@@ -765,7 +880,22 @@ export const mockAdapter: GuardrailAdapter = {
   async getCrash(id) {
     for (const g of DB) {
       const crash = g.crashes.find((c) => c.id === id);
-      if (crash) return { crash, group: g };
+      if (crash) return { crash: withMockAttachments(crash), group: g };
+    }
+    return null;
+  },
+  async downloadAttachment(id) {
+    for (const group of DB) {
+      for (const crash of group.crashes) {
+        const content = mockAttachmentContent(crash, id);
+        if (!content) continue;
+        return new Response(content.body, {
+          headers: {
+            'content-type': content.type,
+            'content-disposition': `attachment; filename="${content.filename}"`
+          }
+        });
+      }
     }
     return null;
   },

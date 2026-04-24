@@ -8,9 +8,11 @@
 //   GUARDRAIL_API_URL=http://127.0.0.1:4500/api/v1 npm run dev
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::Router;
+use common::settings::Settings;
 use surrealdb::opt::auth::Root;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
@@ -20,27 +22,46 @@ mod db_api;
 
 type AnyErr = Box<dyn std::error::Error + Send + Sync>;
 
+fn default_config_dir() -> String {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../../config")
+        .to_string_lossy()
+        .into_owned()
+}
+
 #[tokio::main]
 async fn main() -> Result<(), AnyErr> {
     tracing_subscriber::fmt::init();
 
-    let host = std::env::var("GUARDRAIL_DB_HOST")
-        .unwrap_or_else(|_| "ws://localhost:8000".into());
+    let host = std::env::var("GUARDRAIL_DB_HOST").unwrap_or_else(|_| "ws://localhost:8000".into());
     let user = std::env::var("GUARDRAIL_DB_USER").unwrap_or_else(|_| "root".into());
     let pass = std::env::var("GUARDRAIL_DB_PASS").unwrap_or_else(|_| "root".into());
     let ns = std::env::var("GUARDRAIL_DB_NS").unwrap_or_else(|_| "guardrail".into());
     let db_name = std::env::var("GUARDRAIL_DB_NAME").unwrap_or_else(|_| "guardrail".into());
+    let config_dir = std::env::var("GUARDRAIL_CONFIG_DIR").unwrap_or_else(|_| default_config_dir());
 
     let addr: SocketAddr = std::env::var("GUARDRAIL_API_ADDR")
         .unwrap_or_else(|_| "127.0.0.1:4500".into())
         .parse()?;
 
+    let settings = Arc::new(Settings::with_config_dir(&config_dir)?);
     let db = surrealdb::engine::any::connect(&host).await?;
-    db.signin(Root { username: user, password: pass }).await?;
+    db.signin(Root {
+        username: user,
+        password: pass,
+    })
+    .await?;
     db.use_ns(&ns).use_db(&db_name).await?;
-    let state = db_api::DbState { db: Arc::new(db) };
+    let storage = common::init_s3_object_store(settings).await;
+    let state = db_api::DbState {
+        db: Arc::new(db),
+        storage,
+    };
 
-    let cors = CorsLayer::new().allow_origin(Any).allow_methods(Any).allow_headers(Any);
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
     let app = Router::new()
         .nest("/api/v1", db_api::router().with_state(state))
         .layer(cors);

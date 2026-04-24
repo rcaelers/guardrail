@@ -100,7 +100,7 @@ async fn test_create() {
         build_id: "build_apple".to_string(),
         module_id: "module_apple".to_string(),
         storage_path: "/path/to/apple_symbols".to_string(),
-        product_id: product.id,
+        product_id: product.id.to_string(),
     };
 
     let symbols_id = SymbolsRepo::create(&db, new_symbols.clone())

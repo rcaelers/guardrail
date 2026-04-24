@@ -13,6 +13,7 @@ DEFINE FIELD name ON TABLE products TYPE string ASSERT $value != NONE AND $value
 DEFINE FIELD slug ON TABLE products TYPE string ASSERT $value != NONE AND $value != "";
 DEFINE FIELD description ON TABLE products TYPE string DEFAULT "";
 DEFINE FIELD color ON TABLE products TYPE string DEFAULT "#6b7280";
+DEFINE FIELD public ON TABLE products TYPE bool DEFAULT false;
 DEFINE FIELD accepting_crashes ON TABLE products TYPE bool DEFAULT true;
 DEFINE FIELD metadata ON TABLE products TYPE object FLEXIBLE DEFAULT {};
 DEFINE FIELD created_at ON TABLE products TYPE datetime DEFAULT time::now();
@@ -334,7 +335,7 @@ DEFINE FUNCTION fn::auth::shares_admin_product_with_user($user_id: record<users>
 
 DEFINE TABLE OVERWRITE products SCHEMAFULL
 	PERMISSIONS
-		FOR select WHERE fn::auth::has_product_role(id, "readonly")
+		FOR select WHERE public = true OR fn::auth::has_product_role(id, "readonly")
 		FOR create WHERE fn::auth::is_admin()
 		FOR update WHERE fn::auth::is_admin()
 		FOR delete WHERE fn::auth::is_admin();
@@ -358,28 +359,28 @@ DEFINE TABLE OVERWRITE user_access SCHEMAFULL
 
 DEFINE TABLE OVERWRITE crashes SCHEMAFULL
 	PERMISSIONS
-		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
+		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
 		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE TABLE OVERWRITE crash_groups SCHEMAFULL
 	PERMISSIONS
-		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
+		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
 		FOR create, update WHERE fn::auth::has_product_role(product_id, "readwrite")
 		FOR delete WHERE fn::auth::is_product_admin(product_id);
 
 DEFINE TABLE OVERWRITE annotations SCHEMAFULL
 	PERMISSIONS
-		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
+		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
 		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE TABLE OVERWRITE attachments SCHEMAFULL
 	PERMISSIONS
-		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
+		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
 		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE TABLE OVERWRITE symbols SCHEMAFULL
 	PERMISSIONS
-		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
+		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
 		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE TABLE OVERWRITE api_tokens SCHEMAFULL

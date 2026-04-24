@@ -4,6 +4,60 @@
 @layer base {
   html, body { height: 100%; }
   body { font-family: 'Inter', system-ui, sans-serif; }
+
+  button,
+  input[type="button"],
+  input[type="submit"],
+  input[type="reset"] {
+    transition:
+      transform 120ms ease,
+      filter 120ms ease,
+      box-shadow 120ms ease,
+      background-color 120ms ease,
+      border-color 120ms ease,
+      color 120ms ease,
+      opacity 120ms ease;
+  }
+
+  button:not(:disabled),
+  input[type="button"]:not(:disabled),
+  input[type="submit"]:not(:disabled),
+  input[type="reset"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  button:not(:disabled):hover,
+  input[type="button"]:not(:disabled):hover,
+  input[type="submit"]:not(:disabled):hover,
+  input[type="reset"]:not(:disabled):hover {
+    filter: brightness(0.98) saturate(1.04);
+    transform: translateY(-1px);
+  }
+
+  button:not(:disabled):active,
+  input[type="button"]:not(:disabled):active,
+  input[type="submit"]:not(:disabled):active,
+  input[type="reset"]:not(:disabled):active {
+    filter: brightness(0.94);
+    transform: translateY(1px) scale(0.985);
+  }
+
+  button:focus-visible,
+  input[type="button"]:focus-visible,
+  input[type="submit"]:focus-visible,
+  input[type="reset"]:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--color-accent) 32%, transparent),
+      0 0 0 4px color-mix(in oklab, var(--color-accent) 14%, transparent);
+  }
+
+  button:disabled,
+  input[type="button"]:disabled,
+  input[type="submit"]:disabled,
+  input[type="reset"]:disabled {
+    cursor: not-allowed;
+  }
 }
 
 /* Hide scrollbars inside the crash detail panes on webkit for that clean prototype feel */

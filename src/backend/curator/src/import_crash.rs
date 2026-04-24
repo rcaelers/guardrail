@@ -30,7 +30,7 @@ impl ImportCrashProcessor {
     }
 
     #[instrument(skip(self))]
-    async fn get_processed_crash(&self, crash_id: uuid::Uuid) -> Result<Bytes, JobError> {
+    async fn get_processed_crash(&self, crash_id: &str) -> Result<Bytes, JobError> {
         let path = format!("processed-crashes/{crash_id}.json");
         let object = self
             .storage
@@ -49,10 +49,10 @@ impl ImportCrashProcessor {
     }
 
     #[instrument(skip(self), fields(crash_id = %crash_id))]
-    async fn handle_job(&self, crash_id: uuid::Uuid) -> Result<(), JobError> {
+    async fn handle_job(&self, crash_id: String) -> Result<(), JobError> {
         info!("ImportCrashProcessor handling job: {}", crash_id);
 
-        let data = self.get_processed_crash(crash_id).await?;
+        let data = self.get_processed_crash(&crash_id).await?;
         let processed: Value = serde_json::from_slice(&data).map_err(|e| {
             error!("Failed to parse processed crash JSON: {:?}", e);
             JobError::Failure("failed to parse processed crash JSON".to_string())
@@ -61,7 +61,7 @@ impl ImportCrashProcessor {
         let crash_info = processed["crash_info"].clone();
         let report = processed["report"].clone();
 
-        Self::create_crash(&self.repo.db, crash_id, crash_info, report).await?;
+        Self::create_crash(&self.repo.db, &crash_id, crash_info, report).await?;
         info!("Imported crash report with ID: {:?}", crash_id);
 
         // Clean up processed crash file after successful import
@@ -73,15 +73,14 @@ impl ImportCrashProcessor {
     #[instrument(skip(db, crash_info, report))]
     async fn create_crash(
         db: &Surreal<Any>,
-        crash_id: uuid::Uuid,
+        crash_id: &str,
         crash_info: serde_json::Value,
         report: serde_json::Value,
-    ) -> Result<uuid::Uuid, JobError> {
+    ) -> Result<String, JobError> {
         let product_id = crash_info["product_id"]
             .as_str()
             .ok_or_else(|| JobError::Failure("product_id is missing".to_string()))?
-            .parse::<uuid::Uuid>()
-            .map_err(|_| JobError::Failure("invalid product_id format".to_string()))?;
+            .to_string();
 
         let minidump_id = crash_info["minidump"]["storage_id"]
             .as_str()
@@ -95,26 +94,26 @@ impl ImportCrashProcessor {
                 JobError::Failure("invalid minidump_id format".to_string())
             })?;
 
+        let product = ProductRepo::get_by_id(db, &product_id)
+            .await
+            .map_err(|_| JobError::Failure(format!("failed to get product {product_id}")))?
+            .ok_or_else(|| JobError::Failure(format!("no such product {product_id}")))?;
+
         let crash = NewCrash {
-            id: Some(crash_id),
+            id: Some(crash_id.to_string()),
             minidump: Some(minidump_id),
             signature: crash_info["signature"].as_str().map(|s| s.to_string()),
             product_id,
             report: Some(report),
         };
 
-        let product = ProductRepo::get_by_id(db, product_id)
-            .await
-            .map_err(|_| JobError::Failure(format!("failed to get product {product_id}")))?
-            .ok_or_else(|| JobError::Failure(format!("no such product {product_id}")))?;
-
         let id = CrashRepo::create(db, crash).await.map_err(|e| {
             error!("Failed to store crash report for {} ({:?})", product.name, e);
             JobError::Failure("failed to store crash report".to_string())
         })?;
 
-        Self::create_annotations(db, id, product.id, &crash_info).await?;
-        Self::create_attachments(db, id, product.id, &crash_info).await?;
+        Self::create_annotations(db, &id, &product.id, &crash_info).await?;
+        Self::create_attachments(db, &id, &product.id, &crash_info).await?;
         info!("Created crash report with ID: {}", id);
         Ok(id)
     }
@@ -122,8 +121,8 @@ impl ImportCrashProcessor {
     #[instrument(skip(db, crash_info))]
     async fn create_annotations(
         db: &Surreal<Any>,
-        crash_id: uuid::Uuid,
-        product_id: uuid::Uuid,
+        crash_id: &str,
+        product_id: &str,
         crash_info: &serde_json::Value,
     ) -> Result<(), JobError> {
         for (key, annotation_data) in crash_info["annotations"]
@@ -153,8 +152,8 @@ impl ImportCrashProcessor {
             };
 
             let annotation = NewAnnotation {
-                crash_id,
-                product_id,
+                crash_id: crash_id.to_string(),
+                product_id: product_id.to_string(),
                 source: source.to_string(),
                 key: key.to_string(),
                 value: value.to_string(),
@@ -172,8 +171,8 @@ impl ImportCrashProcessor {
     #[instrument(skip(db, crash_info))]
     async fn create_attachments(
         db: &Surreal<Any>,
-        crash_id: uuid::Uuid,
-        product_id: uuid::Uuid,
+        crash_id: &str,
+        product_id: &str,
         crash_info: &serde_json::Value,
     ) -> Result<(), JobError> {
         for attachment in crash_info["attachments"].as_array().unwrap_or(&vec![]) {
@@ -196,8 +195,8 @@ impl ImportCrashProcessor {
 
             let attachment = NewAttachment {
                 name: filename.to_string(),
-                crash_id,
-                product_id,
+                crash_id: crash_id.to_string(),
+                product_id: product_id.to_string(),
                 filename: filename.to_string(),
                 mime_type: content_type.to_string(),
                 storage_path: storage_path.to_string(),
@@ -213,7 +212,7 @@ impl ImportCrashProcessor {
     }
 
     #[instrument(skip(self), fields(crash_id = %crash_id))]
-    async fn cleanup_processed_crash(&self, crash_id: uuid::Uuid) {
+    async fn cleanup_processed_crash(&self, crash_id: String) {
         let path = format!("processed-crashes/{crash_id}.json");
         if let Err(e) = self.storage.delete(&Path::from(path.as_str())).await {
             error!(crash_id = %crash_id, path = %path, error = ?e, "Failed to delete processed crash file");
@@ -226,7 +225,7 @@ impl ImportCrashProcessor {
     pub async fn process(job: ImportCrashJob, state: Data<AppState>) -> Result<(), JobError> {
         info!("Incoming import crash job");
         let processor = ImportCrashProcessor::new(state.clone());
-        processor.handle_job(job.crash_id).await?;
+        processor.handle_job(job.crash_id.clone()).await?;
         info!("Successfully imported crash ID: {}", job.crash_id);
 
         Ok(())

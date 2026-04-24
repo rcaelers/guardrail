@@ -5,7 +5,6 @@ use futures::stream::TryStreamExt;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path};
 use std::collections::HashSet;
 use tracing::{error, info};
-use uuid::Uuid;
 
 use crate::error::JobError;
 use crate::jobs::ImportCrashJob;
@@ -44,7 +43,7 @@ impl JobCleaner {
     async fn get_crash_ids_for_status(
         redis: &RedisStorage<ImportCrashJob>,
         status: Status,
-    ) -> Result<HashSet<Uuid>, JobError>
+    ) -> Result<HashSet<String>, JobError>
     where
         RedisStorage<ImportCrashJob>: ListTasks<ImportCrashJob>,
     {
@@ -92,13 +91,13 @@ impl JobCleaner {
     }
 
     /// Extract crash_id from an ImportCrashJob
-    pub fn extract_crash_id_from_job(job: &ImportCrashJob) -> Option<Uuid> {
-        Some(job.crash_id)
+    pub fn extract_crash_id_from_job(job: &ImportCrashJob) -> Option<String> {
+        Some(job.crash_id.clone())
     }
 
     pub async fn remove_crash_info_files(
         storage: &dyn ObjectStore,
-        crash_ids: &HashSet<Uuid>,
+        crash_ids: &HashSet<String>,
     ) -> Result<usize, Box<dyn std::error::Error + Send + Sync>> {
         let mut deleted_count = 0;
 
@@ -120,17 +119,16 @@ impl JobCleaner {
 
     async fn get_existing_crash_info_files(
         storage: &dyn ObjectStore,
-    ) -> Result<Vec<(Uuid, Path)>, JobError> {
+    ) -> Result<Vec<(String, Path)>, JobError> {
         let mut crash_info_files = Vec::new();
 
         let mut crash_info_stream = storage.list(Some(&Path::from("crashes/")));
         while let Some(object_meta) = crash_info_stream.try_next().await? {
             let path_str = object_meta.location.to_string();
             if let Some(name) = path_str.strip_prefix("crashes/")
-                && let Some(uuid_str) = name.strip_suffix(".json")
-                && let Ok(uuid) = Uuid::parse_str(uuid_str)
+                && let Some(crash_id) = name.strip_suffix(".json")
             {
-                crash_info_files.push((uuid, object_meta.location.clone()));
+                crash_info_files.push((crash_id.to_string(), object_meta.location.clone()));
             }
         }
         Ok(crash_info_files)

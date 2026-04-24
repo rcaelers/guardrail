@@ -85,10 +85,10 @@ pub async fn create_test_product_with_details(
 pub async fn create_test_crash(
     db: &Surreal<Any>,
     signature: Option<&str>,
-    product_id: Option<Uuid>,
+    product_id: Option<impl ToString>,
 ) -> Crash {
     let product_id = match product_id {
-        Some(pid) => pid,
+        Some(pid) => pid.to_string(),
         None => create_test_product(db).await.id,
     };
 
@@ -120,11 +120,11 @@ pub async fn create_test_attachment(
     mime_type: &str,
     file_size: i64,
     filename: &str,
-    product_id: Option<Uuid>,
-    crash_id: Option<Uuid>,
+    product_id: Option<impl ToString>,
+    crash_id: Option<impl ToString>,
 ) -> Attachment {
     let crash_id = match crash_id {
-        Some(id) => id,
+        Some(id) => id.to_string(),
         None => {
             let product = create_test_product(db).await;
 
@@ -146,10 +146,10 @@ pub async fn create_test_attachment(
     };
 
     let product_id = match product_id {
-        Some(id) => id,
+        Some(id) => id.to_string(),
         None => {
             // Use crash's product_id if not provided
-            let crash = CrashRepo::get_by_id(db, crash_id)
+            let crash = CrashRepo::get_by_id(db, &crash_id)
                 .await
                 .expect("Failed to get crash")
                 .expect("Crash not found");
@@ -185,11 +185,11 @@ pub async fn create_test_symbols(
     build_id: &str,
     module_id: &str,
     storage_path: &str,
-    product_id: Option<Uuid>,
+    product_id: Option<impl ToString>,
 ) -> Symbols {
     let product_id = match product_id {
-        Some(p) => p,
-        _ => create_test_product(db).await.id,
+        Some(p) => p.to_string(),
+        _ => create_test_product(db).await.id.to_string(),
     };
 
     let new_symbols = NewSymbols {
@@ -229,7 +229,7 @@ pub async fn create_test_user(db: &Surreal<Any>, username: &str, is_admin: bool)
 }
 
 /// Create a test user with a random username
-pub async fn create_random_test_user(db: &Surreal<Any>) -> Uuid {
+pub async fn create_random_test_user(db: &Surreal<Any>) -> String {
     let username = format!("testuser_{}", Uuid::new_v4());
     let new_user = NewUser {
         username,
@@ -245,10 +245,10 @@ pub async fn create_random_test_user(db: &Surreal<Any>) -> Uuid {
 pub async fn create_test_credential(
     db: &Surreal<Any>,
     data: serde_json::Value,
-    user_id: Option<Uuid>,
+    user_id: Option<impl ToString>,
 ) -> Credential {
     let user_id = match user_id {
-        Some(id) => id,
+        Some(id) => id.to_string(),
         None => create_random_test_user(db).await,
     };
 
@@ -302,8 +302,8 @@ pub fn create_webauthn(settings: Arc<Settings>) -> Arc<Webauthn> {
 pub async fn create_test_token(
     db: &Surreal<Any>,
     description: &str,
-    product: Option<Uuid>,
-    user: Option<Uuid>,
+    product: Option<String>,
+    user: Option<String>,
     entitlements: &[&str],
 ) -> (String, ApiToken) {
     let (token_id, token, token_hash) = generate_api_token().expect("Failed to generate API token");

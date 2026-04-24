@@ -23,7 +23,7 @@ use ingestion::worker::TestWorker;
 use testware::create_settings;
 
 fn create_test_product_cache() -> ProductCache {
-    let product_id = uuid::Uuid::new_v4();
+    let product_id = uuid::Uuid::new_v4().to_string();
     let mut products = HashMap::new();
     products.insert(
         "TestProduct".to_string(),
@@ -43,7 +43,7 @@ fn create_test_product_cache_with(entries: Vec<(&str, bool)>) -> ProductCache {
         products.insert(
             name.to_string(),
             ProductInfo {
-                id: uuid::Uuid::new_v4(),
+                id: uuid::Uuid::new_v4().to_string(),
                 name: name.to_string(),
                 accepting_crashes: accepting,
                 metadata: serde_json::Value::Object(Default::default()),

@@ -12,7 +12,8 @@ use tokio_util::io::StreamReader;
 use tracing::error;
 
 use crate::error::ApiError;
-use data::{api_token::ApiToken, product::Product};
+use data::api_token::ApiToken;
+use data::product::Product;
 use repos::product::ProductRepo;
 
 pub async fn peek_line<'a>(
@@ -92,33 +93,27 @@ where
     .map_err(|_err| ApiError::InternalFailure())
 }
 
-pub async fn get_product(db: &Surreal<Any>, product_name: &str) -> Result<Product, ApiError> {
+pub async fn get_product_by_name(
+    db: &Surreal<Any>,
+    product_name: &str,
+) -> Result<Product, ApiError> {
     ProductRepo::get_by_name(db, product_name)
         .await
-        .map_err(|_| {
-            error!("Failed to get product {}", product_name);
+        .map_err(|err| {
+            error!("Failed to get product {}: {}", product_name, err);
             ApiError::Failure(format!("failed to get product {product_name}"))
         })?
-        .ok_or_else(|| {
-            error!("No such product {}", product_name);
-            ApiError::ProductNotFound(product_name.to_string())
-        })
+        .ok_or_else(|| ApiError::ProductNotFound(product_name.to_string()))
 }
 
-pub async fn get_product_by_id(
-    db: &Surreal<Any>,
-    product_id: uuid::Uuid,
-) -> Result<Product, ApiError> {
+pub async fn get_product_by_id(db: &Surreal<Any>, product_id: &str) -> Result<Product, ApiError> {
     ProductRepo::get_by_id(db, product_id)
         .await
-        .map_err(|_| {
-            error!("Failed to get product {}", product_id);
+        .map_err(|err| {
+            error!("Failed to get product {}: {}", product_id, err);
             ApiError::Failure(format!("failed to get product {product_id}"))
         })?
-        .ok_or_else(|| {
-            error!("No such product {}", product_id);
-            ApiError::ProductNotFound(product_id.to_string())
-        })
+        .ok_or_else(|| ApiError::ProductNotFound(product_id.to_string()))
 }
 
 pub fn validate_api_token_for_product(
@@ -126,12 +121,12 @@ pub fn validate_api_token_for_product(
     product: &Product,
     product_name: &str,
 ) -> Result<(), ApiError> {
-    if let Some(token_product_id) = api_token.product_id
+    if let Some(token_product_id) = api_token.product_id.as_deref()
         && token_product_id != product.id
     {
         error!(
-            "API token not authorized for product {}, token is for product_id: {}",
-            product_name, token_product_id
+            "API token not authorized for product {}, token is for product_id: {} not {}",
+            product_name, token_product_id, product.id
         );
         return Err(ApiError::ProductAccessDenied(product_name.to_owned()));
     }

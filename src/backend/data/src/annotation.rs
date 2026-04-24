@@ -3,14 +3,14 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct Annotation {
-    pub id: uuid::Uuid,
+    pub id: String,
     pub key: String,
     pub source: String,
     pub value: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
-    pub crash_id: uuid::Uuid,
-    pub product_id: uuid::Uuid,
+    pub crash_id: String,
+    pub product_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -18,8 +18,8 @@ pub struct NewAnnotation {
     pub key: String,
     pub source: String,
     pub value: String,
-    pub crash_id: uuid::Uuid,
-    pub product_id: uuid::Uuid,
+    pub crash_id: String,
+    pub product_id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

@@ -4,6 +4,7 @@ use surrealdb::engine::any::Any;
 use crate::{
     Repo,
     error::{RepoError, handle_surreal_error},
+    record_key,
 };
 use common::QueryParams;
 use data::symbols::{NewSymbols, Symbols};
@@ -13,11 +14,11 @@ pub struct SymbolsRepo {}
 impl SymbolsRepo {
     pub async fn get_by_id(
         db: &Surreal<Any>,
-        id: uuid::Uuid,
+        id: impl ToString,
     ) -> Result<Option<Symbols>, RepoError> {
         let mut result = db
-            .query("SELECT *, meta::id(id) as id FROM ONLY type::record('symbols', $id)")
-            .bind(("id", id.to_string()))
+            .query("SELECT *, meta::id(id) as id, meta::id(product_id) as product_id FROM ONLY type::record('symbols', $id)")
+            .bind(("id", record_key(id.to_string())))
             .await
             .map_err(handle_surreal_error)?;
         crate::take_one(&mut result, 0)
@@ -29,7 +30,7 @@ impl SymbolsRepo {
         module_id: &str,
     ) -> Result<Option<Symbols>, RepoError> {
         let mut result = db
-            .query("SELECT *, meta::id(id) as id FROM symbols WHERE build_id = $build_id AND module_id = $module_id LIMIT 1")
+            .query("SELECT *, meta::id(id) as id, meta::id(product_id) as product_id FROM symbols WHERE build_id = $build_id AND module_id = $module_id LIMIT 1")
             .bind(("build_id", build_id.to_owned()))
             .bind(("module_id", module_id.to_owned()))
             .await
@@ -48,7 +49,9 @@ impl SymbolsRepo {
             &["os", "arch", "build_id", "module_id"],
         )?;
 
-        let query = format!("SELECT *, meta::id(id) as id FROM symbols{suffix}");
+        let query = format!(
+            "SELECT *, meta::id(id) as id, meta::id(product_id) as product_id FROM symbols{suffix}"
+        );
         let mut builder = db.query(&query);
 
         if let Some(filter) = params.filter {
@@ -59,8 +62,8 @@ impl SymbolsRepo {
         crate::take_many(&mut result, 0)
     }
 
-    pub async fn create(db: &Surreal<Any>, symbols: NewSymbols) -> Result<uuid::Uuid, RepoError> {
-        let id = uuid::Uuid::new_v4();
+    pub async fn create(db: &Surreal<Any>, symbols: NewSymbols) -> Result<String, RepoError> {
+        let id = uuid::Uuid::new_v4().to_string();
         let _: Option<serde_json::Value> = db
             .query(
                 "CREATE type::record('symbols', $id) CONTENT {
@@ -69,18 +72,18 @@ impl SymbolsRepo {
                 build_id: $build_id,
                 module_id: $module_id,
                 storage_path: $storage_path,
-                product_id: $product_id,
+                product_id: type::record('products', $product_id),
                 created_at: time::now(),
                 updated_at: time::now(),
             }",
             )
-            .bind(("id", id.to_string()))
+            .bind(("id", id.clone()))
             .bind(("os", symbols.os.clone()))
             .bind(("arch", symbols.arch.clone()))
             .bind(("build_id", symbols.build_id.clone()))
             .bind(("module_id", symbols.module_id.clone()))
             .bind(("storage_path", symbols.storage_path.clone()))
-            .bind(("product_id", symbols.product_id))
+            .bind(("product_id", record_key(&symbols.product_id)))
             .await
             .map_err(handle_surreal_error)?
             .take(0)
@@ -88,10 +91,7 @@ impl SymbolsRepo {
         Ok(id)
     }
 
-    pub async fn update(
-        db: &Surreal<Any>,
-        symbols: Symbols,
-    ) -> Result<Option<uuid::Uuid>, RepoError> {
+    pub async fn update(db: &Surreal<Any>, symbols: Symbols) -> Result<Option<String>, RepoError> {
         let mut result = db
             .query(
                 "UPDATE type::record('symbols', $id) SET
@@ -103,7 +103,7 @@ impl SymbolsRepo {
                 updated_at = time::now()
             RETURN meta::id(id) as id",
             )
-            .bind(("id", symbols.id.to_string()))
+            .bind(("id", symbols.id.clone()))
             .bind(("os", symbols.os.clone()))
             .bind(("arch", symbols.arch.clone()))
             .bind(("build_id", symbols.build_id.clone()))
@@ -112,16 +112,16 @@ impl SymbolsRepo {
             .await
             .map_err(handle_surreal_error)?;
         let rows: Vec<serde_json::Value> = result.take(0).map_err(handle_surreal_error)?;
-        Ok(rows.first().and_then(|r| {
-            r.get("id")
-                .and_then(|v| v.as_str())
-                .and_then(|s| uuid::Uuid::parse_str(s).ok())
-        }))
+        Ok(rows
+            .first()
+            .and_then(|r| r.get("id"))
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string))
     }
 
-    pub async fn remove(db: &Surreal<Any>, id: uuid::Uuid) -> Result<(), RepoError> {
+    pub async fn remove(db: &Surreal<Any>, id: impl ToString) -> Result<(), RepoError> {
         db.query("DELETE type::record('symbols', $id)")
-            .bind(("id", id.to_string()))
+            .bind(("id", record_key(id.to_string())))
             .await
             .map_err(handle_surreal_error)?;
         Ok(())

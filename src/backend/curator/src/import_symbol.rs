@@ -27,7 +27,7 @@ impl ImportSymbolProcessor {
     }
 
     #[instrument(skip(self))]
-    async fn get_processed_symbol(&self, symbol_upload_id: uuid::Uuid) -> Result<Bytes, JobError> {
+    async fn get_processed_symbol(&self, symbol_upload_id: &str) -> Result<Bytes, JobError> {
         let path = format!("processed-symbols/{symbol_upload_id}.json");
         let object = self
             .storage
@@ -45,10 +45,10 @@ impl ImportSymbolProcessor {
     }
 
     #[instrument(skip(self), fields(symbol_upload_id = %symbol_upload_id))]
-    async fn handle_job(&self, symbol_upload_id: uuid::Uuid) -> Result<(), JobError> {
+    async fn handle_job(&self, symbol_upload_id: String) -> Result<(), JobError> {
         info!("ImportSymbolProcessor handling job: {}", symbol_upload_id);
 
-        let data = self.get_processed_symbol(symbol_upload_id).await?;
+        let data = self.get_processed_symbol(&symbol_upload_id).await?;
         let symbol_info: Value = serde_json::from_slice(&data).map_err(|e| {
             error!("Failed to parse processed symbol JSON: {:?}", e);
             JobError::Failure("failed to parse processed symbol JSON".to_string())
@@ -66,12 +66,11 @@ impl ImportSymbolProcessor {
     async fn create_symbol(
         db: &Surreal<Any>,
         symbol_info: &serde_json::Value,
-    ) -> Result<uuid::Uuid, JobError> {
+    ) -> Result<String, JobError> {
         let product_id = symbol_info["product_id"]
             .as_str()
             .ok_or_else(|| JobError::Failure("product_id is missing".to_string()))?
-            .parse::<uuid::Uuid>()
-            .map_err(|_| JobError::Failure("invalid product_id format".to_string()))?;
+            .to_string();
 
         let os = symbol_info["os"]
             .as_str()
@@ -113,7 +112,7 @@ impl ImportSymbolProcessor {
     }
 
     #[instrument(skip(self), fields(symbol_upload_id = %symbol_upload_id))]
-    async fn cleanup_processed_symbol(&self, symbol_upload_id: uuid::Uuid) {
+    async fn cleanup_processed_symbol(&self, symbol_upload_id: String) {
         let path = format!("processed-symbols/{symbol_upload_id}.json");
         if let Err(e) = self.storage.delete(&Path::from(path.as_str())).await {
             error!(symbol_upload_id = %symbol_upload_id, path = %path, error = ?e, "Failed to delete processed symbol file");
@@ -126,7 +125,7 @@ impl ImportSymbolProcessor {
     pub async fn process(job: ImportSymbolJob, state: Data<AppState>) -> Result<(), JobError> {
         info!("Incoming import symbol job");
         let processor = ImportSymbolProcessor::new(state.clone());
-        processor.handle_job(job.symbol_upload_id).await?;
+        processor.handle_job(job.symbol_upload_id.clone()).await?;
         info!("Successfully imported symbol upload: {}", job.symbol_upload_id);
 
         Ok(())

@@ -15,7 +15,7 @@ pub async fn sync_products_to_valkey(
 
     for product in &products {
         let info = ProductInfo {
-            id: product.id,
+            id: product.id.clone(),
             name: product.name.clone(),
             accepting_crashes: product.accepting_crashes,
             metadata: product.metadata.clone(),

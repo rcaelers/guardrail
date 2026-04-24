@@ -2,7 +2,12 @@
 
 import type { PageServerLoad, Actions } from './$types';
 import { adapter } from '$lib/adapters';
-import { fail } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
+
+function requireAdmin(locals: App.Locals) {
+  if (!locals.user) throw error(401);
+  if (!locals.user.isAdmin) throw error(403, 'Administrator access required');
+}
 
 export const load: PageServerLoad = async () => {
   const products = await adapter.listProducts('all');
@@ -14,7 +19,8 @@ export const load: PageServerLoad = async () => {
 };
 
 export const actions: Actions = {
-  create: async ({ request }) => {
+  create: async ({ request, locals }) => {
+    requireAdmin(locals);
     const form = await request.formData();
     const name = String(form.get('name') ?? '').trim();
     const slug = String(form.get('slug') ?? '').trim();
@@ -27,7 +33,26 @@ export const actions: Actions = {
       return fail(400, { error: (e as Error).message });
     }
   },
-  delete: async ({ request }) => {
+  update: async ({ request, locals }) => {
+    requireAdmin(locals);
+    const form = await request.formData();
+    const id = String(form.get('id') ?? '');
+    const name = String(form.get('name') ?? '').trim();
+    const slug = String(form.get('slug') ?? '').trim();
+    const description = String(form.get('description') ?? '').trim();
+    const color = String(form.get('color') ?? '').trim();
+    if (!id) return fail(400, { error: 'missing id' });
+    if (!name) return fail(400, { error: 'Name required.' });
+    if (!slug) return fail(400, { error: 'Slug required.' });
+    try {
+      await adapter.updateProduct(id, { name, slug, description, color });
+      return { ok: true };
+    } catch (e) {
+      return fail(400, { error: (e as Error).message });
+    }
+  },
+  delete: async ({ request, locals }) => {
+    requireAdmin(locals);
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
     if (!id) return fail(400, { error: 'missing id' });

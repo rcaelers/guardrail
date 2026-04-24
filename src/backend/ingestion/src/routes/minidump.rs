@@ -19,7 +19,7 @@ pub struct MinidumpApi;
 #[derive(Debug, Serialize)]
 pub struct MinidumpResponse {
     pub result: String,
-    pub crash_id: Option<uuid::Uuid>,
+    pub crash_id: Option<String>,
 }
 
 #[derive(Default, Debug, Serialize)]
@@ -43,10 +43,10 @@ struct Attachment {
 
 #[derive(Default, Debug, Serialize)]
 struct CrashInfo {
-    crash_id: uuid::Uuid,
+    crash_id: String,
     submission_timestamp: String,
     product: Option<String>,
-    product_id: Option<uuid::Uuid>,
+    product_id: Option<String>,
     product_metadata: Option<serde_json::Value>,
     minidump: Option<Minidump>,
     attachments: Vec<Attachment>,
@@ -379,7 +379,7 @@ impl MinidumpApi {
     #[instrument(skip(storage, crash_info), fields(crash_id = %crash_id))]
     async fn upload_crash(
         storage: Arc<dyn ObjectStore>,
-        crash_id: uuid::Uuid,
+        crash_id: &str,
         crash_info: serde_json::Value,
     ) -> Result<(), ApiError> {
         debug!(crash_id = %crash_id, "Uploading crash info to S3");
@@ -434,8 +434,8 @@ impl MinidumpApi {
             })?;
 
         crash_info.product = Some(product.name.clone());
-        crash_info.product_id = Some(product.id);
-        crash_info.product_metadata = Some(product.metadata);
+        crash_info.product_id = Some(product.id.clone());
+        crash_info.product_metadata = Some(product.metadata.clone());
 
         info!(product = %product.name, "Processing crash for product");
 
@@ -450,8 +450,12 @@ impl MinidumpApi {
             ApiError::Failure("failed to serialize crash info".to_string())
         })?;
 
-        Self::upload_crash(state.storage.clone(), crash_info.crash_id, crash_info_json.clone())
-            .await?;
+        Self::upload_crash(
+            state.storage.clone(),
+            crash_info.crash_id.as_str(),
+            crash_info_json.clone(),
+        )
+        .await?;
 
         state
             .worker
@@ -470,12 +474,12 @@ impl MinidumpApi {
         State(state): State<AppState>,
         multipart: Multipart,
     ) -> Result<Json<MinidumpResponse>, ApiError> {
-        let crash_id = uuid::Uuid::new_v4();
-        tracing::Span::current().record("crash_id", format!("{crash_id}"));
+        let crash_id = uuid::Uuid::new_v4().to_string();
+        tracing::Span::current().record("crash_id", crash_id.clone());
         info!(crash_id = %crash_id, "Received minidump upload request");
 
         let mut crash_info = CrashInfo {
-            crash_id,
+            crash_id: crash_id.clone(),
             submission_timestamp: chrono::Utc::now().to_rfc3339(),
             product: None,
             minidump: None,
@@ -625,7 +629,7 @@ impl MinidumpApi {
     fn convert_crash_info_to_rhai_map(crash_info: &CrashInfo) -> rhai::Map {
         let mut map = rhai::Map::new();
 
-        map.insert("crash_id".into(), crash_info.crash_id.to_string().into());
+        map.insert("crash_id".into(), crash_info.crash_id.clone().into());
         map.insert("submission_timestamp".into(), crash_info.submission_timestamp.clone().into());
 
         if let Some(ref product) = crash_info.product {
@@ -633,7 +637,7 @@ impl MinidumpApi {
         }
 
         if let Some(ref product_id) = crash_info.product_id {
-            map.insert("product_id".into(), product_id.to_string().into());
+            map.insert("product_id".into(), product_id.clone().into());
         }
 
         if let Some(ref metadata) = crash_info.product_metadata {
@@ -670,19 +674,22 @@ impl MinidumpApi {
     }
 
     #[instrument(fields(crash_id = %crash_id))]
-    fn create_rhai_engine(crash_id: uuid::Uuid) -> Engine {
+    fn create_rhai_engine(crash_id: &str) -> Engine {
         let mut engine = Engine::new();
         engine.build_type::<TrackedAnnotations>();
 
+        let crash_id_for_print = crash_id.to_string();
+
         engine.on_print(move |message| {
-            info!(crash_id = %crash_id, rhai_log = true, "{}", message);
+            info!(crash_id = %crash_id_for_print, rhai_log = true, "{}", message);
         });
 
+        let crash_id_for_debug = crash_id.to_string();
         engine.on_debug(move |message, source, pos| {
             if let Some(source) = source {
-                debug!(crash_id = %crash_id, rhai_log = true, script = %source, line = pos.line().unwrap_or(0), "{}", message);
+                debug!(crash_id = %crash_id_for_debug, rhai_log = true, script = %source, line = pos.line().unwrap_or(0), "{}", message);
             } else {
-                debug!(crash_id = %crash_id, rhai_log = true, "{}", message);
+                debug!(crash_id = %crash_id_for_debug, rhai_log = true, "{}", message);
             }
         });
 
@@ -721,7 +728,7 @@ impl MinidumpApi {
             ApiError::Failure(format!("Failed to load validation script '{script_path}': {e}"))
         })?;
 
-        let engine = Self::create_rhai_engine(crash_info.crash_id);
+        let engine = Self::create_rhai_engine(crash_info.crash_id.as_str());
         let crash_info_map = Self::convert_crash_info_to_rhai_map(crash_info);
         let mut scope = rhai::Scope::new();
         scope.push("crash_info", crash_info_map);
@@ -749,10 +756,10 @@ mod tests {
     fn test_crash_info_annotations_is_tracked_annotations_in_rhai() {
         // Create a test CrashInfo with some annotations
         let mut crash_info = CrashInfo {
-            crash_id: uuid::Uuid::new_v4(),
+            crash_id: uuid::Uuid::new_v4().to_string(),
             submission_timestamp: "2023-01-01T00:00:00Z".to_string(),
             product: Some("TestProduct".to_string()),
-            product_id: Some(uuid::Uuid::new_v4()),
+            product_id: Some(uuid::Uuid::new_v4().to_string()),
             minidump: None,
             attachments: vec![],
             annotations: HashMap::new(),

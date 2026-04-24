@@ -9,19 +9,18 @@ pub mod token;
 use object_store::{ObjectStore, aws::AmazonS3Builder};
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{EnvFilter, FmtSubscriber, fmt::format::FmtSpan, layer::SubscriberExt};
-use uuid::Uuid;
 
 use settings::Settings;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthenticatedUser {
-    pub id: Uuid,
+    pub id: String,
     pub username: String,
     pub is_admin: bool,
 }
 
 impl AuthenticatedUser {
-    pub fn new(id: uuid::Uuid, username: String, is_admin: bool) -> Self {
+    pub fn new(id: String, username: String, is_admin: bool) -> Self {
         Self {
             id,
             username,

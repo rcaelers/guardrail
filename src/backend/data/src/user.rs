@@ -3,8 +3,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct User {
-    pub id: uuid::Uuid,
+    pub id: String,
     pub username: String,
+    pub email: String,
     pub is_admin: bool,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

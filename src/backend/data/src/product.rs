@@ -3,9 +3,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct Product {
-    pub id: uuid::Uuid,
+    pub id: String,
     pub name: String,
+    pub slug: String,
     pub description: String,
+    pub public: bool,
     pub accepting_crashes: bool,
     pub metadata: serde_json::Value,
     pub created_at: DateTime<Utc>,
@@ -16,6 +18,8 @@ pub struct Product {
 pub struct NewProduct {
     pub name: String,
     pub description: String,
+    #[serde(default)]
+    pub public: bool,
     #[serde(default = "default_metadata")]
     pub metadata: serde_json::Value,
 }
@@ -29,6 +33,7 @@ impl Default for NewProduct {
         Self {
             name: String::new(),
             description: String::new(),
+            public: false,
             metadata: default_metadata(),
         }
     }
@@ -39,6 +44,7 @@ impl From<Product> for NewProduct {
         Self {
             name: product.name,
             description: product.description,
+            public: product.public,
             metadata: product.metadata,
         }
     }

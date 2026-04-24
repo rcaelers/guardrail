@@ -107,7 +107,8 @@ async fn test_token_jwt_user_ok() {
 
     let user = create_test_user(&db, "testuser", false).await;
 
-    let (token, _) = create_test_token(&db, "Test Token", None, Some(user.id), &["token"]).await;
+    let (token, _) =
+        create_test_token(&db, "Test Token", None, Some(user.id.clone()), &["token"]).await;
 
     let request = Request::builder()
         .method("POST")
@@ -152,7 +153,7 @@ async fn test_token_jwt_user_ok() {
     assert_eq!(decoded_jwt.claims["ac"].as_str().unwrap(), "guardrail_api");
     assert_eq!(decoded_jwt.claims["ns"].as_str().unwrap(), state.settings.database.namespace);
     assert_eq!(decoded_jwt.claims["db"].as_str().unwrap(), state.settings.database.database);
-    assert_eq!(decoded_jwt.claims["id"].as_str().unwrap(), format!("users:{}", user.id),);
+    assert_eq!(decoded_jwt.claims["id"].as_str().unwrap(), user.id);
 }
 
 #[tokio::test]

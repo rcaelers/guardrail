@@ -20,8 +20,8 @@ RUN mkdir -p /app
 WORKDIR /app
 COPY . .
 
-RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
-  --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
+RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+  --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git,sharing=locked \
   --mount=type=cache,id=target-curator,target=/app/target \
   cargo +stable build --release -p curator && \
   cp /app/target/release/curator /app/curator-bin

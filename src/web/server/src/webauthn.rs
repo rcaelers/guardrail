@@ -5,7 +5,6 @@ use axum::{
 };
 use common::AuthenticatedUser;
 use tower_sessions::Session;
-use uuid::Uuid;
 use webauthn_rs::prelude::*;
 
 use crate::{
@@ -92,20 +91,22 @@ pub async fn finish_register(
         .finish_passkey_registration(&reg, &registration_state.passkey_registration)
         .map_err(AppError::internal)?;
 
-    if user.is_none() {
+    let user_id = if let Some(user) = user {
+        user.id
+    } else {
         repos::user::UserRepo::create_with_id(
             &state.repo.db,
-            registration_state.user_unique_id,
+            registration_state.user_unique_id.to_string(),
             registration_state.username.as_str(),
         )
         .await
-        .map_err(AppError::internal)?;
-    }
+        .map_err(AppError::internal)?
+    };
 
     repos::credentials::CredentialsRepo::create(
         &state.repo.db,
         data::credentials::NewCredential {
-            user_id: registration_state.user_unique_id,
+            user_id,
             data: serde_json::to_value(&passkey).map_err(AppError::internal)?,
         },
     )
@@ -132,7 +133,7 @@ pub async fn start_authentication(
         .ok_or_else(|| AppError::not_found(format!("User {username} not found")))?;
 
     let allow_credentials =
-        repos::credentials::CredentialsRepo::get_all_by_user_id(&state.repo.db, user_unique_id)
+        repos::credentials::CredentialsRepo::get_all_by_user_id(&state.repo.db, &user_unique_id)
             .await
             .map_err(AppError::internal)?
             .iter()
@@ -158,7 +159,7 @@ pub async fn finish_authentication(
     session: Session,
     axum::Json(auth): axum::Json<PublicKeyCredential>,
 ) -> AppResult<impl IntoResponse> {
-    let (user_unique_id, auth_state): (Uuid, PasskeyAuthentication) = session
+    let (user_unique_id, auth_state): (String, PasskeyAuthentication) = session
         .get("authentication_state")
         .await
         .map_err(AppError::internal)?
@@ -173,7 +174,7 @@ pub async fn finish_authentication(
         .finish_passkey_authentication(&auth, &auth_state)
         .map_err(AppError::internal)?;
 
-    update_passkeys(&state, user_unique_id, authentication_result).await?;
+    update_passkeys(&state, &user_unique_id, authentication_result).await?;
 
     let user = repos::user::UserRepo::get_by_id(&state.repo.db, user_unique_id)
         .await
@@ -200,12 +201,9 @@ async fn get_user_unique_id(
         if let Some(current_user) = authenticated_user
             && current_user.id == user.id
         {
-            return Ok(user.id);
+            return Ok(uuid::Uuid::new_v4());
         }
-        return Err(AppError::failure(format!(
-            "User {} already exists",
-            user.username
-        )));
+        return Err(AppError::failure(format!("User {} already exists", user.username)));
     }
 
     Ok(uuid::Uuid::new_v4())
@@ -213,7 +211,7 @@ async fn get_user_unique_id(
 
 async fn update_passkeys(
     state: &AppState,
-    user_unique_id: Uuid,
+    user_unique_id: &str,
     auth_result: AuthenticationResult,
 ) -> AppResult<()> {
     let credentials =

@@ -1,0 +1,202 @@
+web_server:
+  port: 4433
+  dev_proxy_url: "http://localhost:5173"
+  public_key: |
+    -----BEGIN CERTIFICATE-----
+    MIIEVTCCAj2gAwIBAgIBAjANBgkqhkiG9w0BAQsFADAbMRkwFwYDVQQDExBHdWFy
+    ZHJhaWwgRGV2IENBMB4XDTI2MDQxODE2MDY1N1oXDTI3MDUyMDE2MDY1N1owJTEj
+    MCEGA1UEAxMaZ3VhcmRyYWlsLmhvbWUua3JhbmRvci5vcmcwggEiMA0GCSqGSIb3
+    DQEBAQUAA4IBDwAwggEKAoIBAQCpI9z5ChlVMMy1CxcRAzyffPswSEX4uzLL+rn5
+    EZXMMkpP/uogV7HAE97vnZdfeakzv3K0nVFnmgLi6iQyjMSNFIdZ/wplex46x/P7
+    bEeL59++CmM8cX+ilcAG2fdIkYEBt22+erJO707+sVuEv0DscE4B7RDBNT+0xMfe
+    iZUQgOqf7nQS7KpHvvRjFcDVTsm1LDYgTKx3RfoJ00uBfikFWU3xhZJ8+W5cddwy
+    4wka1pi0X4nnFRsrfzVeF2WoKkhSRe4GGnlsoQyIHmhP7FBz4fKv95t43wUJ/NFp
+    J3aFMk9hGjzo+OYUXZbxuvFAmC9bRLezMTJcqUir03EhP7VnAgMBAAGjgZkwgZYw
+    DgYDVR0PAQH/BAQDAgWgMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjAl
+    BgNVHREEHjAcghpndWFyZHJhaWwuaG9tZS5rcmFuZG9yLm9yZzAdBgNVHQ4EFgQU
+    +/WAz0REXm8HMFgaJsxHsUu7KJYwHwYDVR0jBBgwFoAUttipIAZ9OV2rQVbvYMaD
+    /i99ggwwDQYJKoZIhvcNAQELBQADggIBAEB8g3LxkjahfHYpMgNIAdPbP73NvcAA
+    lVWp7zFjdh8b6KgiCxfrkRg77c4CtAUIwQKPDvFwnla1825kwIBoAKzxdHrqEumG
+    1nDls+GCu5uGTA5ukUoTO364btjTNHm/XIns+q/hkBqO6fQQcewJ2jvzlhOMMCok
+    +nYAjIUBp2T0i4k/ZazfCh50ogKR+YeTj0U/ivnPLLKp7g0WXfudaLSHB9aSECod
+    Mt1XKm+DdmTQFqzktMSXP8Azf/i3x2dcNrU2OnBD4WKnKmRXY9eRcu0ub9Q1y3xo
+    TdB6UxSY0HYnigSv5V8GnvzWcjtqZa9vPLYUIfUrtt8ZMp1bEmMVJWUr4UJcqvOk
+    a3E6O1OFlsAUJ4iYRhPdjzu50I58PaEqsUQzmt0rVI7/beUGNjns9wmaW64DxMag
+    IFop5Z/FAFqt+rwDHHXyzRRaiv5C28ASO4Wbtz92BC/YidtWsVsqDaXAkXtvX1dn
+    /ozvEBek/MrR1VLHibddnp+cakf8NSvuTYR5R+HZmNLIlRK3ETcRVwQH4v2LQ6ZU
+    rDJbXJ1sLO8T7iaPoRRdzpr/NpNBLMNuT76FIjt062dXReOchDYci6Dv+xzCfllW
+    aZwaMG4W3FD9wmwVPa93L2XZCNd2vhHPiaVIjNOKyMMEkWzBHOIaeGUkg612Ircm
+    HLN2boxouJP6
+    -----END CERTIFICATE-----
+  private_key: |
+    -----BEGIN RSA PRIVATE KEY-----
+    MIIEpAIBAAKCAQEAqSPc+QoZVTDMtQsXEQM8n3z7MEhF+Lsyy/q5+RGVzDJKT/7q
+    IFexwBPe752XX3mpM79ytJ1RZ5oC4uokMozEjRSHWf8KZXseOsfz+2xHi+ffvgpj
+    PHF/opXABtn3SJGBAbdtvnqyTu9O/rFbhL9A7HBOAe0QwTU/tMTH3omVEIDqn+50
+    EuyqR770YxXA1U7JtSw2IEysd0X6CdNLgX4pBVlN8YWSfPluXHXcMuMJGtaYtF+J
+    5xUbK381XhdlqCpIUkXuBhp5bKEMiB5oT+xQc+Hyr/ebeN8FCfzRaSd2hTJPYRo8
+    6PjmFF2W8brxQJgvW0S3szEyXKlIq9NxIT+1ZwIDAQABAoIBAAkVpAi8QiARPu16
+    awK+6cKnM9akCx4Q7+mEzfhSuXj+On+RcYHLNADdEFxOWpMGNdBRuBd7W6P04bLO
+    YKNWbDgnoh1zVVueAUGm+7PFXRJmod3TMQFOF0zkPiwgCOgc6JDvCTXx4SHcOKH1
+    ZLT8kMAiSA5SbVPzSDitWQ7a1ObN7219iSGyyJOrZOsrx+dBp42YyIFF6PmsxWPb
+    2TSFo0e2Fm7NZ3YE1TGDN+/JeXRIr0k5jzZ4muq6yHGqyjpwgdSOugNA87vne4LM
+    7EzDu/PWVjXPYq6rOq7kKlpzAR88I6+M16kZy84kQla/5SBri/UzOsYM/662nn9v
+    bQDtXAECgYEA2E4jz+iSgcVimhNieqgwjcIOSi6/zgolvO51fGHFRPAQS0b0u343
+    5Qkgzaiue03YnjdQDY2a2iJQpa7ReB/ve8toYEyMlHR5mcqBh1N//62T5VLMXNFV
+    mCj/oZ+joSs/pbiSWc+21cmtkGTAyfGbJAzwJo/Qv6M0p92m/qCDC3kCgYEAyC3w
+    j0aTl7++oySYSXI9vSrybGA2A7Fc0NfJE8BjYMj3sNso0hd2P44Q4PCArousQ6ii
+    p2bfY7PSZzcu9CI2amm76YIQ4Isew3KG1c8J76RkmB3s9FK+Rb4p5WpJ+ULf1Qa/
+    N5ykna2XjeVARYpI8abTZ7xpVxvoB+2+KSsJr98CgYAQrW2rcRYitVJV6Nq19FPS
+    Cj1J0PLu8u9X8tbSIUOxfgTzmOPztNagbSS/VpslXKowALnGYb2nxe+L5r+10FiJ
+    pfRFQIGyTIy3o9p60aBT2VFG5Cxnl6hO1BJppsJaAdilcWavUAmb0DH2qR4IM/2v
+    OOQnRP1mWTINI1Tl2wBfmQKBgQCnpxIabRmftk+Lg1Kn8K4UiKuQaOPUI++AWblm
+    eXLB1I7d6C9ABbZbdDherA6aIRCdedcALQBbGHfXSjhg72ZzqSpgXzaTWPDi8EBN
+    QaEou54kaKvT1JjXAHVGVsatpHyihYwQn3ifNov/o0k49KAzA217LCltc0nZmhvx
+    jsIGMQKBgQCHrws0eWwwwW5ZqZMq0NGQEATogwzJT+EXSeR3ZEnLihW7XEFQnRka
+    joy3l/GjSYckpTX4o17pr4GGlQiir4ppc8fPowzOlI2tjSCQv7aHr0sLKtjHjpmV
+    Ty8f1c8nGOHJLE250Gu8QmN7LuAErFzlyRuOVg1F9QHMEevubg43ZQ==
+    -----END RSA PRIVATE KEY-----
+api_server:
+  port: 80
+ingestion_server:
+  port: 81
+  public_keyx: |
+    -----BEGIN CERTIFICATE-----
+    MIIFRTCCAy2gAwIBAgIUPEsUwWkKGlhvwLZzolvPcjjCE8wwDQYJKoZIhvcNAQEL
+    BQAwMjELMAkGA1UEBhMCTkwxIzAhBgNVBAMMGmd1YXJkcmFpbC5ob21lLmtyYW5k
+    b3Iub3JnMB4XDTI0MDQyMTAyNDQ1MFoXDTM0MDQxOTAyNDQ1MFowMjELMAkGA1UE
+    BhMCTkwxIzAhBgNVBAMMGmd1YXJkcmFpbC5ob21lLmtyYW5kb3Iub3JnMIICIjAN
+    BgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAod1kJfVeSMlU2akQeGBHQPCdphxc
+    z1vmUptneAG50/dJBKAWlxFvSi2LEXOGG3g6+4Hmi251xEvGKhwuQti/OZyb9m7z
+    EkG/cyjtQZqwQzctd3PYKfH4uEVr5du4UGjH3yO1xdeBMqRr77oDnMPpBHV/9xo2
+    Ax9vfWDr+WJuQT100vtCppHy7os55yZT+EIUT9VjlT2M46FANKe+9y1RIjaO4+Gp
+    SQdqUvWyI2+nBM6X5npWlHiB7OmYbejTcD0kGhZ5C2ulkfQlD6i5GRkQmKKIrgqC
+    JKW1+Xu4UsqXUsvq/Dry4WmtviMIiFgTz/GcV3Dh3TYch92/VHU5ijwJ/wcRjDko
+    uyJauPqN/idTcjg/je9oJ4xCUo638Ef+wpAIXN9MmRLOB/uaVWAVXzjgW0zo/DTt
+    3NgUuEaqZewJYhxBslBpeVV/S5DAeod4hl6fhCR6dShCS8W1lgM9/wn/MK3VWV8i
+    toWYj9Lkui6ShT8nCvnzDf7h5KuO0Zw5nPCAza3cUOG/i99HXu3Gk6AdNlrKeEX5
+    ywheO2100CJfkb23FXmPBDecheISIprC54CGod3X78+BQBxZgKBwkWxzDNR2nMbU
+    XaabqSLV40D2VcH2zwFtFiiNW7c3bTx5/CLpWBYQWR7G8QphYoU+GTRA+IneOmBb
+    p6UWmOA6/se11IECAwEAAaNTMFEwHQYDVR0OBBYEFHfusTEcOZbFq7W5uB/abdBW
+    M69HMB8GA1UdIwQYMBaAFHfusTEcOZbFq7W5uB/abdBWM69HMA8GA1UdEwEB/wQF
+    MAMBAf8wDQYJKoZIhvcNAQELBQADggIBAA6mtUzahe7J/8wCarO+NmkhjlXkQdPE
+    Q4g/rhX7PPI0TGlyVcgc/O/OugZIefohDJHUB8DGdcO3k6gPOFzwF2bMQcMtagLf
+    IxvE5Y34pdwlR5kD4h9Y11jZhw+cTKWv9m6zK5oEEtY5HzVCIV7jpUlw6ZLhVqR7
+    Tl2OBVNUoWjAnkn4rLpr1ZNbe6laeGnvELHpd2j/WOekMohbWnnMeLP911k8bAei
+    mBLKGjKHjQ8lFZxt95B0DSbFObyd8ApHVdoXQQxkm30fxn1ioXbxN3gjJ9CwFrwX
+    CVGQYtVcoFnfVt26cqNM6t6QMGALnpCd8S15Kg4DDn3QXiDij/577DxdGwBTsDF2
+    HtFysxhxhnpymY7NbeM6izOtvRbnaeCrvaryxZw3zUEQY8xcieUBHLmlIe+Qz6nM
+    GmgfxsQQniwBR74+Nv9VsGB/G+CkzACyuZPxohttUr9MuHd24fpCVI4uyGrXD/gP
+    heZcPJfDyp3ZvVAqH83QijV0eVAxUU9LykIB5wjW0imINUDPs0YVR+ABVNt273Hw
+    zIQcGxveQCM8H0UF42ukf1dGI3y+Ns0EkgUsvqQAsH9xrVpn+KfjWF5LzONgUYHU
+    FKj8ephsqEwKDHUVIAPfunr5nAKSeZmCOAQdCJd3z6S7j9imyXZgs5nabsjIapGB
+    cHJs64x2VyU0
+    -----END CERTIFICATE-----
+  private_keyx: |
+    -----BEGIN PRIVATE KEY-----
+    MIIJQwIBADANBgkqhkiG9w0BAQEFAASCCS0wggkpAgEAAoICAQCh3WQl9V5IyVTZ
+    qRB4YEdA8J2mHFzPW+ZSm2d4AbnT90kEoBaXEW9KLYsRc4YbeDr7geaLbnXES8Yq
+    HC5C2L85nJv2bvMSQb9zKO1BmrBDNy13c9gp8fi4RWvl27hQaMffI7XF14EypGvv
+    ugOcw+kEdX/3GjYDH299YOv5Ym5BPXTS+0KmkfLuiznnJlP4QhRP1WOVPYzjoUA0
+    p773LVEiNo7j4alJB2pS9bIjb6cEzpfmelaUeIHs6Zht6NNwPSQaFnkLa6WR9CUP
+    qLkZGRCYooiuCoIkpbX5e7hSypdSy+r8OvLhaa2+IwiIWBPP8ZxXcOHdNhyH3b9U
+    dTmKPAn/BxGMOSi7Ilq4+o3+J1NyOD+N72gnjEJSjrfwR/7CkAhc30yZEs4H+5pV
+    YBVfOOBbTOj8NO3c2BS4Rqpl7AliHEGyUGl5VX9LkMB6h3iGXp+EJHp1KEJLxbWW
+    Az3/Cf8wrdVZXyK2hZiP0uS6LpKFPycK+fMN/uHkq47RnDmc8IDNrdxQ4b+L30de
+    7caToB02Wsp4RfnLCF47bXTQIl+RvbcVeY8EN5yF4hIimsLngIah3dfvz4FAHFmA
+    oHCRbHMM1HacxtRdppupItXjQPZVwfbPAW0WKI1btzdtPHn8IulYFhBZHsbxCmFi
+    hT4ZNED4id46YFunpRaY4Dr+x7XUgQIDAQABAoICABCfUIW4unDQGCIYGLm77WVP
+    sGjawx8vnqn/Yoic6MKfQ5oxfyW5Y8vi0cQThdieqAlPBZLDtQgDs2XR/2Axq7A/
+    aHbOCFvoxj/jGpD2UUE90odQrV4KsXzpnX3SlWLQjSyu7p+oFLuozfAlkpxlNAdC
+    B8ejo0X+fZpgZdX2PpX9joM3dq3uEVwKOS0x2Zqw3S7Lnk6OWRXBPVDgTx30GJUN
+    CZnWVpD02Cg31LjgjO7TRnR5PhiWKDA2VvHRNfFx80Soknqn7diyEUztNJZNZXpp
+    6o5bmZIo4FSurgxL2MQRw9/DhVC9Dltsc+0IhSmsHrQ4wpZ51EPm85s5RJTxEHeR
+    ul9Ha3na3Mpthmtzt1Ie5mSnG1GH6VpaQHY96ba4ag/Zr5t8jT0wgJNAJzHRNhWa
+    e+Gs7Fvs3mBIBCP5m482CfxdsJVtBmU+OcSMBEoIDQbA0xSqV+ThwXECgOWa+AgD
+    +s7Au9o9TStGXhTMBDE5RzhvPKLvgTeSDSBiR4ccTLNEGfOSULyn/kFk1rB9RdC4
+    zzNF2dDp08kNuPQswSNQX7zo3ALkl1puvACfDgYfoSlRXoceaRPmUv29XpBDq9SQ
+    qbEO/9/V01OaBsycl59mmcWzKpaPnvHxy1rbyrdWggyQ7a5o4yXND13MLWu74YOd
+    pFysUvxs8fxM/UEAt/eXAoIBAQDaBrM7TC2v2jaq8cO5ljzB88gPcyZ0XB8Wtr/v
+    8lq9m9jenOcif9wtqWlnljYb17AgI5WBgTqxHJmBrWcde5DlMGYq40EiMOp0yRQi
+    IMVnx1f9KrGBUSYYVbPPnChjLyt/4ST0kBxKHlzihAMHdjgev374eDwt5XNHVOqR
+    e2rQUITS5oDNUjkklnH19lT8EojyY9YUXhQLorBTYKeDpUL5SsCpjvyOG7WvAXCU
+    Vhwcj2GA0XJC5cWtLMss8Z34+dY9shrjgOt2lEzErGTTOUxC2krnVsPVcMCMSC/0
+    gDR/Jc8QFJzA54dvHr9oF13usmSnx36cabgl/OYECpwmpfrzAoIBAQC+DpTWBSDX
+    127hdxq01xZGhSaazJ2dtSKTd/SXa8LPQYrAVAFHfelzglSKUPimkBih0Er8M6pA
+    fmTVKeFRdZm4gJlut5GscalqDrANJvzUNxpdKqVtfxhj2rqZpx8f9rljlMQDarIT
+    e/PAKgYO6aN8ZpgdtrWwPhY3tu9TOIXab0divxoIr+ClPcB3eJsmX2M0R5D60wL0
+    qtlvET1xr4I7WJXVkB6qKNMpv5rDS60H0+QbrrZq/loOJQdyWx1ImfYGzECWylOS
+    hW1EuzejaDNcdxQj6lKFArgPl9KsyRFRB6BQ46BF837f1F1u+YiP9KBngCFYJYLw
+    hPy/0TCd8ae7AoIBAQCJSRzE4vQFvj8cJv4at1psuoeoCtcVAAjncY2slovCxwap
+    Ll1wYNiQvBNOEczifU8+/YkfsfL2IU8b08eRTgRv/Kjoqo6R7AFGJnOSBdanwWNL
+    W/3HswRs4FJIEUlxIvueG3P8t13I4hOU4pFRuoQeAHEAHh2uvMN5ECRgFTmuEHWC
+    o3hJUVQAEOeTfFgJHdaz4l+kFZVDul6TMdJpV7+zX/mvCwVGqnYdy6dLEGnFJhe8
+    WKY9L5fossMA+ueBJjhcQvEhfkVGNp2cXf1i77pwgioWP5EyrjvgWXgw2iW0Rmd6
+    9a+63E9wjgjyj3wrWJN+/mRgM0WsTfG8a73lrDA3AoIBACVdEH2SvIYyYCYLGED9
+    F+/9NT2xhDsA5S9AoeEy2jWMmQ5+dVHsuvxuXthiWr/EDFOjc1ppfcr4DjKp7RXq
+    nLHc9k0B4a2ZGsky4gFz7Lh7rL8sJyGDnvPiiFS0ujW6d2/QS0iwrRmPgLgCivZb
+    kDxgnv8YcFeZnRyO5jXiIs5ymgIbt66FhRB3N2NFXpsInaQlfacR3L7k56IiLYYw
+    DtZD8BDwKFcjd3/5nx9NvVKQoYOfsVUPc/zb4r7kkrk3K1rixL/gPtXLTVP5ylJh
+    pddDwb3dzyM/CZhnLI+zZ6gaa7X7SgL2f7bZNRUgEWzblr1CP0vo8/j87AN5yKkE
+    XQkCggEBAJnSNI8Tiv3pPPNgOAsPhgfoaO6xpjFTjHHH/K08Pgj8HGwjcxyEyv/Y
+    zhw2vRV0BMcxtm6eMV6nxTeD6CdbCXk+ZqiUD5TcTgfaxnzVGjJtIOfKN65ma/Td
+    0aa9SElnXRiKB6T6LUpmCP2uTnGRwFg5X5aV2w93NQGVUmqDar8VcxliAOI84qUu
+    JjCZfTD775/fNiUG1+U1ZZEOexj3OJRgQfl++yX2A1ysVRrGuWsYKi9dvXyIa0PY
+    Qeqd8A0LJGwWC2dOVwmV06aN/txAvVPEG5KDJkJ6hLzi2BK+zpHz7RpnWn/H6Bgi
+    kH89+JqlOvmRo8PEP2GF/hiNjlwfzwg=
+    -----END PRIVATE KEY-----
+valkey:
+  uri: redis://valkey:6379
+processor:
+  maximum_frame_count: 10
+  delimiter: "|"
+  skip_patterns:
+  end_patterns:
+    - "WinMainCRTStartup"
+    - "mainCRTStartup"
+    - "main()"
+database:
+  endpoint: ws://surrealdb:8000
+  namespace: guardrail
+  database: guardrail
+  username: root
+  password: root
+object_storage:
+  region: us-east-1
+  bucket: guardrail
+  endpoint: http://minio:9000
+  allow_http: true
+  access_key_id: "guardrail"
+  secret_access_key: "guardrail"
+auth:
+  id: guardrail.home.krandor.org
+  origin: https://guardrail.home.krandor.org:4433
+  name: Guardrail
+  jwk:
+    token_validity_in_minutes: 30
+    public_key: |
+      -----BEGIN PUBLIC KEY-----
+      MCowBQYDK2VwAyEAJuN0TiFkCg0HnTjpisG1gfVY7XjKsFGuRm1JVmqkt74=
+      -----END PUBLIC KEY-----"
+    private_key: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VwBCIEILRksnzl63UUib+nmLsATtXc/EjOHMaMgJu+nbpiX068
+      -----END PRIVATE KEY-----
+  oidc:
+    issuer_url: https://guardrail.home.krandor.org:1443
+    client_id: guardrail
+    client_secret: jCosZuGjbPkOp5rIb0xtTOYic9MmwwqL
+    callback_url: https://guardrail.home.krandor.org:4433/auth/oidc/callback
+    logout_callback_url: https://guardrail.home.krandor.org:4433
+    launch_url: https://guardrail.home.krandor.org:4433
+    self_service_url: https://guardrail.home.krandor.org:1443
+    pkce: true
+    allow_insecure_tls: true
+minidumps:
+  mandatory_annotations:
+    - "product"
+    - "version"
+  validation_scripts:
+    - "scripts/product_validation.rhai"
+    - product: "^Workrave$"
+      script: "scripts/build_age_validation.rhai"

@@ -3,10 +3,23 @@
 
 import type { Handle } from '@sveltejs/kit';
 import { adapter } from '$lib/adapters';
-import { readSessionId } from '$lib/server/session';
+import { clearSession, readSessionId } from '$lib/server/session';
 
 export const handle: Handle = async ({ event, resolve }) => {
   const uid = readSessionId(event.cookies);
-  event.locals.user = uid ? await adapter.getUser(uid) : null;
+  if (!uid) {
+    event.locals.user = null;
+    return resolve(event);
+  }
+
+  try {
+    event.locals.user = await adapter.getUser(uid);
+    if (!event.locals.user) clearSession(event.cookies);
+  } catch (error) {
+    console.warn(`Failed to resolve session user ${uid}:`, error);
+    clearSession(event.cookies);
+    event.locals.user = null;
+  }
+
   return resolve(event);
 };

@@ -5,13 +5,22 @@
   import StackTab from './StackTab.svelte';
   import ThreadsTab from './ThreadsTab.svelte';
   import ModulesTab from './ModulesTab.svelte';
-  import EnvTab from './EnvTab.svelte';
-  import BreadcrumbsTab from './BreadcrumbsTab.svelte';
-  import LogsTab from './LogsTab.svelte';
-  import UserContextTab from './UserContextTab.svelte';
+  import HandlesTab from './HandlesTab.svelte';
+  import SystemTab from './SystemTab.svelte';
+  import AttachmentsTab from './AttachmentsTab.svelte';
   import RelatedTab from './RelatedTab.svelte';
   import NotesTab from './NotesTab.svelte';
   import { fmtDate, fmtInt } from '$lib/utils/format';
+  import {
+    crashAddress,
+    crashOs,
+    crashTitle,
+    exceptionType,
+    exceptionTypeShort,
+    topFrameFile,
+    topFrameLabel,
+    topFrameLine
+  } from '$lib/utils/crash-report';
 
   interface Props {
     group: CrashGroup;
@@ -36,17 +45,24 @@
     canMerge = true
   }: Props = $props();
 
-  type TabKey = 'stack' | 'threads' | 'modules' | 'env' | 'crumbs' | 'logs' | 'user' | 'related' | 'notes';
+  type TabKey =
+    | 'stack'
+    | 'threads'
+    | 'modules'
+    | 'handles'
+    | 'system'
+    | 'attachments'
+    | 'related'
+    | 'notes';
   let tab = $state<TabKey>('stack');
 
   const TABS: [TabKey, string][] = [
     ['stack', 'Stack'],
     ['threads', 'Threads'],
     ['modules', 'Modules'],
-    ['env', 'Env'],
-    ['crumbs', 'Breadcrumbs'],
-    ['logs', 'Logs'],
-    ['user', 'User context'],
+    ['handles', 'Handles'],
+    ['system', 'System'],
+    ['attachments', 'Attachments'],
     ['related', 'Related'],
     ['notes', 'Notes']
   ];
@@ -58,7 +74,7 @@
     <div class="mb-3 flex items-center gap-3">
       <span class="font-mono text-[11px] text-ink-muted dark:text-ink-mutedDark">{crash.id}</span>
       <span class="font-mono text-[10.5px] text-ink-muted dark:text-ink-mutedDark">in {group.id}</span>
-      <SignalChip signal={crash.signal} />
+      <SignalChip signal={crash.signal || exceptionTypeShort(crash)} />
       <StatusPill status={group.status} />
       <span class="flex-1"></span>
       {#if onClose}
@@ -71,15 +87,17 @@
         >×</button>
       {/if}
     </div>
-    <h2 class="mb-2 text-[19px] font-semibold leading-[1.3] text-ink dark:text-ink-dark">{crash.title}</h2>
+    <h2 class="mb-2 text-[19px] font-semibold leading-[1.3] text-ink dark:text-ink-dark">{crashTitle(crash)}</h2>
     <div class="font-mono text-xs text-ink-muted dark:text-ink-mutedDark">
-      {crash.topFrame}  ·  {crash.file}:{crash.line}
+      {topFrameLabel(crash)}  ·  {topFrameFile(crash)}:{topFrameLine(crash)}
     </div>
     <div class="mt-3.5 grid gap-4 text-[11px] text-ink-muted dark:text-ink-mutedDark" style:grid-template-columns="repeat(4, 1fr)">
       {#each [
         ['Occurred', fmtDate(crash.at)],
         ['Version', crash.version],
-        ['OS', crash.os],
+        ['OS', crashOs(crash)],
+        ['Exception', exceptionType(crash)],
+        ['Address', crashAddress(crash)],
         ['Group events', `${fmtInt(group.count)} (last ${fmtDate(group.lastSeen)})`]
       ] as [label, value]}
         <div>
@@ -118,6 +136,16 @@
         <span class="ml-1 self-center text-[11px] text-ink-muted dark:text-ink-mutedDark">Read-only access</span>
       {/if}
     </div>
+
+    {#if crash.userText?.body}
+      <div class="mt-4 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3.5 py-3">
+        <div class="mb-1.5 text-[10px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">User Info</div>
+        <div class="mb-2 text-[11px] text-ink-muted dark:text-ink-mutedDark">
+          Submitted {fmtDate(crash.userText.createdAt)}
+        </div>
+        <pre class="max-h-40 overflow-auto whitespace-pre-wrap break-words font-sans text-[13px] leading-[1.55] text-ink dark:text-ink-dark">{crash.userText.body}</pre>
+      </div>
+    {/if}
   </div>
 
   <!-- Tabs -->
@@ -140,13 +168,12 @@
 
   <!-- Body -->
   <div class="scroll-clean flex-1 overflow-auto px-7 py-5">
-    {#if tab === 'stack'}<StackTab stack={crash.stack} />{/if}
-    {#if tab === 'threads'}<ThreadsTab threads={crash.threads} />{/if}
-    {#if tab === 'modules'}<ModulesTab modules={crash.modules} />{/if}
-    {#if tab === 'env'}<EnvTab env={crash.env} />{/if}
-    {#if tab === 'crumbs'}<BreadcrumbsTab breadcrumbs={crash.breadcrumbs} />{/if}
-    {#if tab === 'logs'}<LogsTab logs={crash.logs} />{/if}
-    {#if tab === 'user'}<UserContextTab user={crash.userDescription} />{/if}
+    {#if tab === 'stack'}<StackTab {crash} />{/if}
+    {#if tab === 'threads'}<ThreadsTab {crash} />{/if}
+    {#if tab === 'modules'}<ModulesTab {crash} />{/if}
+    {#if tab === 'handles'}<HandlesTab {crash} />{/if}
+    {#if tab === 'system'}<SystemTab {crash} />{/if}
+    {#if tab === 'attachments'}<AttachmentsTab attachments={crash.attachments ?? []} productId={crash.productId} />{/if}
     {#if tab === 'related'}<RelatedTab related={group.related} {onMerge} canMerge={canMerge && !readOnly} />{/if}
     {#if tab === 'notes'}<NotesTab notes={group.notes} onAdd={onAddNote} {readOnly} />{/if}
   </div>

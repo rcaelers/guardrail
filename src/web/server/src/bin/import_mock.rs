@@ -5,10 +5,8 @@
 //     --host ws://localhost:8000 --user root --pass root \
 //     --ns guardrail --db guardrail
 //
-// The script is idempotent: it deletes all rows from the managed tables
-// (products, users, user_access, crash_groups, crashes, annotations,
-// symbols) before inserting, so re-running it resets the data set back to
-// the seed.
+// The script is idempotent: it deletes all rows from the application tables
+// before inserting, so re-running it resets the database back to the seed.
 //
 // The schema is assumed to already be applied (`surrealkit sync` before
 // running this). The script only touches row data, never DDL.
@@ -65,6 +63,7 @@ async fn main() -> Result<()> {
     let memberships = seed["memberships"].as_array().cloned().unwrap_or_default();
     let crashes = seed["crashes"].as_array().cloned().unwrap_or_default();
     let symbols = seed["symbols"].as_array().cloned().unwrap_or_default();
+    let api_tokens = seed["api_tokens"].as_array().cloned().unwrap_or_default();
 
     println!("Importing {} products…", products.len());
     for p in &products {
@@ -98,6 +97,11 @@ async fn main() -> Result<()> {
         import_symbol(&db, s).await?;
     }
 
+    println!("Importing {} API tokens…", api_tokens.len());
+    for token in &api_tokens {
+        import_api_token(&db, token).await?;
+    }
+
     println!("Done.");
     Ok(())
 }
@@ -105,9 +109,13 @@ async fn main() -> Result<()> {
 // ----------------------------------------------------------------------
 
 async fn clear_tables(db: &Surreal<Any>) -> Result<()> {
-    // Delete in FK-safe order. `annotations` depends on crashes/crash_groups,
-    // `crashes` on `crash_groups`, `user_access` on users/products, etc.
+    // Delete in FK-safe order. Start with rows that reference the core data,
+    // then remove the imported entities themselves.
     let tables = [
+        "sessions",
+        "credentials",
+        "api_tokens",
+        "attachments",
         "annotations",
         "crashes",
         "crash_groups",
@@ -126,12 +134,14 @@ async fn clear_tables(db: &Surreal<Any>) -> Result<()> {
 
 async fn import_product(db: &Surreal<Any>, p: &Value) -> Result<()> {
     let id = s(p, "id");
+    let public = p.get("public").and_then(|v| v.as_bool()).unwrap_or(false);
     db.query(
         "CREATE type::record('products', $id) CONTENT {
             name: $name,
             slug: $slug,
             description: $description,
-            color: $color
+            color: $color,
+            public: $public
         }",
     )
     .bind(("id", id.to_string()))
@@ -139,6 +149,7 @@ async fn import_product(db: &Surreal<Any>, p: &Value) -> Result<()> {
     .bind(("slug", s(p, "slug").to_string()))
     .bind(("description", s(p, "description").to_string()))
     .bind(("color", s(p, "color").to_string()))
+    .bind(("public", public))
     .await?;
     Ok(())
 }
@@ -240,7 +251,12 @@ async fn import_group(db: &Surreal<Any>, g: &Value) -> Result<(usize, usize, usi
 // A crash keeps the full UI-facing detail (stack/threads/modules/env/
 // breadcrumbs/logs/userDescription/dump/derived plus per-crash metadata)
 // inside `report`. The db_api reads this back and hands it to the UI as-is.
-async fn import_crash(db: &Surreal<Any>, group_id: &str, product_id: &str, c: &Value) -> Result<()> {
+async fn import_crash(
+    db: &Surreal<Any>,
+    group_id: &str,
+    product_id: &str,
+    c: &Value,
+) -> Result<()> {
     let crash_id = s(c, "id");
     // Keep everything EXCEPT id/groupId/productId/at (those are first-class
     // columns) inside the `report` blob.
@@ -324,6 +340,58 @@ async fn import_symbol(db: &Surreal<Any>, s_: &Value) -> Result<()> {
     .bind(("uploaded_by", uploaded_by))
     .bind(("uploaded_at", s(s_, "uploadedAt").to_string()))
     .bind(("referenced_by", s_["referencedBy"].as_i64().unwrap_or(0)))
+    .await?;
+    Ok(())
+}
+
+async fn import_api_token(db: &Surreal<Any>, t: &Value) -> Result<()> {
+    let id = s(t, "id");
+    let product_id = s(t, "productId");
+    let user_id = s(t, "userId");
+    db.query(
+        "CREATE type::record('api_tokens', $id) CONTENT {
+            description: $description,
+            token_id: <uuid>$token_id,
+            token_hash: $token_hash,
+            product_id: IF $product_id != ''
+                THEN type::record('products', $product_id)
+                ELSE NONE END,
+            user_id: IF $user_id != ''
+                THEN type::record('users', $user_id)
+                ELSE NONE END,
+            entitlements: $entitlements,
+            last_used_at: IF $last_used_at != ''
+                THEN <datetime>$last_used_at
+                ELSE NONE END,
+            expires_at: IF $expires_at != ''
+                THEN <datetime>$expires_at
+                ELSE NONE END,
+            is_active: $is_active,
+            created_at: IF $created_at != ''
+                THEN <datetime>$created_at
+                ELSE time::now() END,
+            updated_at: IF $updated_at != ''
+                THEN <datetime>$updated_at
+                ELSE time::now() END
+        }",
+    )
+    .bind(("id", id.to_string()))
+    .bind(("description", s(t, "description").to_string()))
+    .bind(("token_id", s(t, "tokenId").to_string()))
+    .bind(("token_hash", s(t, "tokenHash").to_string()))
+    .bind(("product_id", product_id.to_string()))
+    .bind(("user_id", user_id.to_string()))
+    .bind((
+        "entitlements",
+        t.get("entitlements")
+            .cloned()
+            .unwrap_or(Value::Array(vec![])),
+    ))
+    .bind(("last_used_at", s(t, "lastUsedAt").to_string()))
+    .bind(("expires_at", s(t, "expiresAt").to_string()))
+    .bind(("is_active", t["isActive"].as_bool().unwrap_or(true)))
+    .bind(("created_at", s(t, "createdAt").to_string()))
+    .bind(("updated_at", s(t, "updatedAt").to_string()))
     .await?;
     Ok(())
 }

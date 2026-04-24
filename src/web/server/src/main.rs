@@ -1,7 +1,6 @@
 mod auth;
 mod db_api;
 mod error;
-mod mock_api;
 mod oidc;
 mod routes;
 mod templates;
@@ -18,8 +17,8 @@ use tower_http::{
     services::ServeDir,
     trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
 };
-use tracing::Level;
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer, cookie::SameSite};
+use tracing::Level;
 use tracing::info;
 use webauthn_rs::prelude::*;
 
@@ -108,7 +107,11 @@ async fn main() {
         .with_expiry(Expiry::OnInactivity(time::Duration::hours(4)))
         .with_secure(use_secure_cookies);
 
-    let db_state = db_api::DbState { db: Arc::new(state.repo.db.clone()) };
+    let storage = common::init_s3_object_store(settings.clone()).await;
+    let db_state = db_api::DbState {
+        db: Arc::new(state.repo.db.clone()),
+        storage,
+    };
 
     let app = Router::new()
         .merge(routes::router())

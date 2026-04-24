@@ -3,8 +3,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Credential {
-    pub id: uuid::Uuid,
-    pub user_id: uuid::Uuid,
+    pub id: String,
+    pub user_id: String,
     pub name: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -14,6 +14,6 @@ pub struct Credential {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NewCredential {
-    pub user_id: uuid::Uuid,
+    pub user_id: String,
     pub data: serde_json::Value,
 }

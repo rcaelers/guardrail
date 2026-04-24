@@ -4,14 +4,16 @@ use uuid::Uuid;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ApiToken {
-    pub id: Uuid,
+    pub id: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub description: String,
     pub token_id: Uuid,
     pub token_hash: String,
-    pub product_id: Option<Uuid>,
-    pub user_id: Option<Uuid>,
+    #[serde(default)]
+    pub product_id: Option<String>,
+    #[serde(default)]
+    pub user_id: Option<String>,
     pub entitlements: Vec<String>,
     pub last_used_at: Option<DateTime<Utc>>,
     pub expires_at: Option<DateTime<Utc>>,
@@ -23,8 +25,8 @@ pub struct NewApiToken {
     pub description: String,
     pub token_id: Uuid,
     pub token_hash: String,
-    pub product_id: Option<Uuid>,
-    pub user_id: Option<Uuid>,
+    pub product_id: Option<String>,
+    pub user_id: Option<String>,
     pub entitlements: Vec<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub is_active: bool,

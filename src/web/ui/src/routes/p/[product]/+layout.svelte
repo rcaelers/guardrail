@@ -26,11 +26,11 @@
     localStorage.setItem('gr-dark', dark ? '1' : '0');
   });
 
-  const TABS: Array<[string, string]> = [
-    ['crashes', 'Crashes'],
-    ['symbols', 'Symbols'],
-    ['settings', 'Settings']
-  ];
+  const TABS = $derived([
+    ['crashes', 'Crashes'] as [string, string],
+    ['symbols', 'Symbols'] as [string, string],
+    ...(data.user ? [['settings', 'Settings']] as Array<[string, string]> : [])
+  ]);
 </script>
 
 <div class="flex h-screen w-screen flex-col overflow-hidden">
@@ -68,7 +68,14 @@
 
     <span class="flex-1"></span>
     <ThemeToggle {dark} setDark={(v) => (dark = v)} />
-    {#if data.user}<UserMenu user={data.user} isAdmin={data.user.isAdmin} />{/if}
+    {#if data.user}
+      <UserMenu user={data.user} isAdmin={data.user.isAdmin} />
+    {:else}
+      <a
+        href="/login"
+        class="rounded-md bg-ink dark:bg-ink-dark px-3 py-1.5 text-[13px] font-medium text-surface dark:text-surface-dark"
+      >Sign in</a>
+    {/if}
   </header>
 
   <div class="min-h-0 flex-1">

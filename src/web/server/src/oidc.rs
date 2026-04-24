@@ -1,6 +1,7 @@
 use axum::{
     extract::{Query, State},
-    response::Redirect,
+    http::{HeaderValue, header::SET_COOKIE},
+    response::{IntoResponse, Redirect, Response},
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use common::{AuthenticatedUser, settings::Oidc};
@@ -111,7 +112,7 @@ pub async fn callback(
     State(state): State<AppState>,
     session: Session,
     Query(query): Query<OidcCallbackQuery>,
-) -> AppResult<Redirect> {
+) -> AppResult<Response> {
     let oidc = oidc_settings(&state)?;
     let login_state = session
         .remove::<OidcLoginState>(OIDC_LOGIN_SESSION_KEY)
@@ -125,8 +126,9 @@ pub async fn callback(
             .unwrap_or_else(|| "OIDC login failed".to_string());
         let message = format!("{error}: {description}");
         return Ok(Redirect::to(
-            home_path(Some(login_state.next.as_str()), Some(message.as_str())).as_str(),
-        ));
+            login_path(Some(login_state.next.as_str()), Some(message.as_str())).as_str(),
+        )
+        .into_response());
     }
 
     let state_value = query
@@ -135,8 +137,9 @@ pub async fn callback(
         .ok_or_else(|| AppError::failure("missing OIDC state"))?;
     if state_value != login_state.csrf_state {
         return Ok(Redirect::to(
-            home_path(Some(login_state.next.as_str()), Some("invalid OIDC state")).as_str(),
-        ));
+            login_path(Some(login_state.next.as_str()), Some("invalid OIDC state")).as_str(),
+        )
+        .into_response());
     }
 
     let code = query
@@ -162,12 +165,25 @@ pub async fn callback(
         .map_err(|e| {
             AppError::internal(format!("failed to get or create user '{username}': {e}"))
         })?;
+
     session
-        .insert(AUTHENTICATED_USER_SESSION_KEY, authenticated_user)
+        .insert(AUTHENTICATED_USER_SESSION_KEY, authenticated_user.clone())
         .await
         .map_err(AppError::internal)?;
 
-    Ok(Redirect::to(login_state.next.as_str()))
+    // Set gr_uid so the SvelteKit app can resolve the session without an
+    // extra round-trip to a /auth/me endpoint.
+    let gr_cookie = format!(
+        "gr_uid={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
+        authenticated_user.id,
+        60 * 60 * 24 * 30
+    );
+    let mut response = Redirect::to(login_state.next.as_str()).into_response();
+    response.headers_mut().insert(
+        SET_COOKIE,
+        HeaderValue::from_str(&gr_cookie).map_err(AppError::internal)?,
+    );
+    Ok(response)
 }
 
 fn oidc_settings(state: &AppState) -> AppResult<&Oidc> {
@@ -361,15 +377,14 @@ pub fn sanitize_next(next: Option<&str>) -> String {
     "/".to_string()
 }
 
-pub fn home_path(next: Option<&str>, error: Option<&str>) -> String {
+pub fn login_path(next: Option<&str>, error: Option<&str>) -> String {
     let mut serializer = form_urlencoded::Serializer::new(String::new());
     let next = sanitize_next(next);
     serializer.append_pair("next", next.as_str());
     if let Some(error) = error.filter(|value| !value.is_empty()) {
         serializer.append_pair("error", error);
     }
-
-    format!("/?{}", serializer.finish())
+    format!("/login?{}", serializer.finish())
 }
 
 pub fn login_start_path(next: Option<&str>) -> String {

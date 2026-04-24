@@ -24,7 +24,6 @@ use crate::product_listener;
 use crate::product_sync;
 use crate::state::AppState;
 
-
 #[derive(Clone)]
 struct MaintenanceState {
     app_state: AppState,

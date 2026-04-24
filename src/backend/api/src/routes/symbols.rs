@@ -10,7 +10,7 @@ use tracing::{error, info, instrument};
 
 use crate::error::ApiError;
 use crate::state::AppState;
-use crate::utils::{get_product, get_product_by_id, validate_api_token_for_product};
+use crate::utils::{get_product_by_id, get_product_by_name, validate_api_token_for_product};
 use crate::utils::{peek_line, stream_to_s3};
 use data::api_token::ApiToken;
 
@@ -41,7 +41,7 @@ struct SymbolsInfo {
 
 #[derive(Default, Debug, Serialize)]
 struct SymbolsContext {
-    product_id: uuid::Uuid,
+    product_id: String,
     version: String,
     channel: String,
     commit: String,
@@ -142,7 +142,7 @@ impl SymbolsApi {
             }
         }
 
-        let product = get_product(db, &product_name).await?;
+        let product = get_product_by_name(db, &product_name).await?;
         validate_api_token_for_product(api_token, &product, &product_name)?;
         if !product.accepting_crashes {
             return Err(ApiError::ProductNotAcceptingCrashes(product_name));
@@ -227,7 +227,7 @@ impl SymbolsApi {
 
         Ok(serde_json::json!({
             "symbol_upload_id": symbol_upload_id.to_string(),
-            "product_id": symbols_context.product_id.to_string(),
+            "product_id": symbols_context.product_id,
             "os": symbols.header.os,
             "arch": symbols.header.arch,
             "build_id": symbols.header.build_id,
@@ -337,12 +337,15 @@ impl SymbolsApi {
     ) -> Result<(), ApiError> {
         let db = &state.repo.db;
 
-        let product_id = api_token.product_id.ok_or_else(|| {
-            error!("API token does not have a product ID");
-            ApiError::ProductAccessDenied(
-                "API token is not associated with any product".to_string(),
-            )
-        })?;
+        let product_id = match api_token.product_id.as_deref() {
+            Some(raw) => raw,
+            None => {
+                error!("API token does not have a product ID");
+                return Err(ApiError::ProductAccessDenied(
+                    "API token is not associated with any product".to_string(),
+                ));
+            }
+        };
 
         let product = get_product_by_id(db, product_id).await?;
         symbols_info.product = Some(product.name.clone());

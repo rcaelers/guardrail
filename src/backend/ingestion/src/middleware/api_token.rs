@@ -268,12 +268,12 @@ where
                     .unwrap());
             }
 
-            if let Err(err) = ApiTokenRepo::update_last_used(&mut *conn, api_token.id).await {
+            if let Err(err) = ApiTokenRepo::update_last_used(&mut *conn, &api_token.id).await {
                 error!("Failed to update last_used_at: {}", err);
             }
 
-            if let Some(product_id) = api_token.product_id {
-                if let Some(user_id) = api_token.user_id {
+            if let Some(product_id) = api_token.product_id.as_deref() {
+                if let Some(user_id) = api_token.user_id.as_deref() {
                     info!(
                         "API token validated successfully - product_id: {}, user_id: {}, token_id: {}",
                         product_id, user_id, api_token.id
@@ -284,7 +284,7 @@ where
                         product_id, api_token.id
                     );
                 }
-            } else if let Some(user_id) = api_token.user_id {
+            } else if let Some(user_id) = api_token.user_id.as_deref() {
                 info!(
                     "API token validated successfully - user_id: {}, token_id: {}",
                     user_id, api_token.id

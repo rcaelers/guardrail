@@ -73,7 +73,7 @@ impl MinidumpProcessor {
     #[instrument(skip(self, crash_info, redis_storage), fields(crash_id = %crash_info["crash_id"]))]
     async fn handle_job(
         &self,
-        crash_id: uuid::Uuid,
+        crash_id: String,
         mut crash_info: serde_json::Value,
         redis_storage: &RedisStorage<ImportCrashJob>,
     ) -> Result<(), JobError> {
@@ -112,12 +112,14 @@ impl MinidumpProcessor {
         crash_info["signature"] = Value::String(signature);
 
         // Write processed crash report to S3
-        self.write_processed_crash(crash_id, &crash_info, &report)
+        self.write_processed_crash(&crash_id, &crash_info, &report)
             .await?;
         info!("Wrote processed crash report to S3: {:?}", crash_id);
 
         // Enqueue ImportCrashJob for the maintenance worker to import into database
-        let import_job = ImportCrashJob { crash_id };
+        let import_job = ImportCrashJob {
+            crash_id: crash_id.clone(),
+        };
         redis_storage.clone().push(import_job).await.map_err(|e| {
             error!(error = ?e, "Failed to enqueue ImportCrashJob");
             JobError::ApalisError(format!("failed to enqueue ImportCrashJob: {:?}", e))
@@ -144,7 +146,7 @@ impl MinidumpProcessor {
     #[instrument(skip(self, crash_info, report), fields(crash_id = %crash_id))]
     async fn write_processed_crash(
         &self,
-        crash_id: uuid::Uuid,
+        crash_id: &str,
         crash_info: &serde_json::Value,
         report: &serde_json::Value,
     ) -> Result<(), JobError> {
@@ -183,24 +185,20 @@ impl MinidumpProcessor {
                 error!("Crash ID is missing in job");
                 JobError::Failure("crash_id is missing".to_string())
             })?
-            .parse::<uuid::Uuid>()
-            .map_err(|_| {
-                error!("Invalid crash ID format in job");
-                JobError::Failure("invalid crash_id format".to_string())
-            })?;
+            .to_string();
         info!("Process minidump: {}", crash_id);
         let processor = MinidumpProcessor::new(state.clone());
         processor
-            .handle_job(crash_id, job.crash.clone(), &redis_storage)
+            .handle_job(crash_id.clone(), job.crash.clone(), &redis_storage)
             .await?;
-        processor.cleanup_files(crash_id, &job.crash).await;
+        processor.cleanup_files(crash_id.clone(), &job.crash).await;
         info!("Successfully processed minidump for crash ID: {}", crash_id);
 
         Ok(())
     }
 
     #[instrument(skip(self, crash_info), fields(crash_id = %crash_id))]
-    async fn cleanup_files(&self, crash_id: uuid::Uuid, crash_info: &serde_json::Value) {
+    async fn cleanup_files(&self, crash_id: String, crash_info: &serde_json::Value) {
         let crash_info_path = format!("crashes/{crash_id}.json");
         if let Err(e) = self
             .storage
