@@ -2,7 +2,7 @@
 // URL params); mutations are gated on role.
 
 import type { PageServerLoad, Actions } from './$types';
-import { adapter } from '$lib/adapters';
+import { createAdapter } from '$lib/adapters';
 import { error, fail } from '@sveltejs/kit';
 import type { SymbolQuery } from '$lib/adapters/types';
 import { requireProductAccess } from '$lib/server/product-access';
@@ -11,7 +11,8 @@ function canWrite(role: string | null | undefined): boolean {
   return role === 'readwrite' || role === 'maintainer';
 }
 
-export const load: PageServerLoad = async ({ url, parent }) => {
+export const load: PageServerLoad = async ({ url, parent, request }) => {
+  const adapter = createAdapter(request.headers.get('cookie') ?? '');
   const { product } = await parent();
 
   const q: SymbolQuery = {
@@ -30,7 +31,8 @@ export const load: PageServerLoad = async ({ url, parent }) => {
 export const actions: Actions = {
   upload: async ({ request, locals, params }) => {
     if (!locals.user) throw error(401);
-    const { role, product } = await requireProductAccess(locals.user, params.product!);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { role, product } = await requireProductAccess(locals.user, params.product!, adapter);
     if (!canWrite(role)) throw error(403, 'Read-only on this product');
     const form = await request.formData();
     const name = String(form.get('name') ?? '').trim();
@@ -47,7 +49,8 @@ export const actions: Actions = {
   },
   delete: async ({ request, locals, params }) => {
     if (!locals.user) throw error(401);
-    const { role } = await requireProductAccess(locals.user, params.product!);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { role } = await requireProductAccess(locals.user, params.product!, adapter);
     if (role !== 'maintainer') throw error(403, 'Only maintainers can delete symbols');
     const form = await request.formData();
     const id = String(form.get('id') ?? '');

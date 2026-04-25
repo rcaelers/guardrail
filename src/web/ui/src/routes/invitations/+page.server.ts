@@ -1,10 +1,12 @@
 import type { PageServerLoad, Actions } from './$types';
-import { adapter } from '$lib/adapters';
+import { createAdapter } from '$lib/adapters';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Role } from '$lib/adapters/types';
 
-export const load: PageServerLoad = async ({ locals, url }) => {
+export const load: PageServerLoad = async ({ locals, url, request }) => {
   if (!locals.user) throw redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);
+
+  const adapter = createAdapter(request.headers.get('cookie') ?? '');
 
   // Determine products the user can assign grants for.
   // Admins can assign any product; maintainers only their maintained products.
@@ -40,6 +42,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 export const actions: Actions = {
   create: async ({ request, locals }) => {
     if (!locals.user) throw error(401);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
 
     const form = await request.formData();
     const is_admin = form.get('is_admin') === 'true';
@@ -69,6 +72,7 @@ export const actions: Actions = {
 
   update: async ({ request, locals }) => {
     if (!locals.user) throw error(401);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
 
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
@@ -96,6 +100,7 @@ export const actions: Actions = {
 
   revoke: async ({ request, locals }) => {
     if (!locals.user) throw error(401);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
 
     const form = await request.formData();
     const id = String(form.get('id') ?? '');

@@ -1,7 +1,7 @@
 // Admin: users management.
 
 import type { PageServerLoad, Actions } from './$types';
-import { adapter } from '$lib/adapters';
+import { createAdapter } from '$lib/adapters';
 import { error, fail } from '@sveltejs/kit';
 import type { Role } from '$lib/adapters/types';
 
@@ -11,7 +11,8 @@ function requireAdmin(locals: App.Locals) {
   return locals.user;
 }
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ request }) => {
+  const adapter = createAdapter(request.headers.get('cookie') ?? '');
   const [users, products] = await Promise.all([
     adapter.listUsers(),
     adapter.listProducts('all')
@@ -33,6 +34,7 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
   create: async ({ request, locals }) => {
     requireAdmin(locals);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
     const form = await request.formData();
     const email = String(form.get('email') ?? '').trim();
     const name = String(form.get('name') ?? '').trim();
@@ -46,6 +48,7 @@ export const actions: Actions = {
   },
   update: async ({ request, locals }) => {
     requireAdmin(locals);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
     const email = String(form.get('email') ?? '').trim();
@@ -62,6 +65,7 @@ export const actions: Actions = {
   },
   delete: async ({ request, locals }) => {
     const user = requireAdmin(locals);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
     if (!id) return fail(400, { error: 'missing id' });
@@ -71,6 +75,7 @@ export const actions: Actions = {
   },
   toggleAdmin: async ({ request, locals }) => {
     const user = requireAdmin(locals);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
     const isAdmin = form.get('isAdmin') === 'true';
@@ -82,6 +87,7 @@ export const actions: Actions = {
   },
   setPermission: async ({ request, locals }) => {
     const user = requireAdmin(locals);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
     const form = await request.formData();
     const userId = String(form.get('userId') ?? '');
     const productId = String(form.get('productId') ?? '');
@@ -93,6 +99,7 @@ export const actions: Actions = {
   },
   revokePermission: async ({ request, locals }) => {
     const user = requireAdmin(locals);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
     const form = await request.formData();
     const userId = String(form.get('userId') ?? '');
     const productId = String(form.get('productId') ?? '');

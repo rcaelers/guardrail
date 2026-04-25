@@ -2,7 +2,7 @@
 // selected group to that product, and enforces role gating on mutations.
 
 import type { PageServerLoad, Actions } from './$types';
-import { adapter } from '$lib/adapters';
+import { createAdapter } from '$lib/adapters';
 import { error, fail, redirect } from '@sveltejs/kit';
 import type { Status } from '$lib/adapters/types';
 import { requireProductAccess } from '$lib/server/product-access';
@@ -11,7 +11,8 @@ function canWrite(role: string | null | undefined): boolean {
   return role === 'readwrite' || role === 'maintainer';
 }
 
-export const load: PageServerLoad = async ({ url, parent }) => {
+export const load: PageServerLoad = async ({ url, parent, request }) => {
+  const adapter = createAdapter(request.headers.get('cookie') ?? '');
   const { product } = await parent();
 
   const version = url.searchParams.get('version') ?? 'all';
@@ -78,7 +79,8 @@ export const load: PageServerLoad = async ({ url, parent }) => {
 export const actions: Actions = {
   setStatus: async ({ request, locals, params }) => {
     if (!locals.user) throw error(401);
-    const { role } = await requireProductAccess(locals.user, params.product);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { role } = await requireProductAccess(locals.user, params.product, adapter);
     if (!canWrite(role)) throw error(403, 'You are read-only on this product');
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
@@ -89,7 +91,8 @@ export const actions: Actions = {
   },
   addNote: async ({ request, locals, params }) => {
     if (!locals.user) throw error(401);
-    const { role } = await requireProductAccess(locals.user, params.product);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { role } = await requireProductAccess(locals.user, params.product, adapter);
     if (!canWrite(role)) throw error(403, 'You are read-only on this product');
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
@@ -100,7 +103,8 @@ export const actions: Actions = {
   },
   merge: async ({ request, locals, params }) => {
     if (!locals.user) throw error(401);
-    const { role } = await requireProductAccess(locals.user, params.product);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { role } = await requireProductAccess(locals.user, params.product, adapter);
     if (role !== 'maintainer') throw error(403, 'Only maintainers can merge groups');
     const form = await request.formData();
     const primaryId = String(form.get('primaryId') ?? '');

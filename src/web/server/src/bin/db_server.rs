@@ -13,9 +13,13 @@ use std::sync::Arc;
 
 use axum::Router;
 use common::settings::Settings;
+use repos::Repo;
 use surrealdb::opt::auth::Root;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
+
+#[path = "../jwt.rs"]
+mod jwt;
 
 #[path = "../db_api.rs"]
 mod db_api;
@@ -52,10 +56,23 @@ async fn main() -> Result<(), AnyErr> {
     })
     .await?;
     db.use_ns(&ns).use_db(&db_name).await?;
-    let storage = common::init_s3_object_store(settings).await;
+
+    // Register the JWT access method so RLS $auth variables are populated.
+    {
+        let public_key = &settings.auth.jwk.public_key;
+        db.query(format!(
+            r#"DEFINE ACCESS OVERWRITE guardrail_api ON DATABASE TYPE RECORD
+                WITH JWT ALGORITHM EDDSA KEY '{public_key}'
+                DURATION FOR SESSION 1h"#
+        ))
+        .await?;
+    }
+
+    let storage = common::init_s3_object_store(settings.clone()).await;
     let state = db_api::DbState {
-        db: Arc::new(db),
+        repo: Repo::new(db),
         storage,
+        settings,
     };
 
     let cors = CorsLayer::new()

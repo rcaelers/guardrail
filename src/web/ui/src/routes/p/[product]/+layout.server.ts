@@ -6,9 +6,10 @@
 
 import type { LayoutServerLoad } from './$types';
 import { error, redirect } from '@sveltejs/kit';
-import { adapter } from '$lib/adapters';
+import { createAdapter } from '$lib/adapters';
 
-export const load: LayoutServerLoad = async ({ params, locals }) => {
+export const load: LayoutServerLoad = async ({ params, locals, request }) => {
+  const adapter = createAdapter(request.headers.get('cookie') ?? '');
   const product = await adapter.getProduct(params.product);
   if (!product) throw error(404, `Product "${params.product}" not found`);
 

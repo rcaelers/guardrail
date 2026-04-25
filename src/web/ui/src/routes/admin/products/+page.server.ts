@@ -1,7 +1,7 @@
 // Admin: products management.
 
 import type { PageServerLoad, Actions } from './$types';
-import { adapter } from '$lib/adapters';
+import { createAdapter } from '$lib/adapters';
 import { error, fail } from '@sveltejs/kit';
 
 function requireAdmin(locals: App.Locals) {
@@ -9,7 +9,8 @@ function requireAdmin(locals: App.Locals) {
   if (!locals.user.isAdmin) throw error(403, 'Administrator access required');
 }
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ request }) => {
+  const adapter = createAdapter(request.headers.get('cookie') ?? '');
   const products = await adapter.listProducts('all');
   // Enrich with member counts for the table.
   const withCounts = await Promise.all(
@@ -21,6 +22,7 @@ export const load: PageServerLoad = async () => {
 export const actions: Actions = {
   create: async ({ request, locals }) => {
     requireAdmin(locals);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
     const form = await request.formData();
     const name = String(form.get('name') ?? '').trim();
     const slug = String(form.get('slug') ?? '').trim();
@@ -35,6 +37,7 @@ export const actions: Actions = {
   },
   update: async ({ request, locals }) => {
     requireAdmin(locals);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
     const name = String(form.get('name') ?? '').trim();
@@ -53,6 +56,7 @@ export const actions: Actions = {
   },
   delete: async ({ request, locals }) => {
     requireAdmin(locals);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
     if (!id) return fail(400, { error: 'missing id' });

@@ -199,6 +199,7 @@ pub struct Settings {
     pub object_storage: ObjectStorage,
     pub auth: Auth,
     pub minidumps: Minidumps,
+    #[serde(default)]
     pub provisioner: ProvisionerSettings,
     #[serde(skip)]
     pub config_dir: String,
