@@ -1,24 +1,8 @@
 ##
-## Planner — extract dependency recipe from Cargo.toml/Cargo.lock
-## This stage is tiny and only re-runs when the workspace manifests change.
+## Chef — Rust build image with cargo-chef installed
 ##
 
-FROM --platform=$BUILDPLATFORM rust:alpine3.23 AS planner
-
-RUN apk add --no-cache musl-dev build-base && \
-    cargo install cargo-chef --locked
-
-WORKDIR /app
-COPY . .
-RUN cargo chef prepare --recipe-path recipe.json
-
-##
-## Cacher — pre-build all third-party dependencies
-## This whole stage is a cached Docker layer: it only re-runs when
-## Cargo.lock changes, which means a dependency version changed.
-##
-
-FROM --platform=$BUILDPLATFORM rust:alpine3.23 AS cacher
+FROM --platform=$BUILDPLATFORM rust:alpine3.23 AS chef
 
 ARG CARGO_BUILD_JOBS=2
 ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
@@ -35,34 +19,26 @@ RUN apk add --no-cache \
     cargo install cargo-chef --locked
 
 WORKDIR /app
+
+##
+## Planner — extract dependency recipe from Cargo.toml/Cargo.lock
+##
+
+FROM chef AS planner
+
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+##
+## Builder — pre-build dependencies, then compile service binaries
+##
+
+FROM chef AS builder
+
 COPY --from=planner /app/recipe.json recipe.json
+COPY --from=planner /app/rust-toolchain.toml rust-toolchain.toml
+COPY --from=planner /app/.cargo/config.toml .cargo/config.toml
 RUN cargo chef cook --recipe-path recipe.json
-
-##
-## Builder — compile all service binaries in one pass
-## Shared workspace crates (common, repos, data, …) are compiled once.
-## Only workspace crate source changes trigger a rebuild here.
-##
-
-FROM --platform=$BUILDPLATFORM rust:alpine3.23 AS builder
-
-ARG CARGO_BUILD_JOBS=2
-ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
-
-RUN apk add --no-cache \
-    clang \
-    lld \
-    openssl \
-    pkgconfig \
-    openssl-dev \
-    openssl-libs-static \
-    musl-dev \
-    build-base
-
-WORKDIR /app
-
-COPY --from=cacher /app/target target
-COPY --from=cacher /usr/local/cargo /usr/local/cargo
 COPY . .
 
 RUN cargo build \
