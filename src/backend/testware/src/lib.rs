@@ -137,7 +137,8 @@ pub async fn create_test_attachment(
                     "error": "Test error",
                     "stacktrace": "Test stack trace"
                 })),
-                signature: Some("test_signature".to_string()),
+                fingerprint: Some("test_signature".to_string()),
+                group_id: None,
             };
 
             CrashRepo::create(db, new_crash)

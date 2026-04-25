@@ -30,7 +30,8 @@
 import type {
   GuardrailAdapter, Crash, CrashGroup, ListQuery, ListResult, Note, Status,
   User, Product, Role, MembershipWithUser, MembershipWithProduct,
-  Symbol as SymbolRow, SymbolQuery
+  Symbol as SymbolRow, SymbolQuery,
+  Invitation, CreateInvitationSpec, UpdateInvitationSpec
 } from './types';
 
 export function httpAdapter(baseUrl: string): GuardrailAdapter {
@@ -181,6 +182,28 @@ export function httpAdapter(baseUrl: string): GuardrailAdapter {
     async mergeGroups(primaryId, mergedId) {
       const r = await jpost(`/crashes/${encodeURIComponent(primaryId)}/merge`, { mergedId });
       if (!r.ok) throw new Error(`mergeGroups ${r.status}`);
+    },
+
+    // --- invitations ---
+    async listInvitations() {
+      const r = await req('/api/invitations');
+      return json<Invitation[]>(r, 'listInvitations');
+    },
+    async createInvitation(spec: CreateInvitationSpec) {
+      const r = await jpost('/api/invitations', spec);
+      return json<Invitation>(r, 'createInvitation');
+    },
+    async updateInvitation(id: string, patch: UpdateInvitationSpec) {
+      const r = await req(`/api/invitations/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(patch)
+      });
+      return json<Invitation>(r, 'updateInvitation');
+    },
+    async revokeInvitation(id: string) {
+      const r = await req(`/api/invitations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!r.ok) throw new Error(`revokeInvitation ${r.status}`);
     },
 
     // --- symbols ---

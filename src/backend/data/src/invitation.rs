@@ -40,3 +40,11 @@ pub struct NewInvitation {
     pub is_admin: bool,
     pub grants: Vec<InvitationGrant>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateInvitation {
+    pub expires_at: Option<DateTime<Utc>>,
+    pub max_uses: Option<u32>,
+    pub is_admin: bool,
+    pub grants: Vec<InvitationGrant>,
+}

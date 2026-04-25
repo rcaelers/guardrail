@@ -15,7 +15,8 @@ import type {
   GuardrailAdapter, Crash, CrashGroup, CrashGroupSummary, Dump, DumpThread, DumpModule,
   Derived, ListQuery, ListResult, Note, Status,
   User, Product, Membership, MembershipWithUser, MembershipWithProduct,
-  Role, Symbol as SymbolRow, SymbolQuery, CrashAttachment, CrashUserText
+  Role, Symbol as SymbolRow, SymbolQuery, CrashAttachment, CrashUserText,
+  Invitation, CreateInvitationSpec, UpdateInvitationSpec
 } from './types';
 
 const VERSIONS = ['2.14.0', '2.13.4', '2.13.3', '2.13.2', '2.12.9', '2.12.7'];
@@ -920,6 +921,42 @@ export const mockAdapter: GuardrailAdapter = {
     const i = DB.indexOf(merged);
     if (i >= 0) DB.splice(i, 1);
   },
+
+  // --- invitations (mock stubs) ---
+  async listInvitations(): Promise<Invitation[]> { return []; },
+  async createInvitation(spec: CreateInvitationSpec): Promise<Invitation> {
+    const now = new Date().toISOString();
+    return {
+      id: Math.random().toString(36).slice(2),
+      code: Math.random().toString(36).slice(2),
+      created_by: 'mock-user',
+      expires_at: spec.expires_at ?? null,
+      max_uses: spec.max_uses ?? null,
+      use_count: 0,
+      is_admin: spec.is_admin,
+      grants: spec.grants,
+      status: 'Active',
+      created_at: now,
+      updated_at: now,
+    };
+  },
+  async updateInvitation(id: string, patch: UpdateInvitationSpec): Promise<Invitation> {
+    const now = new Date().toISOString();
+    return {
+      id,
+      code: 'mock-code',
+      created_by: 'mock-user',
+      expires_at: patch.expires_at ?? null,
+      max_uses: patch.max_uses ?? null,
+      use_count: 0,
+      is_admin: patch.is_admin,
+      grants: patch.grants,
+      status: 'Active',
+      created_at: now,
+      updated_at: now,
+    };
+  },
+  async revokeInvitation(_id: string): Promise<void> {},
 
   // --- symbols ---
   async listSymbols(productId, q = {}): Promise<SymbolRow[]> {

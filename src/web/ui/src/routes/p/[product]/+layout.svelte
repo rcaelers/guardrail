@@ -29,7 +29,8 @@
   const TABS = $derived([
     ['crashes', 'Crashes'] as [string, string],
     ['symbols', 'Symbols'] as [string, string],
-    ...(data.user ? [['settings', 'Settings']] as Array<[string, string]> : [])
+    ...(data.user ? [['settings', 'Settings']] as Array<[string, string]> : []),
+    ...(data.role === 'maintainer' ? [['invitations', 'Invitations']] as Array<[string, string]> : [])
   ]);
 </script>
 
@@ -53,9 +54,10 @@
     <!-- Tabs -->
     <nav class="ml-3 flex gap-0.5 text-[13px]">
       {#each TABS as [slug, label]}
-        {@const active = tab === slug || (slug === 'settings' && tab === 'settings')}
+        {@const href = slug === 'invitations' ? '/invitations' : `/p/${data.product.id}/${slug}`}
+        {@const active = slug === 'invitations' ? $page.url.pathname.startsWith('/invitations') : tab === slug}
         <a
-          href={`/p/${data.product.id}/${slug}`}
+          {href}
           class="rounded-md px-2.5 py-1.5"
           class:bg-accent-soft={active}
           class:dark:bg-accent-softDark={active}

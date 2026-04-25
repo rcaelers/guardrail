@@ -315,6 +315,45 @@ export interface MembershipWithProduct extends Membership {
 }
 
 // ------------------------------------------------------------------
+// Invitations.
+// ------------------------------------------------------------------
+
+export type InvitationStatus = 'Active' | 'Exhausted' | 'Expired' | 'Revoked';
+
+export interface InvitationGrant {
+  product_id: string;
+  role: Role;
+}
+
+export interface Invitation {
+  id: string;
+  code: string;
+  created_by: string;
+  expires_at: string | null;
+  max_uses: number | null;
+  use_count: number;
+  is_admin: boolean;
+  grants: InvitationGrant[];
+  status: InvitationStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateInvitationSpec {
+  is_admin: boolean;
+  grants: InvitationGrant[];
+  expires_at?: string | null;
+  max_uses?: number | null;
+}
+
+export interface UpdateInvitationSpec {
+  is_admin: boolean;
+  grants: InvitationGrant[];
+  expires_at?: string | null;
+  max_uses?: number | null;
+}
+
+// ------------------------------------------------------------------
 // Symbols.
 // ------------------------------------------------------------------
 
@@ -407,6 +446,12 @@ export interface GuardrailAdapter {
   setStatus(id: string, status: Status): Promise<void>;
   addNote(id: string, body: string, author: string): Promise<Note>;
   mergeGroups(primaryId: string, mergedId: string): Promise<void>;
+
+  // --- invitations ---
+  listInvitations(): Promise<Invitation[]>;
+  createInvitation(spec: CreateInvitationSpec): Promise<Invitation>;
+  updateInvitation(id: string, patch: UpdateInvitationSpec): Promise<Invitation>;
+  revokeInvitation(id: string): Promise<void>;
 
   // --- symbols ---
   listSymbols(productId: string, q?: SymbolQuery): Promise<Symbol[]>;

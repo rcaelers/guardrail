@@ -7,11 +7,72 @@ use crate::{
     record_key,
 };
 use common::QueryParams;
-use data::invitation::{Invitation, InvitationStatus, NewInvitation};
+use data::invitation::{Invitation, InvitationStatus, NewInvitation, UpdateInvitation};
 
 pub struct InvitationRepo {}
 
 impl InvitationRepo {
+    /// Return invitations visible to a user:
+    /// admins get everything; others see invitations they created OR where any
+    /// grant's product_id is in `maintained_product_ids`.
+    pub async fn get_for_user(
+        db: &Surreal<Any>,
+        user_id: &str,
+        is_admin: bool,
+        maintained_product_ids: &[String],
+    ) -> Result<Vec<Invitation>, RepoError> {
+        if is_admin {
+            let mut result = db
+                .query(
+                    "SELECT *, meta::id(id) as id FROM invitations ORDER BY created_at DESC",
+                )
+                .await
+                .map_err(handle_surreal_error)?;
+            return crate::take_many(&mut result, 0);
+        }
+        let mut result = db
+            .query(
+                "SELECT *, meta::id(id) as id FROM invitations
+                 WHERE created_by = $user_id
+                    OR grants[WHERE product_id INSIDE $product_ids] != []
+                 ORDER BY created_at DESC",
+            )
+            .bind(("user_id", user_id.to_owned()))
+            .bind(("product_ids", maintained_product_ids.to_vec()))
+            .await
+            .map_err(handle_surreal_error)?;
+        crate::take_many(&mut result, 0)
+    }
+
+    pub async fn update(
+        db: &Surreal<Any>,
+        id: &str,
+        update: UpdateInvitation,
+    ) -> Result<Option<Invitation>, RepoError> {
+        let mut result = db
+            .query(
+                "UPDATE type::record('invitations', $id) SET
+                    expires_at = $expires_at,
+                    max_uses   = $max_uses,
+                    is_admin   = $is_admin,
+                    grants     = $grants,
+                    updated_at = time::now()
+                 RETURN *, meta::id(id) as id",
+            )
+            .bind(("id", record_key(id)))
+            .bind(("expires_at", update.expires_at))
+            .bind(("max_uses", update.max_uses))
+            .bind(("is_admin", update.is_admin))
+            .bind((
+                "grants",
+                serde_json::to_value(&update.grants)
+                    .map_err(|e| RepoError::DatabaseError(e.to_string()))?,
+            ))
+            .await
+            .map_err(handle_surreal_error)?;
+        crate::take_one(&mut result, 0)
+    }
+
     pub async fn get_by_id(
         db: &Surreal<Any>,
         id: impl ToString,
