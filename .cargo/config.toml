@@ -1,0 +1,5 @@
+# Use lld for faster linking on Linux container builds.
+# cfg condition keeps this from affecting macOS dev machines.
+[target.'cfg(target_os = "linux")']
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]

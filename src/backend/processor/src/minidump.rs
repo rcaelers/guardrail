@@ -109,7 +109,7 @@ impl MinidumpProcessor {
         })?;
 
         let signature = self.generate_signature(&report).await?;
-        crash_info["signature"] = Value::String(signature);
+        crash_info["fingerprint"] = Value::String(signature);
 
         // Write processed crash report to S3
         self.write_processed_crash(&crash_id, &crash_info, &report)

@@ -9,21 +9,18 @@ ENV RUSTUP_TOOLCHAIN=stable
 
 RUN apk add --no-cache \
     clang \
+    lld \
     openssl \
     pkgconfig \
     openssl-dev \
     openssl-libs-static \
     musl-dev \
-    build-base \
-    nodejs \
-    npm
+    build-base
 
 RUN mkdir -p /app
 WORKDIR /app
 COPY . .
 
-RUN npm install
-RUN npm run web:islands:build
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=target-web,target=/app/target \

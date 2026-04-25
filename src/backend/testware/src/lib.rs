@@ -84,7 +84,7 @@ pub async fn create_test_product_with_details(
 /// Create a test crash and its associated product if needed
 pub async fn create_test_crash(
     db: &Surreal<Any>,
-    signature: Option<&str>,
+    fingerprint: Option<&str>,
     product_id: Option<impl ToString>,
 ) -> Crash {
     let product_id = match product_id {
@@ -100,7 +100,8 @@ pub async fn create_test_crash(
             "error": "Test error",
             "stacktrace": "Test stack trace"
         })),
-        signature: signature.map(|s| s.to_string()),
+        fingerprint: fingerprint.map(|s| s.to_string()),
+        group_id: None,
     };
 
     let crash_id = CrashRepo::create(db, new_crash)

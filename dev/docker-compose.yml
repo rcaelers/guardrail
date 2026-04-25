@@ -87,20 +87,68 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  pocket-id-proxy:
+  caddy:
     image: caddy:2
-    container_name: pocket-id-proxy
+    container_name: caddy
     depends_on:
       pocket-id:
         condition: service_healthy
+      web:
+        condition: service_healthy
+      svelte:
+        condition: service_started
     ports:
       - '1443:1443'
+      - '4433:4433'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./_private/certs/guardrail.home.krandor.org.crt:/certs/guardrail.home.krandor.org.crt:ro
       - ./_private/certs/guardrail.home.krandor.org.key:/certs/guardrail.home.krandor.org.key:ro
       - caddy-data:/data
       - caddy-config:/config
+    restart: unless-stopped
+
+  web:
+    container_name: web
+    build:
+      context: ..
+      dockerfile: Containerfile
+      target: web
+      provenance: false
+      sbom: false
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      minio-setup:
+        condition: service_completed_successfully
+    environment:
+      RUST_LOG: info
+    volumes:
+      - ./config/settings.yaml:/config/settings.yaml:ro
+      - ./config/web-docker.yaml:/config/web-docker.yaml:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:80/healthz || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  svelte:
+    container_name: svelte
+    build:
+      context: ..
+      dockerfile: Containerfile.ui
+      provenance: false
+      sbom: false
+    environment:
+      PORT: '3000'
+      HOST: '0.0.0.0'
+      ORIGIN: 'https://guardrail.home.krandor.org:4433'
+      GUARDRAIL_API_URL: 'http://web:80/api/v1'
     restart: unless-stopped
 
   pocket-id-setup:
@@ -136,7 +184,8 @@ services:
     container_name: ingestion
     build:
       context: ..
-      dockerfile: Containerfile.ingestion
+      dockerfile: Containerfile
+      target: ingestion
       provenance: false
       sbom: false
     depends_on:
@@ -165,7 +214,8 @@ services:
     container_name: processor
     build:
       context: ..
-      dockerfile: Containerfile.processor
+      dockerfile: Containerfile
+      target: processor
       provenance: false
       sbom: false
     depends_on:
@@ -187,7 +237,8 @@ services:
     container_name: curator
     build:
       context: ..
-      dockerfile: Containerfile.curator
+      dockerfile: Containerfile
+      target: curator
       provenance: false
       sbom: false
     depends_on:
@@ -211,7 +262,8 @@ services:
     container_name: api
     build:
       context: ..
-      dockerfile: Containerfile.api
+      dockerfile: Containerfile
+      target: api
       provenance: false
       sbom: false
     depends_on:

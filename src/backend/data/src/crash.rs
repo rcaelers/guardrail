@@ -8,7 +8,8 @@ pub struct Crash {
     pub updated_at: DateTime<Utc>,
     pub minidump: Option<uuid::Uuid>,
     pub report: Option<serde_json::Value>,
-    pub signature: Option<String>,
+    pub fingerprint: Option<String>,
+    pub group_id: Option<String>,
     pub product_id: String,
 }
 
@@ -17,6 +18,7 @@ pub struct NewCrash {
     pub id: Option<String>,
     pub minidump: Option<uuid::Uuid>,
     pub report: Option<serde_json::Value>,
-    pub signature: Option<String>,
+    pub fingerprint: Option<String>,
+    pub group_id: Option<String>,
     pub product_id: String,
 }

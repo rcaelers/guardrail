@@ -1,6 +1,5 @@
 web_server:
   port: 4433
-  dev_proxy_url: "http://localhost:5173"
   public_key: |
     -----BEGIN CERTIFICATE-----
     MIIEVTCCAj2gAwIBAgIBAjANBgkqhkiG9w0BAQsFADAbMRkwFwYDVQQDExBHdWFy

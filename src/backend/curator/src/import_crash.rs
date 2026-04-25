@@ -10,10 +10,13 @@ use tracing::{error, info, instrument};
 use crate::error::JobError;
 use crate::jobs::ImportCrashJob;
 use crate::state::AppState;
-use data::{annotation::NewAnnotation, attachment::NewAttachment, crash::NewCrash};
+use data::{
+    annotation::NewAnnotation, attachment::NewAttachment, crash::NewCrash,
+    crash_group::NewCrashGroup,
+};
 use repos::{
     Repo, annotation::AnnotationsRepo, attachment::AttachmentsRepo, crash::CrashRepo,
-    product::ProductRepo,
+    crash_group::CrashGroupRepo, product::ProductRepo,
 };
 
 pub struct ImportCrashProcessor {
@@ -99,10 +102,28 @@ impl ImportCrashProcessor {
             .map_err(|_| JobError::Failure(format!("failed to get product {product_id}")))?
             .ok_or_else(|| JobError::Failure(format!("no such product {product_id}")))?;
 
+        let fingerprint = crash_info["fingerprint"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        let group_id = if let Some(fp) = fingerprint.as_deref() {
+            match Self::find_or_create_crash_group(db, &product.id, fp).await {
+                Ok(id) => Some(id),
+                Err(e) => {
+                    error!(fingerprint = %fp, error = ?e, "Failed to assign crash group; crash will be stored without one");
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         let crash = NewCrash {
             id: Some(crash_id.to_string()),
             minidump: Some(minidump_id),
-            signature: crash_info["signature"].as_str().map(|s| s.to_string()),
+            fingerprint,
+            group_id,
             product_id,
             report: Some(report),
         };
@@ -116,6 +137,60 @@ impl ImportCrashProcessor {
         Self::create_attachments(db, &id, &product.id, &crash_info).await?;
         info!("Created crash report with ID: {}", id);
         Ok(id)
+    }
+
+    /// Find an existing crash group for this (product, fingerprint) pair, or create one.
+    ///
+    /// The unique index on `crash_groups (product_id, fingerprint)` means two concurrent
+    /// workers can race on the first crash for a given fingerprint. If the CREATE is
+    /// rejected by a uniqueness violation we fall back to a second find, which will
+    /// succeed because the winning worker just created the row.
+    #[instrument(skip(db))]
+    async fn find_or_create_crash_group(
+        db: &Surreal<Any>,
+        product_id: &str,
+        fingerprint: &str,
+    ) -> Result<String, JobError> {
+        if let Some(group) = CrashGroupRepo::find_by_fingerprint(db, product_id, fingerprint)
+            .await
+            .map_err(|e| JobError::Failure(format!("failed to query crash group: {e}")))?
+        {
+            CrashGroupRepo::touch(db, &group.id)
+                .await
+                .map_err(|e| JobError::Failure(format!("failed to update crash group: {e}")))?;
+            return Ok(group.id);
+        }
+
+        match CrashGroupRepo::create(
+            db,
+            NewCrashGroup {
+                product_id: product_id.to_string(),
+                fingerprint: fingerprint.to_string(),
+                signal: fingerprint.to_string(),
+            },
+        )
+        .await
+        {
+            Ok(id) => Ok(id),
+            Err(_) => {
+                // Likely lost a race with another worker. Retry the find.
+                let group =
+                    CrashGroupRepo::find_by_fingerprint(db, product_id, fingerprint)
+                        .await
+                        .map_err(|e| {
+                            JobError::Failure(format!("failed to re-query crash group: {e}"))
+                        })?
+                        .ok_or_else(|| {
+                            JobError::Failure(
+                                "crash group missing after concurrent create".to_string(),
+                            )
+                        })?;
+                CrashGroupRepo::touch(db, &group.id)
+                    .await
+                    .map_err(|e| JobError::Failure(format!("failed to update crash group: {e}")))?;
+                Ok(group.id)
+            }
+        }
     }
 
     #[instrument(skip(db, crash_info))]

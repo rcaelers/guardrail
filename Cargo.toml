@@ -30,6 +30,9 @@ codegen-units = 1
 lto = true
 opt-level = 'z'
 
+[profile.dev]
+debug = 1        # line-level info only; full DWARF (debug=2) is slow to emit and link
+
 [workspace.dependencies]
 
 # WebAuthn
