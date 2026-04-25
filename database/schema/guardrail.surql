@@ -11,13 +11,13 @@ DEFINE TABLE products SCHEMAFULL;
 
 DEFINE FIELD name ON TABLE products TYPE string ASSERT $value != NONE AND $value != "";
 DEFINE FIELD slug ON TABLE products TYPE string ASSERT $value != NONE AND $value != "";
-DEFINE FIELD description ON TABLE products TYPE string DEFAULT "";
-DEFINE FIELD color ON TABLE products TYPE string DEFAULT "#6b7280";
-DEFINE FIELD public ON TABLE products TYPE bool DEFAULT false;
-DEFINE FIELD accepting_crashes ON TABLE products TYPE bool DEFAULT true;
-DEFINE FIELD metadata ON TABLE products TYPE object FLEXIBLE DEFAULT {};
-DEFINE FIELD created_at ON TABLE products TYPE datetime DEFAULT time::now();
-DEFINE FIELD updated_at ON TABLE products TYPE datetime DEFAULT time::now();
+DEFINE FIELD description ON TABLE products TYPE string ASSERT $value != NONE DEFAULT "";
+DEFINE FIELD color ON TABLE products TYPE string ASSERT $value != NONE DEFAULT "#6b7280";
+DEFINE FIELD public ON TABLE products TYPE bool ASSERT $value != NONE DEFAULT false;
+DEFINE FIELD accepting_crashes ON TABLE products TYPE bool ASSERT $value != NONE DEFAULT true;
+DEFINE FIELD metadata ON TABLE products TYPE object FLEXIBLE ASSERT $value != NONE DEFAULT {};
+DEFINE FIELD created_at ON TABLE products TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE products TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 DEFINE INDEX idx_products_name ON TABLE products COLUMNS name UNIQUE;
 DEFINE INDEX idx_products_slug ON TABLE products COLUMNS slug UNIQUE;
@@ -31,12 +31,12 @@ DEFINE TABLE users SCHEMAFULL;
 
 DEFINE FIELD username ON TABLE users TYPE string ASSERT $value != NONE AND $value != "";
 DEFINE FIELD email ON TABLE users TYPE string ASSERT $value != NONE AND $value != "";
-DEFINE FIELD name ON TABLE users TYPE string DEFAULT "";
-DEFINE FIELD avatar ON TABLE users TYPE string DEFAULT "";
-DEFINE FIELD is_admin ON TABLE users TYPE bool DEFAULT false;
+DEFINE FIELD name ON TABLE users TYPE string ASSERT $value != NONE DEFAULT "";
+DEFINE FIELD avatar ON TABLE users TYPE string ASSERT $value != NONE DEFAULT "";
+DEFINE FIELD is_admin ON TABLE users TYPE bool ASSERT $value != NONE DEFAULT false;
 DEFINE FIELD last_login_at ON TABLE users TYPE option<datetime>;
-DEFINE FIELD created_at ON TABLE users TYPE datetime DEFAULT time::now();
-DEFINE FIELD updated_at ON TABLE users TYPE datetime DEFAULT time::now();
+DEFINE FIELD created_at ON TABLE users TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE users TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 DEFINE INDEX idx_users_username ON TABLE users COLUMNS username UNIQUE;
 DEFINE INDEX idx_users_email ON TABLE users COLUMNS email UNIQUE;
@@ -50,12 +50,12 @@ DEFINE INDEX idx_users_email ON TABLE users COLUMNS email UNIQUE;
 --   maintainer - + merge groups, manage members, delete the product
 DEFINE TABLE user_access SCHEMAFULL;
 
-DEFINE FIELD user_id ON TABLE user_access TYPE record<users>;
-DEFINE FIELD product_id ON TABLE user_access TYPE record<products>;
+DEFINE FIELD user_id ON TABLE user_access TYPE record<users> ASSERT $value != NONE;
+DEFINE FIELD product_id ON TABLE user_access TYPE record<products> ASSERT $value != NONE;
 DEFINE FIELD role ON TABLE user_access TYPE string
-    ASSERT $value INSIDE ["readonly", "readwrite", "maintainer"];
-DEFINE FIELD created_at ON TABLE user_access TYPE datetime DEFAULT time::now();
-DEFINE FIELD updated_at ON TABLE user_access TYPE datetime DEFAULT time::now();
+    ASSERT $value != NONE AND $value INSIDE ["readonly", "readwrite", "maintainer"];
+DEFINE FIELD created_at ON TABLE user_access TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE user_access TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 DEFINE INDEX idx_user_access_pk ON TABLE user_access COLUMNS user_id, product_id UNIQUE;
 
@@ -72,13 +72,13 @@ DEFINE INDEX idx_user_access_pk ON TABLE user_access COLUMNS user_id, product_id
 -- fast lookup; the processor writes both.
 DEFINE TABLE crashes SCHEMAFULL;
 
-DEFINE FIELD product_id ON TABLE crashes TYPE record<products>;
+DEFINE FIELD product_id ON TABLE crashes TYPE record<products> ASSERT $value != NONE;
 DEFINE FIELD group_id ON TABLE crashes TYPE option<record<crash_groups>>;
 DEFINE FIELD fingerprint ON TABLE crashes TYPE option<string>;
 DEFINE FIELD report ON TABLE crashes TYPE option<object> FLEXIBLE;
 DEFINE FIELD minidump ON TABLE crashes TYPE option<uuid>;
-DEFINE FIELD created_at ON TABLE crashes TYPE datetime DEFAULT time::now();
-DEFINE FIELD updated_at ON TABLE crashes TYPE datetime DEFAULT time::now();
+DEFINE FIELD created_at ON TABLE crashes TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE crashes TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 DEFINE INDEX idx_crashes_group ON TABLE crashes COLUMNS group_id;
 DEFINE INDEX idx_crashes_product ON TABLE crashes COLUMNS product_id;
@@ -100,24 +100,24 @@ DEFINE INDEX idx_crashes_fingerprint ON TABLE crashes COLUMNS product_id, finger
 -- = same crash kind).
 DEFINE TABLE crash_groups SCHEMAFULL;
 
-DEFINE FIELD product_id ON TABLE crash_groups TYPE record<products>;
+DEFINE FIELD product_id ON TABLE crash_groups TYPE record<products> ASSERT $value != NONE;
 DEFINE FIELD fingerprint ON TABLE crash_groups TYPE string
     ASSERT $value != NONE AND $value != "";
-DEFINE FIELD signal ON TABLE crash_groups TYPE string DEFAULT "";
+DEFINE FIELD signal ON TABLE crash_groups TYPE string ASSERT $value != NONE DEFAULT "";
 
 -- Aggregations over the underlying crashes
-DEFINE FIELD count ON TABLE crash_groups TYPE int DEFAULT 0;
-DEFINE FIELD first_seen ON TABLE crash_groups TYPE datetime DEFAULT time::now();
-DEFINE FIELD last_seen ON TABLE crash_groups TYPE datetime DEFAULT time::now();
+DEFINE FIELD count ON TABLE crash_groups TYPE int ASSERT $value != NONE DEFAULT 0;
+DEFINE FIELD first_seen ON TABLE crash_groups TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD last_seen ON TABLE crash_groups TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 -- Workflow state
 DEFINE FIELD status ON TABLE crash_groups TYPE string
-    ASSERT $value INSIDE ["new", "triaged", "resolved"]
+    ASSERT $value != NONE AND $value INSIDE ["new", "triaged", "resolved"]
     DEFAULT "new";
 DEFINE FIELD assignee ON TABLE crash_groups TYPE option<record<users>>;
 
-DEFINE FIELD created_at ON TABLE crash_groups TYPE datetime DEFAULT time::now();
-DEFINE FIELD updated_at ON TABLE crash_groups TYPE datetime DEFAULT time::now();
+DEFINE FIELD created_at ON TABLE crash_groups TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE crash_groups TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 DEFINE INDEX idx_crash_groups_fingerprint ON TABLE crash_groups
     COLUMNS product_id, fingerprint UNIQUE;
@@ -140,17 +140,21 @@ DEFINE INDEX idx_crash_groups_last_seen ON TABLE crash_groups COLUMNS product_id
 DEFINE TABLE annotations SCHEMAFULL;
 
 DEFINE FIELD source ON TABLE annotations TYPE string
-    ASSERT $value INSIDE ["submission", "script", "user"];
-DEFINE FIELD key ON TABLE annotations TYPE option<string>;
-DEFINE FIELD value ON TABLE annotations TYPE string;
-DEFINE FIELD author ON TABLE annotations TYPE option<string>;
+    ASSERT $value != NONE AND $value INSIDE ["submission", "script", "user"];
+DEFINE FIELD key ON TABLE annotations TYPE option<string>
+    ASSERT source = "user" OR $value != NONE;
+DEFINE FIELD value ON TABLE annotations TYPE string ASSERT $value != NONE;
+DEFINE FIELD author ON TABLE annotations TYPE option<string>
+    ASSERT source != "user" OR $value != NONE;
 
-DEFINE FIELD crash_id ON TABLE annotations TYPE option<record<crashes>>;
-DEFINE FIELD group_id ON TABLE annotations TYPE option<record<crash_groups>>;
-DEFINE FIELD product_id ON TABLE annotations TYPE record<products>;
+DEFINE FIELD crash_id ON TABLE annotations TYPE option<record<crashes>>
+    ASSERT $value != NONE OR group_id != NONE;
+DEFINE FIELD group_id ON TABLE annotations TYPE option<record<crash_groups>>
+    ASSERT $value != NONE OR crash_id != NONE;
+DEFINE FIELD product_id ON TABLE annotations TYPE record<products> ASSERT $value != NONE;
 
-DEFINE FIELD created_at ON TABLE annotations TYPE datetime DEFAULT time::now();
-DEFINE FIELD updated_at ON TABLE annotations TYPE datetime DEFAULT time::now();
+DEFINE FIELD created_at ON TABLE annotations TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE annotations TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 -- Lookup indexes. Uniqueness for keyed annotations (submission / script) is
 -- the app layer's job: SurrealDB doesn't support WHERE-filtered unique
@@ -166,14 +170,14 @@ DEFINE INDEX idx_annotations_source ON TABLE annotations COLUMNS source;
 DEFINE TABLE attachments SCHEMAFULL;
 
 DEFINE FIELD name ON TABLE attachments TYPE string ASSERT $value != NONE AND $value != "";
-DEFINE FIELD mime_type ON TABLE attachments TYPE string;
-DEFINE FIELD size ON TABLE attachments TYPE int;
-DEFINE FIELD filename ON TABLE attachments TYPE string;
-DEFINE FIELD storage_path ON TABLE attachments TYPE string;
-DEFINE FIELD crash_id ON TABLE attachments TYPE record<crashes>;
-DEFINE FIELD product_id ON TABLE attachments TYPE record<products>;
-DEFINE FIELD created_at ON TABLE attachments TYPE datetime DEFAULT time::now();
-DEFINE FIELD updated_at ON TABLE attachments TYPE datetime DEFAULT time::now();
+DEFINE FIELD mime_type ON TABLE attachments TYPE string ASSERT $value != NONE;
+DEFINE FIELD size ON TABLE attachments TYPE int ASSERT $value != NONE;
+DEFINE FIELD filename ON TABLE attachments TYPE string ASSERT $value != NONE;
+DEFINE FIELD storage_path ON TABLE attachments TYPE string ASSERT $value != NONE;
+DEFINE FIELD crash_id ON TABLE attachments TYPE record<crashes> ASSERT $value != NONE;
+DEFINE FIELD product_id ON TABLE attachments TYPE record<products> ASSERT $value != NONE;
+DEFINE FIELD created_at ON TABLE attachments TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE attachments TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 DEFINE INDEX idx_attachments_unique ON TABLE attachments COLUMNS name, crash_id UNIQUE;
 
@@ -185,14 +189,14 @@ DEFINE INDEX idx_attachments_unique ON TABLE attachments COLUMNS name, crash_id 
 -- upload pipeline can actually provide them.
 DEFINE TABLE symbols SCHEMAFULL;
 
-DEFINE FIELD product_id ON TABLE symbols TYPE record<products>;
-DEFINE FIELD os ON TABLE symbols TYPE string DEFAULT "";
-DEFINE FIELD arch ON TABLE symbols TYPE string DEFAULT "";
-DEFINE FIELD build_id ON TABLE symbols TYPE string DEFAULT "";
-DEFINE FIELD module_id ON TABLE symbols TYPE string DEFAULT "";
-DEFINE FIELD storage_path ON TABLE symbols TYPE string DEFAULT "";
-DEFINE FIELD created_at ON TABLE symbols TYPE datetime DEFAULT time::now();
-DEFINE FIELD updated_at ON TABLE symbols TYPE datetime DEFAULT time::now();
+DEFINE FIELD product_id ON TABLE symbols TYPE record<products> ASSERT $value != NONE;
+DEFINE FIELD os ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
+DEFINE FIELD arch ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
+DEFINE FIELD build_id ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
+DEFINE FIELD module_id ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
+DEFINE FIELD storage_path ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
+DEFINE FIELD created_at ON TABLE symbols TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE symbols TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 DEFINE INDEX idx_symbols_product ON TABLE symbols COLUMNS product_id;
 DEFINE INDEX idx_symbols_module_build ON TABLE symbols COLUMNS module_id, build_id;
@@ -202,17 +206,17 @@ DEFINE INDEX idx_symbols_module_build ON TABLE symbols COLUMNS module_id, build_
 -- ============================================================
 DEFINE TABLE api_tokens SCHEMAFULL;
 
-DEFINE FIELD description ON TABLE api_tokens TYPE string;
-DEFINE FIELD token_id ON TABLE api_tokens TYPE uuid;
-DEFINE FIELD token_hash ON TABLE api_tokens TYPE string;
+DEFINE FIELD description ON TABLE api_tokens TYPE string ASSERT $value != NONE;
+DEFINE FIELD token_id ON TABLE api_tokens TYPE uuid ASSERT $value != NONE;
+DEFINE FIELD token_hash ON TABLE api_tokens TYPE string ASSERT $value != NONE;
 DEFINE FIELD product_id ON TABLE api_tokens TYPE option<record<products>>;
 DEFINE FIELD user_id ON TABLE api_tokens TYPE option<record<users>>;
-DEFINE FIELD entitlements ON TABLE api_tokens TYPE array<string>;
+DEFINE FIELD entitlements ON TABLE api_tokens TYPE array<string> ASSERT $value != NONE;
 DEFINE FIELD last_used_at ON TABLE api_tokens TYPE option<datetime>;
 DEFINE FIELD expires_at ON TABLE api_tokens TYPE option<datetime>;
-DEFINE FIELD is_active ON TABLE api_tokens TYPE bool DEFAULT true;
-DEFINE FIELD created_at ON TABLE api_tokens TYPE datetime DEFAULT time::now();
-DEFINE FIELD updated_at ON TABLE api_tokens TYPE datetime DEFAULT time::now();
+DEFINE FIELD is_active ON TABLE api_tokens TYPE bool ASSERT $value != NONE DEFAULT true;
+DEFINE FIELD created_at ON TABLE api_tokens TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE api_tokens TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 DEFINE INDEX idx_api_tokens_token_id ON TABLE api_tokens COLUMNS token_id UNIQUE;
 DEFINE INDEX idx_api_tokens_token_hash ON TABLE api_tokens COLUMNS token_hash UNIQUE;
@@ -220,16 +224,51 @@ DEFINE INDEX idx_api_tokens_product ON TABLE api_tokens COLUMNS product_id;
 DEFINE INDEX idx_api_tokens_user ON TABLE api_tokens COLUMNS user_id;
 
 -- ============================================================
+-- Invitations
+-- ============================================================
+DEFINE TABLE invitations SCHEMAFULL;
+
+DEFINE FIELD code ON TABLE invitations TYPE string ASSERT $value != NONE AND $value != "";
+DEFINE FIELD created_by ON TABLE invitations TYPE string ASSERT $value != NONE AND $value != "";
+DEFINE FIELD expires_at ON TABLE invitations TYPE option<datetime>;
+DEFINE FIELD max_uses ON TABLE invitations TYPE option<int>;
+DEFINE FIELD use_count ON TABLE invitations TYPE int ASSERT $value != NONE DEFAULT 0;
+DEFINE FIELD is_admin ON TABLE invitations TYPE bool ASSERT $value != NONE DEFAULT false;
+DEFINE FIELD grants ON TABLE invitations TYPE array<object> FLEXIBLE ASSERT $value != NONE DEFAULT [];
+DEFINE FIELD status ON TABLE invitations TYPE string
+    ASSERT $value != NONE AND $value INSIDE ["Active", "Exhausted", "Expired", "Revoked"]
+    DEFAULT "Active";
+DEFINE FIELD created_at ON TABLE invitations TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE invitations TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+
+DEFINE INDEX idx_invitations_code ON TABLE invitations COLUMNS code UNIQUE;
+DEFINE INDEX idx_invitations_created_by ON TABLE invitations COLUMNS created_by;
+
+-- ============================================================
+-- Pending access grants
+-- ============================================================
+DEFINE TABLE pending_access SCHEMAFULL;
+
+DEFINE FIELD sub ON TABLE pending_access TYPE string ASSERT $value != NONE AND $value != "";
+DEFINE FIELD invitation_id ON TABLE pending_access TYPE string ASSERT $value != NONE AND $value != "";
+DEFINE FIELD is_admin ON TABLE pending_access TYPE bool ASSERT $value != NONE DEFAULT false;
+DEFINE FIELD grants ON TABLE pending_access TYPE array<object> FLEXIBLE ASSERT $value != NONE DEFAULT [];
+DEFINE FIELD created_at ON TABLE pending_access TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+
+DEFINE INDEX idx_pending_access_sub ON TABLE pending_access COLUMNS sub UNIQUE;
+DEFINE INDEX idx_pending_access_invitation ON TABLE pending_access COLUMNS invitation_id;
+
+-- ============================================================
 -- Credentials (WebAuthn passkeys)
 -- ============================================================
 DEFINE TABLE credentials SCHEMAFULL;
 
-DEFINE FIELD user_id ON TABLE credentials TYPE record<users>;
-DEFINE FIELD name ON TABLE credentials TYPE string;
-DEFINE FIELD data ON TABLE credentials TYPE object FLEXIBLE;
-DEFINE FIELD last_used ON TABLE credentials TYPE datetime;
-DEFINE FIELD created_at ON TABLE credentials TYPE datetime DEFAULT time::now();
-DEFINE FIELD updated_at ON TABLE credentials TYPE datetime DEFAULT time::now();
+DEFINE FIELD user_id ON TABLE credentials TYPE record<users> ASSERT $value != NONE;
+DEFINE FIELD name ON TABLE credentials TYPE string ASSERT $value != NONE;
+DEFINE FIELD data ON TABLE credentials TYPE object FLEXIBLE ASSERT $value != NONE;
+DEFINE FIELD last_used ON TABLE credentials TYPE datetime ASSERT $value != NONE;
+DEFINE FIELD created_at ON TABLE credentials TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE credentials TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 -- ============================================================
 -- Sessions (tower-sessions)
@@ -237,7 +276,7 @@ DEFINE FIELD updated_at ON TABLE credentials TYPE datetime DEFAULT time::now();
 DEFINE TABLE sessions SCHEMAFULL;
 
 DEFINE FIELD expires_at ON TABLE sessions TYPE option<datetime>;
-DEFINE FIELD data ON TABLE sessions TYPE bytes;
+DEFINE FIELD data ON TABLE sessions TYPE bytes ASSERT $value != NONE;
 
 -- ============================================================
 -- Authorization helpers

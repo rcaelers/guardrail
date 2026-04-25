@@ -114,6 +114,8 @@ async fn clear_tables(db: &Surreal<Any>) -> Result<()> {
     let tables = [
         "sessions",
         "credentials",
+        "pending_access",
+        "invitations",
         "api_tokens",
         "attachments",
         "annotations",
@@ -135,13 +137,22 @@ async fn clear_tables(db: &Surreal<Any>) -> Result<()> {
 async fn import_product(db: &Surreal<Any>, p: &Value) -> Result<()> {
     let id = s(p, "id");
     let public = p.get("public").and_then(|v| v.as_bool()).unwrap_or(false);
+    let accepting_crashes = p
+        .get("accepting_crashes")
+        .or_else(|| p.get("acceptingCrashes"))
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
     db.query(
         "CREATE type::record('products', $id) CONTENT {
             name: $name,
             slug: $slug,
             description: $description,
             color: $color,
-            public: $public
+            public: $public,
+            accepting_crashes: $accepting_crashes,
+            metadata: {},
+            created_at: time::now(),
+            updated_at: time::now()
         }",
     )
     .bind(("id", id.to_string()))
@@ -150,6 +161,7 @@ async fn import_product(db: &Surreal<Any>, p: &Value) -> Result<()> {
     .bind(("description", s(p, "description").to_string()))
     .bind(("color", s(p, "color").to_string()))
     .bind(("public", public))
+    .bind(("accepting_crashes", accepting_crashes))
     .await?;
     Ok(())
 }
@@ -164,7 +176,8 @@ async fn import_user(db: &Surreal<Any>, u: &Value) -> Result<()> {
             name: $name,
             avatar: $avatar,
             is_admin: $is_admin,
-            created_at: <datetime>$joined_at
+            created_at: <datetime>$joined_at,
+            updated_at: <datetime>$joined_at
         }",
     )
     .bind(("id", id.to_string()))
@@ -186,7 +199,9 @@ async fn import_membership(db: &Surreal<Any>, m: &Value) -> Result<()> {
         "CREATE user_access CONTENT {
             user_id: type::record('users', $user_id),
             product_id: type::record('products', $product_id),
-            role: $role
+            role: $role,
+            created_at: time::now(),
+            updated_at: time::now()
         }",
     )
     .bind(("user_id", user_id.to_string()))
@@ -217,7 +232,9 @@ async fn import_group(db: &Surreal<Any>, g: &Value) -> Result<(usize, usize, usi
                 THEN type::record('users', $assignee_id)
                 ELSE NONE END,
             first_seen: <datetime>$first_seen,
-            last_seen: <datetime>$last_seen
+            last_seen: <datetime>$last_seen,
+            created_at: <datetime>$first_seen,
+            updated_at: <datetime>$last_seen
         }",
     )
     .bind(("id", group_id.to_string()))

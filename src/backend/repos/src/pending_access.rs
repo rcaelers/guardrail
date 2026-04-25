@@ -91,7 +91,9 @@ impl PendingAccessRepo {
                 "CREATE user_access CONTENT {
                     user_id:    type::record('users',    $uid),
                     product_id: type::record('products', $pid),
-                    role:       $role
+                    role:       $role,
+                    created_at: time::now(),
+                    updated_at: time::now()
                 }",
             )
             .bind(("uid", uid.clone()))

@@ -11,7 +11,7 @@ contains = ["products", "accepting_crashes"]
 name = "crashes_table_visible"
 kind = "schema_metadata"
 sql = "INFO FOR TABLE crashes;"
-contains = ["crashes", "signature", "report"]
+contains = ["crashes", "fingerprint", "report"]
 
 [[cases]]
 name = "api_tokens_table_visible"

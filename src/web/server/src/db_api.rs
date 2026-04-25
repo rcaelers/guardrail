@@ -414,7 +414,7 @@ async fn create_user(
         &format!(
             "CREATE type::record('users', $id) CONTENT {{
             username: $email, email: $email, name: $name, avatar: $avatar,
-            is_admin: false, created_at: time::now()
+            is_admin: false, created_at: time::now(), updated_at: time::now()
         }} RETURN {USER_PROJ}"
         ),
         vec![
@@ -831,7 +831,9 @@ async fn grant_access(
         "CREATE user_access CONTENT {
             user_id: type::record('users', $uid),
             product_id: type::record('products', $pid),
-            role: $role
+            role: $role,
+            created_at: time::now(),
+            updated_at: time::now()
         }",
         vec![
             ("uid", Value::String(uid)),
