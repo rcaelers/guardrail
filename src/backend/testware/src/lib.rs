@@ -187,10 +187,10 @@ pub async fn create_test_symbols(
     build_id: &str,
     module_id: &str,
     storage_path: &str,
-    product_id: Option<impl ToString>,
+    product_id: Option<String>,
 ) -> Symbols {
     let product_id = match product_id {
-        Some(p) => p.to_string(),
+        Some(p) => p,
         _ => create_test_product(db).await.id.to_string(),
     };
 

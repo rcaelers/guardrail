@@ -310,36 +310,25 @@ async fn import_note(db: &Surreal<Any>, group_id: &str, product_id: &str, n: &Va
 async fn import_symbol(db: &Surreal<Any>, s_: &Value) -> Result<()> {
     let id = s(s_, "id");
     let product_id = s(s_, "productId");
-    let uploaded_by = s(s_, "uploadedBy").to_string();
     db.query(
         "CREATE type::record('symbols', $id) CONTENT {
-            external_id: $external_id,
             product_id: type::record('products', $product_id),
-            name: $name,
-            version: $version,
+            os: '',
             arch: $arch,
-            format: $format,
-            size: $size,
-            debug_id: $debug_id,
-            code_id: $code_id,
-            uploaded_by: type::record('users', $uploaded_by),
-            uploaded_at: <datetime>$uploaded_at,
-            referenced_by: $referenced_by
+            build_id: $build_id,
+            module_id: $module_id,
+            storage_path: $storage_path,
+            created_at: <datetime>$created_at,
+            updated_at: <datetime>$created_at
         }",
     )
     .bind(("id", id.to_string()))
-    .bind(("external_id", id.to_string()))
     .bind(("product_id", product_id.to_string()))
-    .bind(("name", s(s_, "name").to_string()))
-    .bind(("version", s(s_, "version").to_string()))
     .bind(("arch", s(s_, "arch").to_string()))
-    .bind(("format", s(s_, "format").to_string()))
-    .bind(("size", s(s_, "size").to_string()))
-    .bind(("debug_id", s(s_, "debugId").to_string()))
-    .bind(("code_id", s(s_, "codeId").to_string()))
-    .bind(("uploaded_by", uploaded_by))
-    .bind(("uploaded_at", s(s_, "uploadedAt").to_string()))
-    .bind(("referenced_by", s_["referencedBy"].as_i64().unwrap_or(0)))
+    .bind(("build_id", s(s_, "debugId").to_string()))
+    .bind(("module_id", s(s_, "name").to_string()))
+    .bind(("storage_path", format!("symbols/{}", id)))
+    .bind(("created_at", s(s_, "uploadedAt").to_string()))
     .await?;
     Ok(())
 }

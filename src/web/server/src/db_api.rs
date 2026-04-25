@@ -164,9 +164,9 @@ async fn run_value(
 const USER_PROJ: &str =
     "meta::id(id) AS id, email, name, avatar, is_admin AS isAdmin, created_at AS joinedAt";
 const PRODUCT_PROJ: &str = "meta::id(id) AS id, name, slug, description, color, public";
-const SYMBOL_PROJ: &str = "external_id AS id, meta::id(product_id) AS productId, \
-    name, version, arch, format, size, debug_id AS debugId, code_id AS codeId, \
-    uploaded_at AS uploadedAt, meta::id(uploaded_by) AS uploadedBy, referenced_by AS referencedBy";
+const SYMBOL_PROJ: &str = "meta::id(id) AS id, meta::id(product_id) AS productId, \
+    module_id AS name, '' AS version, arch, 'Breakpad' AS format, '' AS size, \
+    build_id AS debugId, '' AS codeId, created_at AS uploadedAt, '' AS uploadedBy, 0 AS referencedBy";
 
 const GROUP_BASE_SELECT: &str = "
     SELECT
@@ -1445,12 +1445,7 @@ async fn list_symbols(
 #[derive(Deserialize)]
 struct UploadSymbolBody {
     name: String,
-    version: Option<String>,
     arch: Option<String>,
-    format: Option<String>,
-    size: Option<String>,
-    #[serde(rename = "uploadedBy")]
-    uploaded_by: String,
 }
 
 async fn upload_symbol(
@@ -1460,37 +1455,32 @@ async fn upload_symbol(
     Json(body): Json<UploadSymbolBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let db = s.user_db(&headers).await;
-    let count_rows =
-        run_value(&db, "SELECT VALUE count() FROM symbols GROUP ALL", vec![]).await?;
-    let n = count_rows
-        .into_iter()
-        .next()
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0)
-        + 1;
-    let id = format!("SYM-{:04}", n);
+    let id = uuid::Uuid::new_v4().to_string();
+    let module_id = body.name;
+    let build_id = uuid::Uuid::new_v4().to_string();
+    let storage_path = format!("symbols/{module_id}-{build_id}");
 
     let rows = run_value(
         &db,
         &format!(
             "CREATE type::record('symbols', $id) CONTENT {{
-            external_id: $id,
             product_id: type::record('products', $pid),
-            name: $name, version: $version, arch: $arch, format: $format, size: $size,
-            debug_id: '', code_id: '',
-            uploaded_by: type::record('users', $uploaded_by),
-            uploaded_at: time::now(), referenced_by: 0
+            os: '',
+            arch: $arch,
+            build_id: $build_id,
+            module_id: $module_id,
+            storage_path: $storage_path,
+            created_at: time::now(),
+            updated_at: time::now()
         }} RETURN {SYMBOL_PROJ}"
         ),
         vec![
             ("id", Value::String(id)),
             ("pid", Value::String(pid)),
-            ("name", Value::String(body.name)),
-            ("version", Value::String(body.version.unwrap_or_else(|| "0.0.0".into()))),
             ("arch", Value::String(body.arch.unwrap_or_else(|| "x86_64".into()))),
-            ("format", Value::String(body.format.unwrap_or_else(|| "PDB".into()))),
-            ("size", Value::String(body.size.unwrap_or_else(|| "1.0 MB".into()))),
-            ("uploaded_by", Value::String(body.uploaded_by)),
+            ("build_id", Value::String(build_id)),
+            ("module_id", Value::String(module_id)),
+            ("storage_path", Value::String(storage_path)),
         ],
     )
     .await?;

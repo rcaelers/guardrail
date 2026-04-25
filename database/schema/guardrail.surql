@@ -180,39 +180,22 @@ DEFINE INDEX idx_attachments_unique ON TABLE attachments COLUMNS name, crash_id 
 -- ============================================================
 -- Symbols
 -- ============================================================
--- The original `os/arch/build_id/module_id/storage_path` shape is preserved
--- for the ingest pipeline. The website-facing fields (name, version, format,
--- size, debug_id, code_id, uploaded_by, referenced_by, uploaded_at) are added
--- alongside. `external_id` is the human-readable id used in URLs / tables.
+-- Symbols are populated by the ingest pipeline from the parsed Breakpad header
+-- plus the object storage location. Do not add UI-only fields here unless the
+-- upload pipeline can actually provide them.
 DEFINE TABLE symbols SCHEMAFULL;
 
-DEFINE FIELD external_id ON TABLE symbols TYPE string
-    ASSERT $value != NONE AND $value != "";
 DEFINE FIELD product_id ON TABLE symbols TYPE record<products>;
-
-DEFINE FIELD name ON TABLE symbols TYPE string DEFAULT "";
-DEFINE FIELD version ON TABLE symbols TYPE string DEFAULT "";
 DEFINE FIELD os ON TABLE symbols TYPE string DEFAULT "";
 DEFINE FIELD arch ON TABLE symbols TYPE string DEFAULT "";
-DEFINE FIELD format ON TABLE symbols TYPE string DEFAULT "";
-DEFINE FIELD size ON TABLE symbols TYPE string DEFAULT "";
-
 DEFINE FIELD build_id ON TABLE symbols TYPE string DEFAULT "";
 DEFINE FIELD module_id ON TABLE symbols TYPE string DEFAULT "";
-DEFINE FIELD debug_id ON TABLE symbols TYPE string DEFAULT "";
-DEFINE FIELD code_id ON TABLE symbols TYPE string DEFAULT "";
-
 DEFINE FIELD storage_path ON TABLE symbols TYPE string DEFAULT "";
-DEFINE FIELD uploaded_by ON TABLE symbols TYPE option<record<users>>;
-DEFINE FIELD uploaded_at ON TABLE symbols TYPE datetime DEFAULT time::now();
-DEFINE FIELD referenced_by ON TABLE symbols TYPE int DEFAULT 0;
-
 DEFINE FIELD created_at ON TABLE symbols TYPE datetime DEFAULT time::now();
 DEFINE FIELD updated_at ON TABLE symbols TYPE datetime DEFAULT time::now();
 
-DEFINE INDEX idx_symbols_external_id ON TABLE symbols COLUMNS external_id UNIQUE;
 DEFINE INDEX idx_symbols_product ON TABLE symbols COLUMNS product_id;
-DEFINE INDEX idx_symbols_debug_id ON TABLE symbols COLUMNS debug_id;
+DEFINE INDEX idx_symbols_module_build ON TABLE symbols COLUMNS module_id, build_id;
 
 -- ============================================================
 -- API Tokens

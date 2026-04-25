@@ -21,7 +21,7 @@ async fn test_get_by_id() {
     let inserted_symbols =
         create_test_symbols(&db, os, arch, build_id, module_id, storage_path, None).await;
 
-    let found_symbols = SymbolsRepo::get_by_id(&db, inserted_symbols.id)
+    let found_symbols = SymbolsRepo::get_by_id(&db, &inserted_symbols.id)
         .await
         .expect("Failed to get symbols by ID");
 
@@ -57,8 +57,16 @@ async fn test_get_all() {
     ];
 
     for (os, arch, build_id, module_id, storage_path) in &test_symbol_data {
-        create_test_symbols(&db, os, arch, build_id, module_id, storage_path, Some(product.id))
-            .await;
+        create_test_symbols(
+            &db,
+            os,
+            arch,
+            build_id,
+            module_id,
+            storage_path,
+            Some(product.id.clone()),
+        )
+        .await;
     }
 
     let query_params = QueryParams::default();
@@ -107,7 +115,7 @@ async fn test_create() {
         .await
         .expect("Failed to create symbols");
 
-    let created_symbols = SymbolsRepo::get_by_id(&db, symbols_id)
+    let created_symbols = SymbolsRepo::get_by_id(&db, &symbols_id)
         .await
         .expect("Failed to get created symbols")
         .expect("Created symbols not found");
@@ -166,11 +174,11 @@ async fn test_remove() {
     )
     .await;
 
-    SymbolsRepo::remove(&db, symbols.id)
+    SymbolsRepo::remove(&db, &symbols.id)
         .await
         .expect("Failed to remove symbols");
 
-    let deleted_symbols = SymbolsRepo::get_by_id(&db, symbols.id)
+    let deleted_symbols = SymbolsRepo::get_by_id(&db, &symbols.id)
         .await
         .expect("Failed to query after deletion");
 
@@ -193,8 +201,16 @@ async fn test_count() {
     ];
 
     for (os, arch, build_id, module_id, storage_path) in &test_symbols_data {
-        create_test_symbols(&db, os, arch, build_id, module_id, storage_path, Some(product.id))
-            .await;
+        create_test_symbols(
+            &db,
+            os,
+            arch,
+            build_id,
+            module_id,
+            storage_path,
+            Some(product.id.clone()),
+        )
+        .await;
     }
 
     let new_count = SymbolsRepo::count(&db)
