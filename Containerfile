@@ -65,7 +65,7 @@ COPY --from=cacher /app/target target
 COPY --from=cacher /usr/local/cargo /usr/local/cargo
 COPY . .
 
-RUN cargo build --debug \
+RUN cargo build \
     -p api \
     -p web \
     -p ingestion \
