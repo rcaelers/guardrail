@@ -5,6 +5,7 @@ declare global {
   namespace App {
     interface Locals {
       user: User | null;
+      realUser: User | null; // set when admin is impersonating another user
     }
     // interface PageData {}
     // interface PageState {}

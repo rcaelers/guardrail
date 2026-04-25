@@ -14,11 +14,13 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
   const isLogin = path === '/login' || path.startsWith('/login/') || path.startsWith('/auth/');
   const isPublicAllowed = path === '/' || path.startsWith('/p/');
 
+  const realUser = locals.realUser ?? null;
+
   if (!locals.user) {
-    if (isLogin) return { user: null, products: [] };
+    if (isLogin) return { user: null, products: [], realUser: null };
     if (isPublicAllowed) {
       const products = await adapter.listProducts('public');
-      return { user: null, products };
+      return { user: null, products, realUser: null };
     }
     const next = encodeURIComponent(path + url.search);
     throw redirect(303, `/login?next=${next}`);
@@ -27,6 +29,7 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
   const products = await adapter.listProducts('mine', locals.user.id);
   return {
     user: locals.user,
-    products
+    products,
+    realUser
   };
 };

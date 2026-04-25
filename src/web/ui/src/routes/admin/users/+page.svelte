@@ -60,7 +60,7 @@
   <div class="overflow-hidden rounded-md border border-line dark:border-line-dark">
     <div
       class="grid items-center gap-4 bg-surface-panel dark:bg-surface-panelDark px-4 py-2 text-[10.5px] font-medium uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark"
-      style:grid-template-columns="1.5fr 1.7fr 1.3fr 140px 160px"
+      style:grid-template-columns="1.5fr 1.7fr 1.3fr 140px 240px"
     >
       <span>User</span>
       <span>Email</span>
@@ -71,7 +71,7 @@
     {#each data.users as u (u.id)}
       <div
         class="grid items-center gap-4 border-t border-line dark:border-line-dark px-4 py-2.5 text-[13px]"
-        style:grid-template-columns="1.5fr 1.7fr 1.3fr 140px 160px"
+        style:grid-template-columns="1.5fr 1.7fr 1.3fr 140px 240px"
       >
         <div class="flex min-w-0 items-center gap-2.5 truncate">
           <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft dark:bg-accent-softDark text-[10.5px] font-semibold text-accent">{u.avatar}</span>
@@ -93,6 +93,12 @@
             onclick={() => (editingUserId = editingUserId === u.id ? null : u.id)}
           >{editingUserId === u.id ? 'Close' : 'Edit'}</button>
           {#if !(data.user && u.id === data.user.id)}
+            <form method="POST" action="/auth/impersonate/{u.id}">
+              <button
+                type="submit"
+                class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark hover:text-accent"
+              >Impersonate</button>
+            </form>
             <form method="POST" action="?/delete" use:enhance>
               <input type="hidden" name="id" value={u.id} />
               <button

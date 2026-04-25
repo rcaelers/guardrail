@@ -1,6 +1,7 @@
 mod auth;
 mod db_api;
 mod error;
+mod impersonation;
 mod invite;
 mod oidc;
 mod pocket_id;
@@ -139,6 +140,7 @@ async fn main() {
 
     let app = Router::new()
         .merge(routes::router())
+        .merge(impersonation::router())
         .nest("/api/v1", db_api::router().with_state(db_state))
         .nest_service("/static", ServeDir::new("src/web/server/static"))
         .route("/healthz", get(|| async { "ok" }))
