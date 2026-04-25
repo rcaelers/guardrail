@@ -620,10 +620,11 @@ function buildDataset(): CrashGroup[] {
 // ------------------------------------------------------------------
 
 const PRODUCTS: Product[] = [
-  { id: 'guardrail', name: 'Guardrail',      slug: 'guardrail', color: '#3b6fd4', description: 'Main desktop app',                   public: false },
-  { id: 'harpoon',   name: 'Harpoon',        slug: 'harpoon',   color: '#0f766e', description: 'Shared injection library (Windows)', public: false },
-  { id: 'rivet',     name: 'Rivet',          slug: 'rivet',     color: '#b45309', description: 'CLI build tooling',                  public: false },
-  { id: 'workrave',  name: 'Workrave Agent', slug: 'workrave',  color: '#9333ea', description: 'Background service',                 public: true  }
+  { id: 'guardrail',     name: 'Guardrail',     slug: 'guardrail',     color: '#3b6fd4', description: 'Main desktop app', public: false },
+  { id: 'harpoon',       name: 'Harpoon',       slug: 'harpoon',       color: '#0f766e', description: 'Shared injection library (Windows)', public: false },
+  { id: 'rivet',         name: 'Rivet',         slug: 'rivet',         color: '#b45309', description: 'CLI build tooling', public: false },
+  { id: 'workrave-demo', name: 'Workrave Demo', slug: 'workrave-demo', color: '#9333ea', description: 'Demo Workrave data set', public: true },
+  { id: 'workrave',      name: 'Workrave',      slug: 'workrave',      color: '#9333ea', description: 'Workrave is a free program that assists in the recovery and prevention of Repetitive Strain Injury (RSI)', public: true }
 ];
 
 const USERS: User[] = [
@@ -645,20 +646,21 @@ const MEMBERSHIPS: Membership[] = [
   { userId: 'u-rwang',     productId: 'guardrail', role: 'readwrite'  },
   { userId: 'u-rwang',     productId: 'rivet',     role: 'maintainer' },
   { userId: 'u-tkowalski', productId: 'guardrail', role: 'readwrite'  },
-  { userId: 'u-tkowalski', productId: 'workrave',  role: 'maintainer' },
+  { userId: 'u-tkowalski', productId: 'workrave-demo',  role: 'maintainer' },
   { userId: 'u-ahmed',     productId: 'harpoon',   role: 'maintainer' },
   { userId: 'u-ahmed',     productId: 'rivet',     role: 'readwrite'  },
   { userId: 'u-sofia',     productId: 'guardrail', role: 'readonly'   },
-  { userId: 'u-sofia',     productId: 'workrave',  role: 'readwrite'  },
+  { userId: 'u-sofia',     productId: 'workrave-demo',  role: 'readwrite'  },
   { userId: 'u-jhale',     productId: 'rivet',     role: 'readonly'   }
 ];
 
 // Module-level singleton so mutations persist across requests.
 const DB: CrashGroup[] = buildDataset();
+const DATA_PRODUCTS = PRODUCTS.filter((p) => p.id !== 'workrave');
 
 // Assign groups to products round-robin (stable, by index).
 DB.forEach((g, i) => {
-  g.productId = PRODUCTS[i % PRODUCTS.length].id;
+  g.productId = DATA_PRODUCTS[i % DATA_PRODUCTS.length].id;
   for (const c of g.crashes) c.productId = g.productId;
 });
 // Re-link "related" within the same product.
@@ -701,7 +703,7 @@ function buildSymbols(): SymbolRow[] {
       ['rivet.exe', '0.9.2', 'x86_64', 'PDB', '14 MB'],
       ['rivet.exe', '0.9.1', 'x86_64', 'PDB', '13 MB']
     ],
-    workrave: [
+    'workrave-demo': [
       ['workraved',         '3.1.0', 'x86_64', 'ELF', '11 MB'],
       ['workraved',         '3.0.8', 'x86_64', 'ELF', '10 MB'],
       ['WorkraveAgent.exe', '3.1.0', 'x86_64', 'PDB', '7.4 MB']
