@@ -100,8 +100,8 @@ pub async fn get_product_by_name(
     ProductRepo::get_by_name(db, product_name)
         .await
         .map_err(|err| {
-            error!("Failed to get product {}: {}", product_name, err);
-            ApiError::Failure(format!("failed to get product {product_name}"))
+            error!("Failed to get product by name {}: {}", product_name, err);
+            ApiError::Failure(format!("failed to get product by name {product_name}"))
         })?
         .ok_or_else(|| ApiError::ProductNotFound(product_name.to_string()))
 }
@@ -110,8 +110,8 @@ pub async fn get_product_by_id(db: &Surreal<Any>, product_id: &str) -> Result<Pr
     ProductRepo::get_by_id(db, product_id)
         .await
         .map_err(|err| {
-            error!("Failed to get product {}: {}", product_id, err);
-            ApiError::Failure(format!("failed to get product {product_id}"))
+            error!("Failed to get product by id {}: {}", product_id, err);
+            ApiError::Failure(format!("failed to get product by id {product_id}"))
         })?
         .ok_or_else(|| ApiError::ProductNotFound(product_id.to_string()))
 }
