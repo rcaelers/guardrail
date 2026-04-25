@@ -17,10 +17,10 @@ pub struct JwtClaims {
     pub user_id: Option<String>,
     pub is_admin: bool,
     pub sub: String,
-    pub iss: String,  // Issuer
-    pub aud: String,  // Audience (product_id if available)
-    pub exp: i64,     // Expiration time
-    pub iat: i64,     // Issued at time
+    pub iss: String, // Issuer
+    pub aud: String, // Audience (product_id if available)
+    pub exp: i64,    // Expiration time
+    pub iat: i64,    // Issued at time
     // SurrealDB record-access claims (allow this JWT to authenticate with SurrealDB)
     pub ac: String, // Access method name
     pub ns: String, // SurrealDB namespace

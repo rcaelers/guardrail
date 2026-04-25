@@ -8,7 +8,10 @@ use axum::{
 use common::AuthenticatedUser;
 use tower_sessions::Session;
 
-use crate::{AppState, error::{AppError, AppResult}};
+use crate::{
+    AppState,
+    error::{AppError, AppResult},
+};
 
 const AUTHENTICATED_USER_SESSION_KEY: &str = "authenticated_user";
 const ORIGINAL_USER_SESSION_KEY: &str = "original_user";
@@ -70,24 +73,20 @@ async fn start_impersonation(
         .map_err(AppError::internal)?;
 
     // gr_uid drives SvelteKit's user resolution; gr_real_uid signals the banner.
-    let uid_cookie = format!(
-        "gr_uid={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-        target.id, COOKIE_MAX_AGE
-    );
+    let uid_cookie =
+        format!("gr_uid={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}", target.id, COOKIE_MAX_AGE);
     let real_uid_cookie = format!(
         "gr_real_uid={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
         current.id, COOKIE_MAX_AGE
     );
 
     let mut response = Redirect::to("/").into_response();
-    response.headers_mut().append(
-        SET_COOKIE,
-        HeaderValue::from_str(&uid_cookie).map_err(AppError::internal)?,
-    );
-    response.headers_mut().append(
-        SET_COOKIE,
-        HeaderValue::from_str(&real_uid_cookie).map_err(AppError::internal)?,
-    );
+    response
+        .headers_mut()
+        .append(SET_COOKIE, HeaderValue::from_str(&uid_cookie).map_err(AppError::internal)?);
+    response
+        .headers_mut()
+        .append(SET_COOKIE, HeaderValue::from_str(&real_uid_cookie).map_err(AppError::internal)?);
     Ok(response)
 }
 
@@ -115,13 +114,11 @@ async fn stop_impersonation(session: Session) -> AppResult<Response> {
     let clear_real_uid = "gr_real_uid=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
 
     let mut response = Redirect::to("/").into_response();
-    response.headers_mut().append(
-        SET_COOKIE,
-        HeaderValue::from_str(&uid_cookie).map_err(AppError::internal)?,
-    );
-    response.headers_mut().append(
-        SET_COOKIE,
-        HeaderValue::from_str(clear_real_uid).map_err(AppError::internal)?,
-    );
+    response
+        .headers_mut()
+        .append(SET_COOKIE, HeaderValue::from_str(&uid_cookie).map_err(AppError::internal)?);
+    response
+        .headers_mut()
+        .append(SET_COOKIE, HeaderValue::from_str(clear_real_uid).map_err(AppError::internal)?);
     Ok(response)
 }

@@ -2,7 +2,9 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-use crate::provisioner::{CreateUserRequest, IdentityProvisioner, ProvisionedUser, ProvisionerError};
+use crate::provisioner::{
+    CreateUserRequest, IdentityProvisioner, ProvisionedUser, ProvisionerError,
+};
 
 pub struct PocketIdProvisioner {
     pub base_url: Url,

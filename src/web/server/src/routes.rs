@@ -14,8 +14,7 @@ use crate::{
     AppState,
     auth::AuthSession,
     error::{AppError, AppResult},
-    invite,
-    oidc,
+    invite, oidc,
     templates::HomeTemplate,
     webauthn,
 };
@@ -36,7 +35,10 @@ pub fn router() -> Router<AppState> {
 }
 
 pub fn render(template: impl askama::Template) -> AppResult<axum::response::Html<String>> {
-    template.render().map(axum::response::Html).map_err(AppError::internal)
+    template
+        .render()
+        .map(axum::response::Html)
+        .map_err(AppError::internal)
 }
 
 #[derive(Debug, Deserialize)]
@@ -96,10 +98,7 @@ async fn auth_session(session: &Session) -> AuthSession {
 /// Returns the real (admin) user's data when impersonation is active.
 /// Reads from the session (trusted server-side state) and queries root DB.
 /// 404 if not currently impersonating.
-async fn get_real_user(
-    State(state): State<AppState>,
-    session: Session,
-) -> AppResult<Json<Value>> {
+async fn get_real_user(State(state): State<AppState>, session: Session) -> AppResult<Json<Value>> {
     let original = session
         .get::<AuthenticatedUser>("original_user")
         .await
@@ -127,4 +126,3 @@ async fn get_real_user(
         .map(Json)
         .ok_or_else(|| AppError::not_found("real user not found"))
 }
-

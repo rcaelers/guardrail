@@ -94,7 +94,9 @@ impl UserRepo {
 
     pub async fn create(db: &Surreal<Any>, user: NewUser) -> Result<String, RepoError> {
         let id = uuid::Uuid::new_v4().to_string();
-        let email = user.email.unwrap_or_else(|| format!("{}@test.local", user.username));
+        let email = user
+            .email
+            .unwrap_or_else(|| format!("{}@test.local", user.username));
         let _: Option<serde_json::Value> = db
             .query(
                 "CREATE type::record('users', $id) CONTENT {

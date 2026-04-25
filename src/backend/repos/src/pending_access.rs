@@ -13,9 +13,7 @@ impl PendingAccessRepo {
         sub: &str,
     ) -> Result<Option<PendingAccess>, RepoError> {
         let mut result = db
-            .query(
-                "SELECT *, meta::id(id) as id FROM pending_access WHERE sub = $sub LIMIT 1",
-            )
+            .query("SELECT *, meta::id(id) as id FROM pending_access WHERE sub = $sub LIMIT 1")
             .bind(("sub", sub.to_owned()))
             .await
             .map_err(handle_surreal_error)?;
@@ -103,11 +101,8 @@ impl PendingAccessRepo {
             .map_err(handle_surreal_error)?;
         }
 
-        crate::invitation::InvitationRepo::increment_and_maybe_exhaust(
-            db,
-            &pending.invitation_id,
-        )
-        .await?;
+        crate::invitation::InvitationRepo::increment_and_maybe_exhaust(db, &pending.invitation_id)
+            .await?;
 
         db.query("DELETE type::record('pending_access', $id)")
             .bind(("id", record_key(&pending.id)))

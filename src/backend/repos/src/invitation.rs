@@ -23,9 +23,7 @@ impl InvitationRepo {
     ) -> Result<Vec<Invitation>, RepoError> {
         if is_admin {
             let mut result = db
-                .query(
-                    "SELECT *, meta::id(id) as id FROM invitations ORDER BY created_at DESC",
-                )
+                .query("SELECT *, meta::id(id) as id FROM invitations ORDER BY created_at DESC")
                 .await
                 .map_err(handle_surreal_error)?;
             return crate::take_many(&mut result, 0);
@@ -197,10 +195,7 @@ impl InvitationRepo {
     /// Atomically increments use_count.  If max_uses is now reached, sets
     /// status to Exhausted.  Silently succeeds if the record is missing (e.g.
     /// the invitation was deleted concurrently).
-    pub async fn increment_and_maybe_exhaust(
-        db: &Surreal<Any>,
-        id: &str,
-    ) -> Result<(), RepoError> {
+    pub async fn increment_and_maybe_exhaust(db: &Surreal<Any>, id: &str) -> Result<(), RepoError> {
         db.query(
             "UPDATE type::record('invitations', $id) SET
                 use_count  = use_count + 1,

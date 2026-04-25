@@ -40,8 +40,5 @@ pub trait IdentityProvisioner: Send + Sync {
 
     /// Issue a fresh credential-setup URL for an already-provisioned user.
     /// Called when a user returns to redeem an invite they previously abandoned.
-    async fn create_setup_url(
-        &self,
-        external_id: &str,
-    ) -> Result<Url, ProvisionerError>;
+    async fn create_setup_url(&self, external_id: &str) -> Result<Url, ProvisionerError>;
 }

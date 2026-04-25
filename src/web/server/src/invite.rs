@@ -31,8 +31,7 @@ pub fn api_router() -> Router<AppState> {
 
 /// Web routes for the invitation redemption flow.
 pub fn web_router() -> Router<AppState> {
-    Router::new()
-        .route("/invite/{code}", get(show_invite_form).post(redeem_invite))
+    Router::new().route("/invite/{code}", get(show_invite_form).post(redeem_invite))
 }
 
 // --- Invitation API ---

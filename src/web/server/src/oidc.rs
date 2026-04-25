@@ -179,10 +179,9 @@ pub async fn callback(
         60 * 60 * 24 * 30
     );
     let mut response = Redirect::to(login_state.next.as_str()).into_response();
-    response.headers_mut().insert(
-        SET_COOKIE,
-        HeaderValue::from_str(&gr_cookie).map_err(AppError::internal)?,
-    );
+    response
+        .headers_mut()
+        .insert(SET_COOKIE, HeaderValue::from_str(&gr_cookie).map_err(AppError::internal)?);
     Ok(response)
 }
 
@@ -368,10 +367,12 @@ async fn get_or_create_local_user(
 
     let is_admin = match &pending {
         Some(pa) => pa.is_admin,
-        None => repos::user::UserRepo::count(&state.repo.db)
-            .await
-            .map_err(AppError::internal)?
-            == 0,
+        None => {
+            repos::user::UserRepo::count(&state.repo.db)
+                .await
+                .map_err(AppError::internal)?
+                == 0
+        }
     };
 
     let user_id = repos::user::UserRepo::create(
@@ -386,13 +387,9 @@ async fn get_or_create_local_user(
     .map_err(AppError::internal)?;
 
     if let Some(pa) = pending {
-        repos::pending_access::PendingAccessRepo::apply_and_delete(
-            &state.repo.db,
-            &user_id,
-            &pa,
-        )
-        .await
-        .map_err(AppError::internal)?;
+        repos::pending_access::PendingAccessRepo::apply_and_delete(&state.repo.db, &user_id, &pa)
+            .await
+            .map_err(AppError::internal)?;
     }
 
     Ok(AuthenticatedUser::new(user_id, username.to_owned(), is_admin))

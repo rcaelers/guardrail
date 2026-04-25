@@ -62,7 +62,11 @@ fn extract_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
     let raw = headers.get(header::COOKIE)?.to_str().ok()?;
     raw.split(';').find_map(|part| {
         let (k, v) = part.trim().split_once('=')?;
-        if k.trim() == name { Some(v.trim().to_string()) } else { None }
+        if k.trim() == name {
+            Some(v.trim().to_string())
+        } else {
+            None
+        }
     })
 }
 
@@ -91,12 +95,17 @@ impl DbState {
             return self.anon_db().await;
         };
 
-        let username = row.get("username").and_then(|v| v.as_str()).unwrap_or("anonymous");
-        let is_admin = row.get("is_admin").and_then(|v| v.as_bool()).unwrap_or(false);
+        let username = row
+            .get("username")
+            .and_then(|v| v.as_str())
+            .unwrap_or("anonymous");
+        let is_admin = row
+            .get("is_admin")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
         let user_id = row.get("uid").and_then(|v| v.as_str()).map(String::from);
 
-        let Ok(jwt) =
-            crate::jwt::make_jwt(username, user_id.as_deref(), is_admin, &self.settings)
+        let Ok(jwt) = crate::jwt::make_jwt(username, user_id.as_deref(), is_admin, &self.settings)
         else {
             tracing::error!("JWT generation failed for user {uid}");
             return self.anon_db().await;
@@ -1496,7 +1505,6 @@ async fn delete_symbol(
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let db = s.user_db(&headers).await;
-    run_value(&db, "DELETE type::record('symbols', $id)", vec![("id", Value::String(id))])
-        .await?;
+    run_value(&db, "DELETE type::record('symbols', $id)", vec![("id", Value::String(id))]).await?;
     Ok(StatusCode::NO_CONTENT)
 }

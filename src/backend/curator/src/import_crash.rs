@@ -174,17 +174,12 @@ impl ImportCrashProcessor {
             Ok(id) => Ok(id),
             Err(_) => {
                 // Likely lost a race with another worker. Retry the find.
-                let group =
-                    CrashGroupRepo::find_by_fingerprint(db, product_id, fingerprint)
-                        .await
-                        .map_err(|e| {
-                            JobError::Failure(format!("failed to re-query crash group: {e}"))
-                        })?
-                        .ok_or_else(|| {
-                            JobError::Failure(
-                                "crash group missing after concurrent create".to_string(),
-                            )
-                        })?;
+                let group = CrashGroupRepo::find_by_fingerprint(db, product_id, fingerprint)
+                    .await
+                    .map_err(|e| JobError::Failure(format!("failed to re-query crash group: {e}")))?
+                    .ok_or_else(|| {
+                        JobError::Failure("crash group missing after concurrent create".to_string())
+                    })?;
                 CrashGroupRepo::touch(db, &group.id)
                     .await
                     .map_err(|e| JobError::Failure(format!("failed to update crash group: {e}")))?;
