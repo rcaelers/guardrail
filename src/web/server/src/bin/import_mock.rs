@@ -56,7 +56,10 @@ async fn main() -> Result<()> {
     db.use_ns(&args.ns).use_db(&args.db).await?;
 
     println!("Clearing existing rows…");
-    clear_tables(&db).await?;
+    if let Err(err) = clear_tables(&db).await {
+        eprintln!("Failed to clear existing rows: {err}");
+        return Err(err);
+    }
 
     let products = seed["products"].as_array().cloned().unwrap_or_default();
     let users = seed["users"].as_array().cloned().unwrap_or_default();
@@ -67,17 +70,26 @@ async fn main() -> Result<()> {
 
     println!("Importing {} products…", products.len());
     for p in &products {
-        import_product(&db, p).await?;
+        if let Err(err) = import_product(&db, p).await {
+            log_import_error("product", p, &err);
+            return Err(err);
+        }
     }
 
     println!("Importing {} users…", users.len());
     for u in &users {
-        import_user(&db, u).await?;
+        if let Err(err) = import_user(&db, u).await {
+            log_import_error("user", u, &err);
+            return Err(err);
+        }
     }
 
     println!("Importing {} memberships…", memberships.len());
     for m in &memberships {
-        import_membership(&db, m).await?;
+        if let Err(err) = import_membership(&db, m).await {
+            log_import_error("membership", m, &err);
+            return Err(err);
+        }
     }
 
     let mut group_count = 0usize;
@@ -85,7 +97,13 @@ async fn main() -> Result<()> {
     let mut note_count = 0usize;
     println!("Importing crash groups + crashes…");
     for g in &crashes {
-        let (gc, cc, nc) = import_group(&db, g).await?;
+        let (gc, cc, nc) = match import_group(&db, g).await {
+            Ok(counts) => counts,
+            Err(err) => {
+                log_import_error("crash group", g, &err);
+                return Err(err);
+            }
+        };
         group_count += gc;
         crash_count += cc;
         note_count += nc;
@@ -94,12 +112,18 @@ async fn main() -> Result<()> {
 
     println!("Importing {} symbols…", symbols.len());
     for s in &symbols {
-        import_symbol(&db, s).await?;
+        if let Err(err) = import_symbol(&db, s).await {
+            log_import_error("symbol", s, &err);
+            return Err(err);
+        }
     }
 
     println!("Importing {} API tokens…", api_tokens.len());
     for token in &api_tokens {
-        import_api_token(&db, token).await?;
+        if let Err(err) = import_api_token(&db, token).await {
+            log_import_error("API token", token, &err);
+            return Err(err);
+        }
     }
 
     println!("Done.");
@@ -251,14 +275,20 @@ async fn import_group(db: &Surreal<Any>, g: &Value) -> Result<(usize, usize, usi
     let crashes = g["crashes"].as_array().cloned().unwrap_or_default();
     let mut crash_n = 0usize;
     for c in &crashes {
-        import_crash(db, group_id, product_id, c).await?;
+        if let Err(err) = import_crash(db, group_id, product_id, c).await {
+            log_import_error("crash", c, &err);
+            return Err(err);
+        }
         crash_n += 1;
     }
 
     let notes = g["notes"].as_array().cloned().unwrap_or_default();
     let mut note_n = 0usize;
     for n in &notes {
-        import_note(db, group_id, product_id, n).await?;
+        if let Err(err) = import_note(db, group_id, product_id, n).await {
+            log_import_error("note", n, &err);
+            return Err(err);
+        }
         note_n += 1;
     }
 
@@ -404,4 +434,27 @@ async fn import_api_token(db: &Surreal<Any>, t: &Value) -> Result<()> {
 
 fn s<'a>(v: &'a Value, key: &str) -> &'a str {
     v.get(key).and_then(|x| x.as_str()).unwrap_or("")
+}
+
+fn log_import_error(kind: &str, value: &Value, err: &impl std::fmt::Display) {
+    eprintln!("Failed to import {kind} {}: {err}", import_record_label(value));
+}
+
+fn import_record_label(value: &Value) -> String {
+    for key in [
+        "id",
+        "tokenId",
+        "userId",
+        "productId",
+        "name",
+        "email",
+        "description",
+    ] {
+        if let Some(text) = value.get(key).and_then(|v| v.as_str())
+            && !text.is_empty()
+        {
+            return format!("{key}={text}");
+        }
+    }
+    "<unknown>".to_string()
 }
