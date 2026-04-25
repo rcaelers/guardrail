@@ -13,11 +13,10 @@ use repos::user::UserRepo;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JwtClaims {
-    pub username: String, // Username
+    pub username: String,
     pub user_id: Option<String>,
     pub is_admin: bool,
-    pub role: String, // Role (e.g., "admin")
-    pub sub: String,  // Subject (username)
+    pub sub: String,
     pub iss: String,  // Issuer
     pub aud: String,  // Audience (product_id if available)
     pub exp: i64,     // Expiration time
@@ -63,7 +62,6 @@ pub async fn generate_jwt_token(
         username: username.clone(),
         user_id: user_id.clone(),
         is_admin,
-        role: "guardrail_apiuser".to_string(),
         sub: username.clone(),
         iss: settings.clone().auth.id.clone(),
         aud: "guardrail".to_string(),
