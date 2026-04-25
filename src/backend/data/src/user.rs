@@ -15,5 +15,6 @@ pub struct User {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct NewUser {
     pub username: String,
+    pub email: Option<String>,
     pub is_admin: bool,
 }

@@ -1,4 +1,3 @@
-use askama::Template;
 use axum::{
     Router,
     extract::{Query, State},
@@ -14,6 +13,7 @@ use crate::{
     AppState,
     auth::AuthSession,
     error::{AppError, AppResult},
+    invite,
     oidc,
     templates::HomeTemplate,
     webauthn,
@@ -30,6 +30,11 @@ pub fn router() -> Router<AppState> {
         .route("/auth/register_finish", post(webauthn::finish_register))
         .route("/auth/authenticate_start/{username}", post(webauthn::start_authentication))
         .route("/auth/authenticate_finish", post(webauthn::finish_authentication))
+        .merge(invite::router())
+}
+
+pub fn render(template: impl askama::Template) -> AppResult<axum::response::Html<String>> {
+    template.render().map(axum::response::Html).map_err(AppError::internal)
 }
 
 #[derive(Debug, Deserialize)]
@@ -86,6 +91,3 @@ async fn auth_session(session: &Session) -> AuthSession {
     AuthSession { user }
 }
 
-fn render(template: impl Template) -> AppResult<Html<String>> {
-    template.render().map(Html).map_err(AppError::internal)
-}

@@ -164,6 +164,30 @@ impl fmt::Debug for ObjectStorage {
     }
 }
 
+#[derive(Deserialize, Default)]
+pub struct PocketIdSettings {
+    pub api_url: String,
+    pub api_key: String,
+    /// Path on the Pocket ID server where users land to register their passkey.
+    /// Defaults to "/one-time-access". Override if your Pocket ID version differs.
+    pub setup_path: Option<String>,
+}
+
+impl fmt::Debug for PocketIdSettings {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("PocketIdSettings")
+            .field("api_url", &self.api_url)
+            .field("api_key", &"[REDACTED]")
+            .field("setup_path", &self.setup_path)
+            .finish()
+    }
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct ProvisionerSettings {
+    pub pocket_id: Option<PocketIdSettings>,
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub struct Settings {
     pub api_server: ApiServer,
@@ -175,6 +199,7 @@ pub struct Settings {
     pub object_storage: ObjectStorage,
     pub auth: Auth,
     pub minidumps: Minidumps,
+    pub provisioner: ProvisionerSettings,
     #[serde(skip)]
     pub config_dir: String,
 }

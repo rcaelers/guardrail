@@ -19,6 +19,9 @@ pub enum AppError {
 
     #[error("corrupt session")]
     CorruptSession,
+
+    #[error("forbidden")]
+    Forbidden,
 }
 
 impl AppError {
@@ -38,6 +41,10 @@ impl AppError {
     pub fn corrupt_session() -> Self {
         Self::CorruptSession
     }
+
+    pub fn forbidden() -> Self {
+        Self::Forbidden
+    }
 }
 
 impl IntoResponse for AppError {
@@ -51,6 +58,7 @@ impl IntoResponse for AppError {
             }
             AppError::NotFound(message) => (StatusCode::NOT_FOUND, format!("not found: {message}")),
             AppError::CorruptSession => (StatusCode::BAD_REQUEST, "corrupt session".to_string()),
+            AppError::Forbidden => (StatusCode::FORBIDDEN, "forbidden".to_string()),
         };
 
         (status, message).into_response()

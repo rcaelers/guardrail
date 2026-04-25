@@ -216,6 +216,7 @@ pub async fn create_test_symbols(
 pub async fn create_test_user(db: &Surreal<Any>, username: &str, is_admin: bool) -> User {
     let new_user = NewUser {
         username: username.to_string(),
+        email: None,
         is_admin,
     };
 
@@ -234,6 +235,7 @@ pub async fn create_random_test_user(db: &Surreal<Any>) -> String {
     let username = format!("testuser_{}", Uuid::new_v4());
     let new_user = NewUser {
         username,
+        email: None,
         is_admin: false,
     };
 

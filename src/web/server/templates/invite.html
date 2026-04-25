@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="panel">
+  <h1>Create your account</h1>
+  <p>Fill in your details to accept this invitation.</p>
+
+  {% if has_error %}
+  <p class="notice error">{{ error }}</p>
+  {% endif %}
+
+  <form method="post" action="/invite/{{ code }}">
+    <div class="field">
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" required autofocus autocomplete="username" />
+    </div>
+
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" required autocomplete="email" />
+    </div>
+
+    <div class="field">
+      <label for="first_name">First name <span class="optional">(optional)</span></label>
+      <input type="text" id="first_name" name="first_name" autocomplete="given-name" />
+    </div>
+
+    <div class="field">
+      <label for="last_name">Last name <span class="optional">(optional)</span></label>
+      <input type="text" id="last_name" name="last_name" autocomplete="family-name" />
+    </div>
+
+    <button class="button" type="submit">Continue</button>
+  </form>
+</section>
+{% endblock %}

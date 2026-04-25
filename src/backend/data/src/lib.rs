@@ -4,6 +4,8 @@ pub mod attachment;
 pub mod crash;
 pub mod crash_group;
 pub mod credentials;
+pub mod invitation;
+pub mod pending_access;
 pub mod product;
 pub mod symbols;
 pub mod user;

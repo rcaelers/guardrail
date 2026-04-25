@@ -129,6 +129,7 @@ async fn test_create_user() {
     let db = TestSetup::create_db().await;
     let new_user = NewUser {
         username: "newuser".to_string(),
+        email: None,
         is_admin: false,
     };
 

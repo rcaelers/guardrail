@@ -1,12 +1,17 @@
 mod auth;
 mod db_api;
 mod error;
+mod invite;
 mod oidc;
+mod pocket_id;
+mod provisioner;
 mod routes;
 mod templates;
 mod webauthn;
 
 use std::{net::SocketAddr, sync::Arc};
+
+use provisioner::IdentityProvisioner;
 
 use axum::{Router, extract::DefaultBodyLimit, routing::get};
 use axum_server::tls_rustls::RustlsConfig;
@@ -35,6 +40,7 @@ pub struct AppState {
     settings: Arc<Settings>,
     http_client: reqwest::Client,
     webauthn: Arc<Webauthn>,
+    provisioner: Option<Arc<dyn IdentityProvisioner>>,
 }
 
 #[tokio::main]
@@ -76,23 +82,41 @@ async fn main() {
             .expect("Failed to build Webauthn"),
     );
 
+    let http_client = {
+        let mut builder = reqwest::Client::builder();
+        if settings
+            .auth
+            .oidc
+            .as_ref()
+            .and_then(|oidc| oidc.allow_insecure_tls)
+            .unwrap_or(false)
+        {
+            builder = builder.danger_accept_invalid_certs(true);
+        }
+        builder.build().expect("Failed to build HTTP client")
+    };
+
+    let provisioner: Option<Arc<dyn IdentityProvisioner>> =
+        settings.provisioner.pocket_id.as_ref().map(|cfg| {
+            let setup_path = cfg
+                .setup_path
+                .clone()
+                .unwrap_or_else(|| "/one-time-access".to_string());
+            Arc::new(pocket_id::PocketIdProvisioner {
+                base_url: url::Url::parse(&cfg.api_url)
+                    .expect("Invalid provisioner.pocket_id.api_url"),
+                api_key: cfg.api_key.clone(),
+                setup_path,
+                client: http_client.clone(),
+            }) as Arc<dyn IdentityProvisioner>
+        });
+
     let state = AppState {
         repo: Repo::new(db),
         settings: settings.clone(),
-        http_client: {
-            let mut builder = reqwest::Client::builder();
-            if settings
-                .auth
-                .oidc
-                .as_ref()
-                .and_then(|oidc| oidc.allow_insecure_tls)
-                .unwrap_or(false)
-            {
-                builder = builder.danger_accept_invalid_certs(true);
-            }
-            builder.build().expect("Failed to build HTTP client")
-        },
+        http_client,
         webauthn,
+        provisioner,
     };
 
     let use_secure_cookies = settings

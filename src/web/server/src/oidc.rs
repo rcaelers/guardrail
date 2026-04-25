@@ -160,7 +160,7 @@ pub async fn callback(
         fetch_userinfo(&state, &discovery.userinfo_endpoint, &token.access_token).await?;
     let username = resolve_username(&userinfo);
 
-    let authenticated_user = get_or_create_local_user(&state, &username)
+    let authenticated_user = get_or_create_local_user(&state, &userinfo.sub, &username)
         .await
         .map_err(|e| {
             AppError::internal(format!("failed to get or create user '{username}': {e}"))
@@ -343,30 +343,59 @@ fn resolve_username(userinfo: &OidcUserInfo) -> String {
 
 async fn get_or_create_local_user(
     state: &AppState,
+    sub: &str,
     username: &str,
 ) -> AppResult<AuthenticatedUser> {
+    let pending = repos::pending_access::PendingAccessRepo::get_by_sub(&state.repo.db, sub)
+        .await
+        .map_err(AppError::internal)?;
+
     if let Some(user) = repos::user::UserRepo::get_by_name(&state.repo.db, username)
         .await
         .map_err(AppError::internal)?
     {
+        if let Some(pa) = pending {
+            repos::pending_access::PendingAccessRepo::apply_and_delete(
+                &state.repo.db,
+                &user.id,
+                &pa,
+            )
+            .await
+            .map_err(AppError::internal)?;
+        }
         return Ok(AuthenticatedUser::new(user.id, user.username, user.is_admin));
     }
 
-    let is_first_user = repos::user::UserRepo::count(&state.repo.db)
-        .await
-        .map_err(AppError::internal)?
-        == 0;
+    let is_admin = match &pending {
+        Some(pa) => pa.is_admin,
+        None => repos::user::UserRepo::count(&state.repo.db)
+            .await
+            .map_err(AppError::internal)?
+            == 0,
+    };
+
     let user_id = repos::user::UserRepo::create(
         &state.repo.db,
         NewUser {
             username: username.to_owned(),
-            is_admin: is_first_user,
+            email: None,
+            is_admin,
         },
     )
     .await
     .map_err(AppError::internal)?;
 
-    Ok(AuthenticatedUser::new(user_id, username.to_owned(), is_first_user))
+    if let Some(pa) = pending {
+        repos::pending_access::PendingAccessRepo::apply_and_delete(
+            &state.repo.db,
+            &user_id,
+            &pa,
+        )
+        .await
+        .map_err(AppError::internal)?;
+    }
+
+    Ok(AuthenticatedUser::new(user_id, username.to_owned(), is_admin))
 }
 
 pub fn sanitize_next(next: Option<&str>) -> String {
