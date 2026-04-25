@@ -1,18 +1,10 @@
 // REST API backed by SurrealDB. Returns JSON shapes consumed by
 // the SvelteKit http adapter.
 //
-// Data layout assumptions (match database/schema/guardrail.surql +
-// src/bin/import_mock.rs):
-//   - users.id          = `users:⟨u-…⟩`       (string-based record id)
-//   - products.id       = `products:⟨slug⟩`
-//   - crash_groups.id   = `crash_groups:⟨GR-####⟩`
-//   - crashes.id        = `crashes:⟨CR-####-###⟩`
-//   - symbols.id        = `symbols:⟨SYM-####⟩`
-//   - user_access       = { user_id, product_id, role } links
-//   - annotations       = { source, value, author?, group_id?, crash_id?, product_id }
-//
-// Every query uses `meta::id(id) AS id` so the UI receives bare string ids
-// (not `users:⟨u-you⟩`).
+// Every handler reads the `gr_uid` cookie from the request and generates a
+// short-lived JWT for that user so SurrealDB row-level security (RLS) rules
+// are enforced on every query.  When no cookie is present, an anonymous JWT
+// is used, which grants access only to public data.
 
 use std::sync::Arc;
 
@@ -20,12 +12,14 @@ use axum::{
     Json, Router,
     body::Body,
     extract::{Path, Query, State},
-    http::{HeaderValue, StatusCode, header},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
     response::Response,
     routing::{delete, get, post},
 };
 use chrono::Utc;
+use common::settings::Settings;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path as ObjectPath};
+use repos::Repo;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use surrealdb::Surreal;
@@ -33,8 +27,9 @@ use surrealdb::engine::any::Any;
 
 #[derive(Clone)]
 pub struct DbState {
-    pub db: Arc<Surreal<Any>>,
+    pub repo: Repo,
     pub storage: Arc<dyn ObjectStore>,
+    pub settings: Arc<Settings>,
 }
 
 pub fn router() -> Router<DbState> {
@@ -57,6 +52,74 @@ pub fn router() -> Router<DbState> {
         .route("/crashes/{id}/merge", post(merge_groups))
         .route("/products/{pid}/symbols", get(list_symbols).post(upload_symbol))
         .route("/symbols/{id}", delete(delete_symbol))
+}
+
+// --------------------------------------------------------------------
+// per-request authenticated DB
+// --------------------------------------------------------------------
+
+fn extract_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
+    let raw = headers.get(header::COOKIE)?.to_str().ok()?;
+    raw.split(';').find_map(|part| {
+        let (k, v) = part.trim().split_once('=')?;
+        if k.trim() == name { Some(v.trim().to_string()) } else { None }
+    })
+}
+
+impl DbState {
+    /// Returns a SurrealDB handle authenticated as the user identified by the
+    /// `gr_uid` request cookie.  Falls back to an anonymous JWT (public data
+    /// only) when the cookie is absent or the user cannot be found.
+    pub async fn user_db(&self, headers: &HeaderMap) -> Surreal<Any> {
+        let Some(uid) = extract_cookie(headers, "gr_uid") else {
+            return self.anon_db().await;
+        };
+
+        let user_row = self
+            .repo
+            .db
+            .query(
+                "SELECT username, is_admin, meta::id(id) AS uid \
+                 FROM ONLY type::record('users', $id)",
+            )
+            .bind(("id", uid.clone()))
+            .await
+            .ok()
+            .and_then(|mut r| r.take::<Option<Value>>(0).ok().flatten());
+
+        let Some(row) = user_row else {
+            return self.anon_db().await;
+        };
+
+        let username = row.get("username").and_then(|v| v.as_str()).unwrap_or("anonymous");
+        let is_admin = row.get("is_admin").and_then(|v| v.as_bool()).unwrap_or(false);
+        let user_id = row.get("uid").and_then(|v| v.as_str()).map(String::from);
+
+        let Ok(jwt) =
+            crate::jwt::make_jwt(username, user_id.as_deref(), is_admin, &self.settings)
+        else {
+            tracing::error!("JWT generation failed for user {uid}");
+            return self.anon_db().await;
+        };
+
+        match self.repo.authenticated(&jwt).await {
+            Ok(db) => db,
+            Err(e) => {
+                tracing::error!("DB authentication failed for user {uid}: {e}");
+                self.anon_db().await
+            }
+        }
+    }
+
+    async fn anon_db(&self) -> Surreal<Any> {
+        let Ok(jwt) = crate::jwt::make_anon_jwt(&self.settings) else {
+            return self.repo.db.clone();
+        };
+        match self.repo.authenticated(&jwt).await {
+            Ok(db) => db,
+            Err(_) => self.repo.db.clone(),
+        }
+    }
 }
 
 // --------------------------------------------------------------------
@@ -84,10 +147,6 @@ fn storage_error(err: object_store::Error) -> (StatusCode, String) {
     }
 }
 
-// Runs a query and decodes the first result as JSON. Going through
-// `Option<Vec<Value>>` matches how the rest of the codebase bridges
-// SurrealDB's typed response into serde_json — the client only implements
-// SurrealValue for a handful of types, but serde_json::Value is one of them.
 async fn run_value(
     db: &Surreal<Any>,
     sql: &str,
@@ -102,8 +161,6 @@ async fn run_value(
     Ok(out)
 }
 
-// Projection strings shared across endpoints. Keeps the camelCase field
-// names the UI expects stable in one place.
 const USER_PROJ: &str =
     "meta::id(id) AS id, email, name, avatar, is_admin AS isAdmin, created_at AS joinedAt";
 const PRODUCT_PROJ: &str = "meta::id(id) AS id, name, slug, description, color, public";
@@ -111,11 +168,6 @@ const SYMBOL_PROJ: &str = "external_id AS id, meta::id(product_id) AS productId,
     name, version, arch, format, size, debug_id AS debugId, code_id AS codeId, \
     uploaded_at AS uploadedAt, meta::id(uploaded_by) AS uploadedBy, referenced_by AS referencedBy";
 
-// Base columns from `crash_groups`. Display-only fields
-// (title/topFrame/file/line/version/...) come from a representative crash's
-// `report` — we fetch those separately and merge in Rust because
-// correlated sub-SELECTs inside SurrealDB's projection with ORDER BY don't
-// parse cleanly.
 const GROUP_BASE_SELECT: &str = "
     SELECT
         meta::id(id)         AS id,
@@ -129,9 +181,6 @@ const GROUP_BASE_SELECT: &str = "
     FROM crash_groups
 ";
 
-// SurrealDB returns record links as e.g. `crash_groups:⟨GR-0001⟩` or
-// `crash_groups:GR-0001`. Strip the `<table>:` prefix and the decorative
-// brackets so we get the plain short id the UI wants.
 fn extract_short_id(s: &str) -> String {
     let after = s.split_once(':').map(|(_, r)| r).unwrap_or(s);
     after
@@ -139,7 +188,6 @@ fn extract_short_id(s: &str) -> String {
         .to_string()
 }
 
-// Merge report-derived display fields into a group summary row.
 fn apply_rep(mut group: Value, rep: Option<&Value>) -> Value {
     if let (Some(obj), Some(rep_obj)) = (group.as_object_mut(), rep.and_then(|v| v.as_object())) {
         for key in [
@@ -267,11 +315,13 @@ struct SignInBody {
 
 async fn signin(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Json(body): Json<SignInBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     let email = body.email.trim().to_lowercase();
     let rows = run_value(
-        &s.db,
+        &db,
         &format!("SELECT {USER_PROJ} FROM users WHERE string::lowercase(email) = $email LIMIT 1"),
         vec![("email", Value::String(email))],
     )
@@ -282,19 +332,25 @@ async fn signin(
         .ok_or_else(|| (StatusCode::NOT_FOUND, "user not found".into()))
 }
 
-async fn list_users(State(s): State<DbState>) -> Result<Json<Value>, (StatusCode, String)> {
+async fn list_users(
+    State(s): State<DbState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     let rows =
-        run_value(&s.db, &format!("SELECT {USER_PROJ} FROM users ORDER BY created_at"), vec![])
+        run_value(&db, &format!("SELECT {USER_PROJ} FROM users ORDER BY created_at"), vec![])
             .await?;
     Ok(Json(Value::Array(rows)))
 }
 
 async fn get_user(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     let rows = run_value(
-        &s.db,
+        &db,
         &format!("SELECT {USER_PROJ} FROM ONLY type::record('users', $id)"),
         vec![("id", Value::String(id.clone()))],
     )
@@ -319,8 +375,10 @@ struct UpdateUserBody {
 
 async fn create_user(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Json(body): Json<CreateUserBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     let email = body.email.trim().to_lowercase();
     let name = body
         .name
@@ -343,7 +401,7 @@ async fn create_user(
         .collect::<String>()
         .to_uppercase();
     let rows = run_value(
-        &s.db,
+        &db,
         &format!(
             "CREATE type::record('users', $id) CONTENT {{
             username: $email, email: $email, name: $name, avatar: $avatar,
@@ -373,9 +431,11 @@ async fn create_user(
 
 async fn update_user(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     Json(body): Json<UpdateUserBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     let email = body
         .email
         .as_deref()
@@ -398,7 +458,7 @@ async fn update_user(
         .to_uppercase();
 
     let rows = run_value(
-        &s.db,
+        &db,
         &format!(
             "UPDATE type::record('users', $id) SET
             username = $email,
@@ -432,15 +492,17 @@ async fn update_user(
 
 async fn delete_user(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     run_value(
-        &s.db,
+        &db,
         "DELETE user_access WHERE user_id = type::record('users', $id)",
         vec![("id", Value::String(id.clone()))],
     )
     .await?;
-    run_value(&s.db, "DELETE type::record('users', $id)", vec![("id", Value::String(id))]).await?;
+    run_value(&db, "DELETE type::record('users', $id)", vec![("id", Value::String(id))]).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -452,11 +514,13 @@ struct SetAdminBody {
 
 async fn set_admin(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     Json(body): Json<SetAdminBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     run_value(
-        &s.db,
+        &db,
         "UPDATE type::record('users', $id) SET is_admin = $v, updated_at = time::now()",
         vec![("id", Value::String(id)), ("v", Value::Bool(body.is_admin))],
     )
@@ -466,14 +530,12 @@ async fn set_admin(
 
 async fn memberships_for(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(user_id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    // Build the joined product object via field access on the record link
-    // (`product_id.name` etc.). SurrealDB lets us dereference record links
-    // inline this way — a sub-SELECT like `FROM ONLY product_id` instead
-    // parses `product_id` as a table name and fails.
+    let db = s.user_db(&headers).await;
     let rows = run_value(
-        &s.db,
+        &db,
         "SELECT
             meta::id(user_id)    AS userId,
             meta::id(product_id) AS productId,
@@ -504,15 +566,17 @@ struct ListProductsQuery {
 
 async fn list_products(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Query(q): Query<ListProductsQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     match q.scope.as_deref() {
         Some("mine") => {
             let Some(uid) = q.user.as_deref() else {
                 return Ok(Json(Value::Array(vec![])));
             };
             let rows = run_value(
-                &s.db,
+                &db,
                 &format!(
                     "SELECT {PRODUCT_PROJ} FROM products
                     WHERE id IN (SELECT VALUE product_id FROM user_access
@@ -525,7 +589,7 @@ async fn list_products(
         }
         Some("public") => {
             let rows = run_value(
-                &s.db,
+                &db,
                 &format!("SELECT {PRODUCT_PROJ} FROM products WHERE public = true ORDER BY name"),
                 vec![],
             )
@@ -534,7 +598,7 @@ async fn list_products(
         }
         _ => {
             let rows = run_value(
-                &s.db,
+                &db,
                 &format!("SELECT {PRODUCT_PROJ} FROM products ORDER BY name"),
                 vec![],
             )
@@ -546,10 +610,12 @@ async fn list_products(
 
 async fn get_product(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     let rows = run_value(
-        &s.db,
+        &db,
         &format!("SELECT {PRODUCT_PROJ} FROM ONLY type::record('products', $id)"),
         vec![("id", Value::String(id.clone()))],
     )
@@ -578,8 +644,10 @@ struct UpdateProductBody {
 
 async fn create_product(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Json(body): Json<CreateProductBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     let slug = body
         .slug
         .as_deref()
@@ -596,7 +664,7 @@ async fn create_product(
                 .to_string()
         });
     let rows = run_value(
-        &s.db,
+        &db,
         &format!(
             "CREATE type::record('products', $id) CONTENT {{
             name: $name, slug: $slug, description: $description,
@@ -619,9 +687,11 @@ async fn create_product(
 
 async fn update_product(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     Json(body): Json<UpdateProductBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     let name = body
         .name
         .as_deref()
@@ -662,7 +732,7 @@ async fn update_product(
     }
 
     let rows = run_value(
-        &s.db,
+        &db,
         &format!("UPDATE type::record('products', $id) SET {set_sql} RETURN {PRODUCT_PROJ}"),
         args,
     )
@@ -676,10 +746,11 @@ async fn update_product(
 
 async fn delete_product(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     let args = vec![("id", Value::String(id))];
-    // FK-safe cascade
     for sql in [
         "DELETE annotations WHERE product_id = type::record('products', $id)",
         "DELETE crashes     WHERE product_id = type::record('products', $id)",
@@ -688,7 +759,7 @@ async fn delete_product(
         "DELETE user_access WHERE product_id = type::record('products', $id)",
         "DELETE type::record('products', $id)",
     ] {
-        run_value(&s.db, sql, args.clone()).await?;
+        run_value(&db, sql, args.clone()).await?;
     }
     Ok(StatusCode::NO_CONTENT)
 }
@@ -699,10 +770,12 @@ async fn delete_product(
 
 async fn list_members(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(pid): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     let rows = run_value(
-        &s.db,
+        &db,
         "SELECT
             meta::id(user_id)    AS userId,
             meta::id(product_id) AS productId,
@@ -729,12 +802,13 @@ struct GrantBody {
 
 async fn grant_access(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path((pid, uid)): Path<(String, String)>,
     Json(body): Json<GrantBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    // Upsert (role change vs grant): delete existing row first, then create.
+    let db = s.user_db(&headers).await;
     run_value(
-        &s.db,
+        &db,
         "DELETE user_access WHERE user_id = type::record('users', $uid)
                               AND product_id = type::record('products', $pid)",
         vec![
@@ -744,7 +818,7 @@ async fn grant_access(
     )
     .await?;
     run_value(
-        &s.db,
+        &db,
         "CREATE user_access CONTENT {
             user_id: type::record('users', $uid),
             product_id: type::record('products', $pid),
@@ -762,10 +836,12 @@ async fn grant_access(
 
 async fn revoke_access(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path((pid, uid)): Path<(String, String)>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     run_value(
-        &s.db,
+        &db,
         "DELETE user_access WHERE user_id = type::record('users', $uid)
                               AND product_id = type::record('products', $pid)",
         vec![("uid", Value::String(uid)), ("pid", Value::String(pid))],
@@ -792,15 +868,10 @@ struct ListGroupsQuery {
 
 async fn list_groups(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Query(q): Query<ListGroupsQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    // Two parallel scans: one for the group rows, one for every crash's
-    // lean display fields. We take the first crash per group_id out of
-    // the scan to build the per-group representative, and the distinct
-    // `report.version` set powers the filter dropdown — same scan.
-    //
-    // (An alternative correlated sub-SELECT per group was ~3× slower on
-    // this dataset because SurrealDB re-scans `crashes` per group.)
+    let db = s.user_db(&headers).await;
     let base_sql = format!(
         "{GROUP_BASE_SELECT}
         WHERE product_id = type::record('products', $pid)
@@ -825,8 +896,8 @@ async fn list_groups(
         WHERE product_id = type::record('products', $pid)
         ORDER BY created_at DESC";
     let (base_res, reps_res) = tokio::join!(
-        run_value(&s.db, &base_sql, vec![("pid", Value::String(q.product_id.clone()))]),
-        run_value(&s.db, reps_sql, vec![("pid", Value::String(q.product_id.clone()))]),
+        run_value(&db, &base_sql, vec![("pid", Value::String(q.product_id.clone()))]),
+        run_value(&db, reps_sql, vec![("pid", Value::String(q.product_id.clone()))]),
     );
     let base = base_res?;
     let rep_rows = reps_res?;
@@ -845,7 +916,7 @@ async fn list_groups(
         let gid = extract_short_id(gid_raw);
         if reps.contains_key(&gid) {
             continue;
-        } // first (most recent) wins
+        }
         reps.insert(gid, r);
     }
     let versions_list: Vec<String> = versions_set.into_iter().rev().collect();
@@ -862,7 +933,6 @@ async fn list_groups(
         })
         .collect();
 
-    // Post-filter (keeps the SurrealQL simple; filter sets are small).
     if let Some(v) = q
         .version
         .as_deref()
@@ -907,15 +977,13 @@ async fn list_groups(
                 .and_then(|v| v.as_str())
                 .cmp(&a.get("version").and_then(|v| v.as_str()))
         }),
-        _ => {} // default "count" already sorted by the SurrealQL
+        _ => {}
     }
 
     let total = groups.len();
     let off = q.offset.unwrap_or(0);
     let lim = q.limit.unwrap_or(groups.len());
     let slice: Vec<Value> = groups.into_iter().skip(off).take(lim).collect();
-
-    // Versions dropdown: reuse the same scan that built `reps`.
     let versions: Vec<Value> = versions_list.into_iter().map(Value::String).collect();
 
     Ok(Json(json!({
@@ -927,9 +995,11 @@ async fn list_groups(
 
 async fn get_group(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let g = compose_group(&s.db, &id).await?;
+    let db = s.user_db(&headers).await;
+    let g = compose_group(&db, &id).await?;
     match g {
         Some(v) => Ok(Json(v)),
         None => Err(not_found(&id)),
@@ -938,11 +1008,12 @@ async fn get_group(
 
 async fn get_crash(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(crash_id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    // Fetch the crash row, then its group.
+    let db = s.user_db(&headers).await;
     let crashes = run_value(
-        &s.db,
+        &db,
         "SELECT * FROM ONLY type::record('crashes', $cid)",
         vec![("cid", Value::String(crash_id.clone()))],
     )
@@ -950,7 +1021,7 @@ async fn get_crash(
     let Some(row) = crashes.into_iter().next() else {
         return Err(not_found(&crash_id));
     };
-    let attachment_rows = load_attachment_rows(&s.db, &crash_id).await?;
+    let attachment_rows = load_attachment_rows(&db, &crash_id).await?;
     let (attachments, user_text) =
         split_crash_attachments(s.storage.as_ref(), attachment_rows).await?;
     let crash_value = hydrate_crash(&row, attachments, user_text);
@@ -959,18 +1030,12 @@ async fn get_crash(
         .and_then(|v| v.as_str())
         .map(extract_short_id)
         .unwrap_or_default();
-    let Some(group) = compose_group(&s.db, &group_id).await? else {
+    let Some(group) = compose_group(&db, &group_id).await? else {
         return Err(not_found(&crash_id));
     };
     Ok(Json(json!({ "crash": crash_value, "group": group })))
 }
 
-// Materialize a Crash (in the UI shape) from a DB row: the per-crash
-// metadata lives as top-level columns, but all the detail blobs (stack,
-// threads, modules, env, breadcrumbs, logs, userDescription, dump, derived,
-// plus title/topFrame/...) are nested inside `report`. SurrealDB returns
-// `id`, `group_id`, and `product_id` as record links; we strip the prefix
-// so the UI sees plain short ids.
 fn hydrate_crash(row: &Value, attachments: Vec<Value>, user_text: Option<Value>) -> Value {
     let mut out = serde_json::Map::new();
     if let Some(id) = row.get("id").and_then(|v| v.as_str()) {
@@ -992,7 +1057,6 @@ fn hydrate_crash(row: &Value, attachments: Vec<Value>, user_text: Option<Value>)
     Value::Object(out)
 }
 
-// Return the full group including crashes[], notes, related.
 async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (StatusCode, String)> {
     let rows = run_value(
         db,
@@ -1004,8 +1068,6 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
         return Ok(None);
     };
 
-    // Fetch only the display-relevant fields from the most-recent crash
-    // (not the whole `report` blob — that's KB per row).
     let rep_rows = run_value(
         db,
         "SELECT
@@ -1031,11 +1093,6 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
     let mut group = apply_rep(base, rep.as_ref());
     let group_obj = group.as_object_mut().unwrap();
 
-    // Lightweight list of crashes in this group. We return only the
-    // fields the expanded GroupRow + detail header read (id/os/version/
-    // at/user/similarity/commit + title/topFrame/file/line/signal/etc.).
-    // The full per-crash blob (stack/threads/modules/dump/…) is loaded on
-    // demand by GET /crashes/by-crash/:id when the user selects a crash.
     let crash_rows = run_value(
         db,
         "SELECT
@@ -1067,7 +1124,6 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
     .await?;
     group_obj.insert("crashes".into(), Value::Array(crash_rows));
 
-    // notes = annotations with source=user on this group
     let notes = run_value(
         db,
         "SELECT author, value AS body, created_at AS at
@@ -1079,10 +1135,6 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
     .await?;
     group_obj.insert("notes".into(), Value::Array(notes));
 
-    // related = other groups in this product with the same signal.
-    // We only need {id, title, count} — do a single narrow query that
-    // joins to one representative crash per group, instead of scanning
-    // every crash in the product.
     let product_id = group_obj
         .get("productId")
         .and_then(|v| v.as_str())
@@ -1115,7 +1167,6 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
             .unwrap_or_default()
             .to_string();
         let count = g.get("count").cloned().unwrap_or(Value::Null);
-        // One tiny query per related group for the title.
         let title_rows = run_value(
             db,
             "SELECT created_at, report.title AS title FROM crashes
@@ -1138,10 +1189,12 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
 
 async fn download_attachment(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Response, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     let rows = run_value(
-        &s.db,
+        &db,
         "SELECT
             meta::id(id) AS id,
             name,
@@ -1202,11 +1255,13 @@ struct SetStatusBody {
 
 async fn set_status(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     Json(body): Json<SetStatusBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     run_value(
-        &s.db,
+        &db,
         "UPDATE type::record('crash_groups', $id) SET status = $st, updated_at = time::now()",
         vec![
             ("id", Value::String(id)),
@@ -1225,12 +1280,13 @@ struct AddNoteBody {
 
 async fn add_note(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
     Json(payload): Json<AddNoteBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    // look up product_id for FK on the annotation
+    let db = s.user_db(&headers).await;
     let prod_rows = run_value(
-        &s.db,
+        &db,
         "SELECT meta::id(product_id) AS pid FROM ONLY type::record('crash_groups', $id)",
         vec![("id", Value::String(id.clone()))],
     )
@@ -1243,7 +1299,7 @@ async fn add_note(
 
     let now = Utc::now().to_rfc3339();
     run_value(
-        &s.db,
+        &db,
         "CREATE annotations CONTENT {
             source: 'user',
             value: $body,
@@ -1278,28 +1334,29 @@ struct MergeBody {
 
 async fn merge_groups(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(primary_id): Path<String>,
     Json(body): Json<MergeBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    // Move crashes, add counts, delete merged group.
+    let db = s.user_db(&headers).await;
     let pid = Value::String(primary_id.clone());
     let mid = Value::String(body.merged_id);
     run_value(
-        &s.db,
+        &db,
         "UPDATE crashes SET group_id = type::record('crash_groups', $pid)
          WHERE group_id = type::record('crash_groups', $mid)",
         vec![("pid", pid.clone()), ("mid", mid.clone())],
     )
     .await?;
     run_value(
-        &s.db,
+        &db,
         "UPDATE type::record('crash_groups', $pid) SET
            count = count + (SELECT VALUE count FROM ONLY type::record('crash_groups', $mid)),
            updated_at = time::now()",
         vec![("pid", pid), ("mid", mid.clone())],
     )
     .await?;
-    run_value(&s.db, "DELETE type::record('crash_groups', $mid)", vec![("mid", mid)]).await?;
+    run_value(&db, "DELETE type::record('crash_groups', $mid)", vec![("mid", mid)]).await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1317,11 +1374,13 @@ struct SymbolsQuery {
 
 async fn list_symbols(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(pid): Path<String>,
     Query(q): Query<SymbolsQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
     let mut rows = run_value(
-        &s.db,
+        &db,
         &format!(
             "SELECT {SYMBOL_PROJ} FROM symbols
                   WHERE product_id = type::record('products', $pid)"
@@ -1396,12 +1455,13 @@ struct UploadSymbolBody {
 
 async fn upload_symbol(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(pid): Path<String>,
     Json(body): Json<UploadSymbolBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    // Pick a short id like SYM-0123. Uses a count for uniqueness.
+    let db = s.user_db(&headers).await;
     let count_rows =
-        run_value(&s.db, "SELECT VALUE count() FROM symbols GROUP ALL", vec![]).await?;
+        run_value(&db, "SELECT VALUE count() FROM symbols GROUP ALL", vec![]).await?;
     let n = count_rows
         .into_iter()
         .next()
@@ -1411,7 +1471,7 @@ async fn upload_symbol(
     let id = format!("SYM-{:04}", n);
 
     let rows = run_value(
-        &s.db,
+        &db,
         &format!(
             "CREATE type::record('symbols', $id) CONTENT {{
             external_id: $id,
@@ -1442,9 +1502,11 @@ async fn upload_symbol(
 
 async fn delete_symbol(
     State(s): State<DbState>,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    run_value(&s.db, "DELETE type::record('symbols', $id)", vec![("id", Value::String(id))])
+    let db = s.user_db(&headers).await;
+    run_value(&db, "DELETE type::record('symbols', $id)", vec![("id", Value::String(id))])
         .await?;
     Ok(StatusCode::NO_CONTENT)
 }

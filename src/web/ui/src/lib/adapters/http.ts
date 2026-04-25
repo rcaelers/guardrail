@@ -34,7 +34,7 @@ import type {
   Invitation, CreateInvitationSpec, UpdateInvitationSpec
 } from './types';
 
-export function httpAdapter(baseUrl: string): GuardrailAdapter {
+export function httpAdapter(baseUrl: string, cookieHeader: string = ''): GuardrailAdapter {
   const qs = (q: Record<string, unknown>) =>
     new URLSearchParams(
       Object.entries(q)
@@ -44,8 +44,10 @@ export function httpAdapter(baseUrl: string): GuardrailAdapter {
 
   async function req(path: string, init?: RequestInit): Promise<Response> {
     const url = `${baseUrl}${path}`;
+    const headers = new Headers(init?.headers);
+    if (cookieHeader && !headers.has('cookie')) headers.set('cookie', cookieHeader);
     try {
-      return await fetch(url, init);
+      return await fetch(url, { ...init, headers });
     } catch (e) {
       const reason = e instanceof Error ? e.message : String(e);
       throw new Error(`${init?.method ?? 'GET'} ${url} failed: ${reason}`);
@@ -186,15 +188,15 @@ export function httpAdapter(baseUrl: string): GuardrailAdapter {
 
     // --- invitations ---
     async listInvitations() {
-      const r = await req('/api/invitations');
+      const r = await req('/invitations');
       return json<Invitation[]>(r, 'listInvitations');
     },
     async createInvitation(spec: CreateInvitationSpec) {
-      const r = await jpost('/api/invitations', spec);
+      const r = await jpost('/invitations', spec);
       return json<Invitation>(r, 'createInvitation');
     },
     async updateInvitation(id: string, patch: UpdateInvitationSpec) {
-      const r = await req(`/api/invitations/${encodeURIComponent(id)}`, {
+      const r = await req(`/invitations/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(patch)
@@ -202,7 +204,7 @@ export function httpAdapter(baseUrl: string): GuardrailAdapter {
       return json<Invitation>(r, 'updateInvitation');
     },
     async revokeInvitation(id: string) {
-      const r = await req(`/api/invitations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const r = await req(`/invitations/${encodeURIComponent(id)}`, { method: 'DELETE' });
       if (!r.ok) throw new Error(`revokeInvitation ${r.status}`);
     },
 

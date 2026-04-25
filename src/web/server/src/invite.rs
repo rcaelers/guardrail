@@ -22,10 +22,16 @@ use crate::{
 
 const AUTHENTICATED_USER_SESSION_KEY: &str = "authenticated_user";
 
-pub fn router() -> Router<AppState> {
+/// Invitation API routes, to be nested under /api/v1 in main.rs.
+pub fn api_router() -> Router<AppState> {
     Router::new()
-        .route("/api/invitations", get(list_invitations).post(create_invitation))
-        .route("/api/invitations/{id}", put(update_invitation).delete(revoke_invitation))
+        .route("/invitations", get(list_invitations).post(create_invitation))
+        .route("/invitations/{id}", put(update_invitation).delete(revoke_invitation))
+}
+
+/// Web routes for the invitation redemption flow.
+pub fn web_router() -> Router<AppState> {
+    Router::new()
         .route("/invite/{code}", get(show_invite_form).post(redeem_invite))
 }
 

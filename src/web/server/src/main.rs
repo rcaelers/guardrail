@@ -3,6 +3,7 @@ mod db_api;
 mod error;
 mod impersonation;
 mod invite;
+mod jwt;
 mod oidc;
 mod pocket_id;
 mod provisioner;
@@ -73,6 +74,19 @@ async fn main() {
     })
     .await;
 
+    // Register the JWT access method so RLS $auth variables are populated.
+    // OVERWRITE makes this idempotent on restart.
+    {
+        let public_key = &settings.auth.jwk.public_key;
+        db.query(format!(
+            r#"DEFINE ACCESS OVERWRITE guardrail_api ON DATABASE TYPE RECORD
+                WITH JWT ALGORITHM EDDSA KEY '{public_key}'
+                DURATION FOR SESSION 1h"#
+        ))
+        .await
+        .expect("Failed to define JWT access method");
+    }
+
     let rp_id = settings.auth.id.clone();
     let rp_origin = Url::parse(&settings.auth.origin).expect("Invalid auth origin URL");
     let webauthn = Arc::new(
@@ -134,14 +148,20 @@ async fn main() {
 
     let storage = common::init_s3_object_store(settings.clone()).await;
     let db_state = db_api::DbState {
-        db: Arc::new(state.repo.db.clone()),
+        repo: state.repo.clone(),
         storage,
+        settings: settings.clone(),
     };
+
+    // Combine db_api routes and invitation API routes under /api/v1.
+    let api_v1 = db_api::router()
+        .with_state(db_state)
+        .merge(invite::api_router().with_state(state.clone()));
 
     let app = Router::new()
         .merge(routes::router())
         .merge(impersonation::router())
-        .nest("/api/v1", db_api::router().with_state(db_state))
+        .nest("/api/v1", api_v1)
         .nest_service("/static", ServeDir::new("src/web/server/static"))
         .route("/healthz", get(|| async { "ok" }))
         .layer(DefaultBodyLimit::max(10 * 1024 * 1024))

@@ -1,5 +1,5 @@
 use axum::{
-    Router,
+    Json, Router,
     extract::{Query, State},
     http::{HeaderValue, header::SET_COOKIE},
     response::{Html, IntoResponse, Redirect},
@@ -7,6 +7,7 @@ use axum::{
 };
 use common::AuthenticatedUser;
 use serde::Deserialize;
+use serde_json::Value;
 use tower_sessions::Session;
 
 use crate::{
@@ -30,7 +31,8 @@ pub fn router() -> Router<AppState> {
         .route("/auth/register_finish", post(webauthn::finish_register))
         .route("/auth/authenticate_start/{username}", post(webauthn::start_authentication))
         .route("/auth/authenticate_finish", post(webauthn::finish_authentication))
-        .merge(invite::router())
+        .route("/auth/real-user", get(get_real_user))
+        .merge(invite::web_router())
 }
 
 pub fn render(template: impl askama::Template) -> AppResult<axum::response::Html<String>> {
@@ -89,5 +91,40 @@ async fn auth_session(session: &Session) -> AuthSession {
         .await
         .unwrap_or(None);
     AuthSession { user }
+}
+
+/// Returns the real (admin) user's data when impersonation is active.
+/// Reads from the session (trusted server-side state) and queries root DB.
+/// 404 if not currently impersonating.
+async fn get_real_user(
+    State(state): State<AppState>,
+    session: Session,
+) -> AppResult<Json<Value>> {
+    let original = session
+        .get::<AuthenticatedUser>("original_user")
+        .await
+        .map_err(AppError::internal)?;
+
+    let Some(original) = original else {
+        return Err(AppError::not_found("not impersonating"));
+    };
+
+    let mut result = state
+        .repo
+        .db
+        .query(
+            "SELECT meta::id(id) AS id, email, name, avatar, \
+             is_admin AS isAdmin, created_at AS joinedAt \
+             FROM ONLY type::record('users', $id)",
+        )
+        .bind(("id", original.id.clone()))
+        .await
+        .map_err(AppError::internal)?;
+
+    let rows: Vec<Value> = result.take(0).map_err(AppError::internal)?;
+    rows.into_iter()
+        .next()
+        .map(Json)
+        .ok_or_else(|| AppError::not_found("real user not found"))
 }
 
