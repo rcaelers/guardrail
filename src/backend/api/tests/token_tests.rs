@@ -87,7 +87,7 @@ async fn test_token_jwt_admin_ok() {
     assert!(decoded_jwt.claims["user_id"].is_null());
     assert!(decoded_jwt.claims["is_admin"].as_bool().unwrap());
     assert_eq!(decoded_jwt.claims["iss"].as_str().unwrap(), state.settings.auth.id);
-    assert_eq!(decoded_jwt.claims["role"].as_str().unwrap(), "guardrail_apiuser");
+    assert!(decoded_jwt.claims.get("role").is_none());
     assert!(decoded_jwt.claims["exp"].is_number());
     assert!(decoded_jwt.claims["iat"].is_number());
     // SurrealDB record-access claims
@@ -146,7 +146,7 @@ async fn test_token_jwt_user_ok() {
     assert_eq!(decoded_jwt.claims["user_id"].as_str().unwrap(), user.id.to_string());
     assert!(!decoded_jwt.claims["is_admin"].as_bool().unwrap());
     assert_eq!(decoded_jwt.claims["iss"].as_str().unwrap(), state.settings.auth.id);
-    assert_eq!(decoded_jwt.claims["role"].as_str().unwrap(), "guardrail_apiuser");
+    assert!(decoded_jwt.claims.get("role").is_none());
     assert!(decoded_jwt.claims["exp"].is_number());
     assert!(decoded_jwt.claims["iat"].is_number());
     // SurrealDB record-access claims
