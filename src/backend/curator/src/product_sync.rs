@@ -14,7 +14,6 @@ pub async fn sync_products_to_valkey(
     let products = ProductRepo::get_all(&repo.db, QueryParams::default()).await?;
 
     for product in &products {
-        info!(product = %product.name, "Syncing product to Valkey");
         let info = ProductInfo {
             id: product.id.clone(),
             name: product.name.clone(),
@@ -25,8 +24,10 @@ pub async fn sync_products_to_valkey(
         let json = serde_json::to_string(&info)?;
         let key = product_cache_key(&product.name);
 
+        info!(product = %product.name, key = %key, "Syncing product to Valkey");
+
         redis.set::<_, _, ()>(&key, &json).await.map_err(|e| {
-            error!(product = %product.name, error = ?e, "Failed to write product to Valkey");
+            error!(product = %product.name, key = %key, error = ?e, "Failed to write product to Valkey");
             e
         })?;
     }

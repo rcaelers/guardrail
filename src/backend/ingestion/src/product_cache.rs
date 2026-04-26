@@ -35,15 +35,16 @@ impl ProductCache {
         match &self.backend {
             Backend::Redis(conn) => {
                 let key = product_cache_key(name);
+                info!(name = %name, key = %key, "Fetching product from Valkey");
                 let json: Option<String> = conn.clone().get(&key).await.map_err(|e| {
-                    error!(error = ?e, "Failed to get product from Valkey");
+                    error!(name = %name, key = %key, error = ?e, "Failed to get product from Valkey");
                     ApiError::Failure("failed to get product info".to_string())
                 })?;
 
                 match json {
                     Some(j) => {
                         let info: ProductInfo = serde_json::from_str(&j).map_err(|e| {
-                            error!(error = ?e, "Failed to deserialize product info");
+                            error!(name = %name, key = %key, error = ?e, "Failed to deserialize product info");
                             ApiError::Failure("failed to deserialize product info".to_string())
                         })?;
                         Ok(Some(info))
