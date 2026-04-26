@@ -31,16 +31,19 @@ jobs:
           shared-key: ${{ matrix.os }}
           cache-all-crates: 'true'
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Build Svelte islands
         run: |
-          npm i
-          npm run web:islands:build
+          bun install
+          bun run web:islands:build
 
       - name: Check SvelteKit UI
         working-directory: src/web/ui
         run: |
-          npm ci
-          npm run check
+          bun install
+          bun run check
 
       - name: Build backend
         run: cargo +stable build --workspace
@@ -61,19 +64,22 @@ jobs:
           shared-key: ubuntu-24.04
           cache-all-crates: 'true'
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Install cargo-llvm-cov
         run: cargo +stable install --locked cargo-llvm-cov
 
       - name: Build Svelte islands
         run: |
-          npm i
-          npm run web:islands:build
+          bun install
+          bun run web:islands:build
 
       - name: Check SvelteKit UI
         working-directory: src/web/ui
         run: |
-          npm ci
-          npm run check
+          bun install
+          bun run check
 
       - name: Run tests
         run: RUST_BACKTRACE=1 cargo +stable test -p api -p repos -p processor -p curator -p web --no-fail-fast
