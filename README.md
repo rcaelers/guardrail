@@ -26,9 +26,10 @@ DATABASE_PASSWORD=root
 Common commands:
 
 ```sh
-npm run surrealkit:sync
-npm run surrealkit:test
-npm run surrealkit:status
+# Install Bun first if needed: https://bun.sh/docs/installation
+bun run surrealkit:sync
+bun run surrealkit:test
+bun run surrealkit:status
 ```
 
 Shared and Kubernetes-managed databases should use SurrealKit rollouts instead of direct sync.
@@ -57,8 +58,8 @@ Fastest path when you just want to see the UI. The mock adapter lives in
 
 ```sh
 cd src/web/ui
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 The adapter is selected at boot in `src/lib/adapters/index.ts`: if
@@ -76,7 +77,7 @@ cargo run -p web --bin mock_server
 
 # terminal 2
 cd src/web/ui
-GUARDRAIL_API_URL=http://127.0.0.1:4500/api/v1 npm run dev
+GUARDRAIL_API_URL=http://127.0.0.1:4500/api/v1 bun run dev
 ```
 
 Routes and tests live in `src/web/server/src/mock_api.rs` and
@@ -111,7 +112,7 @@ cargo run -p web --bin db_server
 
 # terminal 2
 cd src/web/ui
-GUARDRAIL_API_URL=http://127.0.0.1:4500/api/v1 npm run dev
+GUARDRAIL_API_URL=http://127.0.0.1:4500/api/v1 bun run dev
 ```
 
 Key files:
