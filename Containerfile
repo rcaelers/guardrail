@@ -54,6 +54,16 @@ RUN cargo build \
     cp target/debug/curator   /app/curator-bin
 
 ##
+## SurrealKit — schema management CLI
+##
+
+FROM chef AS surrealkit-builder
+
+ENV RUSTUP_TOOLCHAIN=stable
+
+RUN cargo +stable install --locked --version 0.5.6 surrealkit
+
+##
 ## Shared runtime base — Alpine with just the essentials
 ##
 
@@ -153,3 +163,18 @@ VOLUME ["/config"]
 USER guardrail
 
 CMD ["/app/web", "-C", "/config"]
+
+##
+## Runtime: schema sync
+##
+
+FROM base AS schema-sync
+
+COPY --from=surrealkit-builder /usr/local/cargo/bin/surrealkit /usr/local/bin/surrealkit
+COPY database /app/database
+
+RUN chown -R guardrail:guardrail /app
+
+USER guardrail
+
+CMD ["surrealkit", "status"]
