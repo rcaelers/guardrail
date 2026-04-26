@@ -30,14 +30,17 @@ impl AppError {
         Self::InternalFailure()
     }
 
+    #[allow(dead_code)]
     pub fn failure(message: impl Into<String>) -> Self {
         Self::Failure(message.into())
     }
 
+    #[allow(dead_code)]
     pub fn not_found(message: impl Into<String>) -> Self {
         Self::NotFound(message.into())
     }
 
+    #[allow(dead_code)]
     pub fn corrupt_session() -> Self {
         Self::CorruptSession
     }

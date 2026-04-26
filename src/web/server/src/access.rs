@@ -41,6 +41,7 @@ impl Principal {
     ///
     /// For users this means `is_admin = true`.  For tokens this means the
     /// token has no product restriction (it is a global token).
+    #[allow(dead_code)]
     pub fn is_admin(&self) -> bool {
         match self {
             Principal::User(u) => u.is_admin,
@@ -49,6 +50,7 @@ impl Principal {
     }
 
     /// A stable identifier for logging / audit trails.
+    #[allow(dead_code)]
     pub fn display_id(&self) -> String {
         match self {
             Principal::User(u) => u.id.clone(),
@@ -77,6 +79,7 @@ pub async fn require_session(session: &Session) -> AppResult<AuthenticatedUser> 
 ///
 /// Use for session-only admin actions such as impersonation that must never
 /// accept a token.
+#[allow(dead_code)]
 pub async fn require_session_admin(session: &Session) -> AppResult<AuthenticatedUser> {
     let user = require_session(session).await?;
     if !user.is_admin {
@@ -93,6 +96,7 @@ pub async fn require_session_admin(session: &Session) -> AppResult<Authenticated
 ///
 /// Use for endpoints consumed by automated systems (crash submission, symbol
 /// upload) that never involve a browser session.
+#[allow(dead_code)]
 pub async fn require_entitlement(
     headers: &HeaderMap,
     db: &Surreal<Any>,
@@ -171,6 +175,7 @@ pub async fn require_product_maintainer(
 /// The token path is taken only when an `Authorization` header is present;
 /// otherwise a session is required.  Use for endpoints that accept both
 /// human users and automated API callers (e.g. invitation creation).
+#[allow(dead_code)]
 pub async fn require_session_or_entitlement(
     session: &Session,
     headers: &HeaderMap,
