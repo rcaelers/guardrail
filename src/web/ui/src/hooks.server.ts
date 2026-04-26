@@ -1,7 +1,7 @@
 // Resolve the current user from the session cookie on every request,
 // so routes can read `event.locals.user` instead of re-parsing cookies.
 
-import type { Handle } from '@sveltejs/kit';
+import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { createAdapter } from '$lib/adapters';
 import { clearSession, readSessionId } from '$lib/server/session';
@@ -47,4 +47,22 @@ export const handle: Handle = async ({ event, resolve }) => {
   }
 
   return resolve(event);
+};
+
+export const handleError: HandleServerError = ({ error, event, status, message }) => {
+  const err = error instanceof Error ? error : new Error(String(error));
+  console.error(
+    JSON.stringify({
+      level: 'error',
+      message: 'SvelteKit request failed',
+      method: event.request.method,
+      path: event.url.pathname,
+      query: event.url.search,
+      status,
+      errorMessage: err.message,
+      stack: err.stack
+    })
+  );
+
+  return { message };
 };

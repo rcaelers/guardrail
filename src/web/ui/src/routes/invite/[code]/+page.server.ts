@@ -12,6 +12,10 @@ export const load: PageServerLoad = async ({ params }) => {
   if (!r.ok) {
     throw error(500, 'Failed to load invitation.');
   }
+  const data = await r.json();
+  if (data.redirect_url) {
+    throw redirect(303, data.redirect_url);
+  }
   return { code: params.code };
 };
 

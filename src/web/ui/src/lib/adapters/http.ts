@@ -35,7 +35,18 @@ import type {
   ApiToken, CreatedApiToken, CreateApiTokenSpec, CreateAdminApiTokenSpec
 } from './types';
 
+type ResponseMeta = {
+  method: string;
+  path: string;
+  url: string;
+  durationMs: number;
+};
+
+const MAX_LOGGED_BODY_BYTES = 4096;
+
 export function httpAdapter(baseUrl: string, cookieHeader: string = ''): GuardrailAdapter {
+  const responseMeta = new WeakMap<Response, ResponseMeta>();
+
   const qs = (q: Record<string, unknown>) =>
     new URLSearchParams(
       Object.entries(q)
@@ -45,20 +56,101 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
 
   async function req(path: string, init?: RequestInit): Promise<Response> {
     const url = `${baseUrl}${path}`;
+    const method = init?.method ?? 'GET';
+    const started = Date.now();
     const headers = new Headers(init?.headers);
     if (cookieHeader && !headers.has('cookie')) headers.set('cookie', cookieHeader);
     try {
-      return await fetch(url, { ...init, headers });
+      const response = await fetch(url, { ...init, headers });
+      responseMeta.set(response, {
+        method,
+        path,
+        url,
+        durationMs: Date.now() - started
+      });
+      return response;
     } catch (e) {
       const reason = e instanceof Error ? e.message : String(e);
-      throw new Error(`${init?.method ?? 'GET'} ${url} failed: ${reason}`);
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          message: 'Guardrail API request failed before receiving a response',
+          method,
+          path,
+          url,
+          durationMs: Date.now() - started,
+          error: reason
+        })
+      );
+      throw new Error(`${method} ${url} failed: ${reason}`);
     }
   }
 
-  async function json<T>(res: Response, what: string): Promise<T> {
-    if (!res.ok) throw new Error(`${what} ${res.status}`);
-    return res.json();
+  async function responseBodyForLog(res: Response): Promise<string> {
+    try {
+      const body = await res.clone().text();
+      if (body.length <= MAX_LOGGED_BODY_BYTES) return body;
+      return `${body.slice(0, MAX_LOGGED_BODY_BYTES)}...<truncated>`;
+    } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
+      return `<failed to read response body: ${reason}>`;
+    }
   }
+
+  function logApiResponseFailure(res: Response, what: string, body: string) {
+    const meta = responseMeta.get(res);
+    console.error(
+      JSON.stringify({
+        level: 'error',
+        message: 'Guardrail API request returned an error response',
+        operation: what,
+        method: meta?.method ?? 'GET',
+        path: meta?.path,
+        url: meta?.url ?? res.url,
+        status: res.status,
+        statusText: res.statusText,
+        durationMs: meta?.durationMs,
+        body
+      })
+    );
+  }
+
+  async function assertOk(res: Response, what: string): Promise<void> {
+    if (res.ok) return;
+    const body = await responseBodyForLog(res);
+    logApiResponseFailure(res, what, body);
+    throw new Error(`${what} ${res.status}`);
+  }
+
+  async function json<T>(res: Response, what: string): Promise<T> {
+    await assertOk(res, what);
+    const copy = res.clone();
+    try {
+      return await res.json();
+    } catch (e) {
+      const meta = responseMeta.get(res);
+      const body = await responseBodyForLog(copy);
+      const reason = e instanceof Error ? e.message : String(e);
+      console.error(
+        JSON.stringify({
+          level: 'error',
+          message: 'Guardrail API response was not valid JSON',
+          operation: what,
+          method: meta?.method ?? 'GET',
+          path: meta?.path,
+          url: meta?.url ?? res.url,
+          status: res.status,
+          statusText: res.statusText,
+          durationMs: meta?.durationMs,
+          contentType: res.headers.get('content-type'),
+          body,
+          error: reason
+        })
+      );
+      throw new Error(`${what} invalid JSON`);
+    }
+  }
+
   const jpost = (path: string, body: unknown) =>
     req(path, {
       method: 'POST',
@@ -100,7 +192,7 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     },
     async deleteProduct(id) {
       const r = await jdel(`/products/${encodeURIComponent(id)}`);
-      if (!r.ok) throw new Error(`deleteProduct ${r.status}`);
+      await assertOk(r, 'deleteProduct');
     },
 
     // --- users ---
@@ -118,11 +210,11 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     },
     async deleteUser(id) {
       const r = await jdel(`/users/${encodeURIComponent(id)}`);
-      if (!r.ok) throw new Error(`deleteUser ${r.status}`);
+      await assertOk(r, 'deleteUser');
     },
     async setAdmin(id, isAdmin) {
       const r = await jpost(`/users/${encodeURIComponent(id)}/admin`, { isAdmin });
-      if (!r.ok) throw new Error(`setAdmin ${r.status}`);
+      await assertOk(r, 'setAdmin');
     },
 
     // --- memberships ---
@@ -144,13 +236,13 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
         `/products/${encodeURIComponent(productId)}/members/${encodeURIComponent(userId)}`,
         { role }
       );
-      if (!r.ok) throw new Error(`grantAccess ${r.status}`);
+      await assertOk(r, 'grantAccess');
     },
     async revokeAccess({ userId, productId }) {
       const r = await jdel(
         `/products/${encodeURIComponent(productId)}/members/${encodeURIComponent(userId)}`
       );
-      if (!r.ok) throw new Error(`revokeAccess ${r.status}`);
+      await assertOk(r, 'revokeAccess');
     },
 
     // --- crashes ---
@@ -171,12 +263,12 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     async downloadAttachment(id) {
       const r = await req(`/attachments/${encodeURIComponent(id)}/download`);
       if (r.status === 404) return null;
-      if (!r.ok) throw new Error(`downloadAttachment ${r.status}`);
+      await assertOk(r, 'downloadAttachment');
       return r;
     },
     async setStatus(id, status: Status) {
       const r = await jpost(`/crashes/${encodeURIComponent(id)}/status`, { status });
-      if (!r.ok) throw new Error(`setStatus ${r.status}`);
+      await assertOk(r, 'setStatus');
     },
     async addNote(id, body, author): Promise<Note> {
       const r = await jpost(`/crashes/${encodeURIComponent(id)}/notes`, { body, author });
@@ -184,7 +276,7 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     },
     async mergeGroups(primaryId, mergedId) {
       const r = await jpost(`/crashes/${encodeURIComponent(primaryId)}/merge`, { mergedId });
-      if (!r.ok) throw new Error(`mergeGroups ${r.status}`);
+      await assertOk(r, 'mergeGroups');
     },
 
     // --- invitations ---
@@ -206,7 +298,7 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     },
     async revokeInvitation(id: string) {
       const r = await req(`/invitations/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      if (!r.ok) throw new Error(`revokeInvitation ${r.status}`);
+      await assertOk(r, 'revokeInvitation');
     },
 
     // --- symbols ---
@@ -222,7 +314,7 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     },
     async deleteSymbol(id) {
       const r = await jdel(`/symbols/${encodeURIComponent(id)}`);
-      if (!r.ok) throw new Error(`deleteSymbol ${r.status}`);
+      await assertOk(r, 'deleteSymbol');
     },
 
     // --- api tokens ---
@@ -236,7 +328,7 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     },
     async deleteApiToken(productId, id) {
       const r = await jdel(`/products/${encodeURIComponent(productId)}/api-tokens/${encodeURIComponent(id)}`);
-      if (!r.ok) throw new Error(`deleteApiToken ${r.status}`);
+      await assertOk(r, 'deleteApiToken');
     },
 
     // --- admin api tokens (product-optional) ---
@@ -250,7 +342,7 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     },
     async deleteAdminApiToken(id) {
       const r = await jdel(`/api-tokens/${encodeURIComponent(id)}`);
-      if (!r.ok) throw new Error(`deleteAdminApiToken ${r.status}`);
+      await assertOk(r, 'deleteAdminApiToken');
     }
   };
 }
