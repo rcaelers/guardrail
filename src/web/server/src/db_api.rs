@@ -1519,8 +1519,7 @@ async fn delete_symbol(
 // API tokens
 // --------------------------------------------------------------------
 
-const API_TOKEN_PROJ: &str =
-    "meta::id(id) AS id, description, entitlements, is_active, last_used_at, expires_at, created_at";
+const API_TOKEN_PROJ: &str = "meta::id(id) AS id, description, entitlements, is_active, last_used_at, expires_at, created_at";
 
 async fn list_api_tokens(
     State(s): State<DbState>,
@@ -1606,7 +1605,8 @@ async fn delete_api_token(
 ) -> Result<StatusCode, (StatusCode, String)> {
     let db = s.user_db(&headers).await;
     let _ = pid;
-    run_value(&db, "DELETE type::record('api_tokens', $id)", vec![("id", Value::String(id))]).await?;
+    run_value(&db, "DELETE type::record('api_tokens', $id)", vec![("id", Value::String(id))])
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -1700,6 +1700,7 @@ async fn delete_admin_api_token(
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     let db = s.user_db(&headers).await;
-    run_value(&db, "DELETE type::record('api_tokens', $id)", vec![("id", Value::String(id))]).await?;
+    run_value(&db, "DELETE type::record('api_tokens', $id)", vec![("id", Value::String(id))])
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
