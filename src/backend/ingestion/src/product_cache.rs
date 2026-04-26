@@ -1,7 +1,7 @@
 use redis::AsyncCommands;
 use redis::aio::ConnectionManager;
 use std::collections::HashMap;
-use tracing::error;
+use tracing::{error, info};
 
 use common::product_info::{ProductInfo, product_cache_key};
 
