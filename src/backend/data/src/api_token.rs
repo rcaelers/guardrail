@@ -2,6 +2,8 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+pub const ENTITLEMENT_INVITATION_CREATE: &str = "invitation-create";
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ApiToken {
     pub id: String,

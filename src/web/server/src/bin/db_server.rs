@@ -1,22 +1,31 @@
 // Standalone HTTP server that exposes /api/v1 backed by SurrealDB.
-// Minimal plumbing (no OIDC / webauthn / sessions), intended for running
-// the SvelteKit UI against the real database without lifting the full web
-// stack.
+// Minimal plumbing (no OIDC / webauthn), intended for running the SvelteKit
+// UI against the real database without lifting the full web stack.
 //
 //   cargo run -p web --bin db_server
 //   # then in src/web/ui:
 //   GUARDRAIL_API_URL=http://127.0.0.1:4500/api/v1 npm run dev
+//
+// Every request is automatically treated as a local admin user so that all
+// access guards pass.  Do NOT expose this binary on a public interface.
 
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use axum::Router;
-use common::settings::Settings;
+use axum::{Router, middleware, response::Response, extract::Request};
+use common::{AuthenticatedUser, settings::Settings};
 use repos::Repo;
 use surrealdb::opt::auth::Root;
 use tokio::net::TcpListener;
 use tower_http::cors::{Any, CorsLayer};
+use tower_sessions::{Expiry, MemoryStore, Session, SessionManagerLayer, cookie::SameSite};
+
+#[path = "../error.rs"]
+mod error;
+
+#[path = "../access.rs"]
+mod access;
 
 #[path = "../jwt.rs"]
 mod jwt;
@@ -31,6 +40,18 @@ fn default_config_dir() -> String {
         .join("../../../config")
         .to_string_lossy()
         .into_owned()
+}
+
+/// Middleware that injects a dev admin into every session so all access guards
+/// pass without requiring a real login flow.
+async fn inject_dev_admin(session: Session, request: Request, next: axum::middleware::Next) -> Response {
+    let _ = session
+        .insert(
+            access::SESSION_KEY,
+            AuthenticatedUser::new("dev-admin".into(), "dev-admin".into(), true),
+        )
+        .await;
+    next.run(request).await
 }
 
 #[tokio::main]
@@ -86,16 +107,25 @@ async fn main() -> Result<(), AnyErr> {
         settings,
     };
 
+    let session_layer = SessionManagerLayer::new(MemoryStore::default())
+        .with_name("guardrail-dev")
+        .with_same_site(SameSite::Lax)
+        .with_expiry(Expiry::OnInactivity(time::Duration::hours(24)))
+        .with_secure(false);
+
     let cors = CorsLayer::new()
         .allow_origin(Any)
         .allow_methods(Any)
         .allow_headers(Any);
+
     let app = Router::new()
         .nest("/api/v1", db_api::router().with_state(state))
+        .layer(middleware::from_fn(inject_dev_admin))
+        .layer(session_layer)
         .layer(cors);
 
     let listener = TcpListener::bind(addr).await?;
-    eprintln!("db_server listening on http://{addr}/api/v1");
+    eprintln!("db_server listening on http://{addr}/api/v1  [dev admin auto-injected]");
     axum::serve(listener, app).await?;
     Ok(())
 }

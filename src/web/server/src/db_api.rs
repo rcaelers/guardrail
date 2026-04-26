@@ -24,6 +24,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
+use tower_sessions::Session;
 
 #[derive(Clone)]
 pub struct DbState {
@@ -148,6 +149,17 @@ fn not_found(what: &str) -> (StatusCode, String) {
 fn server_error(e: impl std::fmt::Display) -> (StatusCode, String) {
     tracing::error!("db_api: {e}");
     (StatusCode::INTERNAL_SERVER_ERROR, format!("db error: {e}"))
+}
+
+/// Converts an `access` module error into the `(StatusCode, String)` tuple
+/// used by db_api handlers.
+fn access_err(e: crate::error::AppError) -> (StatusCode, String) {
+    use crate::error::AppError;
+    match e {
+        AppError::Forbidden => (StatusCode::FORBIDDEN, "forbidden".to_string()),
+        AppError::NotFound(msg) => (StatusCode::NOT_FOUND, msg),
+        _ => (StatusCode::INTERNAL_SERVER_ERROR, "internal error".to_string()),
+    }
 }
 
 fn storage_error(err: object_store::Error) -> (StatusCode, String) {
@@ -347,8 +359,10 @@ async fn signin(
 
 async fn list_users(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let rows =
         run_value(&db, &format!("SELECT {USER_PROJ} FROM users ORDER BY created_at"), vec![])
@@ -358,9 +372,11 @@ async fn list_users(
 
 async fn get_user(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let rows = run_value(
         &db,
@@ -388,9 +404,11 @@ struct UpdateUserBody {
 
 async fn create_user(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Json(body): Json<CreateUserBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let email = body.email.trim().to_lowercase();
     let name = body
@@ -444,10 +462,12 @@ async fn create_user(
 
 async fn update_user(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
     Json(body): Json<UpdateUserBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let email = body
         .email
@@ -505,9 +525,11 @@ async fn update_user(
 
 async fn delete_user(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     run_value(
         &db,
@@ -527,10 +549,12 @@ struct SetAdminBody {
 
 async fn set_admin(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
     Json(body): Json<SetAdminBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     run_value(
         &db,
@@ -543,9 +567,11 @@ async fn set_admin(
 
 async fn memberships_for(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(user_id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_session(&session).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let rows = run_value(
         &db,
@@ -657,9 +683,11 @@ struct UpdateProductBody {
 
 async fn create_product(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Json(body): Json<CreateProductBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let slug = body
         .slug
@@ -700,10 +728,14 @@ async fn create_product(
 
 async fn update_product(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
     Json(body): Json<UpdateProductBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
+        .await
+        .map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let name = body
         .name
@@ -759,9 +791,11 @@ async fn update_product(
 
 async fn delete_product(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let args = vec![("id", Value::String(id))];
     for sql in [
@@ -815,10 +849,14 @@ struct GrantBody {
 
 async fn grant_access(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path((pid, uid)): Path<(String, String)>,
     Json(body): Json<GrantBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
+        .await
+        .map_err(access_err)?;
     let db = s.user_db(&headers).await;
     run_value(
         &db,
@@ -851,9 +889,13 @@ async fn grant_access(
 
 async fn revoke_access(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path((pid, uid)): Path<(String, String)>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
+        .await
+        .map_err(access_err)?;
     let db = s.user_db(&headers).await;
     run_value(
         &db,
@@ -1270,10 +1312,12 @@ struct SetStatusBody {
 
 async fn set_status(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
     Json(body): Json<SetStatusBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_session(&session).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     run_value(
         &db,
@@ -1295,10 +1339,12 @@ struct AddNoteBody {
 
 async fn add_note(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
     Json(payload): Json<AddNoteBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_session(&session).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let prod_rows = run_value(
         &db,
@@ -1349,10 +1395,12 @@ struct MergeBody {
 
 async fn merge_groups(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(primary_id): Path<String>,
     Json(body): Json<MergeBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_session(&session).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let pid = Value::String(primary_id.clone());
     let mid = Value::String(body.merged_id);
@@ -1465,10 +1513,14 @@ struct UploadSymbolBody {
 
 async fn upload_symbol(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(pid): Path<String>,
     Json(body): Json<UploadSymbolBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
+        .await
+        .map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let id = uuid::Uuid::new_v4().to_string();
     let module_id = body.name;
@@ -1507,9 +1559,12 @@ async fn upload_symbol(
 
 async fn delete_symbol(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    // No pid in path — require a session; RLS enforces product-level access.
+    crate::access::require_session(&session).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     run_value(&db, "DELETE type::record('symbols', $id)", vec![("id", Value::String(id))]).await?;
     Ok(StatusCode::NO_CONTENT)
@@ -1523,9 +1578,13 @@ const API_TOKEN_PROJ: &str = "meta::id(id) AS id, description, entitlements, is_
 
 async fn list_api_tokens(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(pid): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
+        .await
+        .map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let rows = run_value(
         &db,
@@ -1548,10 +1607,14 @@ struct CreateApiTokenBody {
 
 async fn create_api_token(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(pid): Path<String>,
     Json(body): Json<CreateApiTokenBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
+        .await
+        .map_err(access_err)?;
     let db = s.user_db(&headers).await;
 
     let description = body.description.trim().to_string();
@@ -1600,9 +1663,13 @@ async fn create_api_token(
 
 async fn delete_api_token(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path((pid, id)): Path<(String, String)>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
+        .await
+        .map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let _ = pid;
     run_value(&db, "DELETE type::record('api_tokens', $id)", vec![("id", Value::String(id))])
@@ -1616,8 +1683,10 @@ async fn delete_api_token(
 
 async fn list_all_api_tokens(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     let rows = run_value(
         &db,
@@ -1644,9 +1713,11 @@ struct CreateAdminApiTokenBody {
 
 async fn create_admin_api_token(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Json(body): Json<CreateAdminApiTokenBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
 
     let description = body.description.trim().to_string();
@@ -1696,9 +1767,11 @@ async fn create_admin_api_token(
 
 async fn delete_admin_api_token(
     State(s): State<DbState>,
+    session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db).await.map_err(access_err)?;
     let db = s.user_db(&headers).await;
     run_value(&db, "DELETE type::record('api_tokens', $id)", vec![("id", Value::String(id))])
         .await?;

@@ -1,3 +1,4 @@
+mod access;
 mod auth;
 mod db_api;
 mod error;

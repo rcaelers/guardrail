@@ -1,11 +1,12 @@
 use axum::{
     Form, Json, Router,
     extract::{Path, State},
+    http::HeaderMap,
     response::{IntoResponse, Redirect, Response},
     routing::{get, put},
 };
 use chrono::{DateTime, Utc};
-use common::AuthenticatedUser;
+use data::api_token::{ApiToken, ENTITLEMENT_INVITATION_CREATE};
 use data::invitation::{Invitation, InvitationGrant, NewInvitation, UpdateInvitation};
 use data::pending_access::{NewPendingAccess, PendingAccessGrant};
 use serde::Deserialize;
@@ -13,14 +14,14 @@ use tower_sessions::Session;
 
 use crate::{
     AppState,
+    access,
+    access::Principal,
     auth::AuthSession,
     error::{AppError, AppResult},
     provisioner::CreateUserRequest,
     routes::render,
     templates::InviteTemplate,
 };
-
-const AUTHENTICATED_USER_SESSION_KEY: &str = "authenticated_user";
 
 /// Invitation API routes, to be nested under /api/v1 in main.rs.
 pub fn api_router() -> Router<AppState> {
@@ -56,8 +57,8 @@ async fn list_invitations(
     State(state): State<AppState>,
     session: Session,
 ) -> AppResult<Json<Vec<Invitation>>> {
-    let user = require_auth(&session).await?;
-    let maintained_ids = get_maintained_product_ids(&state, &user.id).await?;
+    let user = access::require_session(&session).await?;
+    let maintained_ids = access::get_maintained_product_ids(&state.repo.db, &user.id).await?;
     let invitations = repos::invitation::InvitationRepo::get_for_user(
         &state.repo.db,
         &user.id,
@@ -72,29 +73,42 @@ async fn list_invitations(
 async fn create_invitation(
     State(state): State<AppState>,
     session: Session,
+    headers: HeaderMap,
     Json(body): Json<CreateInvitationRequest>,
 ) -> AppResult<Json<Invitation>> {
-    let user = require_auth(&session).await?;
+    let principal =
+        access::require_session_or_entitlement(&session, &headers, &state.repo.db, ENTITLEMENT_INVITATION_CREATE)
+            .await?;
 
-    if !user.is_admin {
-        let maintained_ids = get_maintained_product_ids(&state, &user.id).await?;
-        if maintained_ids.is_empty() {
-            return Err(AppError::forbidden());
+    let created_by = match &principal {
+        Principal::Token(token) => {
+            authorize_api_token_grants(token, &body)?;
+            format!("api-token:{}", token.id)
         }
-        if body.is_admin {
-            return Err(AppError::forbidden());
-        }
-        for grant in &body.grants {
-            if !maintained_ids.contains(&grant.product_id) {
-                return Err(AppError::forbidden());
+        Principal::User(user) => {
+            if !user.is_admin {
+                let maintained_ids =
+                    access::get_maintained_product_ids(&state.repo.db, &user.id).await?;
+                if maintained_ids.is_empty() {
+                    return Err(AppError::forbidden());
+                }
+                if body.is_admin {
+                    return Err(AppError::forbidden());
+                }
+                for grant in &body.grants {
+                    if !maintained_ids.contains(&grant.product_id) {
+                        return Err(AppError::forbidden());
+                    }
+                }
             }
+            user.id.clone()
         }
-    }
+    };
 
     let invitation = repos::invitation::InvitationRepo::create(
         &state.repo.db,
         NewInvitation {
-            created_by: user.id,
+            created_by,
             expires_at: body.expires_at,
             max_uses: body.max_uses,
             is_admin: body.is_admin,
@@ -112,7 +126,7 @@ async fn update_invitation(
     Path(id): Path<String>,
     Json(body): Json<UpdateInvitationRequest>,
 ) -> AppResult<Json<Invitation>> {
-    let user = require_auth(&session).await?;
+    let user = access::require_session(&session).await?;
 
     let invitation = repos::invitation::InvitationRepo::get_by_id(&state.repo.db, &id)
         .await
@@ -122,9 +136,8 @@ async fn update_invitation(
     let (grants, is_admin) = if user.is_admin {
         (body.grants, body.is_admin)
     } else {
-        let maintained_ids = get_maintained_product_ids(&state, &user.id).await?;
+        let maintained_ids = access::get_maintained_product_ids(&state.repo.db, &user.id).await?;
 
-        // Must have at least one overlap to be allowed to edit at all.
         let has_overlap = invitation
             .grants
             .iter()
@@ -140,7 +153,6 @@ async fn update_invitation(
             }
         }
 
-        // Merge: keep grants for products the user doesn't maintain unchanged.
         let mut merged: Vec<InvitationGrant> = invitation
             .grants
             .iter()
@@ -173,7 +185,7 @@ async fn revoke_invitation(
     session: Session,
     Path(id): Path<String>,
 ) -> AppResult<Json<serde_json::Value>> {
-    let user = require_auth(&session).await?;
+    let user = access::require_session(&session).await?;
 
     if !user.is_admin {
         let invitation = repos::invitation::InvitationRepo::get_by_id(&state.repo.db, &id)
@@ -181,7 +193,7 @@ async fn revoke_invitation(
             .map_err(AppError::internal)?
             .ok_or_else(|| AppError::not_found("Invitation not found"))?;
 
-        let maintained_ids = get_maintained_product_ids(&state, &user.id).await?;
+        let maintained_ids = access::get_maintained_product_ids(&state.repo.db, &user.id).await?;
         let can_revoke = invitation.created_by == user.id
             || invitation
                 .grants
@@ -223,9 +235,6 @@ async fn show_invite_form(
         .map_err(AppError::internal)?
         .ok_or_else(|| AppError::not_found("Invitation not found or has expired"))?;
 
-    // If a pending_access already exists for this invitation the user previously
-    // started setup but aborted (e.g. closed the passkey page).  Re-issue a
-    // fresh setup URL so they can continue without filling in the form again.
     if let Some(provisioner) = state.provisioner.as_ref() {
         if let Some(pending) = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
             &state.repo.db,
@@ -293,9 +302,6 @@ async fn redeem_invite(
             AppError::failure(e.to_string())
         })?;
 
-    // Persist access grants — applied to user_access on first OIDC login.
-    // use_count is incremented there, so the counter only moves after a
-    // passkey is successfully created.
     repos::pending_access::PendingAccessRepo::create(
         &state.repo.db,
         NewPendingAccess {
@@ -325,37 +331,25 @@ async fn redeem_invite(
 
 // --- Helpers ---
 
-async fn require_auth(session: &Session) -> AppResult<AuthenticatedUser> {
-    session
-        .get::<AuthenticatedUser>(AUTHENTICATED_USER_SESSION_KEY)
-        .await
-        .map_err(AppError::internal)?
-        .ok_or_else(AppError::forbidden)
-}
-
-/// Returns product IDs (plain UUID strings) where the user has the maintainer role.
-async fn get_maintained_product_ids(state: &AppState, user_id: &str) -> AppResult<Vec<String>> {
-    let uid = repos::record_key(user_id);
-    let mut result = state
-        .repo
-        .db
-        .query(
-            "SELECT meta::id(product_id) as pid FROM user_access
-             WHERE user_id = type::record('users', $uid)
-               AND role = 'maintainer'",
-        )
-        .bind(("uid", uid))
-        .await
-        .map_err(AppError::internal)?;
-
-    let rows: Vec<serde_json::Value> = result.take(0).map_err(AppError::internal)?;
-    let ids = rows
-        .into_iter()
-        .filter_map(|v| v.get("pid").and_then(|p| p.as_str()).map(str::to_owned))
-        .collect();
-    Ok(ids)
-}
-
 fn non_empty(s: String) -> Option<String> {
     if s.is_empty() { None } else { Some(s) }
+}
+
+/// Validates that a product-scoped token is not used to create grants
+/// outside its own product or to create admin invitations.
+fn authorize_api_token_grants(
+    api_token: &ApiToken,
+    body: &CreateInvitationRequest,
+) -> AppResult<()> {
+    if let Some(product_id) = api_token.product_id.as_deref() {
+        if body.is_admin
+            || body
+                .grants
+                .iter()
+                .any(|grant| grant.product_id != product_id)
+        {
+            return Err(AppError::forbidden());
+        }
+    }
+    Ok(())
 }

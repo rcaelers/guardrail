@@ -89,7 +89,7 @@ async fn logout(session: Session) -> impl IntoResponse {
 
 async fn auth_session(session: &Session) -> AuthSession {
     let user = session
-        .get::<AuthenticatedUser>("authenticated_user")
+        .get::<AuthenticatedUser>(crate::access::SESSION_KEY)
         .await
         .unwrap_or(None);
     AuthSession { user }

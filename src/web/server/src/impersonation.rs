@@ -10,10 +10,10 @@ use tower_sessions::Session;
 
 use crate::{
     AppState,
+    access,
     error::{AppError, AppResult},
 };
 
-const AUTHENTICATED_USER_SESSION_KEY: &str = "authenticated_user";
 const ORIGINAL_USER_SESSION_KEY: &str = "original_user";
 
 const COOKIE_MAX_AGE: u32 = 60 * 60 * 24 * 30;
@@ -31,15 +31,7 @@ async fn start_impersonation(
     session: Session,
     Path(user_id): Path<String>,
 ) -> AppResult<Response> {
-    let current = session
-        .get::<AuthenticatedUser>(AUTHENTICATED_USER_SESSION_KEY)
-        .await
-        .map_err(AppError::internal)?
-        .ok_or_else(AppError::forbidden)?;
-
-    if !current.is_admin {
-        return Err(AppError::forbidden());
-    }
+    let current = access::require_session_admin(&session).await?;
 
     // Prevent chaining one impersonation on top of another.
     if session
@@ -68,7 +60,7 @@ async fn start_impersonation(
         .await
         .map_err(AppError::internal)?;
     session
-        .insert(AUTHENTICATED_USER_SESSION_KEY, target_auth)
+        .insert(access::SESSION_KEY, target_auth)
         .await
         .map_err(AppError::internal)?;
 
@@ -99,7 +91,7 @@ async fn stop_impersonation(session: Session) -> AppResult<Response> {
         .ok_or_else(|| AppError::failure("Not currently impersonating"))?;
 
     session
-        .insert(AUTHENTICATED_USER_SESSION_KEY, original.clone())
+        .insert(access::SESSION_KEY, original.clone())
         .await
         .map_err(AppError::internal)?;
     session
