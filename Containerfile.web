@@ -24,7 +24,7 @@ COPY . .
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
     --mount=type=cache,id=target-web,target=/app/target \
-    cargo +stable build --release -p web && \
+    cargo +stable build -vv --release -p web && \
     cp /app/target/release/web /app/web-bin
 
 #
