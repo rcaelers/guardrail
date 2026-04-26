@@ -11,7 +11,11 @@ export const load: LayoutServerLoad = async ({ locals, url, request }) => {
   const path = url.pathname;
   // /login and /auth/* are handled by the Rust server or the login page itself —
   // don't gate them or the OIDC redirect loop never terminates.
-  const isLogin = path === '/login' || path.startsWith('/login/') || path.startsWith('/auth/');
+  const isLogin =
+    path === '/login' ||
+    path.startsWith('/login/') ||
+    path.startsWith('/auth/') ||
+    path.startsWith('/invite/');
   const isPublicAllowed = path === '/' || path.startsWith('/p/');
 
   const realUser = locals.realUser ?? null;

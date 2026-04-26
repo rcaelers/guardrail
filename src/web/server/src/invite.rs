@@ -28,6 +28,7 @@ pub fn api_router() -> Router<AppState> {
     Router::new()
         .route("/invitations", get(list_invitations).post(create_invitation))
         .route("/invitations/{id}", put(update_invitation).delete(revoke_invitation))
+        .route("/invitations/redeem/{code}", get(get_invite_info).post(redeem_invite_json))
 }
 
 /// Web routes for the invitation redemption flow.
@@ -210,7 +211,87 @@ async fn revoke_invitation(
     Ok(Json(serde_json::json!({ "status": "revoked" })))
 }
 
-// --- Public invite flow ---
+// --- Public JSON endpoints for SvelteKit invite flow ---
+
+async fn get_invite_info(
+    State(state): State<AppState>,
+    Path(code): Path<String>,
+) -> AppResult<Json<serde_json::Value>> {
+    repos::invitation::InvitationRepo::get_by_code(&state.repo.db, &code)
+        .await
+        .map_err(AppError::internal)?
+        .ok_or_else(|| AppError::not_found("Invitation not found or has expired"))?;
+    Ok(Json(serde_json::json!({ "valid": true })))
+}
+
+#[derive(Deserialize)]
+struct RedeemJsonRequest {
+    username: String,
+    email: String,
+    first_name: Option<String>,
+    last_name: Option<String>,
+}
+
+async fn redeem_invite_json(
+    State(state): State<AppState>,
+    Path(code): Path<String>,
+    Json(body): Json<RedeemJsonRequest>,
+) -> AppResult<Json<serde_json::Value>> {
+    let invitation = repos::invitation::InvitationRepo::get_by_code(&state.repo.db, &code)
+        .await
+        .map_err(AppError::internal)?
+        .ok_or_else(|| AppError::not_found("Invitation not found or has expired"))?;
+
+    if invitation.max_uses.is_some_and(|max| invitation.use_count >= max) {
+        return Err(AppError::not_found("Invitation has been fully used"));
+    }
+
+    let provisioner = state
+        .provisioner
+        .as_ref()
+        .ok_or_else(|| AppError::failure("No identity provisioner configured"))?;
+
+    let provisioned = provisioner
+        .create_user(CreateUserRequest {
+            username: body.username.clone(),
+            email: body.email.clone(),
+            first_name: body.first_name,
+            last_name: body.last_name,
+        })
+        .await
+        .map_err(|e| {
+            tracing::warn!("provisioner error for invite {code}: {e}");
+            AppError::failure(e.to_string())
+        })?;
+
+    repos::pending_access::PendingAccessRepo::create(
+        &state.repo.db,
+        NewPendingAccess {
+            sub: provisioned.external_id.clone(),
+            invitation_id: invitation.id.clone(),
+            is_admin: invitation.is_admin,
+            grants: invitation
+                .grants
+                .iter()
+                .map(|g| PendingAccessGrant {
+                    product_id: g.product_id.clone(),
+                    role: g.role.clone(),
+                })
+                .collect(),
+        },
+    )
+    .await
+    .map_err(AppError::internal)?;
+
+    let redirect_url = provisioned
+        .setup_url
+        .map(|u| u.to_string())
+        .unwrap_or_else(|| "/auth/login/start".to_string());
+
+    Ok(Json(serde_json::json!({ "redirect_url": redirect_url })))
+}
+
+// --- Public invite flow (template-based, kept for reference) ---
 
 #[derive(Deserialize)]
 struct InviteQuery {
