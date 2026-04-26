@@ -9,7 +9,7 @@ ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
 
 RUN apk add --no-cache \
     clang \
-    lld \
+    mold \
     openssl \
     pkgconfig \
     openssl-dev \
