@@ -14,6 +14,7 @@ pub async fn sync_products_to_valkey(
     let products = ProductRepo::get_all(&repo.db, QueryParams::default()).await?;
 
     for product in &products {
+        info!(product = %product.name, "Syncing product to Valkey");
         let info = ProductInfo {
             id: product.id.clone(),
             name: product.name.clone(),
