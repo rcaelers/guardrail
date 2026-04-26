@@ -283,7 +283,7 @@ DEFINE FIELD data ON TABLE sessions TYPE bytes ASSERT $value != NONE;
 -- ============================================================
 
 DEFINE FUNCTION fn::auth::username() -> option<string> {
-	RETURN $auth.username;
+	RETURN IF $auth.username != NONE THEN $auth.username ELSE $token.username END;
 };
 
 DEFINE FUNCTION fn::auth::user_id() -> option<record<users>> {
@@ -292,6 +292,7 @@ DEFINE FUNCTION fn::auth::user_id() -> option<record<users>> {
 
 DEFINE FUNCTION fn::auth::is_admin() -> bool {
 	RETURN $auth.is_admin = true
+		OR $token.is_admin = true
 		OR fn::auth::username() = "admin"
 		OR array::len((
 			SELECT VALUE id
