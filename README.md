@@ -26,10 +26,9 @@ DATABASE_PASSWORD=root
 Common commands:
 
 ```sh
-# Install Bun first if needed: https://bun.sh/docs/installation
-bun run surrealkit:sync
-bun run surrealkit:test
-bun run surrealkit:status
+surrealkit sync
+surrealkit test
+surrealkit rollout status
 ```
 
 Shared and Kubernetes-managed databases should use SurrealKit rollouts instead of direct sync.

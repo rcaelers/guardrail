@@ -35,14 +35,14 @@ jobs:
         uses: oven-sh/setup-bun@v2
 
       - name: Build Svelte islands
+        working-directory: src/web/ui
         run: |
           bun install
-          bun run web:islands:build
+          bun run build
 
       - name: Check SvelteKit UI
         working-directory: src/web/ui
         run: |
-          bun install
           bun run check
 
       - name: Build backend
@@ -71,14 +71,14 @@ jobs:
         run: cargo +stable install --locked cargo-llvm-cov
 
       - name: Build Svelte islands
+        working-directory: src/web/ui
         run: |
           bun install
-          bun run web:islands:build
+          bun run build
 
       - name: Check SvelteKit UI
         working-directory: src/web/ui
         run: |
-          bun install
           bun run check
 
       - name: Run tests

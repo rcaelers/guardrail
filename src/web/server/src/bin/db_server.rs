@@ -4,7 +4,7 @@
 //
 //   cargo run -p web --bin db_server
 //   # then in src/web/ui:
-//   GUARDRAIL_API_URL=http://127.0.0.1:4500/api/v1 npm run dev
+//   GUARDRAIL_API_URL=http://127.0.0.1:4500/api/v1 bun run dev
 //
 // Every request is automatically treated as a local admin user so that all
 // access guards pass.  Do NOT expose this binary on a public interface.
