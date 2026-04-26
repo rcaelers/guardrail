@@ -14,19 +14,19 @@ use testware::{create_test_crash, create_test_product};
 #[tokio::test]
 async fn test_get_by_id() {
     let db = TestSetup::create_db().await;
-    let signature = "Test Crash";
-    let inserted_crash = create_test_crash(&db, Some(signature), None).await;
+    let fingerprint = "Test Crash";
+    let inserted_crash = create_test_crash(&db, Some(fingerprint), None).await;
 
-    let found_crash = CrashRepo::get_by_id(&db, inserted_crash.id)
+    let found_crash = CrashRepo::get_by_id(&db, inserted_crash.id.clone())
         .await
         .expect("Failed to get crash by ID");
 
     assert!(found_crash.is_some());
     let found_crash = found_crash.unwrap();
     assert_eq!(found_crash.id, inserted_crash.id);
-    assert_eq!(found_crash.signature, Some(signature.to_string()));
+    assert_eq!(found_crash.fingerprint, Some(fingerprint.to_string()));
 
-    let non_existent_id = Uuid::new_v4();
+    let non_existent_id = Uuid::new_v4().to_string();
     let not_found = CrashRepo::get_by_id(&db, non_existent_id)
         .await
         .expect("Failed to query with non-existent ID");
@@ -41,10 +41,10 @@ async fn test_get_all() {
     let db = TestSetup::create_db().await;
     let product = create_test_product(&db).await;
 
-    let test_crash_data = vec![("Crash A"), ("Crash B"), ("Crash C")];
+    let test_crash_data = vec!["Crash A", "Crash B", "Crash C"];
 
-    for signature in &test_crash_data {
-        create_test_crash(&db, Some(signature), Some(product.id)).await;
+    for fingerprint in &test_crash_data {
+        create_test_crash(&db, Some(fingerprint), Some(product.id.clone())).await;
     }
 
     let query_params = QueryParams::default();
@@ -57,17 +57,17 @@ async fn test_get_all() {
     let mut query_params = QueryParams::default();
     query_params
         .sorting
-        .push_back(("signature".to_string(), SortOrder::Ascending));
+        .push_back(("fingerprint".to_string(), SortOrder::Ascending));
 
     let sorted_crashes = CrashRepo::get_all(&db, query_params)
         .await
         .expect("Failed to get sorted crashes");
 
     for i in 1..sorted_crashes.len() {
-        if sorted_crashes[i - 1].signature == sorted_crashes[i].signature {
+        if sorted_crashes[i - 1].fingerprint == sorted_crashes[i].fingerprint {
             continue;
         }
-        assert!(sorted_crashes[i - 1].signature <= sorted_crashes[i].signature);
+        assert!(sorted_crashes[i - 1].fingerprint <= sorted_crashes[i].fingerprint);
     }
 
     let query_params = QueryParams {
@@ -82,7 +82,7 @@ async fn test_get_all() {
     for crash in filtered_crashes {
         assert!(
             crash
-                .signature
+                .fingerprint
                 .as_ref()
                 .unwrap_or(&String::new())
                 .contains("Crash B")
@@ -99,13 +99,14 @@ async fn test_create() {
 
     let new_crash = NewCrash {
         id: None,
-        signature: Some("Test Crash Signature".to_string()),
-        product_id: product.id,
+        fingerprint: Some("Test Crash Signature".to_string()),
+        product_id: product.id.clone(),
         minidump: Some(Uuid::new_v4()),
         report: Some(serde_json::json!({
             "error": "Division by zero",
             "stack_trace": "at main",
         })),
+        group_id: None,
     };
 
     let crash_id = CrashRepo::create(&db, new_crash.clone())
@@ -117,7 +118,7 @@ async fn test_create() {
         .expect("Failed to get created crash")
         .expect("Created crash not found");
 
-    assert_eq!(created_crash.signature, new_crash.signature);
+    assert_eq!(created_crash.fingerprint, new_crash.fingerprint);
     assert_eq!(created_crash.product_id, new_crash.product_id);
 }
 
@@ -128,7 +129,7 @@ async fn test_update() {
     let db = TestSetup::create_db().await;
     let mut crash = create_test_crash(&db, Some("Original Crash"), None).await;
 
-    crash.signature = Some("Updated Crash".to_string());
+    crash.fingerprint = Some("Updated Crash".to_string());
 
     let updated_id = CrashRepo::update(&db, crash.clone())
         .await
@@ -137,12 +138,12 @@ async fn test_update() {
 
     assert_eq!(updated_id, crash.id);
 
-    let updated_crash = CrashRepo::get_by_id(&db, crash.id)
+    let updated_crash = CrashRepo::get_by_id(&db, crash.id.clone())
         .await
         .expect("Failed to get updated crash")
         .expect("Updated crash not found");
 
-    assert_eq!(updated_crash.signature, Some("Updated Crash".to_string()));
+    assert_eq!(updated_crash.fingerprint, Some("Updated Crash".to_string()));
 }
 
 // remove tests
@@ -152,11 +153,11 @@ async fn test_remove() {
     let db = TestSetup::create_db().await;
     let crash = create_test_crash(&db, Some("Crash to Delete"), None).await;
 
-    CrashRepo::remove(&db, crash.id)
+    CrashRepo::remove(&db, crash.id.clone())
         .await
         .expect("Failed to remove crash");
 
-    let deleted_crash = CrashRepo::get_by_id(&db, crash.id)
+    let deleted_crash = CrashRepo::get_by_id(&db, crash.id.clone())
         .await
         .expect("Failed to query after deletion");
 
@@ -174,10 +175,10 @@ async fn test_count() {
 
     let product = create_test_product(&db).await;
 
-    let test_crashes = vec![("Count Crash 1"), ("Count Crash 2"), ("Count Crash 3")];
+    let test_crashes = vec!["Count Crash 1", "Count Crash 2", "Count Crash 3"];
 
-    for signature in &test_crashes {
-        create_test_crash(&db, Some(signature), Some(product.id)).await;
+    for fingerprint in &test_crashes {
+        create_test_crash(&db, Some(fingerprint), Some(product.id.clone())).await;
     }
 
     let new_count = CrashRepo::count(&db)

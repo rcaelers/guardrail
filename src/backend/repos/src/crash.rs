@@ -19,7 +19,7 @@ impl CrashRepo {
         let mut result = db
             .query(
                 "SELECT *, meta::id(id) as id, meta::id(product_id) as product_id, \
-                 meta::id(group_id) as group_id \
+                 IF group_id != NONE THEN meta::id(group_id) ELSE NONE END as group_id \
                  FROM ONLY type::record('crashes', $id)",
             )
             .bind(("id", record_key(id.to_string())))
@@ -37,7 +37,7 @@ impl CrashRepo {
 
         let query = format!(
             "SELECT *, meta::id(id) as id, meta::id(product_id) as product_id, \
-             meta::id(group_id) as group_id FROM crashes{suffix}"
+             IF group_id != NONE THEN meta::id(group_id) ELSE NONE END as group_id FROM crashes{suffix}"
         );
         let mut builder = db.query(&query);
 

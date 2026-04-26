@@ -16,7 +16,7 @@ async fn test_get_by_id() {
 
     let inserted_credential = create_test_credential(&db, data.clone(), None).await;
 
-    let found_credential = CredentialsRepo::get_by_id(&db, inserted_credential.id)
+    let found_credential = CredentialsRepo::get_by_id(&db, inserted_credential.id.clone())
         .await
         .expect("Failed to get credential by ID");
 
@@ -29,7 +29,7 @@ async fn test_get_by_id() {
 #[tokio::test]
 async fn test_get_by_id_not_found() {
     let db = TestSetup::create_db().await;
-    let non_existent_id = Uuid::new_v4();
+    let non_existent_id = Uuid::new_v4().to_string();
     let not_found = CredentialsRepo::get_by_id(&db, non_existent_id)
         .await
         .expect("Failed to query with non-existent ID");
@@ -49,13 +49,13 @@ async fn test_get_all_by_user_id() {
     ];
 
     for data in &credentials_data {
-        create_test_credential(&db, data.clone(), Some(user_id)).await;
+        create_test_credential(&db, data.clone(), Some(user_id.clone())).await;
     }
 
     let other_user_id = create_random_test_user(&db).await;
     create_test_credential(&db, json!({"token": "other-token"}), Some(other_user_id)).await;
 
-    let user_credentials = CredentialsRepo::get_all_by_user_id(&db, user_id)
+    let user_credentials = CredentialsRepo::get_all_by_user_id(&db, user_id.clone())
         .await
         .expect("Failed to get credentials by user ID");
 
@@ -79,7 +79,7 @@ async fn test_create() {
     let credential_id = CredentialsRepo::create(
         &db,
         NewCredential {
-            user_id,
+            user_id: user_id.clone(),
             data: data.clone(),
         },
     )
@@ -105,14 +105,14 @@ async fn test_update_data() {
         "comment": "Added comment"
     });
 
-    let updated_id = CredentialsRepo::update_data(&db, credential.id, updated_data.clone())
+    let updated_id = CredentialsRepo::update_data(&db, credential.id.clone(), updated_data.clone())
         .await
         .expect("Failed to update credential")
         .expect("Credential not found when updating");
 
     assert_eq!(updated_id, credential.id);
 
-    let updated_credential = CredentialsRepo::get_by_id(&db, credential.id)
+    let updated_credential = CredentialsRepo::get_by_id(&db, credential.id.clone())
         .await
         .expect("Failed to get updated credential")
         .expect("Updated credential not found");

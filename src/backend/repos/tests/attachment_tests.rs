@@ -22,7 +22,7 @@ async fn test_get_by_id() {
     let inserted_attachment =
         create_test_attachment(&db, name, mime_type, size, filename, None, None).await;
 
-    let found_attachment = AttachmentsRepo::get_by_id(&db, inserted_attachment.id)
+    let found_attachment = AttachmentsRepo::get_by_id(&db, inserted_attachment.id.clone())
         .await
         .expect("Failed to get attachment by ID");
 
@@ -39,7 +39,7 @@ async fn test_get_by_id() {
 #[tokio::test]
 async fn test_get_by_id_not_found() {
     let db = TestSetup::create_db().await;
-    let non_existent_id = Uuid::new_v4();
+    let non_existent_id = Uuid::new_v4().to_string();
     let not_found = AttachmentsRepo::get_by_id(&db, non_existent_id)
         .await
         .expect("Failed to query with non-existent ID");
@@ -53,7 +53,7 @@ async fn test_get_by_id_not_found() {
 async fn test_get_all() {
     let db = TestSetup::create_db().await;
     let product = create_test_product(&db).await;
-    let crash = create_test_crash(&db, None, Some(product.id)).await;
+    let crash = create_test_crash(&db, None, Some(product.id.clone())).await;
 
     let test_attachment_data = vec![
         ("screenshot.png", "image/png", 20480, "crash_screenshot.png"),
@@ -68,8 +68,8 @@ async fn test_get_all() {
             mime_type,
             *size,
             filename,
-            Some(product.id),
-            Some(crash.id),
+            Some(product.id.clone()),
+            Some(crash.id.clone()),
         )
         .await;
     }
@@ -106,15 +106,15 @@ async fn test_get_all() {
 async fn test_create() {
     let db = TestSetup::create_db().await;
     let product = create_test_product(&db).await;
-    let crash = create_test_crash(&db, None, Some(product.id)).await;
+    let crash = create_test_crash(&db, None, Some(product.id.clone())).await;
 
     let new_attachment = NewAttachment {
         name: "stacktrace.txt".to_string(),
         mime_type: "text/plain".to_string(),
         size: 5120,
         filename: "stack_trace_full.txt".to_string(),
-        crash_id: crash.id,
-        product_id: product.id,
+        crash_id: crash.id.clone(),
+        product_id: product.id.clone(),
         storage_path: "s3://bucket/path/to/stack_trace_full.txt".to_string(),
     };
 
@@ -163,7 +163,7 @@ async fn test_update() {
 
     assert_eq!(updated_id, attachment.id);
 
-    let updated_attachment = AttachmentsRepo::get_by_id(&db, attachment.id)
+    let updated_attachment = AttachmentsRepo::get_by_id(&db, attachment.id.clone())
         .await
         .expect("Failed to get updated attachment")
         .expect("Updated attachment not found");
@@ -190,11 +190,11 @@ async fn test_remove() {
     )
     .await;
 
-    AttachmentsRepo::remove(&db, attachment.id)
+    AttachmentsRepo::remove(&db, attachment.id.clone())
         .await
         .expect("Failed to remove attachment");
 
-    let deleted_attachment = AttachmentsRepo::get_by_id(&db, attachment.id)
+    let deleted_attachment = AttachmentsRepo::get_by_id(&db, attachment.id.clone())
         .await
         .expect("Failed to query after deletion");
 
@@ -211,7 +211,7 @@ async fn test_count() {
         .expect("Failed to count initial attachments");
 
     let product = create_test_product(&db).await;
-    let crash = create_test_crash(&db, None, Some(product.id)).await;
+    let crash = create_test_crash(&db, None, Some(product.id.clone())).await;
 
     let test_attachments = vec![
         ("count1.txt", "text/plain", 100, "count_file1.txt"),
@@ -226,8 +226,8 @@ async fn test_count() {
             mime_type,
             *size,
             filename,
-            Some(product.id),
-            Some(crash.id),
+            Some(product.id.clone()),
+            Some(crash.id.clone()),
         )
         .await;
     }

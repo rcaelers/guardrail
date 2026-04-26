@@ -16,7 +16,7 @@ async fn test_get_by_id() {
     let description = "Test Description";
     let inserted_product = create_test_product_with_details(&db, name, description).await;
 
-    let found_product = ProductRepo::get_by_id(&db, inserted_product.id)
+    let found_product = ProductRepo::get_by_id(&db, inserted_product.id.clone())
         .await
         .expect("Failed to get product by ID");
 
@@ -30,7 +30,7 @@ async fn test_get_by_id() {
 #[tokio::test]
 async fn test_get_by_id_not_found() {
     let db = TestSetup::create_db().await;
-    let non_existent_id = Uuid::new_v4();
+    let non_existent_id = Uuid::new_v4().to_string();
     let not_found = ProductRepo::get_by_id(&db, non_existent_id)
         .await
         .expect("Failed to query with non-existent ID");
@@ -210,7 +210,7 @@ async fn test_update() {
         .expect("Product not found when updating");
     assert_eq!(updated_id, product.id);
 
-    let updated_product = ProductRepo::get_by_id(&db, product.id)
+    let updated_product = ProductRepo::get_by_id(&db, product.id.clone())
         .await
         .expect("Failed to get updated product")
         .expect("Updated product not found");
@@ -221,7 +221,7 @@ async fn test_update() {
 #[tokio::test]
 async fn test_update_non_existent() {
     let db = TestSetup::create_db().await;
-    let non_existent_id = Uuid::new_v4();
+    let non_existent_id = Uuid::new_v4().to_string();
 
     let non_existent_product = Product {
         id: non_existent_id,
@@ -243,11 +243,11 @@ async fn test_remove() {
     let db = TestSetup::create_db().await;
     let product = create_test_product_with_details(&db, "DeleteProduct", "Product to delete").await;
 
-    ProductRepo::remove(&db, product.id)
+    ProductRepo::remove(&db, product.id.clone())
         .await
         .expect("Failed to remove product");
 
-    let deleted_product = ProductRepo::get_by_id(&db, product.id)
+    let deleted_product = ProductRepo::get_by_id(&db, product.id.clone())
         .await
         .expect("Failed to query after deletion");
     assert!(deleted_product.is_none());
@@ -256,7 +256,7 @@ async fn test_remove() {
 #[tokio::test]
 async fn test_remove_non_existent() {
     let db = TestSetup::create_db().await;
-    let non_existent_id = Uuid::new_v4();
+    let non_existent_id = Uuid::new_v4().to_string();
     let result = ProductRepo::remove(&db, non_existent_id).await;
     assert!(result.is_ok(), "Removal of non-existent product should not fail");
 }

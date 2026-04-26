@@ -85,10 +85,10 @@ pub async fn create_test_product_with_details(
 pub async fn create_test_crash(
     db: &Surreal<Any>,
     fingerprint: Option<&str>,
-    product_id: Option<impl ToString>,
+    product_id: Option<String>,
 ) -> Crash {
     let product_id = match product_id {
-        Some(pid) => pid.to_string(),
+        Some(pid) => pid,
         None => create_test_product(db).await.id,
     };
 
@@ -121,11 +121,11 @@ pub async fn create_test_attachment(
     mime_type: &str,
     file_size: i64,
     filename: &str,
-    product_id: Option<impl ToString>,
-    crash_id: Option<impl ToString>,
+    product_id: Option<String>,
+    crash_id: Option<String>,
 ) -> Attachment {
     let crash_id = match crash_id {
-        Some(id) => id.to_string(),
+        Some(id) => id,
         None => {
             let product = create_test_product(db).await;
 
@@ -148,7 +148,7 @@ pub async fn create_test_attachment(
     };
 
     let product_id = match product_id {
-        Some(id) => id.to_string(),
+        Some(id) => id,
         None => {
             // Use crash's product_id if not provided
             let crash = CrashRepo::get_by_id(db, &crash_id)
@@ -249,10 +249,10 @@ pub async fn create_random_test_user(db: &Surreal<Any>) -> String {
 pub async fn create_test_credential(
     db: &Surreal<Any>,
     data: serde_json::Value,
-    user_id: Option<impl ToString>,
+    user_id: Option<String>,
 ) -> Credential {
     let user_id = match user_id {
-        Some(id) => id.to_string(),
+        Some(id) => id,
         None => create_random_test_user(db).await,
     };
 

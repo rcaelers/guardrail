@@ -17,7 +17,10 @@ impl AnnotationsRepo {
         id: impl ToString,
     ) -> Result<Option<Annotation>, RepoError> {
         let mut result = db
-            .query("SELECT *, meta::id(id) as id FROM ONLY type::record('annotations', $id)")
+            .query(
+                "SELECT *, meta::id(id) as id, meta::id(crash_id) as crash_id, \
+                 meta::id(product_id) as product_id FROM ONLY type::record('annotations', $id)",
+            )
             .bind(("id", record_key(id.to_string())))
             .await
             .map_err(handle_surreal_error)?;
@@ -34,7 +37,10 @@ impl AnnotationsRepo {
             &["key", "source", "value"],
         )?;
 
-        let query = format!("SELECT *, meta::id(id) as id FROM annotations{suffix}");
+        let query = format!(
+            "SELECT *, meta::id(id) as id, meta::id(crash_id) as crash_id, \
+             meta::id(product_id) as product_id FROM annotations{suffix}"
+        );
         let mut builder = db.query(&query);
 
         if let Some(filter) = params.filter {
@@ -147,11 +153,13 @@ impl AnnotationsRepo {
         };
 
         let query = format!(
-            "SELECT *, meta::id(id) as id FROM annotations WHERE crash_id = $crash_id{suffix}"
+            "SELECT *, meta::id(id) as id, meta::id(crash_id) as crash_id, \
+             meta::id(product_id) as product_id FROM annotations \
+             WHERE crash_id = type::record('crashes', $crash_id){suffix}"
         );
         let mut result = db
             .query(&query)
-            .bind(("crash_id", crash_id.to_string()))
+            .bind(("crash_id", record_key(crash_id.to_string())))
             .await
             .map_err(handle_surreal_error)?;
         crate::take_many(&mut result, 0)

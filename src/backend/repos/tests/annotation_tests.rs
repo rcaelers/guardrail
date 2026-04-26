@@ -50,16 +50,16 @@ fn test_annotation_source_try_from_invalid_str() {
 
 async fn create_test_annotation(
     db: &surrealdb::Surreal<surrealdb::engine::any::Any>,
-) -> (NewAnnotation, Uuid, Uuid) {
+) -> (NewAnnotation, String, String) {
     let product = create_test_product(db).await;
-    let crash = create_test_crash(db, None, Some(product.id)).await;
+    let crash = create_test_crash(db, None, Some(product.id.clone())).await;
 
     let new_annotation = NewAnnotation {
         key: format!("test_key_{}", Uuid::new_v4()),
         source: "submission".to_string(),
         value: "test_value".to_string(),
-        crash_id: crash.id,
-        product_id: product.id,
+        crash_id: crash.id.clone(),
+        product_id: product.id.clone(),
     };
 
     (new_annotation, product.id, crash.id)
@@ -75,7 +75,7 @@ async fn test_get_by_id() {
         .await
         .expect("Failed to create test annotation");
 
-    let found_annotation = AnnotationsRepo::get_by_id(&db, annotation_id)
+    let found_annotation = AnnotationsRepo::get_by_id(&db, annotation_id.clone())
         .await
         .expect("Failed to get annotation by ID");
 
@@ -90,7 +90,7 @@ async fn test_get_by_id() {
 #[tokio::test]
 async fn test_get_by_id_not_found() {
     let db = TestSetup::create_db().await;
-    let non_existent_id = Uuid::new_v4();
+    let non_existent_id = Uuid::new_v4().to_string();
     let not_found = AnnotationsRepo::get_by_id(&db, non_existent_id)
         .await
         .expect("Failed to query with non-existent ID");
@@ -104,32 +104,32 @@ async fn test_get_by_id_not_found() {
 async fn test_get_by_crash_id() {
     let db = TestSetup::create_db().await;
     let product = create_test_product(&db).await;
-    let crash = create_test_crash(&db, None, Some(product.id)).await;
+    let crash = create_test_crash(&db, None, Some(product.id.clone())).await;
 
     let new_annotation1 = NewAnnotation {
         key: "key1".to_string(),
         source: "submission".to_string(),
         value: "test_value1".to_string(),
-        crash_id: crash.id,
-        product_id: product.id,
+        crash_id: crash.id.clone(),
+        product_id: product.id.clone(),
     };
 
     let new_annotation2 = NewAnnotation {
         key: "key2".to_string(),
         source: "submission".to_string(),
         value: "test_value2".to_string(),
-        crash_id: crash.id,
-        product_id: product.id,
+        crash_id: crash.id.clone(),
+        product_id: product.id.clone(),
     };
 
-    let different_crash = create_test_crash(&db, None, Some(product.id)).await;
+    let different_crash = create_test_crash(&db, None, Some(product.id.clone())).await;
 
     let new_annotation3 = NewAnnotation {
         key: "key3".to_string(),
         source: "submission".to_string(),
         value: "test_value3".to_string(),
-        crash_id: different_crash.id,
-        product_id: product.id,
+        crash_id: different_crash.id.clone(),
+        product_id: product.id.clone(),
     };
 
     let _id1 = AnnotationsRepo::create(&db, new_annotation1)
@@ -145,7 +145,7 @@ async fn test_get_by_crash_id() {
         .expect("Failed to create test annotation 3");
 
     let params = QueryParams::default();
-    let annotations = AnnotationsRepo::get_by_crash_id(&db, crash.id, params)
+    let annotations = AnnotationsRepo::get_by_crash_id(&db, crash.id.clone(), params)
         .await
         .expect("Failed to get annotations by crash_id");
 
@@ -191,7 +191,7 @@ async fn test_create() {
         .await
         .expect("Failed to create annotation");
 
-    let annotation = AnnotationsRepo::get_by_id(&db, annotation_id)
+    let annotation = AnnotationsRepo::get_by_id(&db, annotation_id.clone())
         .await
         .expect("Failed to get annotation by ID")
         .expect("Annotation not found");
@@ -228,7 +228,7 @@ async fn test_update() {
         .await
         .expect("Failed to create test annotation");
 
-    let mut annotation = AnnotationsRepo::get_by_id(&db, annotation_id)
+    let mut annotation = AnnotationsRepo::get_by_id(&db, annotation_id.clone())
         .await
         .expect("Failed to get annotation")
         .expect("Annotation not found");
@@ -243,7 +243,7 @@ async fn test_update() {
 
     assert_eq!(result, annotation_id);
 
-    let updated_annotation = AnnotationsRepo::get_by_id(&db, annotation_id)
+    let updated_annotation = AnnotationsRepo::get_by_id(&db, annotation_id.clone())
         .await
         .expect("Failed to get updated annotation")
         .expect("Updated annotation not found");
@@ -260,7 +260,7 @@ async fn test_update_with_invalid_source() {
         .await
         .expect("Failed to create test annotation");
 
-    let mut annotation = AnnotationsRepo::get_by_id(&db, annotation_id)
+    let mut annotation = AnnotationsRepo::get_by_id(&db, annotation_id.clone())
         .await
         .expect("Failed to get annotation")
         .expect("Annotation not found");
@@ -317,18 +317,18 @@ async fn test_remove() {
         .await
         .expect("Failed to create test annotation");
 
-    let annotation = AnnotationsRepo::get_by_id(&db, id)
+    let annotation = AnnotationsRepo::get_by_id(&db, id.clone())
         .await
         .expect("Failed to get annotation")
         .expect("Annotation not found");
 
     assert_eq!(annotation.id, id);
 
-    AnnotationsRepo::remove(&db, id)
+    AnnotationsRepo::remove(&db, id.clone())
         .await
         .expect("Failed to remove annotation");
 
-    let result = AnnotationsRepo::get_by_id(&db, id)
+    let result = AnnotationsRepo::get_by_id(&db, id.clone())
         .await
         .expect("Failed to query for annotation");
 

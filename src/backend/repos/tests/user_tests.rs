@@ -20,7 +20,7 @@ async fn test_get_by_id() {
     let is_admin = true;
     let inserted_user = create_test_user(&db, username, is_admin).await;
 
-    let found_user = UserRepo::get_by_id(&db, inserted_user.id)
+    let found_user = UserRepo::get_by_id(&db, inserted_user.id.clone())
         .await
         .expect("Failed to get user by ID");
 
@@ -34,7 +34,7 @@ async fn test_get_by_id() {
 #[tokio::test]
 async fn test_get_by_id_not_found() {
     let db = TestSetup::create_db().await;
-    let non_existent_id = Uuid::new_v4();
+    let non_existent_id = Uuid::new_v4().to_string();
     let not_found = UserRepo::get_by_id(&db, non_existent_id)
         .await
         .expect("Failed to query with non-existent ID");
@@ -149,16 +149,16 @@ async fn test_create_user() {
 #[tokio::test]
 async fn test_create_with_id() {
     let db = TestSetup::create_db().await;
-    let user_id = Uuid::new_v4();
+    let user_id = Uuid::new_v4().to_string();
     let username = "userwithid";
 
-    let created_id = UserRepo::create_with_id(&db, user_id, username)
+    let created_id = UserRepo::create_with_id(&db, user_id.clone(), username)
         .await
         .expect("Failed to create user with ID");
 
     assert_eq!(created_id, user_id);
 
-    let found_user = UserRepo::get_by_id(&db, user_id)
+    let found_user = UserRepo::get_by_id(&db, user_id.clone())
         .await
         .expect("Failed to get user by ID")
         .expect("User not found after creation");
@@ -183,7 +183,7 @@ async fn test_update() {
 
     assert_eq!(updated_id, user.id);
 
-    let found_user = UserRepo::get_by_id(&db, user.id)
+    let found_user = UserRepo::get_by_id(&db, user.id.clone())
         .await
         .expect("Failed to get user by ID")
         .expect("User not found after update");
@@ -197,17 +197,17 @@ async fn test_remove() {
     let db = TestSetup::create_db().await;
     let user = create_test_user(&db, "removeuser", false).await;
 
-    let found_user = UserRepo::get_by_id(&db, user.id)
+    let found_user = UserRepo::get_by_id(&db, user.id.clone())
         .await
         .expect("Failed to get user by ID");
 
     assert!(found_user.is_some());
 
-    UserRepo::remove(&db, user.id)
+    UserRepo::remove(&db, user.id.clone())
         .await
         .expect("Failed to remove user");
 
-    let not_found = UserRepo::get_by_id(&db, user.id)
+    let not_found = UserRepo::get_by_id(&db, user.id.clone())
         .await
         .expect("Failed to query after removal");
 
