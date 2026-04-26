@@ -144,8 +144,8 @@ Harpoon, and readonly on Rivet).
 ## Run
 
 ```
-npm install
-npm run dev
+bun install
+bun run dev
 ```
 
 Sign in with any seeded email on the login screen — the list suggests them.

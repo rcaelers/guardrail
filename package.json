@@ -1,4 +1,7 @@
 {
+  "engines": {
+    "bun": ">=1.2.0"
+  },
   "scripts": {
     "surrealkit:setup": "surrealkit setup",
     "surrealkit:sync": "surrealkit sync",
