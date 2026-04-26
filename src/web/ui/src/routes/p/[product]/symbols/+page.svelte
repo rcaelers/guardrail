@@ -8,7 +8,7 @@
 
   let { data }: { data: PageData } = $props();
 
-  const readOnly = $derived(data.role === 'readonly');
+  const canUpload = $derived(data.role === 'readwrite' || data.role === 'maintainer');
   const canDelete = $derived(data.role === 'maintainer');
 
   async function updateParam(key: string, value: string) {
@@ -61,7 +61,7 @@
     <span class="text-xs text-ink-muted dark:text-ink-mutedDark">
       {data.symbols.length} symbol{data.symbols.length === 1 ? '' : 's'}
     </span>
-    {#if !readOnly}
+    {#if canUpload}
       <button
         type="button"
         onclick={() => (showUpload = !showUpload)}
@@ -71,7 +71,7 @@
   </div>
 
   <!-- Upload panel (inline) -->
-  {#if showUpload && !readOnly}
+  {#if showUpload && canUpload}
     <form
       method="POST"
       action="?/upload"
