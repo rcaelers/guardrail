@@ -217,10 +217,32 @@ async fn get_invite_info(
     State(state): State<AppState>,
     Path(code): Path<String>,
 ) -> AppResult<Json<serde_json::Value>> {
-    repos::invitation::InvitationRepo::get_by_code(&state.repo.db, &code)
+    let invitation = repos::invitation::InvitationRepo::get_by_code(&state.repo.db, &code)
         .await
         .map_err(AppError::internal)?
         .ok_or_else(|| AppError::not_found("Invitation not found or has expired"))?;
+
+    if let Some(provisioner) = state.provisioner.as_ref() {
+        if let Some(pending) = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
+            &state.repo.db,
+            &invitation.id,
+        )
+        .await
+        .map_err(AppError::internal)?
+        {
+            let setup_url = provisioner
+                .create_setup_url(&pending.sub)
+                .await
+                .map_err(|e| {
+                    tracing::warn!("re-issue setup URL for invite {code}: {e}");
+                    AppError::failure(e.to_string())
+                })?;
+            return Ok(Json(
+                serde_json::json!({ "valid": true, "redirect_url": setup_url.to_string() }),
+            ));
+        }
+    }
+
     Ok(Json(serde_json::json!({ "valid": true })))
 }
 
@@ -250,6 +272,25 @@ async fn redeem_invite_json(
         .provisioner
         .as_ref()
         .ok_or_else(|| AppError::failure("No identity provisioner configured"))?;
+
+    if let Some(pending) = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
+        &state.repo.db,
+        &invitation.id,
+    )
+    .await
+    .map_err(AppError::internal)?
+    {
+        let setup_url = provisioner
+            .create_setup_url(&pending.sub)
+            .await
+            .map_err(|e| {
+                tracing::warn!("re-issue setup URL for invite {code}: {e}");
+                AppError::failure(e.to_string())
+            })?;
+        return Ok(Json(
+            serde_json::json!({ "redirect_url": setup_url.to_string() }),
+        ));
+    }
 
     let provisioned = provisioner
         .create_user(CreateUserRequest {
