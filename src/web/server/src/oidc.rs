@@ -205,7 +205,12 @@ fn oidc_settings(state: &AppState) -> AppResult<&Oidc> {
 }
 
 async fn fetch_discovery(state: &AppState, oidc: &Oidc) -> AppResult<OidcDiscoveryDocument> {
-    let issuer = oidc.issuer_url.trim_end_matches('/');
+    let issuer = oidc
+        .internal_issuer_url
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .unwrap_or(oidc.issuer_url.as_str())
+        .trim_end_matches('/');
     let discovery_url = format!("{issuer}/.well-known/openid-configuration");
     let response = state
         .http_client
@@ -222,10 +227,34 @@ async fn fetch_discovery(state: &AppState, oidc: &Oidc) -> AppResult<OidcDiscove
             "OIDC discovery at {discovery_url} returned {status}: {body}"
         )));
     }
-    response
+    let mut discovery = response
         .json::<OidcDiscoveryDocument>()
         .await
-        .map_err(|e| AppError::internal(format!("OIDC discovery response parse error: {e}")))
+        .map_err(|e| AppError::internal(format!("OIDC discovery response parse error: {e}")))?;
+    if oidc
+        .internal_issuer_url
+        .as_deref()
+        .is_some_and(|value| !value.is_empty())
+    {
+        rewrite_internal_endpoint(&mut discovery.token_endpoint, oidc);
+        rewrite_internal_endpoint(&mut discovery.userinfo_endpoint, oidc);
+    }
+    Ok(discovery)
+}
+
+fn rewrite_internal_endpoint(endpoint: &mut String, oidc: &Oidc) {
+    let Some(internal_issuer) = oidc
+        .internal_issuer_url
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .map(|value| value.trim_end_matches('/'))
+    else {
+        return;
+    };
+    let public_issuer = oidc.issuer_url.trim_end_matches('/');
+    if let Some(path) = endpoint.strip_prefix(public_issuer) {
+        *endpoint = format!("{internal_issuer}{path}");
+    }
 }
 
 fn build_authorize_url(

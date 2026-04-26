@@ -183,6 +183,7 @@ auth:
       -----END PRIVATE KEY-----
   oidc:
     issuer_url: https://guardrail.home.krandor.org:1443
+    internal_issuer_url:
     client_id: guardrail
     client_secret: jCosZuGjbPkOp5rIb0xtTOYic9MmwwqL
     callback_url: https://guardrail.home.krandor.org:4433/auth/oidc/callback

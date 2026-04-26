@@ -64,6 +64,7 @@ pub struct Auth {
 #[derive(Deserialize, Default)]
 pub struct Oidc {
     pub issuer_url: String,
+    pub internal_issuer_url: Option<String>,
     pub client_id: String,
     pub client_secret: String,
     pub callback_url: String,
@@ -78,6 +79,7 @@ impl fmt::Debug for Oidc {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Oidc")
             .field("issuer_url", &self.issuer_url)
+            .field("internal_issuer_url", &self.internal_issuer_url)
             .field("client_id", &self.client_id)
             .field("client_secret", &"[REDACTED]")
             .field("callback_url", &self.callback_url)
