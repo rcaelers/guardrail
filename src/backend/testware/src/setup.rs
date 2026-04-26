@@ -53,6 +53,17 @@ impl TestSetup {
         db.query(format!(
             r#"DEFINE ACCESS OVERWRITE guardrail_api ON DATABASE TYPE RECORD
                 WITH JWT ALGORITHM EDDSA KEY '{TEST_PUBLIC_KEY}'
+                AUTHENTICATE {{
+                    IF $auth.id {{
+                        RETURN $auth.id;
+                    }};
+                    IF $token.user_id {{
+                        RETURN type::record('users', $token.user_id);
+                    }};
+                    IF $token.username {{
+                        RETURN type::record('users', $token.username);
+                    }};
+                }}
                 DURATION FOR SESSION 1h"#
         ))
         .await

@@ -1,6 +1,7 @@
 use axum::extract::multipart::Field;
-use axum::extract::{Multipart, State};
-use axum::{Extension, Json};
+use axum::extract::{Multipart, Query, State};
+use axum::{Json, http::HeaderMap};
+use serde::Deserialize;
 use object_store::ObjectStoreExt;
 use object_store::path::Path;
 use serde::Serialize;
@@ -51,6 +52,11 @@ struct SymbolsContext {
 #[derive(Debug, Serialize)]
 pub struct SymbolsResponse {
     pub result: String,
+}
+
+#[derive(Deserialize, Default)]
+pub(crate) struct ApiKeyQuery {
+    pub api_key: Option<String>,
 }
 
 pub struct SymbolsApi;
@@ -375,12 +381,21 @@ impl SymbolsApi {
         Ok(())
     }
 
-    #[instrument(skip(state, api_token, multipart), fields(crash_id))]
+    #[instrument(skip(state, headers, api_key_query, multipart), fields(crash_id))]
     pub async fn upload(
         State(state): State<AppState>,
-        Extension(api_token): Extension<ApiToken>,
+        headers: HeaderMap,
+        api_key_query: Query<ApiKeyQuery>,
         multipart: Multipart,
     ) -> Result<Json<SymbolsResponse>, ApiError> {
+        let api_token = crate::access::require_entitlement(
+            &headers,
+            api_key_query.api_key.as_deref(),
+            &state.repo.db,
+            "symbol-upload",
+        )
+        .await?;
+
         let mut symbols_info = SymbolsInfo {
             submission_timestamp: chrono::Utc::now().to_rfc3339(),
             product: None,

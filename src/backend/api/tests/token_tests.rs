@@ -22,7 +22,9 @@ use testware::{
 };
 
 async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> (Router, AppState) {
-    let settings = create_settings();
+    let mut settings = create_settings();
+    settings.database.namespace = "test".to_string();
+    settings.database.database = "test".to_string();
     let repo = Repo::new(db.clone());
     let store = Arc::new(object_store::memory::InMemory::new());
     let worker = Arc::new(TestWorker::new());
@@ -42,6 +44,23 @@ async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> (Router,
         .with_state(state.clone());
 
     (app, state)
+}
+
+async fn assert_jwt_authenticates(state: &AppState, jwt: &str, username: &str, is_admin: bool) {
+    let db = state
+        .repo
+        .authenticated(jwt)
+        .await
+        .expect("JWT should authenticate with SurrealDB");
+    let mut result = db
+        .query("RETURN fn::auth::username(); RETURN fn::auth::is_admin();")
+        .await
+        .expect("auth helper query should run");
+    let actual_username: Option<String> = result.take(0).expect("username result should decode");
+    let actual_is_admin: Option<bool> = result.take(1).expect("is_admin result should decode");
+
+    assert_eq!(actual_username.as_deref(), Some(username));
+    assert_eq!(actual_is_admin, Some(is_admin));
 }
 
 #[tokio::test]
@@ -94,10 +113,9 @@ async fn test_token_jwt_admin_ok() {
     assert_eq!(decoded_jwt.claims["ac"].as_str().unwrap(), "guardrail_api");
     assert_eq!(decoded_jwt.claims["ns"].as_str().unwrap(), state.settings.database.namespace);
     assert_eq!(decoded_jwt.claims["db"].as_str().unwrap(), state.settings.database.database);
-    assert!(
-        decoded_jwt.claims.get("id").is_none() || decoded_jwt.claims["id"].is_null(),
-        "admin token should have no id claim"
-    );
+    assert_eq!(decoded_jwt.claims["id"].as_str().unwrap(), "users:admin");
+
+    assert_jwt_authenticates(&state, jwt, "admin", true).await;
 }
 
 #[tokio::test]
@@ -153,7 +171,9 @@ async fn test_token_jwt_user_ok() {
     assert_eq!(decoded_jwt.claims["ac"].as_str().unwrap(), "guardrail_api");
     assert_eq!(decoded_jwt.claims["ns"].as_str().unwrap(), state.settings.database.namespace);
     assert_eq!(decoded_jwt.claims["db"].as_str().unwrap(), state.settings.database.database);
-    assert_eq!(decoded_jwt.claims["id"].as_str().unwrap(), user.id);
+    assert_eq!(decoded_jwt.claims["id"].as_str().unwrap(), format!("users:{}", user.id));
+
+    assert_jwt_authenticates(&state, jwt, &user.username, false).await;
 }
 
 #[tokio::test]
@@ -190,8 +210,11 @@ async fn test_token_ok() {
     let db = TestSetup::create_db().await;
     let (app, _state) = setup(&db).await;
 
+    let (admin_token, _) = create_test_token(&db, "Admin Token", None::<String>, None, &[]).await;
+
     let request = Request::builder()
         .method("POST")
+        .header("Authorization", format!("Bearer {admin_token}"))
         .uri("/api/auth/token")
         .body(Body::empty())
         .unwrap();

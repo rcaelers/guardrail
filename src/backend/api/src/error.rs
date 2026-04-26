@@ -15,8 +15,11 @@ pub enum ApiError {
     #[error("general failure: {0}")]
     Failure(String),
 
-    #[error("invalid token: {0}")]
+    #[error("{0}")]
     InvalidToken(String),
+
+    #[error("{0}")]
+    Forbidden(String),
 
     #[error("access denied for product {0}")]
     ProductAccessDenied(String),
@@ -50,9 +53,8 @@ impl IntoResponse for ApiError {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal failure".to_string())
             }
             ApiError::Failure(err) => (StatusCode::BAD_REQUEST, format!("general failure: {err}")),
-            ApiError::InvalidToken(token) => {
-                (StatusCode::FORBIDDEN, format!("invalid token: {token}"))
-            }
+            ApiError::InvalidToken(msg) => (StatusCode::UNAUTHORIZED, msg.to_string()),
+            ApiError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg.to_string()),
             ApiError::ProductAccessDenied(product) => {
                 (StatusCode::FORBIDDEN, format!("access denied for product {product}"))
             }
