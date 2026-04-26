@@ -49,6 +49,7 @@ RUN cargo build \
     -p curator && \
     cp target/debug/api       /app/api-bin && \
     cp target/debug/web       /app/web-bin && \
+    cp target/debug/guardrailctl /app/guardrailctl-bin && \
     cp target/debug/ingestion /app/ingestion-bin && \
     cp target/debug/processor /app/processor-bin && \
     cp target/debug/curator   /app/curator-bin
@@ -153,6 +154,7 @@ CMD ["/app/curator", "-C", "/config"]
 FROM base AS web
 
 COPY --from=builder /app/web-bin /app/web
+COPY --from=builder /app/guardrailctl-bin /app/guardrailctl
 COPY src/web/server/static /app/static
 
 RUN mkdir -p /config && \

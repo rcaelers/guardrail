@@ -3,6 +3,14 @@ name = "web"
 version.workspace = true
 edition.workspace = true
 
+[[bin]]
+name = "web"
+path = "src/main.rs"
+
+[[bin]]
+name = "guardrailctl"
+path = "src/bin/tool.rs"
+
 [dependencies]
 repos = { path = "../../backend/repos" }
 data = { path = "../../backend/data", default-features = false, features = ["ssr"] }
