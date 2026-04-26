@@ -37,6 +37,29 @@ services:
       timeout: 5s
       retries: 5
 
+  schema-sync:
+    container_name: schema-sync
+    build:
+      context: ..
+      dockerfile: Containerfile
+      target: schema-sync
+      provenance: false
+      sbom: false
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+    environment:
+      DATABASE_HOST: ws://surrealdb:8000
+      DATABASE_NAMESPACE: guardrail
+      DATABASE_NAME: guardrail
+      DATABASE_USER: root
+      DATABASE_PASSWORD: root
+    command:
+      - sh
+      - -c
+      - surrealkit setup && surrealkit sync --fail-fast
+    restart: 'no'
+
   minio:
     image: minio/minio:latest
     container_name: minio
@@ -119,6 +142,8 @@ services:
     depends_on:
       surrealdb:
         condition: service_healthy
+      schema-sync:
+        condition: service_completed_successfully
       valkey:
         condition: service_healthy
       minio:
@@ -244,6 +269,8 @@ services:
     depends_on:
       surrealdb:
         condition: service_healthy
+      schema-sync:
+        condition: service_completed_successfully
       valkey:
         condition: service_healthy
       minio:
@@ -269,6 +296,8 @@ services:
     depends_on:
       surrealdb:
         condition: service_healthy
+      schema-sync:
+        condition: service_completed_successfully
       valkey:
         condition: service_healthy
       minio:
