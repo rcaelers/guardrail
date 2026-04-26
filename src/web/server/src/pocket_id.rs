@@ -7,8 +7,11 @@ use crate::provisioner::{
 };
 
 pub struct PocketIdProvisioner {
-    pub base_url: Url,
+    pub api_url: Url,
+    pub public_url: Url,
     pub api_key: String,
+    /// Path prefix for the passkey setup page; token is appended directly.
+    /// e.g. "/lc/" → "{public_url}/lc/{token}"
     pub setup_path: String,
     pub client: reqwest::Client,
 }
@@ -55,12 +58,10 @@ impl IdentityProvisioner for PocketIdProvisioner {
 
     async fn create_setup_url(&self, external_id: &str) -> Result<Url, ProvisionerError> {
         let token = self.create_one_time_token(external_id).await?;
-        let mut url = self
-            .base_url
-            .join(&self.setup_path)
-            .map_err(|e| ProvisionerError::ApiError(e.to_string()))?;
-        url.query_pairs_mut().append_pair("token", &token);
-        Ok(url)
+        let path = format!("{}{}", self.setup_path.trim_end_matches('/'), token);
+        self.public_url
+            .join(&path)
+            .map_err(|e| ProvisionerError::ApiError(e.to_string()))
     }
 }
 
@@ -70,7 +71,7 @@ impl PocketIdProvisioner {
         req: &CreateUserRequest,
     ) -> Result<String, ProvisionerError> {
         let url = self
-            .base_url
+            .api_url
             .join("/api/users")
             .map_err(|e| ProvisionerError::ApiError(e.to_string()))?;
 
@@ -112,7 +113,7 @@ impl PocketIdProvisioner {
 
     async fn create_one_time_token(&self, user_id: &str) -> Result<String, ProvisionerError> {
         let url = self
-            .base_url
+            .api_url
             .join(&format!("/api/users/{user_id}/one-time-access-token"))
             .map_err(|e| ProvisionerError::ApiError(e.to_string()))?;
 
@@ -120,6 +121,7 @@ impl PocketIdProvisioner {
             .client
             .post(url)
             .header("X-API-KEY", &self.api_key)
+            .json(&serde_json::json!({ "ttl": "168h" }))
             .send()
             .await
             .map_err(|e| ProvisionerError::HttpError(e.to_string()))?;

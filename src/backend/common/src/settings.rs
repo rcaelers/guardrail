@@ -170,8 +170,12 @@ impl fmt::Debug for ObjectStorage {
 pub struct PocketIdSettings {
     pub api_url: String,
     pub api_key: String,
-    /// Path on the Pocket ID server where users land to register their passkey.
-    /// Defaults to "/one-time-access". Override if your Pocket ID version differs.
+    /// Public-facing base URL of the Pocket ID server (what the user's browser reaches).
+    /// If omitted, falls back to api_url — only works when the API is publicly reachable.
+    pub public_url: Option<String>,
+    /// Path prefix on the Pocket ID server for the one-time passkey setup page.
+    /// The token is appended directly: `{public_url}{setup_path}{token}`.
+    /// Defaults to "/lc/" (Pocket ID v2+).
     pub setup_path: Option<String>,
 }
 
@@ -180,6 +184,7 @@ impl fmt::Debug for PocketIdSettings {
         f.debug_struct("PocketIdSettings")
             .field("api_url", &self.api_url)
             .field("api_key", &"[REDACTED]")
+            .field("public_url", &self.public_url)
             .field("setup_path", &self.setup_path)
             .finish()
     }

@@ -2,3 +2,8 @@ web_server:
   port: 80
   public_key: ""
   private_key: ""
+provisioner:
+  pocket_id:
+    api_url: http://pocket-id:1411
+    public_url: https://guardrail.home.krandor.org:1443
+    api_key: GuardrailPocketIdStaticApiKey0123456789
