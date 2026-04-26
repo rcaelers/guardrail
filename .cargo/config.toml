@@ -3,3 +3,7 @@
 [target.'cfg(target_os = "linux")']
 linker = "clang"
 rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+[alias]
+build-maxperf = "build --profile maxperf"
+run-maxperf = "run --profile maxperf"

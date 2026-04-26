@@ -6,6 +6,11 @@ volumes:
   caddy-data:
   caddy-config:
 
+x-rust-build-args: &rust-build-args
+  CARGO_BUILD_FLAGS: ${GUARDRAIL_CARGO_BUILD_FLAGS:-}
+  CARGO_BUILD_OUTPUT_DIR: ${GUARDRAIL_CARGO_BUILD_OUTPUT_DIR:-debug}
+  CARGO_BUILD_RUSTFLAGS: ${GUARDRAIL_CARGO_BUILD_RUSTFLAGS:-}
+
 services:
   valkey:
     container_name: valkey
@@ -137,6 +142,7 @@ services:
       context: ..
       dockerfile: Containerfile
       target: web
+      args: *rust-build-args
       provenance: false
       sbom: false
     depends_on:
@@ -211,6 +217,7 @@ services:
       context: ..
       dockerfile: Containerfile
       target: ingestion
+      args: *rust-build-args
       provenance: false
       sbom: false
     depends_on:
@@ -241,6 +248,7 @@ services:
       context: ..
       dockerfile: Containerfile
       target: processor
+      args: *rust-build-args
       provenance: false
       sbom: false
     depends_on:
@@ -264,6 +272,7 @@ services:
       context: ..
       dockerfile: Containerfile
       target: curator
+      args: *rust-build-args
       provenance: false
       sbom: false
     depends_on:
@@ -291,6 +300,7 @@ services:
       context: ..
       dockerfile: Containerfile
       target: api
+      args: *rust-build-args
       provenance: false
       sbom: false
     depends_on:

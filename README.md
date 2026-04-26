@@ -45,6 +45,70 @@ surrealkit rollout plan --name describe_the_change
 
 The rollout plan updates `database/rollouts/` and `database/snapshots/`. Commit both.
 
+## Rust Builds
+
+Day-to-day development uses Cargo's default debug profile:
+
+```sh
+cargo build
+cargo run -p web
+```
+
+For a normal release build, use the existing release profile. It is currently
+tuned for small binaries:
+
+```sh
+cargo build --release
+```
+
+For a local performance build with maximum optimization, use the `maxperf`
+profile:
+
+```sh
+cargo build --profile maxperf
+```
+
+That writes binaries under `target/maxperf/`. For the strongest local build on
+the current machine, use the helper script, which also enables
+`-C target-cpu=native`:
+
+```sh
+dev/build-maxperf.sh
+dev/build-maxperf.sh -p web
+dev/build-maxperf.sh -p processor
+```
+
+Disable CPU-specific code generation when you need a more portable local
+binary:
+
+```sh
+GUARDRAIL_MAXPERF_NATIVE=0 dev/build-maxperf.sh -p web
+```
+
+The Docker Compose development stack still builds debug binaries by default:
+
+```sh
+docker compose --parallel 1 -f dev/docker-compose.yml up -d --build
+```
+
+To build the Rust services in the compose containers with the local maxperf
+profile, pass the optional env file:
+
+```sh
+docker compose --env-file dev/docker-compose.maxperf.env \
+  --parallel 1 -f dev/docker-compose.yml up -d --build
+```
+
+That env file sets `--profile maxperf`, copies binaries from
+`target/maxperf/`, and enables `-C target-cpu=native` for the local Docker
+builder. For a portable optimized compose build, override the Rust flags:
+
+```sh
+GUARDRAIL_CARGO_BUILD_RUSTFLAGS='' \
+  docker compose --env-file dev/docker-compose.maxperf.env \
+  --parallel 1 -f dev/docker-compose.yml up -d --build
+```
+
 ## Web UI + mock data
 
 The SvelteKit UI under `src/web/ui/` can run against three different backends.

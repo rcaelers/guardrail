@@ -35,24 +35,29 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM chef AS builder
 
+ARG CARGO_BUILD_FLAGS=""
+ARG CARGO_BUILD_OUTPUT_DIR=debug
+ARG CARGO_BUILD_RUSTFLAGS=""
+ENV RUSTFLAGS=${CARGO_BUILD_RUSTFLAGS}
+
 COPY --from=planner /app/recipe.json recipe.json
 COPY --from=planner /app/rust-toolchain.toml rust-toolchain.toml
 COPY --from=planner /app/.cargo/config.toml .cargo/config.toml
-RUN cargo chef cook --recipe-path recipe.json
+RUN cargo chef cook ${CARGO_BUILD_FLAGS} --recipe-path recipe.json
 COPY . .
 
-RUN cargo build \
+RUN cargo build ${CARGO_BUILD_FLAGS} \
     -p api \
     -p web \
     -p ingestion \
     -p processor \
     -p curator && \
-    cp target/debug/api       /app/api-bin && \
-    cp target/debug/web       /app/web-bin && \
-    cp target/debug/guardrailctl /app/guardrailctl-bin && \
-    cp target/debug/ingestion /app/ingestion-bin && \
-    cp target/debug/processor /app/processor-bin && \
-    cp target/debug/curator   /app/curator-bin
+    cp target/${CARGO_BUILD_OUTPUT_DIR}/api          /app/api-bin && \
+    cp target/${CARGO_BUILD_OUTPUT_DIR}/web          /app/web-bin && \
+    cp target/${CARGO_BUILD_OUTPUT_DIR}/guardrailctl /app/guardrailctl-bin && \
+    cp target/${CARGO_BUILD_OUTPUT_DIR}/ingestion    /app/ingestion-bin && \
+    cp target/${CARGO_BUILD_OUTPUT_DIR}/processor    /app/processor-bin && \
+    cp target/${CARGO_BUILD_OUTPUT_DIR}/curator      /app/curator-bin
 
 ##
 ## SurrealKit — schema management CLI

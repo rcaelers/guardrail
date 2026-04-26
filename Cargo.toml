@@ -30,6 +30,16 @@ codegen-units = 1
 lto = true
 opt-level = 'z'
 
+[profile.maxperf]
+inherits = "release"
+codegen-units = 1
+debug = false
+incremental = false
+lto = "fat"
+opt-level = 3
+panic = "abort"
+strip = "symbols"
+
 [profile.dev]
 debug = 1        # line-level info only; full DWARF (debug=2) is slow to emit and link
 
