@@ -403,6 +403,40 @@ export interface ListResult {
 }
 
 // ------------------------------------------------------------------
+// API tokens.
+// ------------------------------------------------------------------
+
+export interface ApiToken {
+  id: string;
+  description: string;
+  entitlements: string[];
+  isActive: boolean;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+  productId?: string | null;
+  productName?: string | null;
+}
+
+/** Returned once on creation — the raw token string is never stored. */
+export interface CreatedApiToken {
+  id: string;
+  description: string;
+  token: string;
+}
+
+export interface CreateApiTokenSpec {
+  description: string;
+  entitlements?: string[];
+}
+
+export interface CreateAdminApiTokenSpec {
+  description: string;
+  entitlements?: string[];
+  productId?: string | null;
+}
+
+// ------------------------------------------------------------------
 // The adapter contract.
 // ------------------------------------------------------------------
 
@@ -464,4 +498,14 @@ export interface GuardrailAdapter {
     uploadedBy: string;
   }): Promise<Symbol>;
   deleteSymbol(id: string): Promise<void>;
+
+  // --- api tokens ---
+  listApiTokens(productId: string): Promise<ApiToken[]>;
+  createApiToken(productId: string, spec: CreateApiTokenSpec): Promise<CreatedApiToken>;
+  deleteApiToken(productId: string, id: string): Promise<void>;
+
+  // --- admin api tokens (product-optional) ---
+  listAllApiTokens(): Promise<ApiToken[]>;
+  createAdminApiToken(spec: CreateAdminApiTokenSpec): Promise<CreatedApiToken>;
+  deleteAdminApiToken(id: string): Promise<void>;
 }

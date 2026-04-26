@@ -11,6 +11,7 @@
 
   const NAV: Array<[string, string]> = [
     ['members', 'Members'],
+    ['tokens', 'API tokens'],
     ['danger', 'Danger zone']
   ];
 </script>

@@ -23,6 +23,15 @@ pub struct JwtClaims {
     pub id: Option<String>,
 }
 
+fn user_record_id(username: &str, user_id: Option<&str>) -> String {
+    let id = user_id.unwrap_or(username);
+    if id.contains(':') {
+        id.to_string()
+    } else {
+        format!("users:{id}")
+    }
+}
+
 pub fn make_jwt(
     username: &str,
     user_id: Option<&str>,
@@ -44,7 +53,7 @@ pub fn make_jwt(
         ac: SURREAL_ACCESS_METHOD.to_string(),
         ns: settings.database.namespace.clone(),
         db: settings.database.database.clone(),
-        id: user_id.map(String::from),
+        id: Some(user_record_id(username, user_id)),
     };
     let key = EncodingKey::from_ed_pem(settings.auth.jwk.private_key.as_bytes())?;
     encode(&Header::new(Algorithm::EdDSA), &claims, &key)

@@ -31,7 +31,8 @@ import type {
   GuardrailAdapter, Crash, CrashGroup, ListQuery, ListResult, Note, Status,
   User, Product, Role, MembershipWithUser, MembershipWithProduct,
   Symbol as SymbolRow, SymbolQuery,
-  Invitation, CreateInvitationSpec, UpdateInvitationSpec
+  Invitation, CreateInvitationSpec, UpdateInvitationSpec,
+  ApiToken, CreatedApiToken, CreateApiTokenSpec, CreateAdminApiTokenSpec
 } from './types';
 
 export function httpAdapter(baseUrl: string, cookieHeader: string = ''): GuardrailAdapter {
@@ -222,6 +223,34 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     async deleteSymbol(id) {
       const r = await jdel(`/symbols/${encodeURIComponent(id)}`);
       if (!r.ok) throw new Error(`deleteSymbol ${r.status}`);
+    },
+
+    // --- api tokens ---
+    async listApiTokens(productId) {
+      const r = await req(`/products/${encodeURIComponent(productId)}/api-tokens`);
+      return json<ApiToken[]>(r, 'listApiTokens');
+    },
+    async createApiToken(productId, spec: CreateApiTokenSpec) {
+      const r = await jpost(`/products/${encodeURIComponent(productId)}/api-tokens`, spec);
+      return json<CreatedApiToken>(r, 'createApiToken');
+    },
+    async deleteApiToken(productId, id) {
+      const r = await jdel(`/products/${encodeURIComponent(productId)}/api-tokens/${encodeURIComponent(id)}`);
+      if (!r.ok) throw new Error(`deleteApiToken ${r.status}`);
+    },
+
+    // --- admin api tokens (product-optional) ---
+    async listAllApiTokens() {
+      const r = await req('/api-tokens');
+      return json<ApiToken[]>(r, 'listAllApiTokens');
+    },
+    async createAdminApiToken(spec: CreateAdminApiTokenSpec) {
+      const r = await jpost('/api-tokens', spec);
+      return json<CreatedApiToken>(r, 'createAdminApiToken');
+    },
+    async deleteAdminApiToken(id) {
+      const r = await jdel(`/api-tokens/${encodeURIComponent(id)}`);
+      if (!r.ok) throw new Error(`deleteAdminApiToken ${r.status}`);
     }
   };
 }

@@ -15,7 +15,8 @@
   const NAV: Array<[string, string]> = [
     ['users', 'Users'],
     ['products', 'Products'],
-    ['invitations', 'Invitations']
+    ['invitations', 'Invitations'],
+    ['tokens', 'API tokens']
   ];
 
   // Dark-mode toggle

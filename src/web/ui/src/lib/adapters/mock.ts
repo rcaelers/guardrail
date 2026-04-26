@@ -16,7 +16,8 @@ import type {
   Derived, ListQuery, ListResult, Note, Status,
   User, Product, Membership, MembershipWithUser, MembershipWithProduct,
   Role, Symbol as SymbolRow, SymbolQuery, CrashAttachment, CrashUserText,
-  Invitation, CreateInvitationSpec, UpdateInvitationSpec
+  Invitation, CreateInvitationSpec, UpdateInvitationSpec,
+  CreateAdminApiTokenSpec
 } from './types';
 
 const VERSIONS = ['2.14.0', '2.13.4', '2.13.3', '2.13.2', '2.12.9', '2.12.7'];
@@ -998,5 +999,17 @@ export const mockAdapter: GuardrailAdapter = {
   },
   async deleteSymbol(id) {
     const i = SYMBOLS.findIndex((s) => s.id === id); if (i >= 0) SYMBOLS.splice(i, 1);
-  }
+  },
+
+  async listApiTokens(_productId) { return []; },
+  async createApiToken(_productId, spec) {
+    return { id: crypto.randomUUID(), description: spec.description, token: 'mock-token' };
+  },
+  async deleteApiToken(_productId, _id) {},
+
+  async listAllApiTokens() { return []; },
+  async createAdminApiToken(spec: CreateAdminApiTokenSpec) {
+    return { id: crypto.randomUUID(), description: spec.description, token: 'mock-token' };
+  },
+  async deleteAdminApiToken(_id) {}
 };

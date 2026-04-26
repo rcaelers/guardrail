@@ -52,6 +52,10 @@ pub fn router() -> Router<DbState> {
         .route("/crashes/{id}/merge", post(merge_groups))
         .route("/products/{pid}/symbols", get(list_symbols).post(upload_symbol))
         .route("/symbols/{id}", delete(delete_symbol))
+        .route("/products/{pid}/api-tokens", get(list_api_tokens).post(create_api_token))
+        .route("/products/{pid}/api-tokens/{id}", delete(delete_api_token))
+        .route("/api-tokens", get(list_all_api_tokens).post(create_admin_api_token))
+        .route("/api-tokens/{id}", delete(delete_admin_api_token))
 }
 
 // --------------------------------------------------------------------
@@ -1508,5 +1512,194 @@ async fn delete_symbol(
 ) -> Result<StatusCode, (StatusCode, String)> {
     let db = s.user_db(&headers).await;
     run_value(&db, "DELETE type::record('symbols', $id)", vec![("id", Value::String(id))]).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// --------------------------------------------------------------------
+// API tokens
+// --------------------------------------------------------------------
+
+const API_TOKEN_PROJ: &str =
+    "meta::id(id) AS id, description, entitlements, is_active, last_used_at, expires_at, created_at";
+
+async fn list_api_tokens(
+    State(s): State<DbState>,
+    headers: HeaderMap,
+    Path(pid): Path<String>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
+    let rows = run_value(
+        &db,
+        &format!(
+            "SELECT {API_TOKEN_PROJ} FROM api_tokens \
+             WHERE product_id = type::record('products', $pid) \
+             ORDER BY created_at DESC"
+        ),
+        vec![("pid", Value::String(pid))],
+    )
+    .await?;
+    Ok(Json(Value::Array(rows)))
+}
+
+#[derive(Deserialize)]
+struct CreateApiTokenBody {
+    description: String,
+    entitlements: Option<Vec<String>>,
+}
+
+async fn create_api_token(
+    State(s): State<DbState>,
+    headers: HeaderMap,
+    Path(pid): Path<String>,
+    Json(body): Json<CreateApiTokenBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
+
+    let description = body.description.trim().to_string();
+    if description.is_empty() {
+        return Err(bad("description required"));
+    }
+    let entitlements = body
+        .entitlements
+        .unwrap_or_else(|| vec!["symbol-upload".into(), "minidump-upload".into()]);
+
+    let (token_id, token, token_hash) = common::token::generate_api_token()
+        .map_err(|e| server_error(format!("token generation failed: {e}")))?;
+
+    let id = uuid::Uuid::new_v4().to_string();
+    run_value(
+        &db,
+        "CREATE type::record('api_tokens', $id) CONTENT {
+            description: $description,
+            token_id: $token_id,
+            token_hash: $token_hash,
+            product_id: type::record('products', $pid),
+            user_id: NONE,
+            entitlements: $entitlements,
+            expires_at: NONE,
+            is_active: true,
+            created_at: time::now(),
+            updated_at: time::now()
+        }",
+        vec![
+            ("id", Value::String(id.clone())),
+            ("description", Value::String(description.clone())),
+            ("token_id", Value::String(token_id.to_string())),
+            ("token_hash", Value::String(token_hash)),
+            ("pid", Value::String(pid)),
+            ("entitlements", Value::Array(entitlements.into_iter().map(Value::String).collect())),
+        ],
+    )
+    .await?;
+
+    Ok(Json(json!({
+        "id": id,
+        "description": description,
+        "token": token,
+    })))
+}
+
+async fn delete_api_token(
+    State(s): State<DbState>,
+    headers: HeaderMap,
+    Path((pid, id)): Path<(String, String)>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
+    let _ = pid;
+    run_value(&db, "DELETE type::record('api_tokens', $id)", vec![("id", Value::String(id))]).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+// --------------------------------------------------------------------
+// Admin API tokens (product-optional)
+// --------------------------------------------------------------------
+
+async fn list_all_api_tokens(
+    State(s): State<DbState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
+    let rows = run_value(
+        &db,
+        &format!(
+            "SELECT {API_TOKEN_PROJ}, \
+             meta::id(product_id) AS productId, \
+             product_id.name AS productName \
+             FROM api_tokens \
+             ORDER BY created_at DESC"
+        ),
+        vec![],
+    )
+    .await?;
+    Ok(Json(Value::Array(rows)))
+}
+
+#[derive(Deserialize)]
+struct CreateAdminApiTokenBody {
+    description: String,
+    entitlements: Option<Vec<String>>,
+    #[serde(rename = "productId")]
+    product_id: Option<String>,
+}
+
+async fn create_admin_api_token(
+    State(s): State<DbState>,
+    headers: HeaderMap,
+    Json(body): Json<CreateAdminApiTokenBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
+
+    let description = body.description.trim().to_string();
+    if description.is_empty() {
+        return Err(bad("description required"));
+    }
+    let entitlements = body
+        .entitlements
+        .unwrap_or_else(|| vec!["symbol-upload".into(), "minidump-upload".into()]);
+
+    let (token_id, token, token_hash) = common::token::generate_api_token()
+        .map_err(|e| server_error(format!("token generation failed: {e}")))?;
+
+    let id = uuid::Uuid::new_v4().to_string();
+
+    run_value(
+        &db,
+        "CREATE type::record('api_tokens', $id) CONTENT {
+            description: $description,
+            token_id: $token_id,
+            token_hash: $token_hash,
+            product_id: IF $pid IS NOT NONE THEN type::record('products', $pid) ELSE NONE END,
+            user_id: NONE,
+            entitlements: $entitlements,
+            expires_at: NONE,
+            is_active: true,
+            created_at: time::now(),
+            updated_at: time::now()
+        }",
+        vec![
+            ("id", Value::String(id.clone())),
+            ("description", Value::String(description.clone())),
+            ("token_id", Value::String(token_id.to_string())),
+            ("token_hash", Value::String(token_hash)),
+            ("pid", body.product_id.map(Value::String).unwrap_or(Value::Null)),
+            ("entitlements", Value::Array(entitlements.into_iter().map(Value::String).collect())),
+        ],
+    )
+    .await?;
+
+    Ok(Json(json!({
+        "id": id,
+        "description": description,
+        "token": token,
+    })))
+}
+
+async fn delete_admin_api_token(
+    State(s): State<DbState>,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
+    run_value(&db, "DELETE type::record('api_tokens', $id)", vec![("id", Value::String(id))]).await?;
     Ok(StatusCode::NO_CONTENT)
 }
