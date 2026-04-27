@@ -1,13 +1,8 @@
 ##
-## Builder
+## Chef
 ##
 
-FROM --platform=$BUILDPLATFORM rust:alpine3.23 AS builder
-
-ENV RUSTUP_PERMIT_COPY_RENAME=true
-ENV RUSTUP_TOOLCHAIN=stable
-ARG CARGO_BUILD_JOBS=2
-ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
+FROM --platform=$BUILDPLATFORM rust:alpine3.23 AS chef
 
 RUN apk add --no-cache \
     clang \
@@ -19,14 +14,41 @@ RUN apk add --no-cache \
     musl-dev \
     build-base
 
-RUN mkdir -p /app
-WORKDIR /app
-COPY . .
-
 RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git,sharing=locked \
-    --mount=type=cache,id=target-web,target=/app/target \
-    cargo +stable build --release -p web && \
+    cargo install cargo-chef --locked
+
+WORKDIR /app
+
+##
+## Planner
+##
+
+FROM chef AS planner
+
+COPY . .
+RUN cargo chef prepare --recipe-path recipe.json
+
+##
+## Builder
+##
+
+FROM chef AS builder
+
+ENV RUSTUP_PERMIT_COPY_RENAME=true
+ENV RUSTUP_TOOLCHAIN=stable
+ARG CARGO_BUILD_JOBS=2
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
+
+COPY --from=planner /app/recipe.json recipe.json
+RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git,sharing=locked \
+    cargo chef cook --release --recipe-path recipe.json -p web
+
+COPY . .
+RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git,sharing=locked \
+    cargo build --release -p web && \
     cp /app/target/release/web /app/web-bin
 
 #
