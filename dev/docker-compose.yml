@@ -5,6 +5,8 @@ volumes:
   pocket-id-storage:
   caddy-data:
   caddy-config:
+  svelte-node-modules:
+  svelte-kit:
 
 x-rust-build-args: &rust-build-args
   CARGO_BUILD_FLAGS: ${GUARDRAIL_CARGO_BUILD_FLAGS:-}
@@ -173,6 +175,7 @@ services:
     build:
       context: ..
       dockerfile: Containerfile.ui
+      target: dev
       provenance: false
       sbom: false
     environment:
@@ -180,6 +183,13 @@ services:
       HOST: '0.0.0.0'
       ORIGIN: 'https://guardrail.home.krandor.org:4433'
       GUARDRAIL_API_URL: 'http://web:80/api/v1'
+      # Vite uses Chokidar for file watching. Polling makes host bind-mount
+      # changes reliable on Docker Desktop filesystems.
+      CHOKIDAR_USEPOLLING: 'true'
+    volumes:
+      - ../src/web/ui:/app
+      - svelte-node-modules:/app/node_modules
+      - svelte-kit:/app/.svelte-kit
     restart: unless-stopped
 
   pocket-id-setup:
