@@ -134,15 +134,17 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push ${{ matrix.name }} image (${{ matrix.arch }})
-        run: |
-          docker buildx build \
-            --platform ${{ matrix.platform }} \
-            --build-arg TARGET=${{ matrix.target }} \
-            --file ${{ matrix.file }} \
-            --cache-from type=gha,scope=${{ matrix.name }}-${{ matrix.arch }} \
-            --cache-to type=gha,mode=max,scope=${{ matrix.name }}-${{ matrix.arch }} \
-            --tag ${{ env.GHCR }}-${{ matrix.name }}:${{ matrix.arch }}-${{ github.sha }} \
-            --push .
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ matrix.file }}
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            TARGET=${{ matrix.target }}
+          push: true
+          tags: ${{ env.GHCR }}-${{ matrix.name }}:${{ matrix.arch }}-${{ github.sha }}
+          cache-from: type=gha,scope=${{ matrix.name }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-${{ matrix.arch }}
 
   create-and-sign-manifests:
     name: Create & Sign Multiarch Image Manifests
