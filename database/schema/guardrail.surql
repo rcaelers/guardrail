@@ -282,15 +282,15 @@ DEFINE FIELD data ON TABLE sessions TYPE bytes ASSERT $value != NONE;
 -- Authorization helpers
 -- ============================================================
 
-DEFINE FUNCTION fn::auth::username() -> option<string> {
+DEFINE FUNCTION OVERWRITE fn::auth::username() -> option<string> {
 	RETURN IF $auth.username != NONE THEN $auth.username ELSE $token.username END;
 };
 
-DEFINE FUNCTION fn::auth::user_id() -> option<record<users>> {
+DEFINE FUNCTION OVERWRITE fn::auth::user_id() -> option<record<users>> {
 	RETURN (SELECT VALUE id FROM users WHERE username = fn::auth::username() LIMIT 1)[0];
 };
 
-DEFINE FUNCTION fn::auth::is_admin() -> bool {
+DEFINE FUNCTION OVERWRITE fn::auth::is_admin() -> bool {
 	RETURN $auth.is_admin = true
 		OR $token.is_admin = true
 		OR fn::auth::username() = "admin"
@@ -305,7 +305,7 @@ DEFINE FUNCTION fn::auth::is_admin() -> bool {
 
 -- A "product admin" is anyone with the `maintainer` role on that product
 -- (or a global admin).
-DEFINE FUNCTION fn::auth::is_product_admin($product_id: record<products>) -> bool {
+DEFINE FUNCTION OVERWRITE fn::auth::is_product_admin($product_id: record<products>) -> bool {
 	RETURN fn::auth::is_admin()
 		OR array::len((
 			SELECT VALUE product_id
@@ -320,7 +320,7 @@ DEFINE FUNCTION fn::auth::is_product_admin($product_id: record<products>) -> boo
 -- Required role hierarchy: maintainer > readwrite > readonly. Asking for
 -- "readonly" is satisfied by any role; "readwrite" needs readwrite or
 -- maintainer; "maintainer" needs maintainer.
-DEFINE FUNCTION fn::auth::has_product_role($product_id: record<products>, $required_role: string) -> bool {
+DEFINE FUNCTION OVERWRITE fn::auth::has_product_role($product_id: record<products>, $required_role: string) -> bool {
 	RETURN fn::auth::is_admin()
 		OR array::len((
 			SELECT VALUE product_id
@@ -336,7 +336,7 @@ DEFINE FUNCTION fn::auth::has_product_role($product_id: record<products>, $requi
 		)) > 0;
 };
 
-DEFINE FUNCTION fn::auth::shares_admin_product_with_user($user_id: record<users>) -> bool {
+DEFINE FUNCTION OVERWRITE fn::auth::shares_admin_product_with_user($user_id: record<users>) -> bool {
 	RETURN fn::auth::is_admin()
 		OR array::len((
 			SELECT VALUE product_id
