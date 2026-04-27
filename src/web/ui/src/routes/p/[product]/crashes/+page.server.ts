@@ -87,7 +87,7 @@ export const actions: Actions = {
     if (!locals.user) throw error(401);
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
     const { role } = await requireProductAccess(locals.user, params.product, adapter);
-    if (!canWrite(role)) throw error(403, 'You are read-only on this product');
+    if (!canWrite(role) && !locals.user.isAdmin) throw error(403, 'You are read-only on this product');
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
     const status = String(form.get('status') ?? '') as Status;
@@ -99,7 +99,7 @@ export const actions: Actions = {
     if (!locals.user) throw error(401);
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
     const { role } = await requireProductAccess(locals.user, params.product, adapter);
-    if (!canWrite(role)) throw error(403, 'You are read-only on this product');
+    if (!canWrite(role) && !locals.user.isAdmin) throw error(403, 'You are read-only on this product');
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
     const body = String(form.get('body') ?? '');
@@ -111,7 +111,7 @@ export const actions: Actions = {
     if (!locals.user) throw error(401);
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
     const { role } = await requireProductAccess(locals.user, params.product, adapter);
-    if (role !== 'maintainer') throw error(403, 'Only maintainers can merge groups');
+    if (role !== 'maintainer' && !locals.user.isAdmin) throw error(403, 'Only maintainers can merge groups');
     const form = await request.formData();
     const primaryId = String(form.get('primaryId') ?? '');
     const mergedId = String(form.get('mergedId') ?? '');

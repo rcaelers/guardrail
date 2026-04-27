@@ -11,8 +11,8 @@
 
   let { data }: { data: PageData } = $props();
 
-  const readOnly = $derived(data.role === 'readonly');
-  const canMerge = $derived(data.role === 'maintainer');
+  const readOnly = $derived(data.role === 'readonly' && !data.user?.isAdmin);
+  const canMerge = $derived(data.role === 'maintainer' || !!data.user?.isAdmin);
 
   // Expanded-group state (per-row chevron) — local to session.
   let expanded = $state<Set<string>>(new Set());
