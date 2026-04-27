@@ -30,7 +30,26 @@
     if (reset) {
       url.searchParams.delete('id');
       url.searchParams.delete('crash');
+      url.searchParams.delete('page');
     }
+    await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
+  }
+
+  async function setPageSize(size: string) {
+    const url = new URL($page.url);
+    url.searchParams.set('limit', size);
+    url.searchParams.delete('page');
+    url.searchParams.delete('id');
+    url.searchParams.delete('crash');
+    await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
+  }
+
+  async function goToPage(n: number) {
+    const totalPages = Math.max(1, Math.ceil(data.list.total / data.filters.limit));
+    const clamped = Math.max(1, Math.min(totalPages, n));
+    const url = new URL($page.url);
+    if (clamped <= 1) url.searchParams.delete('page');
+    else url.searchParams.set('page', String(clamped));
     await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
   }
 
@@ -140,9 +159,21 @@
         options={[['count', 'Most frequent'], ['recent', 'Recently seen'], ['similarity', 'Similarity'], ['version', 'Version']]}
         onChange={(v) => updateParam('sort', v)}
       />
+      <Select
+        label="Per page"
+        value={String(data.filters.limit)}
+        options={[['10', '10'], ['25', '25'], ['50', '50'], ['100', '100']]}
+        onChange={setPageSize}
+      />
       <span class="flex-1"></span>
       <span class="text-xs text-ink-muted dark:text-ink-mutedDark">
-        {data.list.groups.length} of {data.list.total.toLocaleString()} groups
+        {#if data.list.total > data.filters.limit}
+          {@const start = (data.filters.page - 1) * data.filters.limit + 1}
+          {@const end = Math.min(data.filters.page * data.filters.limit, data.list.total)}
+          {start}–{end} of {data.list.total.toLocaleString()} groups
+        {:else}
+          {data.list.total.toLocaleString()} groups
+        {/if}
       </span>
     </div>
 
@@ -175,6 +206,42 @@
         />
       {/each}
     </div>
+
+    <!-- Pagination footer -->
+    {#if data.list.total > data.filters.limit}
+      {@const totalPages = Math.ceil(data.list.total / data.filters.limit)}
+      <div class="flex shrink-0 items-center justify-center gap-2 border-t border-line dark:border-line-dark px-5 py-2">
+        <button
+          type="button"
+          disabled={data.filters.page <= 1}
+          onclick={() => goToPage(data.filters.page - 1)}
+          class="rounded px-2.5 py-1 text-xs text-ink dark:text-ink-dark hover:bg-surface-panel dark:hover:bg-surface-panelDark disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          ← Previous
+        </button>
+        <span class="text-xs text-ink-muted dark:text-ink-mutedDark">Page</span>
+        <input
+          type="number"
+          min="1"
+          max={totalPages}
+          value={data.filters.page}
+          onchange={(e) => {
+            const n = parseInt((e.currentTarget as HTMLInputElement).value, 10);
+            if (!isNaN(n)) goToPage(n);
+          }}
+          class="w-12 rounded border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-1.5 py-1 text-center text-xs text-ink dark:text-ink-dark outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
+        <span class="text-xs text-ink-muted dark:text-ink-mutedDark">of {totalPages}</span>
+        <button
+          type="button"
+          disabled={data.filters.page >= totalPages}
+          onclick={() => goToPage(data.filters.page + 1)}
+          class="rounded px-2.5 py-1 text-xs text-ink dark:text-ink-dark hover:bg-surface-panel dark:hover:bg-surface-panelDark disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Next →
+        </button>
+      </div>
+    {/if}
   </div>
 
   <!-- RESIZER -->

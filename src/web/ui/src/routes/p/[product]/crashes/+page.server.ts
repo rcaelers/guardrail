@@ -19,6 +19,10 @@ export const load: PageServerLoad = async ({ url, parent, request }) => {
   const status = (url.searchParams.get('status') ?? 'all') as Status | 'all';
   const search = url.searchParams.get('q') ?? '';
   const sort = (url.searchParams.get('sort') ?? 'count') as 'count' | 'recent' | 'similarity' | 'version';
+  const page = Math.max(1, parseInt(url.searchParams.get('page') ?? '1', 10) || 1);
+  const limitRaw = parseInt(url.searchParams.get('limit') ?? '25', 10);
+  const limit = [10, 25, 50, 100].includes(limitRaw) ? limitRaw : 25;
+  const offset = (page - 1) * limit;
 
   // Selection model: `crash` is the source of truth for what's shown in the
   // detail pane. `id` (group) is supported for back-compat / convenience —
@@ -32,7 +36,9 @@ export const load: PageServerLoad = async ({ url, parent, request }) => {
     version: version === 'all' ? undefined : version,
     status: status === 'all' ? undefined : (status as Status),
     search,
-    sort
+    sort,
+    limit,
+    offset
   });
 
   // Resolve the selected crash. If the URL gives us a crash id, fetch
@@ -72,7 +78,7 @@ export const load: PageServerLoad = async ({ url, parent, request }) => {
     list,
     selectedGroup,
     selectedCrash,
-    filters: { version, status, search, sort }
+    filters: { version, status, search, sort, page, limit }
   };
 };
 
