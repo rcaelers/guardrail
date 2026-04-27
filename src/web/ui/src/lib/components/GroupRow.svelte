@@ -92,9 +92,10 @@
       <span>{(c.similarity * 100).toFixed(1)}%</span>
     </div>
   {/each}
-  {#if g.count > 6}
+  {@const shown = Math.min(crashes.length, 6)}
+  {#if g.count > shown}
     <div class="border-b border-line dark:border-line-dark bg-[#fbfbfc] dark:bg-[#18181a] py-2 pl-12 pr-5 text-[11px] text-ink-muted dark:text-ink-mutedDark">
-      + {fmtInt(g.count - 6)} more crashes
+      + {fmtInt(g.count - shown)} more crashes
     </div>
   {/if}
 {/if}

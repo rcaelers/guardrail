@@ -8,6 +8,7 @@
   import HandlesTab from './HandlesTab.svelte';
   import SystemTab from './SystemTab.svelte';
   import AttachmentsTab from './AttachmentsTab.svelte';
+  import AnnotationsTab from './AnnotationsTab.svelte';
   import RelatedTab from './RelatedTab.svelte';
   import NotesTab from './NotesTab.svelte';
   import { fmtDate, fmtInt } from '$lib/utils/format';
@@ -51,6 +52,7 @@
     | 'modules'
     | 'handles'
     | 'system'
+    | 'annotations'
     | 'attachments'
     | 'related'
     | 'notes';
@@ -62,6 +64,7 @@
     ['modules', 'Modules'],
     ['handles', 'Handles'],
     ['system', 'System'],
+    ['annotations', 'Annotations'],
     ['attachments', 'Attachments'],
     ['related', 'Related'],
     ['notes', 'Notes']
@@ -173,6 +176,7 @@
     {#if tab === 'modules'}<ModulesTab {crash} />{/if}
     {#if tab === 'handles'}<HandlesTab {crash} />{/if}
     {#if tab === 'system'}<SystemTab {crash} />{/if}
+    {#if tab === 'annotations'}<AnnotationsTab annotations={crash.annotations} />{/if}
     {#if tab === 'attachments'}<AttachmentsTab attachments={crash.attachments ?? []} productId={crash.productId} />{/if}
     {#if tab === 'related'}<RelatedTab related={group.related} {onMerge} canMerge={canMerge && !readOnly} />{/if}
     {#if tab === 'notes'}<NotesTab notes={group.notes} onAdd={onAddNote} {readOnly} />{/if}

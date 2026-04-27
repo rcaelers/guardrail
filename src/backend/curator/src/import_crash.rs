@@ -107,8 +107,15 @@ impl ImportCrashProcessor {
             .filter(|s| !s.is_empty())
             .map(|s| s.to_string());
 
+        // Extract signal (exception type) from the minidump report.
+        let signal = report["crash_info"]["type"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .map(|s| shorten_exception_type(s))
+            .unwrap_or_else(|| fingerprint.clone().unwrap_or_default());
+
         let group_id = if let Some(fp) = fingerprint.as_deref() {
-            match Self::find_or_create_crash_group(db, &product.id, fp).await {
+            match Self::find_or_create_crash_group(db, &product.id, fp, &signal).await {
                 Ok(id) => Some(id),
                 Err(e) => {
                     error!(fingerprint = %fp, error = ?e, "Failed to assign crash group; crash will be stored without one");
@@ -119,13 +126,16 @@ impl ImportCrashProcessor {
             None
         };
 
+        // Enrich the report with derived fields so SurrealDB can query report.* fields.
+        let enriched_report = derive_report_fields(report, &crash_info);
+
         let crash = NewCrash {
             id: Some(crash_id.to_string()),
             minidump: Some(minidump_id),
             fingerprint,
             group_id,
             product_id,
-            report: Some(report),
+            report: Some(enriched_report),
         };
 
         let id = CrashRepo::create(db, crash).await.map_err(|e| {
@@ -150,6 +160,7 @@ impl ImportCrashProcessor {
         db: &Surreal<Any>,
         product_id: &str,
         fingerprint: &str,
+        signal: &str,
     ) -> Result<String, JobError> {
         if let Some(group) = CrashGroupRepo::find_by_fingerprint(db, product_id, fingerprint)
             .await
@@ -166,7 +177,7 @@ impl ImportCrashProcessor {
             NewCrashGroup {
                 product_id: product_id.to_string(),
                 fingerprint: fingerprint.to_string(),
-                signal: fingerprint.to_string(),
+                signal: signal.to_string(),
             },
         )
         .await
@@ -299,5 +310,333 @@ impl ImportCrashProcessor {
         info!("Successfully imported crash ID: {}", job.crash_id);
 
         Ok(())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers for deriving display fields from raw minidump-stackwalk JSON
+// ---------------------------------------------------------------------------
+
+/// Adds UI-friendly fields to the raw minidump report so that SurrealDB
+/// `report.*` queries in db_api.rs resolve to real values.
+fn derive_report_fields(mut report: Value, crash_info: &Value) -> Value {
+    // Pull everything out as owned values first to avoid borrow conflicts.
+    let exception_type = report["crash_info"]["type"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    let address = report["crash_info"]["address"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+
+    let first_frame = &report["crashing_thread"]["frames"][0];
+    let top_frame = first_frame["function"].as_str().unwrap_or("").to_string();
+    let file = first_frame["file"].as_str().unwrap_or("").to_string();
+    let line = first_frame["line"].as_u64();
+
+    let os_name = report["system_info"]["os"].as_str().unwrap_or("").to_string();
+    let os_ver = report["system_info"]["os_ver"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+
+    let exception_type_short = shorten_exception_type(&exception_type);
+    let platform = derive_platform(&os_name);
+    let os = if os_ver.is_empty() {
+        os_name.clone()
+    } else {
+        format!("{os_name} {os_ver}")
+    };
+
+    let title = crash_info["fingerprint"].as_str().unwrap_or("").to_string();
+    let at = crash_info["submission_timestamp"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+    let version = get_annotation_value(crash_info, "version")
+        .unwrap_or("")
+        .to_string();
+    let build = get_annotation_value(crash_info, "BuildID")
+        .or_else(|| get_annotation_value(crash_info, "build"))
+        .unwrap_or("")
+        .to_string();
+    let user = get_annotation_value(crash_info, "Email")
+        .or_else(|| get_annotation_value(crash_info, "user"))
+        .unwrap_or("")
+        .to_string();
+    let commit = get_annotation_value(crash_info, "commit")
+        .or_else(|| get_annotation_value(crash_info, "GitRevision"))
+        .unwrap_or("")
+        .to_string();
+
+    let Some(obj) = report.as_object_mut() else {
+        return report;
+    };
+
+    macro_rules! set_if_absent {
+        ($key:expr, $val:expr) => {
+            obj.entry($key).or_insert_with(|| Value::String($val));
+        };
+    }
+
+    if !exception_type.is_empty() {
+        set_if_absent!("exceptionType", exception_type);
+        set_if_absent!("exceptionTypeShort", exception_type_short.clone());
+        set_if_absent!("signal", exception_type_short);
+    }
+    if !address.is_empty() {
+        set_if_absent!("address", address);
+    }
+    if !top_frame.is_empty() {
+        set_if_absent!("topFrame", top_frame);
+    }
+    if !file.is_empty() {
+        set_if_absent!("file", file);
+    }
+    if let Some(n) = line {
+        obj.entry("line").or_insert_with(|| n.into());
+    }
+    if !os.is_empty() {
+        set_if_absent!("os", os);
+    }
+    if !platform.is_empty() {
+        set_if_absent!("platform", platform);
+    }
+    if !title.is_empty() {
+        set_if_absent!("title", title);
+    }
+    if !at.is_empty() {
+        set_if_absent!("at", at);
+    }
+    if !version.is_empty() {
+        set_if_absent!("version", version);
+    }
+    if !build.is_empty() {
+        set_if_absent!("build", build);
+    }
+    if !user.is_empty() {
+        set_if_absent!("user", user);
+    }
+    if !commit.is_empty() {
+        set_if_absent!("commit", commit);
+    }
+    obj.entry("similarity").or_insert_with(|| 1.0_f64.into());
+
+    report
+}
+
+fn get_annotation_value<'a>(crash_info: &'a Value, key: &str) -> Option<&'a str> {
+    crash_info["annotations"][key]["value"]
+        .as_str()
+        .or_else(|| crash_info["annotations"][key].as_str())
+}
+
+/// Produces a short signal label from a minidump exception type string.
+/// "EXCEPTION_ACCESS_VIOLATION_WRITE" → "ACCESS_VIOLATION"
+/// "SIGSEGV" → "SIGSEGV"
+fn shorten_exception_type(exception_type: &str) -> String {
+    let s = exception_type
+        .strip_prefix("EXCEPTION_")
+        .unwrap_or(exception_type);
+    // Strip access-direction suffixes so read/write/exec variants share one label.
+    let s = s
+        .strip_suffix("_WRITE")
+        .or_else(|| s.strip_suffix("_READ"))
+        .or_else(|| s.strip_suffix("_EXEC"))
+        .or_else(|| s.strip_suffix("_DEP"))
+        .unwrap_or(s);
+    s.to_string()
+}
+
+fn derive_platform(os_name: &str) -> String {
+    let lower = os_name.to_lowercase();
+    if lower.contains("windows") {
+        "windows".to_string()
+    } else if lower.contains("mac") || lower.contains("darwin") {
+        "macos".to_string()
+    } else if lower.contains("linux") || lower.contains("android") {
+        "linux".to_string()
+    } else {
+        os_name.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_annotation_processing() {
+        // Test data with both submission annotations and script annotations
+        let crash_info = json!({
+            "annotations": {
+                "product_version": "1.0.0",
+                "user_email": "test@example.com",
+                "submission_notes": "App crashed on startup"
+            },
+            "script_annotations": {
+                "script_classification": "access_violation",
+                "script_known_issue": "ISSUE-123",
+                "product_version": "1.0.0-debug"  // Same key as submission, different value
+            }
+        });
+
+        // Verify that we can extract both annotation types
+        let submission_annotations = crash_info["annotations"].as_object().unwrap();
+        let script_annotations = crash_info["script_annotations"].as_object().unwrap();
+
+        // Verify submission annotations
+        assert_eq!(
+            submission_annotations
+                .get("product_version")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "1.0.0"
+        );
+        assert_eq!(
+            submission_annotations
+                .get("user_email")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "test@example.com"
+        );
+        assert_eq!(
+            submission_annotations
+                .get("submission_notes")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "App crashed on startup"
+        );
+
+        // Verify script annotations
+        assert_eq!(
+            script_annotations
+                .get("script_classification")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "access_violation"
+        );
+        assert_eq!(
+            script_annotations
+                .get("script_known_issue")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "ISSUE-123"
+        );
+        assert_eq!(
+            script_annotations
+                .get("product_version")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "1.0.0-debug"
+        );
+
+        // Verify that the same key can have different values in different sources
+        assert_ne!(
+            submission_annotations
+                .get("product_version")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            script_annotations
+                .get("product_version")
+                .unwrap()
+                .as_str()
+                .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_missing_annotations() {
+        // Test with missing annotation fields
+        let crash_info = json!({
+            "annotations": {
+                "product_version": "1.0.0"
+            }
+            // No script_annotations field
+        });
+
+        let submission_annotations = crash_info["annotations"].as_object().unwrap();
+        let script_annotations = crash_info["script_annotations"].as_object();
+
+        assert!(submission_annotations.contains_key("product_version"));
+        assert!(script_annotations.is_none()); // Should handle missing script_annotations gracefully
+    }
+
+    #[test]
+    fn test_empty_annotations() {
+        // Test with empty annotation objects
+        let crash_info = json!({
+            "annotations": {},
+            "script_annotations": {}
+        });
+
+        let submission_annotations = crash_info["annotations"].as_object().unwrap();
+        let script_annotations = crash_info["script_annotations"].as_object().unwrap();
+
+        assert!(submission_annotations.is_empty());
+        assert!(script_annotations.is_empty());
+    }
+
+    #[test]
+    fn test_shorten_exception_type() {
+        assert_eq!(shorten_exception_type("EXCEPTION_ACCESS_VIOLATION_WRITE"), "ACCESS_VIOLATION");
+        assert_eq!(shorten_exception_type("EXCEPTION_ACCESS_VIOLATION_READ"), "ACCESS_VIOLATION");
+        assert_eq!(shorten_exception_type("EXCEPTION_STACK_OVERFLOW"), "STACK_OVERFLOW");
+        assert_eq!(shorten_exception_type("SIGSEGV"), "SIGSEGV");
+        assert_eq!(shorten_exception_type("EXC_BAD_ACCESS"), "EXC_BAD_ACCESS");
+    }
+
+    #[test]
+    fn test_derive_report_fields() {
+        let report = json!({
+            "crash_info": {
+                "type": "EXCEPTION_ACCESS_VIOLATION_WRITE",
+                "address": "0xdeadbeef",
+                "crashing_thread": 0
+            },
+            "crashing_thread": {
+                "frames": [
+                    {
+                        "function": "crash2",
+                        "module": "crash.exe",
+                        "file": "src/crash.cpp",
+                        "line": 42
+                    }
+                ]
+            },
+            "system_info": {
+                "os": "Windows NT",
+                "os_ver": "10.0.19041.0",
+                "cpu_arch": "amd64"
+            }
+        });
+        let crash_info = json!({
+            "fingerprint": "crash.exe!crash2|crash.exe!main",
+            "submission_timestamp": "2024-01-01T00:00:00Z",
+            "annotations": {
+                "version": { "value": "1.2.3", "source": "submission" }
+            }
+        });
+
+        let enriched = derive_report_fields(report, &crash_info);
+        assert_eq!(enriched["exceptionType"], "EXCEPTION_ACCESS_VIOLATION_WRITE");
+        assert_eq!(enriched["exceptionTypeShort"], "ACCESS_VIOLATION");
+        assert_eq!(enriched["signal"], "ACCESS_VIOLATION");
+        assert_eq!(enriched["topFrame"], "crash2");
+        assert_eq!(enriched["file"], "src/crash.cpp");
+        assert_eq!(enriched["line"], 42);
+        assert_eq!(enriched["platform"], "windows");
+        assert_eq!(enriched["title"], "crash.exe!crash2|crash.exe!main");
+        assert_eq!(enriched["version"], "1.2.3");
+        assert_eq!(enriched["similarity"], 1.0);
     }
 }

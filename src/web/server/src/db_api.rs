@@ -1099,10 +1099,29 @@ async fn get_crash(
     let Some(row) = crashes.into_iter().next() else {
         return Err(not_found(&crash_id));
     };
-    let attachment_rows = load_attachment_rows(&db, &crash_id).await?;
+
+    let (attachment_rows, annotation_rows) = tokio::join!(
+        load_attachment_rows(&db, &crash_id),
+        run_value(
+            &db,
+            "SELECT key, value, source
+             FROM annotations
+             WHERE crash_id = type::record('crashes', $cid)
+               AND source INSIDE ['submission', 'script']
+             ORDER BY source, key",
+            vec![("cid", Value::String(crash_id.clone()))],
+        ),
+    );
+
     let (attachments, user_text) =
-        split_crash_attachments(s.storage.as_ref(), attachment_rows).await?;
-    let crash_value = hydrate_crash(&row, attachments, user_text);
+        split_crash_attachments(s.storage.as_ref(), attachment_rows?).await?;
+    let annotations = build_annotations_map(annotation_rows?);
+
+    let mut crash_value = hydrate_crash(&row, attachments, user_text);
+    if let Some(obj) = crash_value.as_object_mut() {
+        obj.insert("annotations".into(), Value::Object(annotations));
+    }
+
     let group_id = row
         .get("group_id")
         .and_then(|v| v.as_str())
@@ -1112,6 +1131,23 @@ async fn get_crash(
         return Err(not_found(&crash_id));
     };
     Ok(Json(json!({ "crash": crash_value, "group": group })))
+}
+
+fn build_annotations_map(rows: Vec<Value>) -> serde_json::Map<String, Value> {
+    let mut map = serde_json::Map::new();
+    for row in rows {
+        if let (Some(key), Some(value)) = (
+            row.get("key").and_then(|v| v.as_str()),
+            row.get("value").and_then(|v| v.as_str()),
+        ) {
+            // script source wins over submission for the same key
+            let source = row.get("source").and_then(|v| v.as_str()).unwrap_or("submission");
+            if source == "script" || !map.contains_key(key) {
+                map.insert(key.to_string(), Value::String(value.to_string()));
+            }
+        }
+    }
+    map
 }
 
 fn hydrate_crash(row: &Value, attachments: Vec<Value>, user_text: Option<Value>) -> Value {

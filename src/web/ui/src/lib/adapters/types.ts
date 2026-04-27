@@ -257,6 +257,7 @@ export interface Crash extends Partial<CrashReport> {
   build: string;
   attachments?: CrashAttachment[];
   userText?: CrashUserText | null;
+  annotations?: Record<string, string>;
 }
 
 // Lightweight crash summary used in the expanded group row.
