@@ -5,6 +5,7 @@
 FROM --platform=$BUILDPLATFORM rust:alpine3.23 AS builder
 
 ARG TARGET
+ENV RUSTUP_PERMIT_COPY_RENAME=true
 ENV RUSTUP_TOOLCHAIN=stable
 ARG CARGO_BUILD_JOBS=2
 ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
@@ -15,9 +16,8 @@ RUN apk add --no-cache \
   openssl-dev \
   pkgconfig
 
-RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
-    cargo +stable install --locked --version 0.5.6 surrealkit
+RUN cargo +stable install --locked --version 0.5.6 surrealkit \
+    && rm -rf /usr/local/cargo/registry /usr/local/cargo/git
 
 ##
 ## Runtime
