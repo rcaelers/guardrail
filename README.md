@@ -241,6 +241,76 @@ Generated artifacts are written under `dev/_private/pocket-id/`:
 - `guardrail-oidc.env`: generic `GUARDRAIL_AUTH_OIDC_*` issuer, client id, and client secret values for Guardrail
 - `admin-login.env`: admin id, username, and a one-time login URL
 
+### Getting an Admin Login Code
+
+The bootstrap container writes a ready-to-use login URL to `dev/_private/pocket-id/admin-login.env` on every startup:
+
+```sh
+cat dev/_private/pocket-id/admin-login.env
+# POCKET_ID_ADMIN_LOGIN_URL=https://guardrail.home.krandor.org:1443/lc/<token>
+```
+
+Open the `POCKET_ID_ADMIN_LOGIN_URL` value in a browser to log in as admin without a passkey.
+
+To refresh the login code, re-run the setup container (safe to repeat; it reuses the existing OIDC client secret):
+
+```sh
+docker compose -f dev/docker-compose.yml run --rm pocket-id-setup
+cat dev/_private/pocket-id/admin-login.env
+```
+
+To generate a token without running the full setup, use a temporary container on the compose network:
+
+```sh
+docker compose -f dev/docker-compose.yml run --rm --no-deps \
+  --entrypoint /bin/sh pocket-id-setup -c '
+    apk add -q curl jq
+    API_KEY=GuardrailPocketIdStaticApiKey0123456789
+    URL=http://pocket-id:1411
+    ADMIN_ID=$(curl -sS -H "X-API-KEY: $API_KEY" "$URL/api/users" \
+      | jq -r ".data[] | select(.isAdmin == true and .username != \"Static API User\") | .id" \
+      | head -n1)
+    TOKEN=$(curl -sS -X POST \
+      -H "Content-Type: application/json" \
+      -H "X-API-KEY: $API_KEY" \
+      "$URL/api/users/$ADMIN_ID/one-time-access-token" \
+      -d "{\"ttl\":\"168h\"}" | jq -r .token)
+    echo "https://guardrail.home.krandor.org:1443/lc/$TOKEN"
+  '
+```
+
+### Getting an Admin Login Code on Kubernetes
+
+The Pocket ID API key is stored in the `pocket-id-secrets` Secret.
+Run a temporary pod inside the cluster to call the API and print a one-time login URL.
+
+**Development** (namespace `guardrail-dev`, app URL `https://auth-dev.workrave.org`):
+
+```sh
+API_KEY=$(kubectl get secret pocket-id-secrets -n guardrail-dev \
+  -o jsonpath='{.data.STATIC_API_KEY}' | base64 -d)
+
+kubectl run -it --rm --restart=Never pocket-id-login \
+  --image=alpine --namespace=guardrail-dev \
+  --env="POCKET_ID_URL=http://pocket-id" \
+  --env="POCKET_ID_API_KEY=$API_KEY" \
+  --env="APP_URL=https://auth-dev.workrave.org" \
+  --command -- sh -c '
+    apk add -q curl jq
+    ADMIN_ID=$(curl -sS -H "X-API-KEY: $POCKET_ID_API_KEY" "$POCKET_ID_URL/api/users" \
+      | jq -r ".data[] | select(.isAdmin == true and .username != \"Static API User\") | .id" \
+      | head -n1)
+    TOKEN=$(curl -sS -X POST \
+      -H "Content-Type: application/json" \
+      -H "X-API-KEY: $POCKET_ID_API_KEY" \
+      "$POCKET_ID_URL/api/users/$ADMIN_ID/one-time-access-token" \
+      -d "{\"ttl\":\"168h\"}" | jq -r .token)
+    echo "$APP_URL/lc/$TOKEN"
+  '
+```
+
+**Production**: substitute `guardrail-prd` for the namespace and `https://auth.workrave.org` for `APP_URL`.
+
 Export the generated OIDC settings before starting the Rust web server:
 
 ```sh
@@ -395,20 +465,3 @@ curl -X POST "localhost:8080/api/symbols/upload?product=workrave" \
   -Fcommit=0059ba745f1648d54848e75075cccbe954a8d8f6 \
   -Fbuild_id=1
 ```
-
-## Todo
-
-- [ ] API
-  - [ ] Swagger documentation
-  - [ ] Tests
-    - [ ] Token generation
-- [ ] Job execution
-  - [ ] Remove minidump after processing
-  - [ ] Periodically clean up left over minidumps
-  - [ ] Tests
-- [ ] Web UI
-  - [ ] Authentication
-    - [ ] Invitations
-    - [ ] User roles
- [ ] Infra
-  - [ ] K8S deployment
