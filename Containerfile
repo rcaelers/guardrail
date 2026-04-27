@@ -60,14 +60,18 @@ RUN cargo build ${CARGO_BUILD_FLAGS} \
     cp target/${CARGO_BUILD_OUTPUT_DIR}/curator      /app/curator-bin
 
 ##
-## SurrealKit — schema management CLI
+## SurrealKit — download pre-built binary via cargo-binstall
 ##
 
-FROM chef AS surrealkit-builder
+FROM --platform=$BUILDPLATFORM alpine:3.23 AS surrealkit-downloader
 
-ENV RUSTUP_TOOLCHAIN=stable
+RUN apk add --no-cache ca-certificates curl
 
-RUN cargo +stable install --locked --version 0.5.6 surrealkit
+RUN curl -L --proto '=https' --tlsv1.2 -sSf \
+    https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
+    | sh
+
+RUN /root/.cargo/bin/cargo-binstall --no-confirm --version 0.5.8 surrealkit
 
 ##
 ## Shared runtime base — Alpine with just the essentials
@@ -177,7 +181,7 @@ CMD ["/app/web", "-C", "/config"]
 
 FROM base AS schema-sync
 
-COPY --from=surrealkit-builder /usr/local/cargo/bin/surrealkit /usr/local/bin/surrealkit
+COPY --from=surrealkit-downloader /root/.cargo/bin/surrealkit /usr/local/bin/surrealkit
 COPY database /app/database
 
 RUN chown -R guardrail:guardrail /app

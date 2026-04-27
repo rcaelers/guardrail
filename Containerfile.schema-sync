@@ -1,23 +1,16 @@
 ##
-## Builder
+## Downloader
 ##
 
-FROM --platform=$BUILDPLATFORM rust:alpine3.23 AS builder
+FROM --platform=$BUILDPLATFORM alpine:3.23 AS downloader
 
-ARG TARGET
-ENV RUSTUP_PERMIT_COPY_RENAME=true
-ENV RUSTUP_TOOLCHAIN=stable
-ARG CARGO_BUILD_JOBS=2
-ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
+RUN apk add --no-cache ca-certificates curl
 
-RUN apk add --no-cache \
-  build-base \
-  musl-dev \
-  openssl-dev \
-  pkgconfig
+RUN curl -L --proto '=https' --tlsv1.2 -sSf \
+    https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
+    | sh
 
-RUN cargo +stable install --locked --version 0.5.6 surrealkit \
-    && rm -rf /usr/local/cargo/registry /usr/local/cargo/git
+RUN /root/.cargo/bin/cargo-binstall --no-confirm --version 0.5.8 surrealkit
 
 ##
 ## Runtime
@@ -32,7 +25,7 @@ WORKDIR /app
 RUN apk add --no-cache ca-certificates tzdata tini && \
   rm -rf /var/cache/apk/*
 
-COPY --from=builder /usr/local/cargo/bin/surrealkit /usr/local/bin/surrealkit
+COPY --from=downloader /root/.cargo/bin/surrealkit /usr/local/bin/surrealkit
 COPY database /app/database
 COPY ops/surrealkit-rollout-start.sh /app/bin/surrealkit-rollout-start.sh
 COPY ops/surrealkit-rollout-complete.sh /app/bin/surrealkit-rollout-complete.sh
