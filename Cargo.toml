@@ -26,8 +26,9 @@ version = "0.1.0"
 edition = "2024"
 
 [profile.release]
-codegen-units = 1
-lto = true
+# Keep normal release builds suitable for CI/container builds. The expensive
+# whole-program optimization path is available through `--profile maxperf`.
+lto = false
 opt-level = 'z'
 
 [profile.maxperf]

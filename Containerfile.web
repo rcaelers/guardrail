@@ -6,6 +6,8 @@ FROM --platform=$BUILDPLATFORM rust:alpine3.23 AS builder
 
 ENV RUSTUP_PERMIT_COPY_RENAME=true
 ENV RUSTUP_TOOLCHAIN=stable
+ARG CARGO_BUILD_JOBS=2
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
 
 RUN apk add --no-cache \
     clang \
@@ -21,10 +23,10 @@ RUN mkdir -p /app
 WORKDIR /app
 COPY . .
 
-RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry \
-    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git \
+RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry,sharing=locked \
+    --mount=type=cache,id=cargo-git,target=/usr/local/cargo/git,sharing=locked \
     --mount=type=cache,id=target-web,target=/app/target \
-    cargo +stable build -vv --release -p web && \
+    cargo +stable build --release -p web && \
     cp /app/target/release/web /app/web-bin
 
 #

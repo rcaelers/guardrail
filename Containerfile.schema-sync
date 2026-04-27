@@ -6,6 +6,8 @@ FROM --platform=$BUILDPLATFORM rust:alpine3.23 AS builder
 
 ARG TARGET
 ENV RUSTUP_TOOLCHAIN=stable
+ARG CARGO_BUILD_JOBS=2
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
 
 RUN apk add --no-cache \
   build-base \
