@@ -175,9 +175,15 @@ pub struct PocketIdSettings {
     /// If omitted, falls back to api_url — only works when the API is publicly reachable.
     pub public_url: Option<String>,
     /// Path prefix on the Pocket ID server for the one-time passkey setup page.
-    /// The token is appended directly: `{public_url}{setup_path}{token}`.
+    /// The token is appended with a `/` separator: `{public_url}{setup_path}/{token}`.
     /// Defaults to "/lc/" (Pocket ID v2+).
     pub setup_path: Option<String>,
+    /// URL to redirect the user to after they complete passkey setup on Pocket ID.
+    /// Passed as `?redirect=<url>` on the setup page URL.
+    /// Defaults to `{oidc.launch_url}/auth/login/start` so the user is walked straight
+    /// into the Guardrail OIDC login flow after registration.
+    /// Set to an empty string to disable the redirect parameter entirely.
+    pub post_setup_redirect: Option<String>,
 }
 
 impl fmt::Debug for PocketIdSettings {

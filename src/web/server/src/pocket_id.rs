@@ -10,9 +10,11 @@ pub struct PocketIdProvisioner {
     pub api_url: Url,
     pub public_url: Url,
     pub api_key: String,
-    /// Path prefix for the passkey setup page; token is appended directly.
+    /// Path prefix for the passkey setup page; token is appended with a `/` separator.
     /// e.g. "/lc/" → "{public_url}/lc/{token}"
     pub setup_path: String,
+    /// If set, appended as `?redirect=<url>` so PocketID sends the user here after passkey setup.
+    pub post_setup_redirect: Option<String>,
     pub client: reqwest::Client,
 }
 
@@ -58,10 +60,15 @@ impl IdentityProvisioner for PocketIdProvisioner {
 
     async fn create_setup_url(&self, external_id: &str) -> Result<Url, ProvisionerError> {
         let token = self.create_one_time_token(external_id).await?;
-        let path = format!("{}{}", self.setup_path.trim_end_matches('/'), token);
-        self.public_url
+        let path = format!("{}/{}", self.setup_path.trim_end_matches('/'), token);
+        let mut url = self
+            .public_url
             .join(&path)
-            .map_err(|e| ProvisionerError::ApiError(e.to_string()))
+            .map_err(|e| ProvisionerError::ApiError(e.to_string()))?;
+        if let Some(redirect) = &self.post_setup_redirect {
+            url.query_pairs_mut().append_pair("redirect", redirect);
+        }
+        Ok(url)
     }
 }
 

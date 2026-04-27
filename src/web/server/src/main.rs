@@ -133,11 +133,23 @@ async fn main() {
                 .map(|u| url::Url::parse(u).expect("Invalid provisioner.pocket_id.public_url"))
                 .unwrap_or_else(|| api_url.clone());
             let setup_path = cfg.setup_path.clone().unwrap_or_else(|| "/lc/".to_string());
+            let post_setup_redirect = cfg.post_setup_redirect.clone().or_else(|| {
+                settings
+                    .auth
+                    .oidc
+                    .as_ref()
+                    .and_then(|o| o.launch_url.as_deref())
+                    .filter(|u| !u.is_empty())
+                    .map(|launch_url| {
+                        format!("{}/auth/login/start", launch_url.trim_end_matches('/'))
+                    })
+            });
             Arc::new(pocket_id::PocketIdProvisioner {
                 api_url,
                 public_url,
                 api_key: cfg.api_key.clone(),
                 setup_path,
+                post_setup_redirect,
                 client: http_client.clone(),
             }) as Arc<dyn IdentityProvisioner>
         });
