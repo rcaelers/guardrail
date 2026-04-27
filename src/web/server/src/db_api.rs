@@ -645,7 +645,7 @@ async fn list_products(
         }
         Some("public") => {
             let rows = run_value(
-                &db,
+                &s.repo.db,
                 &format!("SELECT {PRODUCT_PROJ} FROM products WHERE public = true ORDER BY name"),
                 vec![],
             )

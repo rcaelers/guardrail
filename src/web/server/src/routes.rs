@@ -62,7 +62,7 @@ async fn home(
         .auth
         .oidc
         .as_ref()
-        .map(|o| o.self_service_url.clone())
+        .and_then(|o| o.self_service_url.clone())
         .unwrap_or_default();
     render(HomeTemplate {
         title: "Guardrail",

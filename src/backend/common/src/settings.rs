@@ -62,6 +62,7 @@ pub struct Auth {
 }
 
 #[derive(Deserialize, Default)]
+#[serde(default)]
 pub struct Oidc {
     pub issuer_url: String,
     pub internal_issuer_url: Option<String>,
@@ -69,8 +70,8 @@ pub struct Oidc {
     pub client_secret: String,
     pub callback_url: String,
     pub logout_callback_url: String,
-    pub launch_url: String,
-    pub self_service_url: String,
+    pub launch_url: Option<String>,
+    pub self_service_url: Option<String>,
     pub pkce: Option<bool>,
     pub allow_insecure_tls: Option<bool>,
 }
