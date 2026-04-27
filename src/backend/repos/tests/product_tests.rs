@@ -55,6 +55,23 @@ async fn test_get_by_name() {
 }
 
 #[tokio::test]
+async fn test_get_by_name_accepts_slug() {
+    let db = TestSetup::create_db().await;
+    let name = "Unique Product";
+    let description = "Unique Description";
+    create_test_product_with_details(&db, name, description).await;
+
+    let found_product = ProductRepo::get_by_name(&db, "unique-product")
+        .await
+        .expect("Failed to get product by slug");
+
+    assert!(found_product.is_some());
+    let found_product = found_product.unwrap();
+    assert_eq!(found_product.name, name);
+    assert_eq!(found_product.description, description);
+}
+
+#[tokio::test]
 async fn test_get_by_name_not_found() {
     let db = TestSetup::create_db().await;
     let non_existent_name = "NonExistentProduct";

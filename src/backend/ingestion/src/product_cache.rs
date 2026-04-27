@@ -26,6 +26,11 @@ impl ProductCache {
     }
 
     pub fn from_map(products: HashMap<String, ProductInfo>) -> Self {
+        let products = products
+            .into_iter()
+            .map(|(name, product)| (product_cache_key(&name), product))
+            .collect();
+
         Self {
             backend: Backend::Memory(products),
         }
@@ -52,7 +57,7 @@ impl ProductCache {
                     None => Ok(None),
                 }
             }
-            Backend::Memory(map) => Ok(map.get(name).cloned()),
+            Backend::Memory(map) => Ok(map.get(&product_cache_key(name)).cloned()),
         }
     }
 

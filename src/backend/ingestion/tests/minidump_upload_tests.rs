@@ -987,6 +987,31 @@ async fn test_minidump_upload_unknown_product() {
 }
 
 #[tokio::test]
+async fn test_minidump_upload_accepts_case_insensitive_product_identifier() {
+    let (app, store, boundary, _worker, _body) = setup().await;
+
+    let body = create_body_from_config(&MinidumpBodyConfig {
+        boundary: &boundary,
+        product: Some("testproduct"),
+        ..Default::default()
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/minidump/upload")
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_response_ok(response).await;
+
+    assert_count_crashes(store.clone(), 1).await;
+    assert_count_minidumps(store.clone(), 1).await;
+    assert_count_attachments(store.clone(), 0).await;
+}
+
+#[tokio::test]
 async fn test_minidump_upload_per_product_validation_script() {
     let mut settings = create_settings();
     settings.minidumps.validation_scripts = Some(vec![

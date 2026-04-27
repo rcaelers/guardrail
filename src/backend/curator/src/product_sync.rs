@@ -3,7 +3,7 @@ use redis::aio::ConnectionManager;
 use tracing::{error, info};
 
 use common::QueryParams;
-use common::product_info::{ProductInfo, product_cache_key};
+use common::product_info::{ProductInfo, product_cache_keys};
 use repos::Repo;
 use repos::product::ProductRepo;
 
@@ -22,14 +22,14 @@ pub async fn sync_products_to_valkey(
         };
 
         let json = serde_json::to_string(&info)?;
-        let key = product_cache_key(&product.name);
+        for key in product_cache_keys(&product.name, Some(&product.slug)) {
+            info!(product = %product.name, key = %key, "Syncing product to Valkey");
 
-        info!(product = %product.name, key = %key, "Syncing product to Valkey");
-
-        redis.set::<_, _, ()>(&key, &json).await.map_err(|e| {
-            error!(product = %product.name, key = %key, error = ?e, "Failed to write product to Valkey");
-            e
-        })?;
+            redis.set::<_, _, ()>(&key, &json).await.map_err(|e| {
+                error!(product = %product.name, key = %key, error = ?e, "Failed to write product to Valkey");
+                e
+            })?;
+        }
     }
 
     info!(count = products.len(), "Synced products to Valkey");

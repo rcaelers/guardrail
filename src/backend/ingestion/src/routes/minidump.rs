@@ -436,6 +436,13 @@ impl MinidumpApi {
         crash_info.product = Some(product.name.clone());
         crash_info.product_id = Some(product.id.clone());
         crash_info.product_metadata = Some(product.metadata.clone());
+        crash_info.annotations.insert(
+            "product".to_string(),
+            AnnotationEntry {
+                value: product.name.clone(),
+                source: "canonical".to_string(),
+            },
+        );
 
         info!(product = %product.name, "Processing crash for product");
 

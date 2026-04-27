@@ -33,6 +33,17 @@ impl ProductRepo {
             .await
             .map_err(handle_surreal_error)?;
         let products: Vec<Product> = crate::take_many(&mut result, 0)?;
+        if let Some(product) = products.into_iter().next() {
+            return Ok(Some(product));
+        }
+
+        let slug = name.trim().to_ascii_lowercase().replace(' ', "-");
+        let mut result = db
+            .query("SELECT *, meta::id(id) as id FROM products WHERE slug = $slug LIMIT 1")
+            .bind(("slug", slug))
+            .await
+            .map_err(handle_surreal_error)?;
+        let products: Vec<Product> = crate::take_many(&mut result, 0)?;
         Ok(products.into_iter().next())
     }
 

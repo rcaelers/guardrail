@@ -6,7 +6,7 @@ use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
 use tracing::{error, info, warn};
 
-use common::product_info::{ProductInfo, product_cache_key};
+use common::product_info::{ProductInfo, product_cache_keys};
 use data::product::Product;
 
 pub async fn listen_for_product_changes(
@@ -43,16 +43,17 @@ pub async fn listen_for_product_changes(
                             metadata: product.metadata.clone(),
                         };
                         let json = serde_json::to_string(&info)?;
-                        let key = product_cache_key(&product.name);
-
-                        if let Err(e) = redis.set::<_, _, ()>(&key, &json).await {
-                            error!(product = %product.name, error = ?e, "Failed to write product to Valkey");
+                        for key in product_cache_keys(&product.name, Some(&product.slug)) {
+                            if let Err(e) = redis.set::<_, _, ()>(&key, &json).await {
+                                error!(product = %product.name, key = %key, error = ?e, "Failed to write product to Valkey");
+                            }
                         }
                     }
                     surrealdb::types::Action::Delete => {
-                        let key = product_cache_key(&product.name);
-                        if let Err(e) = redis.del::<_, ()>(&key).await {
-                            error!(product = %product.name, error = ?e, "Failed to remove product from Valkey");
+                        for key in product_cache_keys(&product.name, Some(&product.slug)) {
+                            if let Err(e) = redis.del::<_, ()>(&key).await {
+                                error!(product = %product.name, key = %key, error = ?e, "Failed to remove product from Valkey");
+                            }
                         }
                         info!(product = %product.name, "Removed deleted product from Valkey");
                     }
