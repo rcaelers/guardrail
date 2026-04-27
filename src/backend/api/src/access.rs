@@ -135,9 +135,7 @@ pub async fn require_admin(
     let api_token = load_and_verify(db, token_id, &token_secret).await?;
 
     if api_token.product_id.is_some() {
-        return Err(ApiError::Forbidden(
-            "global API token or admin JWT required".into(),
-        ));
+        return Err(ApiError::Forbidden("global API token or admin JWT required".into()));
     }
 
     Ok(Principal::ApiToken(api_token))
@@ -163,8 +161,8 @@ fn is_jwt(s: &str) -> bool {
 
 fn verify_jwt(token_str: &str, settings: &Settings) -> Result<JwtClaims, ApiError> {
     let public_key = &settings.auth.jwk.public_key;
-    let key = DecodingKey::from_ed_pem(public_key.as_bytes())
-        .map_err(|_| ApiError::InternalFailure())?;
+    let key =
+        DecodingKey::from_ed_pem(public_key.as_bytes()).map_err(|_| ApiError::InternalFailure())?;
     let mut validation = Validation::new(Algorithm::EdDSA);
     validation.set_audience(&["guardrail"]);
     decode::<JwtClaims>(token_str, &key, &validation)

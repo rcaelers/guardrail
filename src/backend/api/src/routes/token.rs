@@ -1,8 +1,4 @@
-use axum::{
-    extract::State,
-    http::HeaderMap,
-    response::IntoResponse,
-};
+use axum::{extract::State, http::HeaderMap, response::IntoResponse};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use tracing::{error, info};
@@ -16,7 +12,11 @@ use repos::user::UserRepo;
 
 fn user_record_id(username: &str, user_id: Option<&str>) -> String {
     let id = user_id.unwrap_or(username);
-    if id.contains(':') { id.to_string() } else { format!("users:{id}") }
+    if id.contains(':') {
+        id.to_string()
+    } else {
+        format!("users:{id}")
+    }
 }
 
 pub async fn generate_jwt_token(
@@ -25,8 +25,7 @@ pub async fn generate_jwt_token(
 ) -> Result<impl IntoResponse, ApiError> {
     let api_token = access::require_entitlement(&headers, None, &state.repo.db, "token").await?;
     let settings = state.settings.clone();
-    let expiration =
-        Utc::now() + Duration::minutes(settings.auth.jwk.token_validity_in_minutes);
+    let expiration = Utc::now() + Duration::minutes(settings.auth.jwk.token_validity_in_minutes);
     let expiration_timestamp = expiration.timestamp();
 
     let (username, user_id, is_admin) = if let Some(user_id_raw) = api_token.user_id.as_deref() {

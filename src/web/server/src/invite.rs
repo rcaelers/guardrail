@@ -13,8 +13,7 @@ use serde::Deserialize;
 use tower_sessions::Session;
 
 use crate::{
-    AppState,
-    access,
+    AppState, access,
     access::Principal,
     auth::AuthSession,
     error::{AppError, AppResult},
@@ -77,9 +76,13 @@ async fn create_invitation(
     headers: HeaderMap,
     Json(body): Json<CreateInvitationRequest>,
 ) -> AppResult<Json<Invitation>> {
-    let principal =
-        access::require_session_or_entitlement(&session, &headers, &state.repo.db, ENTITLEMENT_INVITATION_CREATE)
-            .await?;
+    let principal = access::require_session_or_entitlement(
+        &session,
+        &headers,
+        &state.repo.db,
+        ENTITLEMENT_INVITATION_CREATE,
+    )
+    .await?;
 
     let created_by = match &principal {
         Principal::Token(token) => {
@@ -264,7 +267,10 @@ async fn redeem_invite_json(
         .map_err(AppError::internal)?
         .ok_or_else(|| AppError::not_found("Invitation not found or has expired"))?;
 
-    if invitation.max_uses.is_some_and(|max| invitation.use_count >= max) {
+    if invitation
+        .max_uses
+        .is_some_and(|max| invitation.use_count >= max)
+    {
         return Err(AppError::not_found("Invitation has been fully used"));
     }
 
@@ -287,9 +293,7 @@ async fn redeem_invite_json(
                 tracing::warn!("re-issue setup URL for invite {code}: {e}");
                 AppError::failure(e.to_string())
             })?;
-        return Ok(Json(
-            serde_json::json!({ "redirect_url": setup_url.to_string() }),
-        ));
+        return Ok(Json(serde_json::json!({ "redirect_url": setup_url.to_string() })));
     }
 
     let provisioned = provisioner

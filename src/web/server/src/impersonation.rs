@@ -9,8 +9,7 @@ use common::AuthenticatedUser;
 use tower_sessions::Session;
 
 use crate::{
-    AppState,
-    access,
+    AppState, access,
     error::{AppError, AppResult},
 };
 

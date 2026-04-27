@@ -13,7 +13,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use axum::{Router, middleware, response::Response, extract::Request};
+use axum::{Router, extract::Request, middleware, response::Response};
 use common::{AuthenticatedUser, settings::Settings};
 use repos::Repo;
 use surrealdb::opt::auth::Root;
@@ -44,7 +44,11 @@ fn default_config_dir() -> String {
 
 /// Middleware that injects a dev admin into every session so all access guards
 /// pass without requiring a real login flow.
-async fn inject_dev_admin(session: Session, request: Request, next: axum::middleware::Next) -> Response {
+async fn inject_dev_admin(
+    session: Session,
+    request: Request,
+    next: axum::middleware::Next,
+) -> Response {
     let _ = session
         .insert(
             access::SESSION_KEY,

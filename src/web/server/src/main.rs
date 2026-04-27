@@ -125,17 +125,14 @@ async fn main() {
 
     let provisioner: Option<Arc<dyn IdentityProvisioner>> =
         settings.provisioner.pocket_id.as_ref().map(|cfg| {
-            let api_url = url::Url::parse(&cfg.api_url)
-                .expect("Invalid provisioner.pocket_id.api_url");
+            let api_url =
+                url::Url::parse(&cfg.api_url).expect("Invalid provisioner.pocket_id.api_url");
             let public_url = cfg
                 .public_url
                 .as_deref()
                 .map(|u| url::Url::parse(u).expect("Invalid provisioner.pocket_id.public_url"))
                 .unwrap_or_else(|| api_url.clone());
-            let setup_path = cfg
-                .setup_path
-                .clone()
-                .unwrap_or_else(|| "/lc/".to_string());
+            let setup_path = cfg.setup_path.clone().unwrap_or_else(|| "/lc/".to_string());
             Arc::new(pocket_id::PocketIdProvisioner {
                 api_url,
                 public_url,
