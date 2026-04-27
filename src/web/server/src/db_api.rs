@@ -200,6 +200,7 @@ const GROUP_BASE_SELECT: &str = "
     SELECT
         meta::id(id)         AS id,
         meta::id(product_id) AS productId,
+        fingerprint,
         signal,
         count,
         status,
@@ -283,10 +284,11 @@ async fn load_user_text(
     let Some(storage_path) = attachment.get("storagePath").and_then(|v| v.as_str()) else {
         return Ok(None);
     };
-    let object = storage
-        .get(&ObjectPath::from(storage_path))
-        .await
-        .map_err(storage_error)?;
+    let object = match storage.get(&ObjectPath::from(storage_path)).await {
+        Ok(obj) => obj,
+        Err(object_store::Error::NotFound { .. }) => return Ok(None),
+        Err(e) => return Err(storage_error(e)),
+    };
     let bytes = object.bytes().await.map_err(storage_error)?;
     let body = String::from_utf8_lossy(&bytes).into_owned();
     Ok(Some(json!({
@@ -959,17 +961,17 @@ async fn list_groups(
         SELECT
             group_id,
             created_at,
-            report.title             AS title,
-            report.topFrame          AS topFrame,
-            report.file              AS file,
-            report.line              AS line,
-            report.version           AS version,
-            report.build             AS build,
-            report.address           AS address,
-            report.platform          AS platform,
-            report.exceptionType     AS exceptionType,
+            report.title              AS title,
+            report.topFrame           AS topFrame,
+            report.file               AS file,
+            report.line               AS line,
+            report.version            AS version,
+            report.build              AS build,
+            report.address            AS address,
+            report.platform           AS platform,
+            (report.exceptionType     ?? report.crash_info.type) AS exceptionType,
             report.exceptionTypeShort AS exceptionTypeShort,
-            report.similarity        AS similarity
+            report.similarity         AS similarity
         FROM crashes
         WHERE product_id = type::record('products', $pid)
         ORDER BY created_at DESC";
@@ -981,7 +983,11 @@ async fn list_groups(
     let rep_rows = reps_res?;
 
     let mut reps: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+    let mut counts: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+    let mut trends: std::collections::HashMap<String, [u64; 14]> = std::collections::HashMap::new();
     let mut versions_set = std::collections::BTreeSet::new();
+    let now = Utc::now();
+
     for r in rep_rows {
         if let Some(v) = r.get("version").and_then(|v| v.as_str()) {
             if !v.is_empty() {
@@ -992,22 +998,46 @@ async fn list_groups(
             continue;
         };
         let gid = extract_short_id(gid_raw);
-        if reps.contains_key(&gid) {
-            continue;
+
+        *counts.entry(gid.clone()).or_insert(0) += 1;
+
+        // 30D trend: 14 two-day buckets; bucket 0 = oldest, 13 = most recent
+        if let Some(created_str) = r.get("created_at").and_then(|v| v.as_str()) {
+            if let Ok(ts) = created_str.parse::<chrono::DateTime<Utc>>() {
+                let days_ago = (now - ts).num_days();
+                if (0..28).contains(&days_ago) {
+                    let bucket = (13 - days_ago / 2) as usize;
+                    trends.entry(gid.clone()).or_insert([0u64; 14])[bucket] += 1;
+                }
+            }
         }
-        reps.insert(gid, r);
+
+        if !reps.contains_key(&gid) {
+            reps.insert(gid, r);
+        }
     }
     let versions_list: Vec<String> = versions_set.into_iter().rev().collect();
 
     let mut groups: Vec<Value> = base
         .into_iter()
         .map(|g| {
-            let gid = g
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string();
-            apply_rep(g, reps.get(&gid))
+            // meta::id() can return "⟨uuid⟩" with angle brackets; normalise so
+            // the lookup into counts/trends/reps (keyed by plain UUID) always works.
+            let gid = extract_short_id(
+                g.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
+            );
+            let mut merged = apply_rep(g, reps.get(&gid));
+            if let Some(obj) = merged.as_object_mut() {
+                if let Some(&actual) = counts.get(&gid) {
+                    obj.insert("count".into(), json!(actual));
+                }
+                let trend = trends
+                    .get(&gid)
+                    .map(|t| t.iter().map(|&c| json!(c)).collect::<Vec<_>>())
+                    .unwrap_or_else(|| vec![json!(0u64); 14]);
+                obj.insert("trend".into(), json!(trend));
+            }
+            merged
         })
         .collect();
 
@@ -1107,7 +1137,6 @@ async fn get_crash(
             "SELECT key, value, source
              FROM annotations
              WHERE crash_id = type::record('crashes', $cid)
-               AND source INSIDE ['submission', 'script']
              ORDER BY source, key",
             vec![("cid", Value::String(crash_id.clone()))],
         ),
@@ -1166,6 +1195,12 @@ fn hydrate_crash(row: &Value, attachments: Vec<Value>, user_text: Option<Value>)
             out.insert(k.clone(), v.clone());
         }
     }
+    // Fall back to the DB record timestamp when submission_timestamp was not stored.
+    if out.get("at").and_then(|v| v.as_str()).map(|s| s.is_empty()).unwrap_or(true) {
+        if let Some(ts) = row.get("created_at") {
+            out.insert("at".into(), ts.clone());
+        }
+    }
     out.insert("attachments".into(), Value::Array(attachments));
     out.insert("userText".into(), user_text.unwrap_or(Value::Null));
     Value::Object(out)
@@ -1186,17 +1221,17 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
         db,
         "SELECT
             created_at,
-            report.title             AS title,
-            report.topFrame          AS topFrame,
-            report.file              AS file,
-            report.line              AS line,
-            report.address           AS address,
-            report.platform          AS platform,
-            report.version           AS version,
-            report.build             AS build,
-            report.exceptionType     AS exceptionType,
+            report.title              AS title,
+            report.topFrame           AS topFrame,
+            report.file               AS file,
+            report.line               AS line,
+            report.address            AS address,
+            report.platform           AS platform,
+            report.version            AS version,
+            report.build              AS build,
+            (report.exceptionType     ?? report.crash_info.type) AS exceptionType,
             report.exceptionTypeShort AS exceptionTypeShort,
-            report.similarity        AS similarity
+            report.similarity         AS similarity
          FROM crashes
          WHERE group_id = type::record('crash_groups', $gid)
          ORDER BY created_at DESC LIMIT 1",
@@ -1236,7 +1271,9 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
         vec![("gid", Value::String(id.into()))],
     )
     .await?;
+    let actual_count = crash_rows.len();
     group_obj.insert("crashes".into(), Value::Array(crash_rows));
+    group_obj.insert("count".into(), json!(actual_count));
 
     let notes = run_value(
         db,

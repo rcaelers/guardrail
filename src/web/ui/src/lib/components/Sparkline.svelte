@@ -1,6 +1,11 @@
 <script lang="ts">
-  let { count }: { count: number } = $props();
+  let { count, trend }: { count: number; trend?: number[] } = $props();
   const bars = $derived.by(() => {
+    if (trend && trend.length > 0) {
+      const max = Math.max(...trend, 1);
+      return trend.map(v => v / max * 0.85 + 0.15);
+    }
+    // fallback: deterministic placeholder when no real data is available
     let s = count;
     const out: number[] = [];
     for (let i = 0; i < 14; i++) {

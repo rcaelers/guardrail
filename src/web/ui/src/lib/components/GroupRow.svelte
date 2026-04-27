@@ -28,7 +28,16 @@
     onSelectCrash
   }: Props = $props();
 
-  const COLS = '28px 1fr 80px 72px 80px 110px 90px';
+  const COLS = '28px 1fr 260px 72px 80px 110px 90px';
+
+  const groupName = $derived(g.fingerprint || g.title || g.id);
+  const exception = $derived(g.exceptionType || g.exceptionTypeShort || g.signal);
+  const subtitle = $derived.by(() => {
+    const parts: string[] = [];
+    if (g.topFrame) parts.push(g.topFrame);
+    if (g.file) parts.push(g.line ? `${g.file}:${g.line}` : g.file);
+    return parts.join('  ·  ');
+  });
 </script>
 
 <div
@@ -54,15 +63,15 @@
     </svg>
   </button>
   <div class="min-w-0">
-    <div class="mb-[3px] truncate text-[13.5px] font-medium text-ink dark:text-ink-dark">{g.title}</div>
-    <div class="truncate font-mono text-[11px] text-ink-muted dark:text-ink-mutedDark">
-      {g.topFrame}  ·  {g.file}:{g.line}
-    </div>
+    <div class="mb-[3px] truncate text-[13.5px] font-medium text-ink dark:text-ink-dark">{groupName}</div>
+    {#if subtitle}
+      <div class="truncate font-mono text-[11px] text-ink-muted dark:text-ink-mutedDark">{subtitle}</div>
+    {/if}
   </div>
-  <SignalChip signal={g.signal} />
+  <SignalChip signal={exception} />
   <div class="font-mono text-xs text-ink-muted dark:text-ink-mutedDark">{g.version}</div>
   <div class="text-sm font-medium tabular-nums text-ink dark:text-ink-dark">{fmtInt(g.count)}</div>
-  <Sparkline count={g.count} />
+  <Sparkline trend={g.trend} count={g.count} />
   <StatusPill status={g.status} />
 </div>
 

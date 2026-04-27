@@ -109,6 +109,7 @@ export interface Environment {
 export interface CrashGroupSummary {
   id: string;
   productId: string;
+  fingerprint?: string;
   signal: Signal;
   exceptionType?: string;
   exceptionTypeShort?: string;
@@ -121,6 +122,7 @@ export interface CrashGroupSummary {
   version: string;
   build: string;
   count: number;
+  trend?: number[];
   similarity: number;
   status: Status;
   assignee: string | null;

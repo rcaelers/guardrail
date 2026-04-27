@@ -54,21 +54,25 @@
     | 'system'
     | 'annotations'
     | 'attachments'
+    | 'usertext'
     | 'related'
     | 'notes';
   let tab = $state<TabKey>('stack');
 
-  const TABS: [TabKey, string][] = [
-    ['stack', 'Stack'],
-    ['threads', 'Threads'],
-    ['modules', 'Modules'],
-    ['handles', 'Handles'],
-    ['system', 'System'],
-    ['annotations', 'Annotations'],
-    ['attachments', 'Attachments'],
-    ['related', 'Related'],
-    ['notes', 'Notes']
-  ];
+  const TABS = $derived.by(() => {
+    const tabs: [TabKey, string][] = [
+      ['stack', 'Stack'],
+      ['threads', 'Threads'],
+      ['modules', 'Modules'],
+      ['handles', 'Handles'],
+      ['system', 'System'],
+      ['annotations', 'Annotations'],
+      ['attachments', 'Attachments'],
+    ];
+    if (crash.userText?.body) tabs.push(['usertext', 'User Text']);
+    tabs.push(['related', 'Related'], ['notes', 'Notes']);
+    return tabs;
+  });
 </script>
 
 <div class="flex h-full min-w-0 flex-col border-l border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark">
@@ -97,7 +101,7 @@
     <div class="mt-3.5 grid gap-4 text-[11px] text-ink-muted dark:text-ink-mutedDark" style:grid-template-columns="repeat(4, 1fr)">
       {#each [
         ['Occurred', fmtDate(crash.at)],
-        ['Version', crash.version],
+        ['Version', crash.version || crash.annotations?.['version'] || crash.annotations?.['Version'] || '—'],
         ['OS', crashOs(crash)],
         ['Exception', exceptionType(crash)],
         ['Address', crashAddress(crash)],
@@ -140,15 +144,6 @@
       {/if}
     </div>
 
-    {#if crash.userText?.body}
-      <div class="mt-4 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3.5 py-3">
-        <div class="mb-1.5 text-[10px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">User Info</div>
-        <div class="mb-2 text-[11px] text-ink-muted dark:text-ink-mutedDark">
-          Submitted {fmtDate(crash.userText.createdAt)}
-        </div>
-        <pre class="max-h-40 overflow-auto whitespace-pre-wrap break-words font-sans text-[13px] leading-[1.55] text-ink dark:text-ink-dark">{crash.userText.body}</pre>
-      </div>
-    {/if}
   </div>
 
   <!-- Tabs -->
@@ -178,6 +173,14 @@
     {#if tab === 'system'}<SystemTab {crash} />{/if}
     {#if tab === 'annotations'}<AnnotationsTab annotations={crash.annotations} />{/if}
     {#if tab === 'attachments'}<AttachmentsTab attachments={crash.attachments ?? []} productId={crash.productId} />{/if}
+    {#if tab === 'usertext'}
+      {#if crash.userText?.body}
+        <div class="mb-1.5 text-[11px] text-ink-muted dark:text-ink-mutedDark">Submitted {fmtDate(crash.userText.createdAt)}</div>
+        <pre class="whitespace-pre-wrap break-words font-sans text-[13px] leading-[1.55] text-ink dark:text-ink-dark">{crash.userText.body}</pre>
+      {:else}
+        <div class="rounded border border-dashed border-line px-3 py-3 text-[12px] text-ink-muted dark:border-line-dark dark:text-ink-mutedDark">No user text for this crash.</div>
+      {/if}
+    {/if}
     {#if tab === 'related'}<RelatedTab related={group.related} {onMerge} canMerge={canMerge && !readOnly} />{/if}
     {#if tab === 'notes'}<NotesTab notes={group.notes} onAdd={onAddNote} {readOnly} />{/if}
   </div>
