@@ -1,7 +1,7 @@
-id = "20260411211855__initial_guardrail_schema"
+id = "20260428213129__initial_guardrail_schema"
 name = "initial_guardrail_schema"
 source_schema_hash = "ad301433f67ec7108b54797ac5d7a61df8c92f62fa52ae631da3f49731576ac3"
-target_schema_hash = "1d2a14d2b789c55efdd97c0183ba114c0d326d810ba2a8bc3e61c401921c6dfb"
+target_schema_hash = "29e25af31ec70b6ecec6bb08ad6dae01a2a9b038fe9235cf5922e812e22c59c7"
 compatibility = "phased"
 renames = []
 
@@ -21,12 +21,22 @@ files = []
 [[steps.entities]]
 kind = "field"
 scope = "annotations"
+name = "author"
+
+[[steps.entities]]
+kind = "field"
+scope = "annotations"
 name = "crash_id"
 
 [[steps.entities]]
 kind = "field"
 scope = "annotations"
 name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "annotations"
+name = "group_id"
 
 [[steps.entities]]
 kind = "field"
@@ -155,8 +165,68 @@ name = "updated_at"
 
 [[steps.entities]]
 kind = "field"
+scope = "crash_groups"
+name = "assignee"
+
+[[steps.entities]]
+kind = "field"
+scope = "crash_groups"
+name = "count"
+
+[[steps.entities]]
+kind = "field"
+scope = "crash_groups"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "crash_groups"
+name = "fingerprint"
+
+[[steps.entities]]
+kind = "field"
+scope = "crash_groups"
+name = "first_seen"
+
+[[steps.entities]]
+kind = "field"
+scope = "crash_groups"
+name = "last_seen"
+
+[[steps.entities]]
+kind = "field"
+scope = "crash_groups"
+name = "product_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "crash_groups"
+name = "signal"
+
+[[steps.entities]]
+kind = "field"
+scope = "crash_groups"
+name = "status"
+
+[[steps.entities]]
+kind = "field"
+scope = "crash_groups"
+name = "updated_at"
+
+[[steps.entities]]
+kind = "field"
 scope = "crashes"
 name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "crashes"
+name = "fingerprint"
+
+[[steps.entities]]
+kind = "field"
+scope = "crashes"
+name = "group_id"
 
 [[steps.entities]]
 kind = "field"
@@ -172,11 +242,6 @@ name = "product_id"
 kind = "field"
 scope = "crashes"
 name = "report"
-
-[[steps.entities]]
-kind = "field"
-scope = "crashes"
-name = "signature"
 
 [[steps.entities]]
 kind = "field"
@@ -215,8 +280,88 @@ name = "user_id"
 
 [[steps.entities]]
 kind = "field"
+scope = "invitations"
+name = "code"
+
+[[steps.entities]]
+kind = "field"
+scope = "invitations"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "invitations"
+name = "created_by"
+
+[[steps.entities]]
+kind = "field"
+scope = "invitations"
+name = "expires_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "invitations"
+name = "grants"
+
+[[steps.entities]]
+kind = "field"
+scope = "invitations"
+name = "is_admin"
+
+[[steps.entities]]
+kind = "field"
+scope = "invitations"
+name = "max_uses"
+
+[[steps.entities]]
+kind = "field"
+scope = "invitations"
+name = "status"
+
+[[steps.entities]]
+kind = "field"
+scope = "invitations"
+name = "updated_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "invitations"
+name = "use_count"
+
+[[steps.entities]]
+kind = "field"
+scope = "pending_access"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "pending_access"
+name = "grants"
+
+[[steps.entities]]
+kind = "field"
+scope = "pending_access"
+name = "invitation_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "pending_access"
+name = "is_admin"
+
+[[steps.entities]]
+kind = "field"
+scope = "pending_access"
+name = "sub"
+
+[[steps.entities]]
+kind = "field"
 scope = "products"
 name = "accepting_crashes"
+
+[[steps.entities]]
+kind = "field"
+scope = "products"
+name = "color"
 
 [[steps.entities]]
 kind = "field"
@@ -237,6 +382,16 @@ name = "metadata"
 kind = "field"
 scope = "products"
 name = "name"
+
+[[steps.entities]]
+kind = "field"
+scope = "products"
+name = "public"
+
+[[steps.entities]]
+kind = "field"
+scope = "products"
+name = "slug"
 
 [[steps.entities]]
 kind = "field"
@@ -321,7 +476,17 @@ name = "user_id"
 [[steps.entities]]
 kind = "field"
 scope = "users"
+name = "avatar"
+
+[[steps.entities]]
+kind = "field"
+scope = "users"
 name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "users"
+name = "email"
 
 [[steps.entities]]
 kind = "field"
@@ -332,6 +497,11 @@ name = "is_admin"
 kind = "field"
 scope = "users"
 name = "last_login_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "users"
+name = "name"
 
 [[steps.entities]]
 kind = "field"
@@ -370,7 +540,17 @@ name = "fn::auth::username"
 [[steps.entities]]
 kind = "index"
 scope = "annotations"
-name = "idx_annotations_unique"
+name = "idx_annotations_crash"
+
+[[steps.entities]]
+kind = "index"
+scope = "annotations"
+name = "idx_annotations_group"
+
+[[steps.entities]]
+kind = "index"
+scope = "annotations"
+name = "idx_annotations_source"
 
 [[steps.entities]]
 kind = "index"
@@ -399,13 +579,83 @@ name = "idx_attachments_unique"
 
 [[steps.entities]]
 kind = "index"
+scope = "crash_groups"
+name = "idx_crash_groups_fingerprint"
+
+[[steps.entities]]
+kind = "index"
+scope = "crash_groups"
+name = "idx_crash_groups_last_seen"
+
+[[steps.entities]]
+kind = "index"
+scope = "crash_groups"
+name = "idx_crash_groups_status"
+
+[[steps.entities]]
+kind = "index"
+scope = "crashes"
+name = "idx_crashes_fingerprint"
+
+[[steps.entities]]
+kind = "index"
+scope = "crashes"
+name = "idx_crashes_group"
+
+[[steps.entities]]
+kind = "index"
+scope = "crashes"
+name = "idx_crashes_product"
+
+[[steps.entities]]
+kind = "index"
+scope = "invitations"
+name = "idx_invitations_code"
+
+[[steps.entities]]
+kind = "index"
+scope = "invitations"
+name = "idx_invitations_created_by"
+
+[[steps.entities]]
+kind = "index"
+scope = "pending_access"
+name = "idx_pending_access_invitation"
+
+[[steps.entities]]
+kind = "index"
+scope = "pending_access"
+name = "idx_pending_access_sub"
+
+[[steps.entities]]
+kind = "index"
 scope = "products"
 name = "idx_products_name"
 
 [[steps.entities]]
 kind = "index"
+scope = "products"
+name = "idx_products_slug"
+
+[[steps.entities]]
+kind = "index"
+scope = "symbols"
+name = "idx_symbols_module_build"
+
+[[steps.entities]]
+kind = "index"
+scope = "symbols"
+name = "idx_symbols_product"
+
+[[steps.entities]]
+kind = "index"
 scope = "user_access"
 name = "idx_user_access_pk"
+
+[[steps.entities]]
+kind = "index"
+scope = "users"
+name = "idx_users_email"
 
 [[steps.entities]]
 kind = "index"
@@ -426,11 +676,23 @@ name = "attachments"
 
 [[steps.entities]]
 kind = "table"
+name = "crash_groups"
+
+[[steps.entities]]
+kind = "table"
 name = "crashes"
 
 [[steps.entities]]
 kind = "table"
 name = "credentials"
+
+[[steps.entities]]
+kind = "table"
+name = "invitations"
+
+[[steps.entities]]
+kind = "table"
+name = "pending_access"
 
 [[steps.entities]]
 kind = "table"

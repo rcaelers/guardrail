@@ -1,8 +1,6 @@
 -- Guardrail SurrealDB desired-state schema managed by SurrealKit.
 --
 -- Keep this file as the schema source of truth for local sync and rollout planning.
--- The application still defines the JWT access method at runtime because it depends on
--- the configured Ed25519 public key.
 
 -- ============================================================
 -- Products
