@@ -1,0 +1,24 @@
+[package]
+name = "guardrail"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "guardrail"
+path = "src/main.rs"
+
+[dependencies]
+api = { path = "../api" }
+ingestion = { path = "../ingestion" }
+processor = { path = "../processor" }
+curator = { path = "../curator" }
+web = { path = "../../web/server" }
+common = { path = "../common", default-features = false, features = ["ssr"] }
+
+clap.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+tracing-log.workspace = true
+rustls.workspace = true
+log.workspace = true

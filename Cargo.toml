@@ -6,6 +6,7 @@ members = [
   "src/backend/ingestion",
   "src/backend/curator",
   "src/backend/processor",
+  "src/backend/server",
   "src/backend/common",
   "src/backend/data",
   "src/backend/repos",
@@ -14,10 +15,7 @@ members = [
   "src/web/server",
 ]
 default-members = [
-  "src/backend/api",
-  "src/backend/ingestion",
-  "src/backend/curator",
-  "src/backend/processor",
+  "src/backend/server",
   "src/web/server",
 ]
 

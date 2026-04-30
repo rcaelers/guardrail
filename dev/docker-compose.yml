@@ -143,10 +143,11 @@ services:
     build:
       context: ..
       dockerfile: Containerfile
-      target: web
+      target: server
       args: *rust-build-args
       provenance: false
       sbom: false
+    command: ['/app/guardrail', 'web', '-C', '/config']
     depends_on:
       surrealdb:
         condition: service_healthy
@@ -226,10 +227,11 @@ services:
     build:
       context: ..
       dockerfile: Containerfile
-      target: ingestion
+      target: server
       args: *rust-build-args
       provenance: false
       sbom: false
+    command: ['/app/guardrail', 'ingestion', '-C', '/config']
     depends_on:
       valkey:
         condition: service_healthy
@@ -257,10 +259,11 @@ services:
     build:
       context: ..
       dockerfile: Containerfile
-      target: processor
+      target: server
       args: *rust-build-args
       provenance: false
       sbom: false
+    command: ['/app/guardrail', 'processor', '-C', '/config']
     depends_on:
       valkey:
         condition: service_healthy
@@ -281,10 +284,11 @@ services:
     build:
       context: ..
       dockerfile: Containerfile
-      target: curator
+      target: server
       args: *rust-build-args
       provenance: false
       sbom: false
+    command: ['/app/guardrail', 'curator', '-C', '/config']
     depends_on:
       surrealdb:
         condition: service_healthy
@@ -309,10 +313,11 @@ services:
     build:
       context: ..
       dockerfile: Containerfile
-      target: api
+      target: server
       args: *rust-build-args
       provenance: false
       sbom: false
+    command: ['/app/guardrail', 'api', '-C', '/config']
     depends_on:
       surrealdb:
         condition: service_healthy

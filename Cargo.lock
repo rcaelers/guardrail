@@ -2412,6 +2412,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "guardrail"
+version = "0.1.0"
+dependencies = [
+ "api",
+ "clap",
+ "common",
+ "curator",
+ "ingestion",
+ "log",
+ "processor",
+ "rustls",
+ "tokio",
+ "tracing",
+ "tracing-log",
+ "tracing-subscriber",
+ "web",
+]
+
+[[package]]
 name = "h2"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"

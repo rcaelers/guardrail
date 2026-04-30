@@ -174,4 +174,76 @@ impl GuardrailApiApp {
                 .unwrap();
         }
     }
+
+    pub async fn ensure_default_api_token(&self) -> Result<(), Box<dyn std::error::Error>> {
+        use data::api_token::NewApiToken;
+        use repos::api_token::ApiTokenRepo;
+        use common::token::generate_api_token;
+
+        let tokens = ApiTokenRepo::get_all(&self.state.repo.db).await?;
+        if !tokens.is_empty() {
+            info!("API tokens already exist, skipping default token creation");
+            return Ok(());
+        }
+
+        let (token_id, token, token_hash) =
+            generate_api_token().map_err(|_| "Failed to generate API token")?;
+
+        let new_token = NewApiToken {
+            description: "Default API token".to_string(),
+            token_id,
+            token_hash,
+            product_id: None,
+            user_id: None,
+            entitlements: vec!["token".to_string()],
+            expires_at: None,
+            is_active: true,
+        };
+
+        let _token_id = ApiTokenRepo::create(&self.state.repo.db, new_token).await?;
+        info!("Created default API token");
+
+        if let Err(err) = Self::create_k8s_initial_token_secret(&token).await {
+            tracing::warn!("Failed to create initial token secret: {}", err);
+        }
+
+        Ok(())
+    }
+
+    async fn create_k8s_initial_token_secret(token: &str) -> Result<(), Box<dyn std::error::Error>> {
+        use k8s_openapi::api::core::v1::Secret;
+        use kube::{Api, Client, api::{ObjectMeta, PostParams}};
+
+        const SECRET_NAME: &str = "guardrail-initial-admin-token";
+
+        let client = Client::try_default().await?;
+        let namespace =
+            std::fs::read_to_string("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+                .unwrap_or_else(|_| {
+                    tracing::warn!("Could not determine current namespace, using 'default'");
+                    "default".to_string()
+                });
+
+        let secrets: Api<Secret> = Api::namespaced(client, &namespace);
+
+        if secrets.get_opt(SECRET_NAME).await?.is_some() {
+            return Ok(());
+        }
+
+        let secret = Secret {
+            metadata: ObjectMeta {
+                name: Some(SECRET_NAME.to_string()),
+                labels: Some(
+                    [("app.kubernetes.io/part-of".to_string(), "guardrail".to_string())].into(),
+                ),
+                ..Default::default()
+            },
+            string_data: Some([("token".to_string(), token.to_string())].into()),
+            type_: Some("Opaque".to_string()),
+            ..Default::default()
+        };
+
+        secrets.create(&PostParams::default(), &secret).await?;
+        Ok(())
+    }
 }
