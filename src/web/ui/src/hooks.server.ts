@@ -19,7 +19,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   const adapter = createAdapter(cookieHeader);
 
   try {
-    event.locals.user = await adapter.getUser(uid);
+    event.locals.user = await adapter.getMe();
     if (!event.locals.user) {
       clearSession(event.cookies);
     } else {

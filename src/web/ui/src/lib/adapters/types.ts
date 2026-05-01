@@ -446,6 +446,7 @@ export interface CreateAdminApiTokenSpec {
 export interface GuardrailAdapter {
   // --- session ---
   signIn(email: string): Promise<User | null>;
+  getMe(): Promise<User | null>;
   getUser(id: string): Promise<User | null>;
 
   // --- products ---

@@ -747,6 +747,7 @@ export const mockAdapter: GuardrailAdapter = {
   async signIn(email) {
     return USERS.find((u) => u.email.toLowerCase() === (email || '').toLowerCase()) ?? null;
   },
+  async getMe() { return USERS[0] ?? null; },
   async getUser(id) { return USERS.find((u) => u.id === id) ?? null; },
 
   // --- products ---
