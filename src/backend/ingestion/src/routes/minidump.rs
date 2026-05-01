@@ -232,6 +232,7 @@ impl MinidumpApi {
         debug!(field_name = %field_name, file_name = %file_name, content_type = %content_type, "Processing multipart field");
         match field_name {
             "upload_file_minidump" => Self::handle_minidump_upload(field, crash_info, state).await,
+            "user-text" => Self::handle_attachment_upload(field, crash_info, state).await,
             _ => {
                 if file_name.is_empty() {
                     Self::handle_annotation_upload(field, crash_info).await

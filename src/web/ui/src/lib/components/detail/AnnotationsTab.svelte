@@ -2,7 +2,9 @@
   let { annotations }: { annotations: Record<string, string> | undefined } = $props();
 
   const entries = $derived(
-    Object.entries(annotations ?? {}).sort(([a], [b]) => a.localeCompare(b))
+    Object.entries(annotations ?? {})
+      .filter(([key]) => key !== 'user-text')
+      .sort(([a], [b]) => a.localeCompare(b))
   );
 </script>
 

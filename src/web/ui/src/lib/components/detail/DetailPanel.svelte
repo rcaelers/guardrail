@@ -69,7 +69,7 @@
       ['annotations', 'Annotations'],
       ['attachments', 'Attachments'],
     ];
-    if (crash.userText?.body) tabs.push(['usertext', 'User Text']);
+    if (crash.userText?.body ?? crash.annotations?.['user-text']) tabs.push(['usertext', 'User Text']);
     tabs.push(['related', 'Related'], ['notes', 'Notes']);
     return tabs;
   });
@@ -174,9 +174,12 @@
     {#if tab === 'annotations'}<AnnotationsTab annotations={crash.annotations} />{/if}
     {#if tab === 'attachments'}<AttachmentsTab attachments={crash.attachments ?? []} productId={crash.productId} />{/if}
     {#if tab === 'usertext'}
-      {#if crash.userText?.body}
-        <div class="mb-1.5 text-[11px] text-ink-muted dark:text-ink-mutedDark">Submitted {fmtDate(crash.userText.createdAt)}</div>
-        <pre class="whitespace-pre-wrap break-words font-sans text-[13px] leading-[1.55] text-ink dark:text-ink-dark">{crash.userText.body}</pre>
+      {@const userTextBody = crash.userText?.body ?? crash.annotations?.['user-text']}
+      {#if userTextBody}
+        {#if crash.userText?.createdAt}
+          <div class="mb-1.5 text-[11px] text-ink-muted dark:text-ink-mutedDark">Submitted {fmtDate(crash.userText.createdAt)}</div>
+        {/if}
+        <pre class="whitespace-pre-wrap break-words font-sans text-[13px] leading-[1.55] text-ink dark:text-ink-dark">{userTextBody}</pre>
       {:else}
         <div class="rounded border border-dashed border-line px-3 py-3 text-[12px] text-ink-muted dark:border-line-dark dark:text-ink-mutedDark">No user text for this crash.</div>
       {/if}
