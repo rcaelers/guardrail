@@ -6,6 +6,9 @@ pub enum RepoError {
     #[error("database failure: {0}")]
     DatabaseError(String),
 
+    #[error("database unavailable")]
+    ConnectionError(),
+
     #[error("database invalid column: {0}")]
     InvalidColumn(String),
 
@@ -29,6 +32,11 @@ pub enum RepoError {
 }
 
 pub fn handle_surreal_error(err: surrealdb::Error) -> RepoError {
+    if err.is_connection() {
+        error!("SurrealDB connection error: {}", err);
+        return RepoError::ConnectionError();
+    }
+
     error!("SurrealDB error: {}", err);
     let msg = err.to_string();
 

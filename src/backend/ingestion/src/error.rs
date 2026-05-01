@@ -15,6 +15,9 @@ pub enum ApiError {
     #[error("general failure: {0}")]
     Failure(String),
 
+    #[error("service unavailable: {0}")]
+    ServiceUnavailable(String),
+
     #[error("invalid token: {0}")]
     InvalidToken(String),
 
@@ -41,6 +44,9 @@ impl IntoResponse for ApiError {
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal failure".to_string())
             }
             ApiError::Failure(err) => (StatusCode::BAD_REQUEST, format!("general failure: {err}")),
+            ApiError::ServiceUnavailable(msg) => {
+                (StatusCode::SERVICE_UNAVAILABLE, msg.to_string())
+            }
             ApiError::InvalidToken(token) => {
                 (StatusCode::FORBIDDEN, format!("invalid token: {token}"))
             }

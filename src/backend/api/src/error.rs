@@ -78,6 +78,9 @@ impl IntoResponse for ApiError {
                 error!("query extractor rejection: {:?}", err);
                 (StatusCode::BAD_REQUEST, err.to_string())
             }
+            ApiError::RepoError(repos::error::RepoError::ConnectionError()) => {
+                (StatusCode::SERVICE_UNAVAILABLE, "database unavailable".to_string())
+            }
             ApiError::RepoError(err) => (StatusCode::BAD_REQUEST, err.to_string()),
         };
 

@@ -43,7 +43,7 @@ impl ProductCache {
                 info!(name = %name, key = %key, "Fetching product from Valkey");
                 let json: Option<String> = conn.clone().get(&key).await.map_err(|e| {
                     error!(name = %name, key = %key, error = ?e, "Failed to get product from Valkey");
-                    ApiError::Failure("failed to get product info".to_string())
+                    ApiError::ServiceUnavailable("cache unavailable".to_string())
                 })?;
 
                 match json {

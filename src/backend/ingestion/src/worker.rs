@@ -44,7 +44,7 @@ impl Worker for WorkQueue {
             .await
             .map_err(|e| {
                 error!("Failed to queue minidump job: {:?}", e);
-                ApiError::Failure("failed to queue minidump job".to_string())
+                ApiError::ServiceUnavailable("job queue unavailable".to_string())
             })?;
 
         Ok(task_id)
