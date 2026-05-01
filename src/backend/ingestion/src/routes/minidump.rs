@@ -440,7 +440,7 @@ impl MinidumpApi {
             "product".to_string(),
             AnnotationEntry {
                 value: product.name.clone(),
-                source: "canonical".to_string(),
+                source: "submission".to_string(),
             },
         );
 
