@@ -107,6 +107,19 @@ impl GuardrailCuratorApp {
     }
 
     pub async fn run(&self, shutdown: impl Future<Output = std::io::Result<()>> + Send) {
+        let db_health = self.state.repo.db.clone();
+        let redis_health = self.redis_manager.clone();
+        common::spawn_health_server(9090, move || {
+            let db = db_health.clone();
+            let mut redis = redis_health.clone();
+            Box::pin(async move {
+                db.health().await.is_ok()
+                    && redis::cmd("PING")
+                        .query_async::<String>(&mut redis)
+                        .await
+                        .is_ok()
+            })
+        });
         self.sync_products().await;
         self.spawn_product_listener();
         self.run_workers(shutdown).await;

@@ -82,12 +82,15 @@ pub async fn init_logging() {
     tracing_log::LogTracer::init().expect("Failed to set logger");
 }
 
+const STARTUP_TIMEOUT: Duration = Duration::from_secs(300);
+
 pub async fn retry_startup<F, Fut, T, E>(dependency: &str, mut init: F) -> T
 where
     F: FnMut() -> Fut,
     Fut: Future<Output = Result<T, E>>,
     E: std::fmt::Display,
 {
+    let start = std::time::Instant::now();
     let mut attempt = 1u32;
     let mut delay = Duration::from_secs(1);
 
@@ -100,6 +103,13 @@ where
                 return value;
             }
             Err(err) => {
+                if start.elapsed() >= STARTUP_TIMEOUT {
+                    tracing::error!(
+                        "Dependency '{dependency}' unavailable after {attempt} attempts ({:.0}s elapsed): {err}",
+                        start.elapsed().as_secs_f64()
+                    );
+                    std::process::exit(1);
+                }
                 tracing::warn!(
                     "Waiting for {dependency} during startup (attempt {attempt}): {err}"
                 );
@@ -109,6 +119,53 @@ where
             }
         }
     }
+}
+
+#[cfg(feature = "ssr")]
+pub fn spawn_health_server(
+    port: u16,
+    ready_check: impl Fn() -> std::pin::Pin<Box<dyn Future<Output = bool> + Send>>
+        + Send
+        + Sync
+        + 'static,
+) {
+    use axum::{Router, extract::State, http::StatusCode, routing::get};
+
+    type CheckFn = std::sync::Arc<
+        dyn Fn() -> std::pin::Pin<Box<dyn Future<Output = bool> + Send>> + Send + Sync,
+    >;
+
+    async fn live() -> StatusCode {
+        StatusCode::OK
+    }
+
+    async fn ready(State(check): State<CheckFn>) -> StatusCode {
+        if check().await {
+            StatusCode::OK
+        } else {
+            StatusCode::SERVICE_UNAVAILABLE
+        }
+    }
+
+    let check: CheckFn = std::sync::Arc::new(ready_check);
+    let app = Router::new()
+        .route("/live", get(live))
+        .route("/ready", get(ready))
+        .with_state(check);
+
+    tokio::spawn(async move {
+        let listener = match tokio::net::TcpListener::bind(("0.0.0.0", port)).await {
+            Ok(l) => l,
+            Err(e) => {
+                tracing::error!("Failed to bind health server on port {port}: {e}");
+                std::process::exit(1);
+            }
+        };
+        tracing::info!("Health server listening on port {port}");
+        if let Err(e) = axum::serve(listener, app).await {
+            tracing::error!("Health server error: {e}");
+        }
+    });
 }
 
 #[cfg(feature = "ssr")]

@@ -30,6 +30,7 @@ minidump-unwind.workspace = true
 # Misc
 apalis.workspace = true
 apalis-redis.workspace = true
+redis.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
 fancy-regex.workspace = true

@@ -10,6 +10,7 @@ use apalis_redis::{ConnectionManager, RedisConfig, RedisStorage};
 use tracing::debug;
 
 use common::jobs::queue;
+use common::retry_startup;
 use common::settings::Settings;
 
 use crate::jobs::{ImportCrashJob, ImportSymbolJob, MinidumpJob, SymbolJob};
@@ -20,26 +21,59 @@ use crate::symbols::SymbolProcessor;
 pub struct GuardrailProcessorApp {
     state: AppState,
     conn: ConnectionManager,
+    redis_manager: redis::aio::ConnectionManager,
 }
 
 impl GuardrailProcessorApp {
-    pub fn new(state: AppState, conn: ConnectionManager) -> Self {
-        Self { state, conn }
+    pub fn new(
+        state: AppState,
+        conn: ConnectionManager,
+        redis_manager: redis::aio::ConnectionManager,
+    ) -> Self {
+        Self {
+            state,
+            conn,
+            redis_manager,
+        }
     }
 
     /// Bootstrap from settings: connect to Valkey and S3, build internal state.
     pub async fn from_settings(settings: Arc<Settings>) -> Self {
-        let conn = apalis_redis::connect(settings.valkey.uri.clone())
-            .await
-            .expect("Failed to connect to Valkey (apalis)");
+        let conn = retry_startup("Valkey (apalis)", || {
+            let uri = settings.valkey.uri.clone();
+            async move { apalis_redis::connect(uri).await }
+        })
+        .await;
+
+        let redis_client = redis::Client::open(settings.valkey.uri.as_str())
+            .expect("Failed to create Redis client");
+        let redis_manager = retry_startup("Valkey (redis)", || {
+            let redis_client = redis_client.clone();
+            async move { redis::aio::ConnectionManager::new(redis_client).await }
+        })
+        .await;
 
         let store = common::init_s3_object_store(settings.clone()).await;
         let state = AppState::new(settings, store);
 
-        Self { state, conn }
+        Self {
+            state,
+            conn,
+            redis_manager,
+        }
     }
 
     pub async fn run(&self, shutdown: impl Future<Output = std::io::Result<()>> + Send) {
+        let redis_health = self.redis_manager.clone();
+        common::spawn_health_server(9090, move || {
+            let mut conn = redis_health.clone();
+            Box::pin(async move {
+                redis::cmd("PING")
+                    .query_async::<String>(&mut conn)
+                    .await
+                    .is_ok()
+            })
+        });
         self.run_workers(shutdown).await;
     }
 

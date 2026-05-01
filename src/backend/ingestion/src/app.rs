@@ -18,6 +18,7 @@ use tracing::Level;
 use tracing::info;
 
 use common::jobs::queue;
+use common::retry_startup;
 use common::settings::Settings;
 
 use crate::product_cache::ProductCache;
@@ -38,17 +39,21 @@ impl GuardrailIngestionApp {
 
     /// Bootstrap from settings: connect to Valkey and S3, build internal state.
     pub async fn from_settings(settings: Arc<Settings>) -> Self {
-        let redis_conn = apalis_redis::connect(settings.valkey.uri.clone())
-            .await
-            .expect("Failed to connect to Valkey (apalis)");
+        let redis_conn = retry_startup("Valkey (apalis)", || {
+            let uri = settings.valkey.uri.clone();
+            async move { apalis_redis::connect(uri).await }
+        })
+        .await;
 
         let store = common::init_s3_object_store(settings.clone()).await;
 
         let redis_client = redis::Client::open(settings.valkey.uri.as_str())
             .expect("Failed to create Redis client");
-        let redis_manager = redis::aio::ConnectionManager::new(redis_client)
-            .await
-            .expect("Failed to create Redis connection manager");
+        let redis_manager = retry_startup("Valkey (redis)", || {
+            let redis_client = redis_client.clone();
+            async move { redis::aio::ConnectionManager::new(redis_client).await }
+        })
+        .await;
         let product_cache = ProductCache::new(redis_manager);
 
         let redis_minidump = RedisStorage::new_with_config(

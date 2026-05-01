@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use axum::{Router, extract::DefaultBodyLimit, routing::get};
+use axum::{Router, extract::{DefaultBodyLimit, State}, http::StatusCode, routing::get};
 use axum_server::tls_rustls::RustlsConfig;
 use common::{init_s3_object_store, retry_startup, settings::Settings};
 use repos::Repo;
@@ -167,11 +167,27 @@ impl GuardrailWebApp {
             .with_state(db_state)
             .merge(invite::api_router().with_state(state.clone()));
 
+        async fn live() -> StatusCode {
+            StatusCode::OK
+        }
+
+        async fn ready(State(state): State<AppState>) -> StatusCode {
+            match state.repo.db.health().await {
+                Ok(()) => StatusCode::OK,
+                Err(err) => {
+                    tracing::error!("Health check failed: {err}");
+                    StatusCode::SERVICE_UNAVAILABLE
+                }
+            }
+        }
+
         let app = Router::new()
             .merge(routes::router())
             .merge(impersonation::router())
             .nest("/api/v1", api_v1)
             .nest_service("/static", ServeDir::new("src/web/server/static"))
+            .route("/live", get(live))
+            .route("/ready", get(ready))
             .route("/healthz", get(|| async { "ok" }))
             .layer(DefaultBodyLimit::max(10 * 1024 * 1024))
             .layer(

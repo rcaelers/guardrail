@@ -1139,6 +1139,7 @@ name = "common"
 version = "0.1.0"
 dependencies = [
  "argon2",
+ "axum",
  "base64 0.22.1",
  "config",
  "glob",
@@ -4564,6 +4565,7 @@ dependencies = [
  "minidump-processor",
  "minidump-unwind",
  "object_store",
+ "redis",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
