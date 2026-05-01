@@ -111,7 +111,7 @@ impl ImportCrashProcessor {
         let signal = report["crash_info"]["type"]
             .as_str()
             .filter(|s| !s.is_empty())
-            .map(|s| shorten_exception_type(s))
+            .map(shorten_exception_type)
             .unwrap_or_else(|| fingerprint.clone().unwrap_or_default());
 
         let group_id = if let Some(fp) = fingerprint.as_deref() {
@@ -143,8 +143,12 @@ impl ImportCrashProcessor {
             JobError::Failure("failed to store crash report".to_string())
         })?;
 
-        Self::create_annotations(db, &id, &product.id, &crash_info).await?;
-        Self::create_attachments(db, &id, &product.id, &crash_info).await?;
+        if let Err(e) = Self::create_annotations(db, &id, &product.id, &crash_info).await {
+            error!(crash_id = %id, error = ?e, "Failed to create annotations");
+        }
+        if let Err(e) = Self::create_attachments(db, &id, &product.id, &crash_info).await {
+            error!(crash_id = %id, error = ?e, "Failed to create attachments");
+        }
         info!("Created crash report with ID: {}", id);
         Ok(id)
     }
@@ -226,9 +230,7 @@ impl ImportCrashProcessor {
                 }
                 _ => {
                     error!("Annotation data is not in expected format for key: {}", key);
-                    return Err(JobError::Failure(
-                        "annotation data must be string or structured object".to_string(),
-                    ));
+                    continue; // Skip this annotation but continue processing others
                 }
             };
 
@@ -335,7 +337,10 @@ fn derive_report_fields(mut report: Value, crash_info: &Value) -> Value {
     let file = first_frame["file"].as_str().unwrap_or("").to_string();
     let line = first_frame["line"].as_u64();
 
-    let os_name = report["system_info"]["os"].as_str().unwrap_or("").to_string();
+    let os_name = report["system_info"]["os"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
     let os_ver = report["system_info"]["os_ver"]
         .as_str()
         .unwrap_or("")
