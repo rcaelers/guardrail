@@ -233,10 +233,10 @@ fn apply_rep(mut group: Value, rep: Option<&Value>) -> Value {
             "exceptionTypeShort",
             "similarity",
         ] {
-            if !obj.contains_key(key) {
-                if let Some(val) = rep_obj.get(key) {
-                    obj.insert(key.into(), val.clone());
-                }
+            if !obj.contains_key(key)
+                && let Some(val) = rep_obj.get(key)
+            {
+                obj.insert(key.into(), val.clone());
             }
         }
     }
@@ -1007,10 +1007,10 @@ async fn list_groups(
     let now = Utc::now();
 
     for r in rep_rows {
-        if let Some(v) = r.get("version").and_then(|v| v.as_str()) {
-            if !v.is_empty() {
-                versions_set.insert(v.to_string());
-            }
+        if let Some(v) = r.get("version").and_then(|v| v.as_str())
+            && !v.is_empty()
+        {
+            versions_set.insert(v.to_string());
         }
         let Some(gid_raw) = r.get("group_id").and_then(|v| v.as_str()) else {
             continue;
@@ -1020,19 +1020,17 @@ async fn list_groups(
         *counts.entry(gid.clone()).or_insert(0) += 1;
 
         // 30D trend: 14 two-day buckets; bucket 0 = oldest, 13 = most recent
-        if let Some(created_str) = r.get("created_at").and_then(|v| v.as_str()) {
-            if let Ok(ts) = created_str.parse::<chrono::DateTime<Utc>>() {
-                let days_ago = (now - ts).num_days();
-                if (0..28).contains(&days_ago) {
-                    let bucket = (13 - days_ago / 2) as usize;
-                    trends.entry(gid.clone()).or_insert([0u64; 14])[bucket] += 1;
-                }
+        if let Some(created_str) = r.get("created_at").and_then(|v| v.as_str())
+            && let Ok(ts) = created_str.parse::<chrono::DateTime<Utc>>()
+        {
+            let days_ago = (now - ts).num_days();
+            if (0..28).contains(&days_ago) {
+                let bucket = (13 - days_ago / 2) as usize;
+                trends.entry(gid.clone()).or_insert([0u64; 14])[bucket] += 1;
             }
         }
 
-        if !reps.contains_key(&gid) {
-            reps.insert(gid, r);
-        }
+        reps.entry(gid).or_insert(r);
     }
     let versions_list: Vec<String> = versions_set.into_iter().rev().collect();
 
@@ -1041,9 +1039,7 @@ async fn list_groups(
         .map(|g| {
             // meta::id() can return "⟨uuid⟩" with angle brackets; normalise so
             // the lookup into counts/trends/reps (keyed by plain UUID) always works.
-            let gid = extract_short_id(
-                g.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
-            );
+            let gid = extract_short_id(g.get("id").and_then(|v| v.as_str()).unwrap_or_default());
             let mut merged = apply_rep(g, reps.get(&gid));
             if let Some(obj) = merged.as_object_mut() {
                 if let Some(&actual) = counts.get(&gid) {
@@ -1183,12 +1179,14 @@ async fn get_crash(
 fn build_annotations_map(rows: Vec<Value>) -> serde_json::Map<String, Value> {
     let mut map = serde_json::Map::new();
     for row in rows {
-        if let (Some(key), Some(value)) = (
-            row.get("key").and_then(|v| v.as_str()),
-            row.get("value").and_then(|v| v.as_str()),
-        ) {
+        if let (Some(key), Some(value)) =
+            (row.get("key").and_then(|v| v.as_str()), row.get("value").and_then(|v| v.as_str()))
+        {
             // script source wins over submission for the same key
-            let source = row.get("source").and_then(|v| v.as_str()).unwrap_or("submission");
+            let source = row
+                .get("source")
+                .and_then(|v| v.as_str())
+                .unwrap_or("submission");
             if source == "script" || !map.contains_key(key) {
                 map.insert(key.to_string(), Value::String(value.to_string()));
             }
@@ -1214,10 +1212,14 @@ fn hydrate_crash(row: &Value, attachments: Vec<Value>, user_text: Option<Value>)
         }
     }
     // Fall back to the DB record timestamp when submission_timestamp was not stored.
-    if out.get("at").and_then(|v| v.as_str()).map(|s| s.is_empty()).unwrap_or(true) {
-        if let Some(ts) = row.get("created_at") {
-            out.insert("at".into(), ts.clone());
-        }
+    if out
+        .get("at")
+        .and_then(|v| v.as_str())
+        .map(|s| s.is_empty())
+        .unwrap_or(true)
+        && let Some(ts) = row.get("created_at")
+    {
+        out.insert("at".into(), ts.clone());
     }
     out.insert("attachments".into(), Value::Array(attachments));
     out.insert("userText".into(), user_text.unwrap_or(Value::Null));

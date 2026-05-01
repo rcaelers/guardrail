@@ -151,10 +151,10 @@ pub async fn require_product_maintainer(
         let token_str = extract_bearer_token(headers).ok_or_else(AppError::forbidden)?;
         let token = verify_and_touch_token(db, token_str, None).await?;
         // Global tokens are accepted; product-scoped tokens must match.
-        if let Some(pid) = &token.product_id {
-            if pid != product_id {
-                return Err(AppError::forbidden());
-            }
+        if let Some(pid) = &token.product_id
+            && pid != product_id
+        {
+            return Err(AppError::forbidden());
         }
         return Ok(Principal::Token(token));
     }
@@ -260,10 +260,10 @@ async fn verify_and_touch_token(
         return Err(AppError::forbidden());
     }
 
-    if let Some(ent) = entitlement {
-        if !token.has_entitlement(ent) {
-            return Err(AppError::forbidden());
-        }
+    if let Some(ent) = entitlement
+        && !token.has_entitlement(ent)
+    {
+        return Err(AppError::forbidden());
     }
 
     if let Err(err) = ApiTokenRepo::update_last_used(db, &token.id).await {

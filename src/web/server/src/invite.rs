@@ -225,25 +225,24 @@ async fn get_invite_info(
         .map_err(AppError::internal)?
         .ok_or_else(|| AppError::not_found("Invitation not found or has expired"))?;
 
-    if let Some(provisioner) = state.provisioner.as_ref() {
-        if let Some(pending) = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
+    if let Some(provisioner) = state.provisioner.as_ref()
+        && let Some(pending) = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
             &state.repo.db,
             &invitation.id,
         )
         .await
         .map_err(AppError::internal)?
-        {
-            let setup_url = provisioner
-                .create_setup_url(&pending.sub)
-                .await
-                .map_err(|e| {
-                    tracing::warn!("re-issue setup URL for invite {code}: {e}");
-                    AppError::failure(e.to_string())
-                })?;
-            return Ok(Json(
-                serde_json::json!({ "valid": true, "redirect_url": setup_url.to_string() }),
-            ));
-        }
+    {
+        let setup_url = provisioner
+            .create_setup_url(&pending.sub)
+            .await
+            .map_err(|e| {
+                tracing::warn!("re-issue setup URL for invite {code}: {e}");
+                AppError::failure(e.to_string())
+            })?;
+        return Ok(Json(
+            serde_json::json!({ "valid": true, "redirect_url": setup_url.to_string() }),
+        ));
     }
 
     Ok(Json(serde_json::json!({ "valid": true })))
@@ -361,23 +360,22 @@ async fn show_invite_form(
         .map_err(AppError::internal)?
         .ok_or_else(|| AppError::not_found("Invitation not found or has expired"))?;
 
-    if let Some(provisioner) = state.provisioner.as_ref() {
-        if let Some(pending) = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
+    if let Some(provisioner) = state.provisioner.as_ref()
+        && let Some(pending) = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
             &state.repo.db,
             &invitation.id,
         )
         .await
         .map_err(AppError::internal)?
-        {
-            let setup_url = provisioner
-                .create_setup_url(&pending.sub)
-                .await
-                .map_err(|e| {
-                    tracing::warn!("re-issue setup URL for invite {code}: {e}");
-                    AppError::failure(e.to_string())
-                })?;
-            return Ok(Redirect::to(setup_url.as_str()).into_response());
-        }
+    {
+        let setup_url = provisioner
+            .create_setup_url(&pending.sub)
+            .await
+            .map_err(|e| {
+                tracing::warn!("re-issue setup URL for invite {code}: {e}");
+                AppError::failure(e.to_string())
+            })?;
+        return Ok(Redirect::to(setup_url.as_str()).into_response());
     }
 
     let error = query.error.unwrap_or_default();
@@ -467,15 +465,14 @@ fn authorize_api_token_grants(
     api_token: &ApiToken,
     body: &CreateInvitationRequest,
 ) -> AppResult<()> {
-    if let Some(product_id) = api_token.product_id.as_deref() {
-        if body.is_admin
+    if let Some(product_id) = api_token.product_id.as_deref()
+        && (body.is_admin
             || body
                 .grants
                 .iter()
-                .any(|grant| grant.product_id != product_id)
-        {
-            return Err(AppError::forbidden());
-        }
+                .any(|grant| grant.product_id != product_id))
+    {
+        return Err(AppError::forbidden());
     }
     Ok(())
 }
