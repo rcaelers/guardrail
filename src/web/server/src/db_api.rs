@@ -36,6 +36,7 @@ pub struct DbState {
 pub fn router() -> Router<DbState> {
     Router::new()
         .route("/auth/signin", post(signin))
+        .route("/me", get(get_me))
         .route("/users", get(list_users).post(create_user))
         .route("/users/{id}", get(get_user).post(update_user).delete(delete_user))
         .route("/users/{id}/admin", post(set_admin))
@@ -360,6 +361,23 @@ async fn signin(
         .next()
         .map(Json)
         .ok_or_else(|| (StatusCode::NOT_FOUND, "user not found".into()))
+}
+
+async fn get_me(
+    State(s): State<DbState>,
+    headers: HeaderMap,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&headers).await;
+    let rows = run_value(
+        &db,
+        &format!("SELECT {USER_PROJ} FROM users WHERE username = fn::auth::username() LIMIT 1"),
+        vec![],
+    )
+    .await?;
+    rows.into_iter()
+        .next()
+        .map(Json)
+        .ok_or_else(|| (StatusCode::UNAUTHORIZED, "not authenticated".into()))
 }
 
 async fn list_users(
