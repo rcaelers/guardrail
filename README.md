@@ -259,57 +259,21 @@ docker compose -f dev/docker-compose.yml run --rm pocket-id-setup
 cat dev/_private/pocket-id/admin-login.env
 ```
 
-To generate a token without running the full setup, use a temporary container on the compose network:
+To generate a token manually:
 
 ```sh
-docker compose -f dev/docker-compose.yml run --rm --no-deps \
-  --entrypoint /bin/sh pocket-id-setup -c '
-    apk add -q curl jq
-    API_KEY=GuardrailPocketIdStaticApiKey0123456789
-    URL=http://pocket-id:1411
-    ADMIN_ID=$(curl -sS -H "X-API-KEY: $API_KEY" "$URL/api/users" \
-      | jq -r ".data[] | select(.isAdmin == true and .username != \"Static API User\") | .id" \
-      | head -n1)
-    TOKEN=$(curl -sS -X POST \
-      -H "Content-Type: application/json" \
-      -H "X-API-KEY: $API_KEY" \
-      "$URL/api/users/$ADMIN_ID/one-time-access-token" \
-      -d "{\"ttl\":\"168h\"}" | jq -r .token)
-    echo "https://guardrail.home.krandor.org:1443/lc/$TOKEN"
-  '
+docker compose -f dev/docker-compose.yml exec pocket-id /app/pocket-id one-time-access-token <username or email>
 ```
 
 ### Getting an Admin Login Code on Kubernetes
 
-The Pocket ID API key is stored in the `pocket-id-secrets` Secret.
-Run a temporary pod inside the cluster to call the API and print a one-time login URL.
-
-**Development** (namespace `guardrail-dev`, app URL `https://auth-dev.workrave.org`):
+**Development** (namespace `guardrail-dev`):
 
 ```sh
-API_KEY=$(kubectl get secret pocket-id-secrets -n guardrail-dev \
-  -o jsonpath='{.data.STATIC_API_KEY}' | base64 -d)
-
-kubectl run -it --rm --restart=Never pocket-id-login \
-  --image=alpine --namespace=guardrail-dev \
-  --env="POCKET_ID_URL=http://pocket-id" \
-  --env="POCKET_ID_API_KEY=$API_KEY" \
-  --env="APP_URL=https://auth-dev.workrave.org" \
-  --command -- sh -c '
-    apk add -q curl jq
-    ADMIN_ID=$(curl -sS -H "X-API-KEY: $POCKET_ID_API_KEY" "$POCKET_ID_URL/api/users" \
-      | jq -r ".data[] | select(.isAdmin == true and .username != \"Static API User\") | .id" \
-      | head -n1)
-    TOKEN=$(curl -sS -X POST \
-      -H "Content-Type: application/json" \
-      -H "X-API-KEY: $POCKET_ID_API_KEY" \
-      "$POCKET_ID_URL/api/users/$ADMIN_ID/one-time-access-token" \
-      -d "{\"ttl\":\"168h\"}" | jq -r .token)
-    echo "$APP_URL/lc/$TOKEN"
-  '
+kubectl exec -n guardrail-dev deployment/pocket-id -- /app/pocket-id one-time-access-token <username or email>
 ```
 
-**Production**: substitute `guardrail-prd` for the namespace and `https://auth.workrave.org` for `APP_URL`.
+**Production**: substitute `guardrail-prd` for the namespace.
 
 Export the generated OIDC settings before starting the Rust web server:
 
