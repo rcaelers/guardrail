@@ -77,7 +77,7 @@ impl GuardrailProcessorApp {
         self.run_workers(shutdown).await;
     }
 
-    async fn run_workers(&self, shutdown: impl Future<Output = std::io::Result<()>> + Send) {
+    pub async fn run_workers(&self, shutdown: impl Future<Output = std::io::Result<()>> + Send) {
         let state = self.state.clone();
         let conn = self.conn.clone();
 

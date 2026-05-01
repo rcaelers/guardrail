@@ -115,7 +115,7 @@ async fn run_all(settings: Arc<Settings>) {
 
     let processor_handle = tokio::spawn(async move {
         let app = processor::app::GuardrailProcessorApp::from_settings(processor_settings).await;
-        app.run(async {
+        app.run_workers(async {
             tokio::signal::ctrl_c().await?;
             Ok(())
         })
@@ -124,7 +124,9 @@ async fn run_all(settings: Arc<Settings>) {
 
     let curator_handle = tokio::spawn(async move {
         let app = curator::app::GuardrailCuratorApp::from_settings(curator_settings).await;
-        app.run(async {
+        app.sync_products().await;
+        app.spawn_product_listener();
+        app.run_workers(async {
             tokio::signal::ctrl_c().await?;
             Ok(())
         })

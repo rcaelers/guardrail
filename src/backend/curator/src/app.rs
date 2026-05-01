@@ -125,7 +125,7 @@ impl GuardrailCuratorApp {
         self.run_workers(shutdown).await;
     }
 
-    async fn sync_products(&self) {
+    pub async fn sync_products(&self) {
         let mut redis_manager = self.redis_manager.clone();
         if let Err(e) =
             product_sync::sync_products_to_valkey(&self.state.repo, &mut redis_manager).await
@@ -134,7 +134,7 @@ impl GuardrailCuratorApp {
         }
     }
 
-    fn spawn_product_listener(&self) {
+    pub fn spawn_product_listener(&self) {
         let listener_db = self.state.repo.db.clone();
         let listener_redis = self.redis_manager.clone();
         tokio::spawn(async move {
@@ -152,7 +152,7 @@ impl GuardrailCuratorApp {
         });
     }
 
-    async fn run_workers(&self, shutdown: impl Future<Output = std::io::Result<()>> + Send) {
+    pub async fn run_workers(&self, shutdown: impl Future<Output = std::io::Result<()>> + Send) {
         let state = self.state.clone();
         let conn = self.conn.clone();
 

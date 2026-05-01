@@ -123,7 +123,7 @@ services:
     depends_on:
       pocket-id:
         condition: service_healthy
-      web:
+      guardrail:
         condition: service_healthy
       svelte:
         condition: service_started
@@ -138,8 +138,8 @@ services:
       - caddy-config:/config
     restart: unless-stopped
 
-  web:
-    container_name: web
+  guardrail:
+    container_name: guardrail
     build:
       context: ..
       dockerfile: Containerfile
@@ -147,7 +147,7 @@ services:
       args: *rust-build-args
       provenance: false
       sbom: false
-    command: ['/app/guardrail', 'web', '-C', '/config']
+    command: ['/app/guardrail', 'all', '-C', '/config']
     depends_on:
       surrealdb:
         condition: service_healthy
@@ -162,10 +162,15 @@ services:
     environment:
       RUST_LOG: info
     volumes:
+      - ../config/scripts:/config/scripts:ro
       - ./config/settings.yaml:/config/settings.yaml:ro
       - ./config/web-docker.yaml:/config/web-docker.yaml:ro
+      - /tmp/guardrail
+    ports:
+      - '8080:80'
+      - '8081:81'
     healthcheck:
-      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:80/healthz || exit 1']
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:80/api/ready || exit 1']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -183,7 +188,7 @@ services:
       PORT: '3000'
       HOST: '0.0.0.0'
       ORIGIN: 'https://guardrail.home.krandor.org:4433'
-      GUARDRAIL_API_URL: 'http://web:80/api/v1'
+      GUARDRAIL_API_URL: 'http://guardrail:8082/api/v1'
       # Vite uses Chokidar for file watching. Polling makes host bind-mount
       # changes reliable on Docker Desktop filesystems.
       CHOKIDAR_USEPOLLING: 'true'
@@ -222,124 +227,3 @@ services:
       - apk add --no-cache curl jq >/dev/null && /bin/sh /guardrail-auth-setup.sh
     restart: 'no'
 
-  ingestion:
-    container_name: ingestion
-    build:
-      context: ..
-      dockerfile: Containerfile
-      target: server
-      args: *rust-build-args
-      provenance: false
-      sbom: false
-    command: ['/app/guardrail', 'ingestion', '-C', '/config']
-    depends_on:
-      valkey:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-      minio-setup:
-        condition: service_completed_successfully
-    environment:
-      RUST_LOG: info
-    volumes:
-      - ../config:/config:ro
-      - ./config/settings.yaml:/config/settings.yaml:ro
-      - /tmp/guardrail
-    ports:
-      - '8081:81'
-    healthcheck:
-      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:81/api/ready || exit 1']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
-
-  processor:
-    container_name: processor
-    build:
-      context: ..
-      dockerfile: Containerfile
-      target: server
-      args: *rust-build-args
-      provenance: false
-      sbom: false
-    command: ['/app/guardrail', 'processor', '-C', '/config']
-    depends_on:
-      valkey:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-      minio-setup:
-        condition: service_completed_successfully
-    environment:
-      RUST_LOG: info
-    volumes:
-      - ../config:/config:ro
-      - ./config/settings.yaml:/config/settings.yaml:ro
-      - /tmp/guardrail
-    restart: unless-stopped
-
-  curator:
-    container_name: curator
-    build:
-      context: ..
-      dockerfile: Containerfile
-      target: server
-      args: *rust-build-args
-      provenance: false
-      sbom: false
-    command: ['/app/guardrail', 'curator', '-C', '/config']
-    depends_on:
-      surrealdb:
-        condition: service_healthy
-      schema-sync:
-        condition: service_completed_successfully
-      valkey:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-      minio-setup:
-        condition: service_completed_successfully
-    environment:
-      RUST_LOG: info
-    volumes:
-      - ../config:/config:ro
-      - ./config/settings.yaml:/config/settings.yaml:ro
-      - /tmp/guardrail
-    restart: unless-stopped
-
-  api:
-    container_name: api
-    build:
-      context: ..
-      dockerfile: Containerfile
-      target: server
-      args: *rust-build-args
-      provenance: false
-      sbom: false
-    command: ['/app/guardrail', 'api', '-C', '/config']
-    depends_on:
-      surrealdb:
-        condition: service_healthy
-      schema-sync:
-        condition: service_completed_successfully
-      valkey:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-      minio-setup:
-        condition: service_completed_successfully
-    environment:
-      RUST_LOG: info
-    volumes:
-      - ../config:/config:ro
-      - ./config/settings.yaml:/config/settings.yaml:ro
-      - /tmp/guardrail
-    ports:
-      - '8080:80'
-    healthcheck:
-      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:80/api/ready || exit 1']
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    restart: unless-stopped
