@@ -8,7 +8,7 @@ pub mod token;
 #[cfg(feature = "ssr")]
 use object_store::{ObjectStore, aws::AmazonS3Builder};
 use serde::{Deserialize, Serialize};
-use tracing_subscriber::{EnvFilter, FmtSubscriber, fmt::format::FmtSpan, layer::SubscriberExt};
+use tracing_subscriber::{EnvFilter, layer::SubscriberExt};
 
 use settings::Settings;
 
@@ -30,7 +30,7 @@ impl AuthenticatedUser {
 }
 
 use std::{
-    collections::VecDeque, future::Future, io::IsTerminal, ops::Range, sync::Arc, time::Duration,
+    collections::VecDeque, future::Future, ops::Range, sync::Arc, time::Duration,
 };
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -68,13 +68,10 @@ pub async fn init_logging() {
         .with_writer(std::io::stdout)
         .with_thread_ids(true)
         .with_thread_names(true)
-        .with_current_span(false)
-        .with_span_events(FmtSpan::CLOSE);
+        .with_current_span(false);
 
-    let subscriber = FmtSubscriber::builder()
-        .with_ansi(std::io::stdout().is_terminal())
-        .with_env_filter(filter)
-        .finish()
+    let subscriber = tracing_subscriber::registry()
+        .with(filter)
         .with(layer);
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");

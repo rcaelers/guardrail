@@ -6,7 +6,7 @@ use common::{init_s3_object_store, retry_startup, settings::Settings};
 use repos::Repo;
 use tower_http::{
     services::ServeDir,
-    trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
+    trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
 };
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer, cookie::SameSite};
 use tracing::{Level, info};
@@ -193,6 +193,7 @@ impl GuardrailWebApp {
             .layer(
                 TraceLayer::new_for_http()
                     .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                    .on_request(DefaultOnRequest::new().level(Level::INFO))
                     .on_response(DefaultOnResponse::new().level(Level::INFO)),
             )
             .layer(session_layer)
