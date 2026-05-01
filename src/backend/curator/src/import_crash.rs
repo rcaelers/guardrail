@@ -259,6 +259,10 @@ impl ImportCrashProcessor {
         crash_info: &serde_json::Value,
     ) -> Result<(), JobError> {
         for attachment in crash_info["attachments"].as_array().unwrap_or(&vec![]) {
+            let name = attachment["name"].as_str().ok_or_else(|| {
+                error!("Attachment name is missing");
+                JobError::Failure("attachment name is missing".to_string())
+            })?;
             let filename = attachment["filename"].as_str().ok_or_else(|| {
                 error!("Attachment filename is missing");
                 JobError::Failure("attachment filename is missing".to_string())
@@ -277,7 +281,7 @@ impl ImportCrashProcessor {
             })?;
 
             let attachment = NewAttachment {
-                name: filename.to_string(),
+                name: name.to_string(),
                 crash_id: crash_id.to_string(),
                 product_id: product_id.to_string(),
                 filename: filename.to_string(),
