@@ -5,7 +5,9 @@ import { env } from '$env/dynamic/private';
 const apiBase = env.GUARDRAIL_API_URL ?? 'http://web:80/api/v1';
 
 export const load: PageServerLoad = async ({ params }) => {
-  const r = await fetch(`${apiBase}/invitations/redeem/${encodeURIComponent(params.code)}`);
+  const r = await fetch(`${apiBase}/invitations/redeem/${encodeURIComponent(params.code)}`, {
+    signal: AbortSignal.timeout(10_000)
+  });
   if (r.status === 404) {
     throw error(404, 'Invitation not found or has expired.');
   }
@@ -34,7 +36,8 @@ export const actions: Actions = {
     const r = await fetch(`${apiBase}/invitations/redeem/${encodeURIComponent(params.code)}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ username, email, first_name, last_name })
+      body: JSON.stringify({ username, email, first_name, last_name }),
+      signal: AbortSignal.timeout(10_000)
     });
 
     if (!r.ok) {

@@ -85,7 +85,8 @@ impl GuardrailWebApp {
         );
 
         let http_client = {
-            let mut builder = reqwest::Client::builder();
+            let mut builder = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(10));
             if settings
                 .auth
                 .oidc
