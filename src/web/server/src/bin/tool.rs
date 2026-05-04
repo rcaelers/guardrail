@@ -19,7 +19,7 @@ type AnyErr = Box<dyn std::error::Error + Send + Sync>;
 struct PocketIdUser {
     id: String,
     username: String,
-    email: String,
+    email: Option<String>,
     #[serde(rename = "firstName")]
     first_name: Option<String>,
     #[serde(rename = "lastName")]
@@ -36,7 +36,8 @@ struct PocketIdUserList {
 #[derive(Serialize)]
 struct UpdateUserBody<'a> {
     username: &'a str,
-    email: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    email: Option<&'a str>,
     #[serde(rename = "firstName", skip_serializing_if = "Option::is_none")]
     first_name: Option<&'a str>,
     #[serde(rename = "lastName", skip_serializing_if = "Option::is_none")]
@@ -79,7 +80,7 @@ impl PocketIdClient {
         let url = self.api_url.join(&format!("/api/users/{}", user.id))?;
         let body = UpdateUserBody {
             username: &user.username,
-            email: &user.email,
+            email: user.email.as_deref(),
             first_name: user.first_name.as_deref(),
             last_name: user.last_name.as_deref(),
             is_admin,
@@ -100,9 +101,11 @@ impl PocketIdClient {
     }
 
     fn find_user<'a>(&self, users: &'a [PocketIdUser], identifier: &str) -> Option<&'a PocketIdUser> {
-        users
-            .iter()
-            .find(|u| u.id == identifier || u.username == identifier || u.email == identifier)
+        users.iter().find(|u| {
+            u.id == identifier
+                || u.username == identifier
+                || u.email.as_deref() == Some(identifier)
+        })
     }
 }
 
@@ -527,7 +530,10 @@ fn print_users(cli: &Cli, users: &[PocketIdUser]) -> Result<(), AnyErr> {
     for user in users {
         println!(
             "{}\t{}\t{}\t{}",
-            user.id, user.is_admin, user.username, user.email
+            user.id,
+            user.is_admin,
+            user.username,
+            user.email.as_deref().unwrap_or("-")
         );
     }
     Ok(())
