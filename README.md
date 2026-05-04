@@ -289,10 +289,11 @@ Because Caddy uses a local development certificate, your browser or local OIDC c
 ## Command-Line Tool
 
 `/app/guardrailctl` connects directly to SurrealDB using the configured database
-credentials. It does not call the HTTP API. The command shape is:
+credentials for most commands. The `user` subcommand is the exception: it calls
+the Pocket ID API using the `provisioner.pocket_id` settings. The command shape is:
 
 ```sh
-guardrailctl <invite|token|product> <list|create|remove|...>
+guardrailctl <invite|token|product|user> <list|create|remove|...>
 ```
 
 Create an initial admin invitation from the running compose stack:
@@ -400,6 +401,45 @@ docker compose -f dev/docker-compose.yml exec web \
 ```
 
 Add `--json` to any command for machine-readable output.
+
+### Managing Pocket ID admin status
+
+The `user` subcommand talks directly to the Pocket ID API (not SurrealDB).
+It requires `provisioner.pocket_id` to be configured in the settings.
+
+List all Pocket ID users and their current admin status:
+
+```sh
+kubectl exec -n guardrail-dev deploy/guardrail-web -- \
+  /app/guardrailctl -C /config user list
+```
+
+Grant admin to an existing user (accepts username, email, or Pocket ID user ID):
+
+```sh
+kubectl exec -n guardrail-dev deploy/guardrail-web -- \
+  /app/guardrailctl -C /config user set-admin rob.caelers@gmail.com
+```
+
+Remove admin from a user:
+
+```sh
+kubectl exec -n guardrail-dev deploy/guardrail-web -- \
+  /app/guardrailctl -C /config user unset-admin rob.caelers@gmail.com
+```
+
+Both `set-admin` and `unset-admin` are idempotent — they succeed without error
+if the user already has (or already lacks) the requested status.
+
+The same commands work against the local compose stack:
+
+```sh
+docker compose -f dev/docker-compose.yml exec web \
+  /app/guardrailctl -C /config user list
+
+docker compose -f dev/docker-compose.yml exec web \
+  /app/guardrailctl -C /config user set-admin admin
+```
 
 ## Manual Uploads
 

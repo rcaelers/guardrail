@@ -7,11 +7,104 @@ use data::{
     product::{NewProduct, Product},
 };
 use repos::{api_token::ApiTokenRepo, invitation::InvitationRepo, product::ProductRepo};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use surrealdb::{Surreal, engine::any::Any, opt::auth::Root};
 
 type AnyErr = Box<dyn std::error::Error + Send + Sync>;
+
+// --- Pocket ID API types ---
+
+#[derive(Debug, Deserialize, Serialize)]
+struct PocketIdUser {
+    id: String,
+    username: String,
+    email: String,
+    #[serde(rename = "firstName")]
+    first_name: Option<String>,
+    #[serde(rename = "lastName")]
+    last_name: Option<String>,
+    #[serde(rename = "isAdmin")]
+    is_admin: bool,
+}
+
+#[derive(Deserialize)]
+struct PocketIdUserList {
+    data: Vec<PocketIdUser>,
+}
+
+#[derive(Serialize)]
+struct UpdateUserBody<'a> {
+    username: &'a str,
+    email: &'a str,
+    #[serde(rename = "firstName", skip_serializing_if = "Option::is_none")]
+    first_name: Option<&'a str>,
+    #[serde(rename = "lastName", skip_serializing_if = "Option::is_none")]
+    last_name: Option<&'a str>,
+    #[serde(rename = "isAdmin")]
+    is_admin: bool,
+}
+
+struct PocketIdClient {
+    api_url: url::Url,
+    api_key: String,
+    client: reqwest::Client,
+}
+
+impl PocketIdClient {
+    fn new(api_url: &str, api_key: &str) -> Result<Self, AnyErr> {
+        Ok(Self {
+            api_url: api_url.parse()?,
+            api_key: api_key.to_string(),
+            client: reqwest::Client::new(),
+        })
+    }
+
+    async fn list_users(&self) -> Result<Vec<PocketIdUser>, AnyErr> {
+        let url = self.api_url.join("/api/users")?;
+        let response = self
+            .client
+            .get(url)
+            .header("X-API-KEY", &self.api_key)
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            return Err(format!("list users failed: {}", response.status()).into());
+        }
+        let body: PocketIdUserList = response.json().await?;
+        Ok(body.data)
+    }
+
+    async fn set_admin(&self, user: &PocketIdUser, is_admin: bool) -> Result<(), AnyErr> {
+        let url = self.api_url.join(&format!("/api/users/{}", user.id))?;
+        let body = UpdateUserBody {
+            username: &user.username,
+            email: &user.email,
+            first_name: user.first_name.as_deref(),
+            last_name: user.last_name.as_deref(),
+            is_admin,
+        };
+        let response = self
+            .client
+            .put(url)
+            .header("X-API-KEY", &self.api_key)
+            .json(&body)
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            return Err(format!("update user failed: {status}: {text}").into());
+        }
+        Ok(())
+    }
+
+    fn find_user<'a>(&self, users: &'a [PocketIdUser], identifier: &str) -> Option<&'a PocketIdUser> {
+        users
+            .iter()
+            .find(|u| u.id == identifier || u.username == identifier || u.email == identifier)
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Guardrail administration tool")]
@@ -31,6 +124,7 @@ enum Command {
     Invite(InviteCommand),
     Token(TokenCommand),
     Product(ProductCommand),
+    User(UserCommand),
 }
 
 #[derive(Args, Debug)]
@@ -141,6 +235,25 @@ struct IdArgs {
     id: String,
 }
 
+#[derive(Args, Debug)]
+struct UserCommand {
+    #[command(subcommand)]
+    command: UserSubcommand,
+}
+
+#[derive(Subcommand, Debug)]
+enum UserSubcommand {
+    List,
+    SetAdmin(UserIdentifierArgs),
+    UnsetAdmin(UserIdentifierArgs),
+}
+
+#[derive(Args, Debug)]
+struct UserIdentifierArgs {
+    /// Pocket ID username, email address, or user ID
+    identifier: String,
+}
+
 #[derive(Serialize)]
 struct CreatedToken {
     id: String,
@@ -172,6 +285,7 @@ async fn run() -> Result<(), AnyErr> {
         Command::Invite(command) => run_invite(&cli, &settings, &db, command).await?,
         Command::Token(command) => run_token(&cli, &db, command).await?,
         Command::Product(command) => run_product(&cli, &db, command).await?,
+        Command::User(command) => run_user(&cli, &settings, command).await?,
     }
 
     Ok(())
@@ -364,6 +478,61 @@ async fn create_token(
     })
 }
 
+async fn run_user(cli: &Cli, settings: &Settings, command: &UserCommand) -> Result<(), AnyErr> {
+    let pocket_id = settings
+        .provisioner
+        .pocket_id
+        .as_ref()
+        .ok_or("provisioner.pocket_id is not configured")?;
+    let client = PocketIdClient::new(&pocket_id.api_url, &pocket_id.api_key)?;
+
+    match &command.command {
+        UserSubcommand::List => {
+            let users = client.list_users().await?;
+            print_users(cli, &users)?;
+        }
+        UserSubcommand::SetAdmin(args) => {
+            let users = client.list_users().await?;
+            let user = client
+                .find_user(&users, &args.identifier)
+                .ok_or_else(|| format!("user not found: {}", args.identifier))?;
+            if user.is_admin {
+                print_status(cli, "already-admin", "user", &user.id)?;
+            } else {
+                client.set_admin(user, true).await?;
+                print_status(cli, "set-admin", "user", &user.id)?;
+            }
+        }
+        UserSubcommand::UnsetAdmin(args) => {
+            let users = client.list_users().await?;
+            let user = client
+                .find_user(&users, &args.identifier)
+                .ok_or_else(|| format!("user not found: {}", args.identifier))?;
+            if !user.is_admin {
+                print_status(cli, "not-admin", "user", &user.id)?;
+            } else {
+                client.set_admin(user, false).await?;
+                print_status(cli, "unset-admin", "user", &user.id)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn print_users(cli: &Cli, users: &[PocketIdUser]) -> Result<(), AnyErr> {
+    if cli.json {
+        return print_json(users);
+    }
+    println!("id\tadmin\tusername\temail");
+    for user in users {
+        println!(
+            "{}\t{}\t{}\t{}",
+            user.id, user.is_admin, user.username, user.email
+        );
+    }
+    Ok(())
+}
+
 fn parse_grants(raw_grants: &[String]) -> Result<Vec<InvitationGrant>, String> {
     raw_grants
         .iter()
@@ -389,7 +558,7 @@ fn parse_grants(raw_grants: &[String]) -> Result<Vec<InvitationGrant>, String> {
         .collect()
 }
 
-fn print_json<T: Serialize>(value: &T) -> Result<(), AnyErr> {
+fn print_json<T: Serialize + ?Sized>(value: &T) -> Result<(), AnyErr> {
     println!("{}", serde_json::to_string_pretty(value)?);
     Ok(())
 }
