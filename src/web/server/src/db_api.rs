@@ -645,9 +645,9 @@ async fn list_products(
     headers: HeaderMap,
     Query(q): Query<ListProductsQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&headers).await;
     match q.scope.as_deref() {
         Some("mine") => {
+            let db = s.user_db(&headers).await;
             let Some(uid) = q.user.as_deref() else {
                 return Ok(Json(Value::Array(vec![])));
             };
@@ -673,6 +673,7 @@ async fn list_products(
             Ok(Json(Value::Array(rows)))
         }
         _ => {
+            let db = s.user_db(&headers).await;
             let rows = run_value(
                 &db,
                 &format!("SELECT {PRODUCT_PROJ} FROM products ORDER BY name"),
