@@ -6,9 +6,7 @@
 // are enforced on every query.  When no cookie is present, an anonymous JWT
 // is used, which grants access only to public data.
 
-use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 
 use axum::{
     Json, Router,
@@ -19,65 +17,18 @@ use axum::{
     routing::{delete, get, post},
 };
 use chrono::Utc;
-use common::settings::Settings;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path as ObjectPath};
-use repos::Repo;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
-use tokio::sync::Mutex;
 use tower_sessions::Session;
 
-// How long a cached authenticated DB handle stays valid.  Kept well below the
-// JWT session duration (60 min default) so admin-status changes propagate
-// within a reasonable window.
-const DB_HANDLE_CACHE_TTL: Duration = Duration::from_secs(300);
+use crate::AppState;
 
-// Cache key used for the shared anonymous session handle.
 const ANON_CACHE_KEY: &str = "__anon__";
 
-type AuthCacheMap = HashMap<String, (Arc<Surreal<Any>>, Instant)>;
-
-// Per-user cache of authenticated SurrealDB handles.
-//
-// Calling clone()+authenticate() on the underlying WebSocket connection for
-// every HTTP request generates a flood of Attach/Detach session messages that
-// can overload the single-task SurrealDB WebSocket event loop and cause
-// subsequent requests to hang.  Caching authenticated handles eliminates this
-// churn: authenticate() is called at most once per user per TTL window, and
-// concurrent requests reuse the same Arc<Surreal<Any>> (which is Send+Sync and
-// supports concurrent queries via independent request IDs).
-#[derive(Clone, Default)]
-pub(crate) struct AuthCache(Arc<Mutex<AuthCacheMap>>);
-
-impl AuthCache {
-    async fn get(&self, key: &str) -> Option<Arc<Surreal<Any>>> {
-        let cache = self.0.lock().await;
-        cache.get(key).and_then(|(handle, created_at)| {
-            if created_at.elapsed() < DB_HANDLE_CACHE_TTL {
-                Some(Arc::clone(handle))
-            } else {
-                None
-            }
-        })
-    }
-
-    async fn insert(&self, key: String, handle: Arc<Surreal<Any>>) {
-        let mut cache = self.0.lock().await;
-        cache.insert(key, (handle, Instant::now()));
-    }
-}
-
-#[derive(Clone)]
-pub struct DbState {
-    pub repo: Arc<Repo>,
-    pub storage: Arc<dyn ObjectStore>,
-    pub settings: Arc<Settings>,
-    pub(crate) auth_cache: AuthCache,
-}
-
-pub fn router() -> Router<DbState> {
+pub fn router() -> Router<AppState> {
     Router::new()
         .route("/auth/signin", post(signin))
         .route("/me", get(get_me))
@@ -120,7 +71,7 @@ fn extract_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
     })
 }
 
-impl DbState {
+impl AppState {
     /// Returns a SurrealDB handle authenticated as the user identified by the
     /// `gr_uid` request cookie.  Falls back to an anonymous JWT (public data
     /// only) when the cookie is absent or the user cannot be found.
@@ -411,7 +362,7 @@ struct SignInBody {
 }
 
 async fn signin(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     headers: HeaderMap,
     Json(body): Json<SignInBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
@@ -430,7 +381,7 @@ async fn signin(
 }
 
 async fn get_me(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let db = s.user_db(&headers).await;
@@ -447,7 +398,7 @@ async fn get_me(
 }
 
 async fn list_users(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
 ) -> Result<Json<Value>, (StatusCode, String)> {
@@ -462,7 +413,7 @@ async fn list_users(
 }
 
 async fn get_user(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
@@ -496,7 +447,7 @@ struct UpdateUserBody {
 }
 
 async fn create_user(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Json(body): Json<CreateUserBody>,
@@ -556,7 +507,7 @@ async fn create_user(
 }
 
 async fn update_user(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
@@ -621,7 +572,7 @@ async fn update_user(
 }
 
 async fn delete_user(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
@@ -647,7 +598,7 @@ struct SetAdminBody {
 }
 
 async fn set_admin(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
@@ -667,7 +618,7 @@ async fn set_admin(
 }
 
 async fn memberships_for(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(user_id): Path<String>,
@@ -707,7 +658,7 @@ struct ListProductsQuery {
 }
 
 async fn list_products(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     headers: HeaderMap,
     Query(q): Query<ListProductsQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
@@ -752,7 +703,7 @@ async fn list_products(
 }
 
 async fn get_product(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
@@ -786,7 +737,7 @@ struct UpdateProductBody {
 }
 
 async fn create_product(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Json(body): Json<CreateProductBody>,
@@ -833,7 +784,7 @@ async fn create_product(
 }
 
 async fn update_product(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
@@ -896,7 +847,7 @@ async fn update_product(
 }
 
 async fn delete_product(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
@@ -924,7 +875,7 @@ async fn delete_product(
 // --------------------------------------------------------------------
 
 async fn list_members(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     headers: HeaderMap,
     Path(pid): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
@@ -956,7 +907,7 @@ struct GrantBody {
 }
 
 async fn grant_access(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path((pid, uid)): Path<(String, String)>,
@@ -996,7 +947,7 @@ async fn grant_access(
 }
 
 async fn revoke_access(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path((pid, uid)): Path<(String, String)>,
@@ -1032,7 +983,7 @@ struct ListGroupsQuery {
 }
 
 async fn list_groups(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     headers: HeaderMap,
     Query(q): Query<ListGroupsQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
@@ -1183,7 +1134,7 @@ async fn list_groups(
 }
 
 async fn get_group(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
@@ -1196,7 +1147,7 @@ async fn get_group(
 }
 
 async fn get_crash(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     headers: HeaderMap,
     Path(crash_id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
@@ -1426,7 +1377,7 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
 }
 
 async fn download_attachment(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<Response, (StatusCode, String)> {
@@ -1492,7 +1443,7 @@ struct SetStatusBody {
 }
 
 async fn set_status(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
@@ -1521,7 +1472,7 @@ struct AddNoteBody {
 }
 
 async fn add_note(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
@@ -1579,7 +1530,7 @@ struct MergeBody {
 }
 
 async fn merge_groups(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(primary_id): Path<String>,
@@ -1623,7 +1574,7 @@ struct SymbolsQuery {
 }
 
 async fn list_symbols(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     headers: HeaderMap,
     Path(pid): Path<String>,
     Query(q): Query<SymbolsQuery>,
@@ -1699,7 +1650,7 @@ struct UploadSymbolBody {
 }
 
 async fn upload_symbol(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(pid): Path<String>,
@@ -1745,7 +1696,7 @@ async fn upload_symbol(
 }
 
 async fn delete_symbol(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
@@ -1766,7 +1717,7 @@ async fn delete_symbol(
 const API_TOKEN_PROJ: &str = "meta::id(id) AS id, description, entitlements, is_active, last_used_at, expires_at, created_at";
 
 async fn list_api_tokens(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(pid): Path<String>,
@@ -1795,7 +1746,7 @@ struct CreateApiTokenBody {
 }
 
 async fn create_api_token(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(pid): Path<String>,
@@ -1851,7 +1802,7 @@ async fn create_api_token(
 }
 
 async fn delete_api_token(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path((pid, id)): Path<(String, String)>,
@@ -1871,7 +1822,7 @@ async fn delete_api_token(
 // --------------------------------------------------------------------
 
 async fn list_all_api_tokens(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
 ) -> Result<Json<Value>, (StatusCode, String)> {
@@ -1903,7 +1854,7 @@ struct CreateAdminApiTokenBody {
 }
 
 async fn create_admin_api_token(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Json(body): Json<CreateAdminApiTokenBody>,
@@ -1959,7 +1910,7 @@ async fn create_admin_api_token(
 }
 
 async fn delete_admin_api_token(
-    State(s): State<DbState>,
+    State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,

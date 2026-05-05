@@ -12,6 +12,7 @@ use data::pending_access::{NewPendingAccess, PendingAccessGrant};
 use serde::Deserialize;
 use tower_sessions::Session;
 
+use super::render;
 use crate::{
     AppState, access,
     access::Principal,
@@ -20,7 +21,6 @@ use crate::{
     provisioner::CreateUserRequest,
     templates::InviteTemplate,
 };
-use super::render;
 
 /// Invitation API routes, to be nested under /api/v1 in main.rs.
 pub fn api_router() -> Router<AppState> {
@@ -31,7 +31,7 @@ pub fn api_router() -> Router<AppState> {
 }
 
 /// Web routes for the invitation redemption flow.
-pub fn web_router() -> Router<AppState> {
+pub fn router() -> Router<AppState> {
     Router::new().route("/invite/{code}", get(show_invite_form).post(redeem_invite))
 }
 

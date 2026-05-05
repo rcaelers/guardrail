@@ -1,6 +1,11 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use axum::{Router, extract::{DefaultBodyLimit, State}, http::StatusCode, routing::get};
+use axum::{
+    Router,
+    extract::{DefaultBodyLimit, State},
+    http::StatusCode,
+    routing::get,
+};
 use axum_server::tls_rustls::RustlsConfig;
 use common::{init_s3_object_store, retry_startup, settings::Settings};
 use repos::Repo;
@@ -16,11 +21,11 @@ use webauthn_rs::prelude::*;
 use crate::pocket_id;
 use crate::provisioner::IdentityProvisioner;
 use crate::routes::{auth, db_api, home, impersonation, invite};
+use crate::auth_cache::AuthCache;
 use crate::state::AppState;
 
 pub struct GuardrailWebApp {
     state: AppState,
-    settings: Arc<Settings>,
 }
 
 impl GuardrailWebApp {
@@ -82,8 +87,8 @@ impl GuardrailWebApp {
         );
 
         let http_client = {
-            let mut builder = reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(10));
+            let mut builder =
+                reqwest::Client::builder().timeout(std::time::Duration::from_secs(10));
             if settings
                 .auth
                 .oidc
@@ -127,20 +132,24 @@ impl GuardrailWebApp {
                 }) as Arc<dyn IdentityProvisioner>
             });
 
+        let storage = init_s3_object_store(settings.clone()).await;
+
         let state = AppState {
-            repo: Repo::new(db),
-            settings: settings.clone(),
+            repo: Arc::new(Repo::new(db)),
+            settings,
             http_client,
             webauthn,
             provisioner,
+            storage,
+            auth_cache: AuthCache::default(),
         };
 
-        Self { state, settings }
+        Self { state }
     }
 
     pub async fn serve(&self) {
-        let settings = &self.settings;
         let state = &self.state;
+        let settings = &state.settings;
 
         let use_secure_cookies = settings
             .web_server
@@ -154,17 +163,9 @@ impl GuardrailWebApp {
             .with_expiry(Expiry::OnInactivity(time::Duration::hours(4)))
             .with_secure(use_secure_cookies);
 
-        let storage = init_s3_object_store(settings.clone()).await;
-        let db_state = db_api::DbState {
-            repo: std::sync::Arc::new(state.repo.clone()),
-            storage,
-            settings: settings.clone(),
-            auth_cache: Default::default(),
-        };
-
         let api_v1 = Router::new()
-            .merge(db_api::router().with_state(db_state))
-            .merge(invite::api_router().with_state(state.clone()));
+            .merge(db_api::router())
+            .merge(invite::api_router());
 
         async fn live() -> StatusCode {
             StatusCode::OK
@@ -184,7 +185,7 @@ impl GuardrailWebApp {
             .merge(home::router())
             .merge(auth::router())
             .merge(impersonation::router())
-            .merge(invite::web_router())
+            .merge(invite::router())
             .nest("/api/v1", api_v1)
             .nest_service("/static", ServeDir::new("src/web/server/static"))
             .route("/live", get(live))
