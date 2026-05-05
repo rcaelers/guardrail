@@ -112,7 +112,9 @@ pub async fn require_entitlement(
 
 /// Require an admin principal.
 ///
-/// * Session users must have `is_admin = true`.
+/// * Browser users must have `is_admin = true`. The db API accepts the
+///   tower session when present and falls back to the `gr_uid` cookie that
+///   drives the SvelteKit UI's authenticated DB handle.
 /// * Bearer token callers must present a *global* token (no product
 ///   restriction).
 pub async fn require_admin(
@@ -128,18 +130,19 @@ pub async fn require_admin(
         }
         return Ok(Principal::Token(token));
     }
-    let mut user = require_session(session).await?;
-    if !session_user_is_admin(db, &user.id).await? {
+    let user = require_session_or_gr_uid_user(session, headers, db).await?;
+    if !user.is_admin {
         return Err(AppError::forbidden());
     }
-    user.is_admin = true;
     Ok(Principal::User(user))
 }
 
 /// Require maintainer-level access for a specific product.
 ///
-/// * Session users must have the maintainer role for `product_id` (admins
-///   are always allowed).
+/// * Browser users must have the maintainer role for `product_id` (admins
+///   are always allowed). The db API accepts the tower session when present
+///   and falls back to the `gr_uid` cookie that drives the SvelteKit UI's
+///   authenticated DB handle.
 /// * Bearer token callers must present a token scoped to `product_id` *or* a
 ///   global token (no product restriction).
 pub async fn require_product_maintainer(
@@ -159,9 +162,8 @@ pub async fn require_product_maintainer(
         }
         return Ok(Principal::Token(token));
     }
-    let mut user = require_session(session).await?;
-    if session_user_is_admin(db, &user.id).await? {
-        user.is_admin = true;
+    let user = require_session_or_gr_uid_user(session, headers, db).await?;
+    if user.is_admin {
         return Ok(Principal::User(user));
     }
     let maintained = get_maintained_product_ids(db, &user.id).await?;
@@ -221,20 +223,73 @@ pub async fn get_maintained_product_ids(
     Ok(ids)
 }
 
-async fn session_user_is_admin(db: &Surreal<Any>, user_id: &str) -> AppResult<bool> {
+async fn require_session_or_gr_uid_user(
+    session: &Session,
+    headers: &HeaderMap,
+    db: &Surreal<Any>,
+) -> AppResult<AuthenticatedUser> {
+    let session_user = session
+        .get::<AuthenticatedUser>(SESSION_KEY)
+        .await
+        .map_err(AppError::internal)?;
+
+    if let Some(user) = session_user {
+        return current_user_by_id(db, &user.id)
+            .await?
+            .ok_or_else(AppError::forbidden);
+    }
+
+    let uid = extract_cookie(headers, "gr_uid").ok_or_else(AppError::forbidden)?;
+    current_user_by_id(db, &uid)
+        .await?
+        .ok_or_else(AppError::forbidden)
+}
+
+async fn current_user_by_id(
+    db: &Surreal<Any>,
+    user_id: &str,
+) -> AppResult<Option<AuthenticatedUser>> {
     let uid = repos::record_key(user_id);
     let mut result = db
-        .query("SELECT is_admin FROM ONLY type::record('users', $uid)")
+        .query(
+            "SELECT meta::id(id) AS id, username, is_admin \
+             FROM ONLY type::record('users', $uid)",
+        )
         .bind(("uid", uid))
         .await
         .map_err(AppError::internal)?;
 
     let rows: Vec<serde_json::Value> = result.take(0).map_err(AppError::internal)?;
-    Ok(rows
-        .into_iter()
-        .next()
-        .and_then(|v| v.get("is_admin").and_then(|is_admin| is_admin.as_bool()))
-        .unwrap_or(false))
+    let Some(row) = rows.into_iter().next() else {
+        return Ok(None);
+    };
+    let id = row
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or(user_id)
+        .to_string();
+    let username = row
+        .get("username")
+        .and_then(|v| v.as_str())
+        .unwrap_or("anonymous")
+        .to_string();
+    let is_admin = row
+        .get("is_admin")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    Ok(Some(AuthenticatedUser::new(id, username, is_admin)))
+}
+
+fn extract_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
+    let raw = headers.get(header::COOKIE)?.to_str().ok()?;
+    raw.split(';').find_map(|part| {
+        let (k, v) = part.trim().split_once('=')?;
+        if k.trim() == name {
+            Some(v.trim().to_string())
+        } else {
+            None
+        }
+    })
 }
 
 /// True when the request carries a `Bearer` or `Token` Authorization header.
