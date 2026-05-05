@@ -128,10 +128,11 @@ pub async fn require_admin(
         }
         return Ok(Principal::Token(token));
     }
-    let user = require_session(session).await?;
-    if !user.is_admin {
+    let mut user = require_session(session).await?;
+    if !session_user_is_admin(db, &user.id).await? {
         return Err(AppError::forbidden());
     }
+    user.is_admin = true;
     Ok(Principal::User(user))
 }
 
@@ -158,8 +159,9 @@ pub async fn require_product_maintainer(
         }
         return Ok(Principal::Token(token));
     }
-    let user = require_session(session).await?;
-    if user.is_admin {
+    let mut user = require_session(session).await?;
+    if session_user_is_admin(db, &user.id).await? {
+        user.is_admin = true;
         return Ok(Principal::User(user));
     }
     let maintained = get_maintained_product_ids(db, &user.id).await?;
@@ -217,6 +219,22 @@ pub async fn get_maintained_product_ids(
         .filter_map(|v| v.get("pid").and_then(|p| p.as_str()).map(str::to_owned))
         .collect();
     Ok(ids)
+}
+
+async fn session_user_is_admin(db: &Surreal<Any>, user_id: &str) -> AppResult<bool> {
+    let uid = repos::record_key(user_id);
+    let mut result = db
+        .query("SELECT is_admin FROM ONLY type::record('users', $uid)")
+        .bind(("uid", uid))
+        .await
+        .map_err(AppError::internal)?;
+
+    let rows: Vec<serde_json::Value> = result.take(0).map_err(AppError::internal)?;
+    Ok(rows
+        .into_iter()
+        .next()
+        .and_then(|v| v.get("is_admin").and_then(|is_admin| is_admin.as_bool()))
+        .unwrap_or(false))
 }
 
 /// True when the request carries a `Bearer` or `Token` Authorization header.
