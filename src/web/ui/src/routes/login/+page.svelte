@@ -27,6 +27,7 @@
 
     <a
       href="/auth/login/start"
+      data-sveltekit-reload
       class="block w-full rounded-md bg-ink dark:bg-ink-dark px-3 py-2 text-center text-[13px] font-medium text-surface dark:text-surface-dark"
     >Try again</a>
   </div>

@@ -75,6 +75,7 @@
     {:else}
       <a
         href="/login"
+        data-sveltekit-reload
         class="rounded-md bg-ink dark:bg-ink-dark px-3 py-1.5 text-[13px] font-medium text-surface dark:text-surface-dark"
       >Sign in</a>
     {/if}

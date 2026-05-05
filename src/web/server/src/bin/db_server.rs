@@ -106,9 +106,10 @@ async fn main() -> Result<(), AnyErr> {
 
     let storage = common::init_s3_object_store(settings.clone()).await;
     let state = db_api::DbState {
-        repo: Repo::new(db),
+        repo: std::sync::Arc::new(Repo::new(db)),
         storage,
         settings,
+        auth_cache: Default::default(),
     };
 
     let session_layer = SessionManagerLayer::new(MemoryStore::default())

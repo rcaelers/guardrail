@@ -7,6 +7,7 @@
     <p class="mb-8 text-[14px] text-ink-muted dark:text-ink-mutedDark">Crash reporting and analysis</p>
     <a
       href="/login"
+      data-sveltekit-reload
       class="inline-block rounded-md bg-ink dark:bg-ink-dark px-5 py-2 text-[13px] font-medium text-surface dark:text-surface-dark"
     >Sign in</a>
   </div>

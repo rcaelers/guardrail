@@ -159,9 +159,10 @@ impl GuardrailWebApp {
 
         let storage = init_s3_object_store(settings.clone()).await;
         let db_state = db_api::DbState {
-            repo: state.repo.clone(),
+            repo: std::sync::Arc::new(state.repo.clone()),
             storage,
             settings: settings.clone(),
+            auth_cache: Default::default(),
         };
 
         let api_v1 = db_api::router()

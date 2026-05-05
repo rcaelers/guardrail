@@ -6,7 +6,9 @@
 // are enforced on every query.  When no cookie is present, an anonymous JWT
 // is used, which grants access only to public data.
 
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use axum::{
     Json, Router,
@@ -24,13 +26,55 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
+use tokio::sync::Mutex;
 use tower_sessions::Session;
+
+// How long a cached authenticated DB handle stays valid.  Kept well below the
+// JWT session duration (60 min default) so admin-status changes propagate
+// within a reasonable window.
+const DB_HANDLE_CACHE_TTL: Duration = Duration::from_secs(300);
+
+// Cache key used for the shared anonymous session handle.
+const ANON_CACHE_KEY: &str = "__anon__";
+
+type AuthCacheMap = HashMap<String, (Arc<Surreal<Any>>, Instant)>;
+
+// Per-user cache of authenticated SurrealDB handles.
+//
+// Calling clone()+authenticate() on the underlying WebSocket connection for
+// every HTTP request generates a flood of Attach/Detach session messages that
+// can overload the single-task SurrealDB WebSocket event loop and cause
+// subsequent requests to hang.  Caching authenticated handles eliminates this
+// churn: authenticate() is called at most once per user per TTL window, and
+// concurrent requests reuse the same Arc<Surreal<Any>> (which is Send+Sync and
+// supports concurrent queries via independent request IDs).
+#[derive(Clone, Default)]
+pub(crate) struct AuthCache(Arc<Mutex<AuthCacheMap>>);
+
+impl AuthCache {
+    async fn get(&self, key: &str) -> Option<Arc<Surreal<Any>>> {
+        let cache = self.0.lock().await;
+        cache.get(key).and_then(|(handle, created_at)| {
+            if created_at.elapsed() < DB_HANDLE_CACHE_TTL {
+                Some(Arc::clone(handle))
+            } else {
+                None
+            }
+        })
+    }
+
+    async fn insert(&self, key: String, handle: Arc<Surreal<Any>>) {
+        let mut cache = self.0.lock().await;
+        cache.insert(key, (handle, Instant::now()));
+    }
+}
 
 #[derive(Clone)]
 pub struct DbState {
-    pub repo: Repo,
+    pub repo: Arc<Repo>,
     pub storage: Arc<dyn ObjectStore>,
     pub settings: Arc<Settings>,
+    pub(crate) auth_cache: AuthCache,
 }
 
 pub fn router() -> Router<DbState> {
@@ -80,10 +124,18 @@ impl DbState {
     /// Returns a SurrealDB handle authenticated as the user identified by the
     /// `gr_uid` request cookie.  Falls back to an anonymous JWT (public data
     /// only) when the cookie is absent or the user cannot be found.
-    pub async fn user_db(&self, headers: &HeaderMap) -> Surreal<Any> {
+    ///
+    /// Authenticated handles are cached per user for `DB_HANDLE_CACHE_TTL` to
+    /// avoid per-request clone()+authenticate() churn on the WebSocket
+    /// connection.  Concurrent requests for the same user safely share the
+    /// same handle via Arc.
+    pub async fn user_db(&self, headers: &HeaderMap) -> Arc<Surreal<Any>> {
         let Some(uid) = extract_cookie(headers, "gr_uid") else {
             return self.anon_db().await;
         };
+        if let Some(cached) = self.auth_cache.get(&uid).await {
+            return cached;
+        }
 
         let user_row = self
             .repo
@@ -118,7 +170,11 @@ impl DbState {
         };
 
         match self.repo.authenticated(&jwt).await {
-            Ok(db) => db,
+            Ok(db) => {
+                let handle = Arc::new(db);
+                self.auth_cache.insert(uid, Arc::clone(&handle)).await;
+                handle
+            }
             Err(e) => {
                 tracing::error!("DB authentication failed for user {uid}: {e}");
                 self.anon_db().await
@@ -126,15 +182,25 @@ impl DbState {
         }
     }
 
-    async fn anon_db(&self) -> Surreal<Any> {
+    async fn anon_db(&self) -> Arc<Surreal<Any>> {
+        if let Some(cached) = self.auth_cache.get(ANON_CACHE_KEY).await {
+            return cached;
+        }
+
         let Ok(jwt) = crate::jwt::make_anon_jwt(&self.settings) else {
-            return self.repo.db.clone();
+            return Arc::new(self.repo.db.clone());
         };
         match self.repo.authenticated(&jwt).await {
-            Ok(db) => db,
+            Ok(db) => {
+                let handle = Arc::new(db);
+                self.auth_cache
+                    .insert(ANON_CACHE_KEY.to_string(), Arc::clone(&handle))
+                    .await;
+                handle
+            }
             Err(e) => {
                 tracing::warn!("Anonymous JWT auth failed, falling back to root session: {e}");
-                self.repo.db.clone()
+                Arc::new(self.repo.db.clone())
             }
         }
     }
