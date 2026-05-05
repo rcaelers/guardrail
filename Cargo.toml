@@ -14,10 +14,7 @@ members = [
   "src/backend/e2e",
   "src/web/server",
 ]
-default-members = [
-  "src/backend/server",
-  "src/web/server",
-]
+default-members = ["src/backend/server", "src/web/server"]
 
 [workspace.package]
 version = "0.1.0"
@@ -40,15 +37,15 @@ panic = "abort"
 strip = "symbols"
 
 [profile.dev]
-debug = 1        # line-level info only; full DWARF (debug=2) is slow to emit and link
+debug = 1 # line-level info only; full DWARF (debug=2) is slow to emit and link
 
 [workspace.dependencies]
 
 # WebAuthn
-webauthn-rs = { version = "0.5.4", features = [
+webauthn-rs = { version = "0.5.5", features = [
   "danger-allow-state-serialisation",
 ] }
-askama = "0.15.6"
+askama = "0.16.0"
 
 # Serde / json
 serde = { version = "1.0.228", features = ["derive"] }
@@ -69,9 +66,9 @@ axum = { version = "0.8.9", features = [
   "multipart",
   "tracing",
 ] }
-axum-extra = { version = "0.12.5", features = ["error-response", "query"] }
+axum-extra = { version = "0.12.6", features = ["error-response", "query"] }
 axum-server = { version = "0.8.0", features = ["tls-rustls"] }
-rustls = "0.23.38"
+rustls = "0.23.40"
 
 # Tracing
 tracing = "0.1.44"
@@ -100,9 +97,9 @@ minidump-unwind = { version = "0.26.1", features = ["http"] }
 apalis = { version = "1.0.0-rc.7" }
 apalis-codec = { version = "0.1.0-rc.7" }
 apalis-core = { version = "1.0.0-rc.7" }
-apalis-redis = { version = "1.0.0-rc.6" }
-apalis-cron = { version = "1.0.0-rc.6" }
-cron = "0.15"
+apalis-redis = { version = "1.0.0-rc.7" }
+apalis-cron = { version = "1.0.0-rc.7" }
+cron = "0.16"
 argon2 = { version = "0.5.3", features = ["password-hash"] }
 password-hash = { version = "0.6.1", features = ["getrandom"] }
 async-trait = "0.1.89"
@@ -112,10 +109,10 @@ bytes = "1.11.1"
 chrono = { version = "0.4.44", features = ["serde"] }
 clap = { version = "4.6.1", features = ["derive"] }
 config = "0.15.22"
-data-encoding = "2.10.0"
+data-encoding = "2.11.0"
 dyn-clone = "1.0.20"
 enumflags2 = { version = "0.7.12", features = ["serde"] }
-fancy-regex = "0.17.0"
+fancy-regex = "0.18.0"
 futures = "0.3.32"
 glob = "0.3.3"
 http = "1.4.0"
