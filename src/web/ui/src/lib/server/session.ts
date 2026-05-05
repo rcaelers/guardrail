@@ -1,4 +1,4 @@
-// Cookie-backed "session" for the mock app.
+// Cookie-backed session for the web UI.
 // Holds just a user id; the adapter resolves it to the full User.
 
 import type { Cookies } from '@sveltejs/kit';

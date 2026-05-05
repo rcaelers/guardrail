@@ -45,10 +45,8 @@ src/
       session.ts        cookie read/write/clear helpers (httpOnly, 30 days)
     adapters/
       types.ts          GuardrailAdapter interface + shared types
-      mock.ts           in-memory dataset: crashes, users, products,
-                        memberships, symbols
-      http.ts           fetch()-based stub that matches the same contract
-      index.ts          picks adapter from env.GUARDRAIL_API_URL
+      http.ts           fetch()-based adapter for the backend API
+      index.ts          creates the adapter from env.GUARDRAIL_API_URL
     stores/
       pane.svelte.ts    detail pane width + open (persists to localStorage)
     components/
@@ -78,13 +76,9 @@ src/
 
 ## Auth
 
-This is a **fake auth** for development. The login form accepts any email
-belonging to a seeded user and sets an httpOnly cookie (`gr_uid`) with that
-user's id. `hooks.server.ts` resolves it to `locals.user` on every request.
-
-Replace `/login/+page.server.ts` and `hooks.server.ts` with real auth when you
-wire up the backend — the rest of the app only reads `locals.user` and
-`adapter.signIn / getUser`.
+The Rust server owns the Pocket ID OIDC flow. `/login` redirects to
+`/auth/login/start`, and `hooks.server.ts` resolves the `gr_uid` cookie to
+`locals.user` on every request through the backend API.
 
 ## Roles
 
@@ -102,19 +96,12 @@ Platform-wide administrators (`user.isAdmin`) additionally get:
 
 ## Swap the data source
 
-`src/lib/adapters/index.ts` picks the adapter at boot. Three options, in
-increasing realism:
+`src/lib/adapters/index.ts` creates the HTTP adapter at boot. Set
+`GUARDRAIL_API_URL` to the backend API, for example
+`GUARDRAIL_API_URL=http://127.0.0.1:4500/api/v1`.
 
-1. **TypeScript mock** (default). No env var set → the in-memory mock from
-   `src/lib/adapters/mock.ts` is used directly inside SvelteKit's server.
-2. **Rust `mock_server`** — same JSON, served over HTTP from an in-memory
-   copy of `src/web/server/mock/seed.json`. Set
-   `GUARDRAIL_API_URL=http://127.0.0.1:4500/api/v1`.
-3. **Real SurrealDB + `db_server`** — import the seed once, then serve via
-   SurrealDB queries. Same `GUARDRAIL_API_URL`.
-
-Setup and commands for options 2 and 3 are documented in the repo-root
-`README.md` under "Web UI + mock data".
+Setup and commands are documented in the repo-root `README.md` under
+"Web UI".
 
 Or implement your own adapter — conform to `GuardrailAdapter` in `types.ts`
 and export it from `index.ts`. Every route loader and form action goes
@@ -145,9 +132,5 @@ Harpoon, and readonly on Rivet).
 
 ```
 bun install
-bun run dev
+GUARDRAIL_API_URL=http://127.0.0.1:4500/api/v1 bun run dev
 ```
-
-Sign in with any seeded email on the login screen — the list suggests them.
-Try `you@studio.co` (admin + Guardrail maintainer) for the fullest experience,
-or `sofia@guardrail.co` (readonly on Guardrail) to see the gated UI.
