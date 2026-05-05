@@ -30,7 +30,7 @@ mod access;
 #[path = "../jwt.rs"]
 mod jwt;
 
-#[path = "../db_api.rs"]
+#[path = "../routes/db_api.rs"]
 mod db_api;
 
 type AnyErr = Box<dyn std::error::Error + Send + Sync>;

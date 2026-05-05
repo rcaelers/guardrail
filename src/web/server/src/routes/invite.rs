@@ -18,9 +18,9 @@ use crate::{
     auth::AuthSession,
     error::{AppError, AppResult},
     provisioner::CreateUserRequest,
-    routes::render,
     templates::InviteTemplate,
 };
+use super::render;
 
 /// Invitation API routes, to be nested under /api/v1 in main.rs.
 pub fn api_router() -> Router<AppState> {

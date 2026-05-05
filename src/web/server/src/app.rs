@@ -13,12 +13,9 @@ use tracing::{Level, info};
 use url::Url;
 use webauthn_rs::prelude::*;
 
-use crate::db_api;
-use crate::impersonation;
-use crate::invite;
 use crate::pocket_id;
 use crate::provisioner::IdentityProvisioner;
-use crate::routes;
+use crate::routes::{auth, db_api, home, impersonation, invite};
 use crate::state::AppState;
 
 pub struct GuardrailWebApp {
@@ -165,8 +162,8 @@ impl GuardrailWebApp {
             auth_cache: Default::default(),
         };
 
-        let api_v1 = db_api::router()
-            .with_state(db_state)
+        let api_v1 = Router::new()
+            .merge(db_api::router().with_state(db_state))
             .merge(invite::api_router().with_state(state.clone()));
 
         async fn live() -> StatusCode {
@@ -184,8 +181,10 @@ impl GuardrailWebApp {
         }
 
         let app = Router::new()
-            .merge(routes::router())
+            .merge(home::router())
+            .merge(auth::router())
             .merge(impersonation::router())
+            .merge(invite::web_router())
             .nest("/api/v1", api_v1)
             .nest_service("/static", ServeDir::new("src/web/server/static"))
             .route("/live", get(live))
