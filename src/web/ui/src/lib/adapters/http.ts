@@ -31,7 +31,7 @@ import type {
   User, Product, Role, MembershipWithUser, MembershipWithProduct,
   Symbol as SymbolRow, SymbolQuery,
   Invitation, CreateInvitationSpec, UpdateInvitationSpec,
-  ApiToken, CreatedApiToken, CreateApiTokenSpec, CreateAdminApiTokenSpec
+  ApiToken, CreatedApiToken, CreateApiTokenSpec, CreateAdminApiTokenSpec, UpdateAdminApiTokenSpec, EntitlementDef
 } from './types';
 
 type ResponseMeta = {
@@ -336,9 +336,21 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
       const r = await req('/api-tokens');
       return json<ApiToken[]>(r, 'listAllApiTokens');
     },
+    async listEntitlements() {
+      const r = await req('/api-tokens/entitlements');
+      return json<EntitlementDef[]>(r, 'listEntitlements');
+    },
     async createAdminApiToken(spec: CreateAdminApiTokenSpec) {
       const r = await jpost('/api-tokens', spec);
       return json<CreatedApiToken>(r, 'createAdminApiToken');
+    },
+    async updateAdminApiToken(id: string, spec: UpdateAdminApiTokenSpec) {
+      const r = await req(`/api-tokens/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(spec)
+      });
+      await assertOk(r, 'updateAdminApiToken');
     },
     async deleteAdminApiToken(id) {
       const r = await jdel(`/api-tokens/${encodeURIComponent(id)}`);

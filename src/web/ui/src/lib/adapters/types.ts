@@ -419,6 +419,8 @@ export interface ApiToken {
   createdAt: string;
   productId?: string | null;
   productName?: string | null;
+  userId?: string | null;
+  userName?: string | null;
 }
 
 /** Returned once on creation — the raw token string is never stored. */
@@ -437,6 +439,13 @@ export interface CreateAdminApiTokenSpec {
   description: string;
   entitlements?: string[];
   productId?: string | null;
+  userId?: string | null;
+}
+
+export interface EntitlementDef {
+  name: string;
+  description: string;
+  scope: 'product' | 'user' | 'general';
 }
 
 // ------------------------------------------------------------------
@@ -509,6 +518,16 @@ export interface GuardrailAdapter {
 
   // --- admin api tokens (product-optional) ---
   listAllApiTokens(): Promise<ApiToken[]>;
+  listEntitlements(): Promise<EntitlementDef[]>;
   createAdminApiToken(spec: CreateAdminApiTokenSpec): Promise<CreatedApiToken>;
+  updateAdminApiToken(id: string, spec: UpdateAdminApiTokenSpec): Promise<void>;
   deleteAdminApiToken(id: string): Promise<void>;
+}
+
+export interface UpdateAdminApiTokenSpec {
+  description: string;
+  isActive: boolean;
+  entitlements: string[];
+  productId: string | null;
+  userId: string | null;
 }
