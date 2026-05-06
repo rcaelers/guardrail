@@ -14,7 +14,7 @@ use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::Response,
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
 };
 use chrono::Utc;
 use common::AuthenticatedUser;
@@ -52,7 +52,8 @@ pub fn router() -> Router<AppState> {
         .route("/products/{pid}/api-tokens", get(list_api_tokens).post(create_api_token))
         .route("/products/{pid}/api-tokens/{id}", delete(delete_api_token))
         .route("/api-tokens", get(list_all_api_tokens).post(create_admin_api_token))
-        .route("/api-tokens/{id}", delete(delete_admin_api_token))
+        .route("/api-tokens/entitlements", get(list_entitlements_handler))
+        .route("/api-tokens/{id}", patch(update_admin_api_token).delete(delete_admin_api_token))
 }
 
 // --------------------------------------------------------------------
@@ -1803,7 +1804,9 @@ async fn list_all_api_tokens(
         &format!(
             "SELECT {API_TOKEN_PROJ}, \
              meta::id(product_id) AS productId, \
-             product_id.name AS productName \
+             product_id.name AS productName, \
+             meta::id(user_id) AS userId, \
+             user_id.name AS userName \
              FROM api_tokens \
              ORDER BY created_at DESC"
         ),
@@ -1813,12 +1816,36 @@ async fn list_all_api_tokens(
     Ok(Json(Value::Array(rows)))
 }
 
+const ENTITLEMENT_DEFS: &[(&str, &str, &str)] = &[
+    ("minidump-upload", "Upload crash reports", "product"),
+    ("symbol-upload",   "Upload debug symbols", "product"),
+    ("invitation-create", "Create user invitations", "general"),
+    ("token", "Generate JWT tokens as the bound user", "user"),
+];
+
+async fn list_entitlements_handler(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db)
+        .await
+        .map_err(access_err)?;
+    let defs: Vec<Value> = ENTITLEMENT_DEFS
+        .iter()
+        .map(|(name, description, scope)| json!({"name": name, "description": description, "scope": scope}))
+        .collect();
+    Ok(Json(Value::Array(defs)))
+}
+
 #[derive(Deserialize)]
 struct CreateAdminApiTokenBody {
     description: String,
     entitlements: Option<Vec<String>>,
     #[serde(rename = "productId")]
     product_id: Option<String>,
+    #[serde(rename = "userId")]
+    user_id: Option<String>,
 }
 
 async fn create_admin_api_token(
@@ -1852,7 +1879,7 @@ async fn create_admin_api_token(
             token_id: $token_id,
             token_hash: $token_hash,
             product_id: IF type::is::string($pid) THEN type::record('products', $pid) ELSE NONE END,
-            user_id: NONE,
+            user_id: IF type::is::string($uid) THEN type::record('users', $uid) ELSE NONE END,
             entitlements: $entitlements,
             expires_at: NONE,
             is_active: true,
@@ -1865,6 +1892,7 @@ async fn create_admin_api_token(
             ("token_id", Value::String(token_id.to_string())),
             ("token_hash", Value::String(token_hash)),
             ("pid", body.product_id.map(Value::String).unwrap_or(Value::Null)),
+            ("uid", body.user_id.map(Value::String).unwrap_or(Value::Null)),
             ("entitlements", Value::Array(entitlements.into_iter().map(Value::String).collect())),
         ],
     )
@@ -1875,6 +1903,57 @@ async fn create_admin_api_token(
         "description": description,
         "token": token,
     })))
+}
+
+#[derive(Deserialize)]
+struct UpdateAdminApiTokenBody {
+    description: String,
+    #[serde(rename = "isActive")]
+    is_active: bool,
+    entitlements: Vec<String>,
+    #[serde(rename = "productId")]
+    product_id: Option<String>,
+    #[serde(rename = "userId")]
+    user_id: Option<String>,
+}
+
+async fn update_admin_api_token(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateAdminApiTokenBody>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db)
+        .await
+        .map_err(access_err)?;
+    let db = s.user_db(&session).await;
+
+    let description = body.description.trim().to_string();
+    if description.is_empty() {
+        return Err(bad("description required"));
+    }
+
+    run_value(
+        &db,
+        "UPDATE type::record('api_tokens', $id) SET \
+            description = $description, \
+            is_active = $is_active, \
+            entitlements = $entitlements, \
+            product_id = IF type::is::string($pid) THEN type::record('products', $pid) ELSE NONE END, \
+            user_id = IF type::is::string($uid) THEN type::record('users', $uid) ELSE NONE END, \
+            updated_at = time::now()",
+        vec![
+            ("id", Value::String(id)),
+            ("description", Value::String(description)),
+            ("is_active", Value::Bool(body.is_active)),
+            ("entitlements", Value::Array(body.entitlements.into_iter().map(Value::String).collect())),
+            ("pid", body.product_id.map(Value::String).unwrap_or(Value::Null)),
+            ("uid", body.user_id.map(Value::String).unwrap_or(Value::Null)),
+        ],
+    )
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn delete_admin_api_token(
