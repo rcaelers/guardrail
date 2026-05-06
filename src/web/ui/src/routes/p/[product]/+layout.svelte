@@ -30,7 +30,7 @@
     ['crashes', 'Crashes'] as [string, string],
     ['symbols', 'Symbols'] as [string, string],
     ...(data.user ? [['settings', 'Settings']] as Array<[string, string]> : []),
-    ...(data.role === 'maintainer' ? [['invitations', 'Invitations']] as Array<[string, string]> : [])
+    ...((data.role === 'maintainer' || data.user?.isAdmin) ? [['invitations', 'Invitations']] as Array<[string, string]> : [])
   ]);
 </script>
 
@@ -54,8 +54,8 @@
     <!-- Tabs -->
     <nav class="ml-3 flex gap-0.5 text-[13px]">
       {#each TABS as [slug, label]}
-        {@const href = slug === 'invitations' ? '/invitations' : `/p/${data.product.id}/${slug}`}
-        {@const active = slug === 'invitations' ? $page.url.pathname.startsWith('/invitations') : tab === slug}
+        {@const href = `/p/${data.product.id}/${slug}`}
+        {@const active = tab === slug}
         <a
           {href}
           class="rounded-md px-2.5 py-1.5"
