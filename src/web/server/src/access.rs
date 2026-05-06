@@ -5,7 +5,7 @@
 // `user_db()` for data queries that should be RLS-scoped.
 //
 // Three auth paths exist:
-//   1. Session — a browser user logged in via WebAuthn or OIDC.
+//   1. Session — a browser user logged in via OIDC.
 //   2. Bearer token — an API token in the Authorization header.
 //   3. Either — session or Bearer depending on what the endpoint accepts.
 
@@ -65,8 +65,7 @@ impl Principal {
 
 /// Require a valid session.  Returns the authenticated user or `Forbidden`.
 ///
-/// Use for flows that can only come from a browser (WebAuthn, OIDC callbacks,
-/// impersonation).
+/// Use for flows that can only come from a browser (OIDC callbacks, impersonation).
 pub async fn require_session(session: &Session) -> AppResult<AuthenticatedUser> {
     session
         .get::<AuthenticatedUser>(SESSION_KEY)

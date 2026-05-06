@@ -6,8 +6,6 @@ use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
 use tracing_subscriber::EnvFilter;
 use uuid::Uuid;
-use webauthn_rs::prelude::Url;
-use webauthn_rs::{Webauthn, WebauthnBuilder};
 
 pub mod mockall_object_store;
 pub mod setup;
@@ -18,7 +16,6 @@ use common::token::generate_api_token;
 use data::api_token::NewApiToken;
 use data::attachment::NewAttachment;
 use data::crash::NewCrash;
-use data::credentials::NewCredential;
 use data::product::NewProduct;
 use data::symbols::NewSymbols;
 use data::user::NewUser;
@@ -27,7 +24,6 @@ use data::user::NewUser;
 use repos::api_token::ApiTokenRepo;
 use repos::attachment::AttachmentsRepo;
 use repos::crash::CrashRepo;
-use repos::credentials::CredentialsRepo;
 use repos::product::ProductRepo;
 use repos::symbols::SymbolsRepo;
 use repos::user::UserRepo;
@@ -36,7 +32,6 @@ use repos::user::UserRepo;
 use data::api_token::ApiToken;
 use data::attachment::Attachment;
 use data::crash::Crash;
-use data::credentials::Credential;
 use data::product::Product;
 use data::symbols::Symbols;
 use data::user::User;
@@ -245,29 +240,6 @@ pub async fn create_random_test_user(db: &Surreal<Any>) -> String {
         .expect("Failed to create test user")
 }
 
-/// Create a test credential
-pub async fn create_test_credential(
-    db: &Surreal<Any>,
-    data: serde_json::Value,
-    user_id: Option<String>,
-) -> Credential {
-    let user_id = match user_id {
-        Some(id) => id,
-        None => create_random_test_user(db).await,
-    };
-
-    let new_credential = NewCredential { user_id, data };
-
-    let credential_id = CredentialsRepo::create(db, new_credential)
-        .await
-        .expect("Failed to insert test credential");
-
-    CredentialsRepo::get_by_id(db, credential_id)
-        .await
-        .expect("Failed to retrieve created credential")
-        .expect("Created credential not found")
-}
-
 /// Hash a token using argon2 (for API token tests)
 pub fn hash_token(token: &str) -> String {
     use argon2::{
@@ -290,17 +262,6 @@ pub fn init_logging() {
         .with_target(true)
         .with_level(true)
         .init();
-
-    //    tracing_log::LogTracer::init().expect("Failed to set logger");
-}
-
-pub fn create_webauthn(settings: Arc<Settings>) -> Arc<Webauthn> {
-    let rp_id = settings.auth.id.as_str();
-    let rp_origin = Url::parse(settings.auth.origin.as_str()).expect("Invalid URL");
-    let builder = WebauthnBuilder::new(rp_id, &rp_origin).expect("Invalid configuration");
-    let builder = builder.rp_name(settings.auth.name.as_str());
-
-    Arc::new(builder.build().expect("Invalid configuration"))
 }
 
 pub async fn create_test_token(

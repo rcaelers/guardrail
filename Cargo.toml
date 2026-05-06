@@ -41,10 +41,6 @@ debug = 1 # line-level info only; full DWARF (debug=2) is slow to emit and link
 
 [workspace.dependencies]
 
-# WebAuthn
-webauthn-rs = { version = "0.5.5", features = [
-  "danger-allow-state-serialisation",
-] }
 askama = "0.16.0"
 
 # Serde / json

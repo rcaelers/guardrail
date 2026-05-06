@@ -16,7 +16,6 @@ use tower_http::{
 use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer, cookie::SameSite};
 use tracing::{Level, info};
 use url::Url;
-use webauthn_rs::prelude::*;
 
 use crate::pocket_id;
 use crate::provisioner::IdentityProvisioner;
@@ -76,16 +75,6 @@ impl GuardrailWebApp {
             .expect("Failed to define JWT access method");
         }
 
-        let rp_id = settings.auth.id.clone();
-        let rp_origin = Url::parse(&settings.auth.origin).expect("Invalid auth origin URL");
-        let webauthn = Arc::new(
-            WebauthnBuilder::new(&rp_id, &rp_origin)
-                .expect("Failed to build Webauthn")
-                .rp_name(&settings.auth.name)
-                .build()
-                .expect("Failed to build Webauthn"),
-        );
-
         let http_client = {
             let mut builder =
                 reqwest::Client::builder().timeout(std::time::Duration::from_secs(10));
@@ -138,7 +127,6 @@ impl GuardrailWebApp {
             repo: Arc::new(Repo::new(db)),
             settings,
             http_client,
-            webauthn,
             provisioner,
             storage,
             auth_cache: AuthCache::default(),

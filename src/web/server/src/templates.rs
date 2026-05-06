@@ -11,7 +11,6 @@ pub struct HomeTemplate<'a> {
     pub error: String,
     pub has_error: bool,
     pub login_url: String,
-    pub oidc_enabled: bool,
     pub self_service_url: String,
 }
 

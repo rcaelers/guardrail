@@ -232,7 +232,8 @@ DEFINE FIELD expires_at ON TABLE invitations TYPE option<datetime>;
 DEFINE FIELD max_uses ON TABLE invitations TYPE option<int>;
 DEFINE FIELD use_count ON TABLE invitations TYPE int ASSERT $value != NONE DEFAULT 0;
 DEFINE FIELD is_admin ON TABLE invitations TYPE bool ASSERT $value != NONE DEFAULT false;
-DEFINE FIELD grants ON TABLE invitations TYPE array<object> FLEXIBLE ASSERT $value != NONE DEFAULT [];
+DEFINE FIELD grants ON TABLE invitations TYPE array ASSERT $value != NONE DEFAULT [];
+DEFINE FIELD grants[*] ON TABLE invitations TYPE object FLEXIBLE;
 DEFINE FIELD status ON TABLE invitations TYPE string
     ASSERT $value != NONE AND $value INSIDE ["Active", "Exhausted", "Expired", "Revoked"]
     DEFAULT "Active";
@@ -250,23 +251,12 @@ DEFINE TABLE pending_access SCHEMAFULL;
 DEFINE FIELD sub ON TABLE pending_access TYPE string ASSERT $value != NONE AND $value != "";
 DEFINE FIELD invitation_id ON TABLE pending_access TYPE string ASSERT $value != NONE AND $value != "";
 DEFINE FIELD is_admin ON TABLE pending_access TYPE bool ASSERT $value != NONE DEFAULT false;
-DEFINE FIELD grants ON TABLE pending_access TYPE array<object> FLEXIBLE ASSERT $value != NONE DEFAULT [];
+DEFINE FIELD grants ON TABLE pending_access TYPE array ASSERT $value != NONE DEFAULT [];
+DEFINE FIELD grants[*] ON TABLE pending_access TYPE object FLEXIBLE;
 DEFINE FIELD created_at ON TABLE pending_access TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 DEFINE INDEX idx_pending_access_sub ON TABLE pending_access COLUMNS sub UNIQUE;
 DEFINE INDEX idx_pending_access_invitation ON TABLE pending_access COLUMNS invitation_id;
-
--- ============================================================
--- Credentials (WebAuthn passkeys)
--- ============================================================
-DEFINE TABLE credentials SCHEMAFULL;
-
-DEFINE FIELD user_id ON TABLE credentials TYPE record<users> ASSERT $value != NONE;
-DEFINE FIELD name ON TABLE credentials TYPE string ASSERT $value != NONE;
-DEFINE FIELD data ON TABLE credentials TYPE object FLEXIBLE ASSERT $value != NONE;
-DEFINE FIELD last_used ON TABLE credentials TYPE datetime ASSERT $value != NONE;
-DEFINE FIELD created_at ON TABLE credentials TYPE datetime ASSERT $value != NONE DEFAULT time::now();
-DEFINE FIELD updated_at ON TABLE credentials TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 -- ============================================================
 -- Sessions (tower-sessions)
@@ -411,10 +401,5 @@ DEFINE TABLE OVERWRITE api_tokens SCHEMAFULL
 			OR (product_id != NONE AND fn::auth::is_product_admin(product_id))
 		FOR create, update, delete WHERE fn::auth::is_admin()
 			OR (product_id != NONE AND fn::auth::is_product_admin(product_id));
-
-DEFINE TABLE OVERWRITE credentials SCHEMAFULL
-	PERMISSIONS
-		FOR select, create, update, delete WHERE fn::auth::is_admin()
-			OR user_id = fn::auth::user_id();
 
 DEFINE TABLE OVERWRITE sessions SCHEMAFULL PERMISSIONS NONE;

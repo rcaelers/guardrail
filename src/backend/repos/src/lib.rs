@@ -3,7 +3,6 @@ pub mod api_token;
 pub mod attachment;
 pub mod crash;
 pub mod crash_group;
-pub mod credentials;
 pub mod error;
 pub mod invitation;
 pub mod pending_access;

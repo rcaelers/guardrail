@@ -12,7 +12,7 @@ use tower_sessions::Session;
 use crate::{
     AppState,
     error::{AppError, AppResult},
-    oidc, webauthn,
+    oidc,
 };
 
 pub fn router() -> Router<AppState> {
@@ -21,10 +21,6 @@ pub fn router() -> Router<AppState> {
         .route("/auth/login/start", get(oidc::login_start))
         .route("/auth/oidc/callback", get(oidc::callback))
         .route("/auth/logout", post(logout))
-        .route("/auth/register_start/{username}", post(webauthn::start_register))
-        .route("/auth/register_finish", post(webauthn::finish_register))
-        .route("/auth/authenticate_start/{username}", post(webauthn::start_authentication))
-        .route("/auth/authenticate_finish", post(webauthn::finish_authentication))
         .route("/auth/real-user", get(get_real_user))
 }
 

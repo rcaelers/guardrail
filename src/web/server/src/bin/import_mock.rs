@@ -137,7 +137,6 @@ async fn clear_tables(db: &Surreal<Any>) -> Result<()> {
     // then remove the imported entities themselves.
     let tables = [
         "sessions",
-        "credentials",
         "pending_access",
         "invitations",
         "api_tokens",

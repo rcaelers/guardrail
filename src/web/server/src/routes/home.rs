@@ -32,7 +32,6 @@ async fn home(
     let next = oidc::sanitize_next(query.next.as_deref());
     let error = query.error.unwrap_or_default();
     let has_error = !error.is_empty();
-    let oidc_enabled = state.settings.auth.oidc.is_some();
     let self_service_url = state
         .settings
         .auth
@@ -47,7 +46,6 @@ async fn home(
         error,
         has_error,
         login_url: oidc::login_start_path(Some(next.as_str())),
-        oidc_enabled,
         self_service_url,
     })
 }

@@ -9,7 +9,6 @@ pub(crate) mod provisioner;
 pub(crate) mod routes;
 pub(crate) mod state;
 pub(crate) mod templates;
-pub(crate) mod webauthn;
 
 pub(crate) use state::AppState;
 
