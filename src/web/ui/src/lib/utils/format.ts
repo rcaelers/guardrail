@@ -13,6 +13,12 @@ export function fmtDate(iso: string | Date | null | undefined): string {
   return d.toISOString().slice(0, 10);
 }
 
+export function fmtDateOnly(iso: string | Date | null | undefined): string {
+  if (!iso) return '—';
+  const d = typeof iso === 'string' ? new Date(iso) : iso;
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
 export function fmtInt(n: number): string {
   return n.toLocaleString();
 }

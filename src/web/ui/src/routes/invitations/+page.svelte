@@ -2,7 +2,7 @@
   import { enhance } from '$app/forms';
   import type { PageData, ActionData } from './$types';
   import type { InvitationGrant, Role } from '$lib/adapters/types';
-  import { fmtDate } from '$lib/utils/format';
+  import { fmtDate, fmtDateOnly } from '$lib/utils/format';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -275,7 +275,7 @@
         <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
           {inv.use_count}{inv.max_uses != null ? ` / ${inv.max_uses}` : ''}
           {#if inv.expires_at}
-            <div class="text-[11px]">exp {fmtDate(inv.expires_at)}</div>
+            <div class="text-[11px]">exp {fmtDateOnly(inv.expires_at)}</div>
           {/if}
         </div>
 
