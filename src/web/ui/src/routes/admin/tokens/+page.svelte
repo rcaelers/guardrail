@@ -6,6 +6,7 @@
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
   // ── create form ──────────────────────────────────────────────────────
+  let showCreate = $state(false);
   let createDescription = $state('');
   let createProductId = $state('');
   let createUserId = $state('');
@@ -16,12 +17,21 @@
   $effect(() => {
     if (form?.created) {
       justCreated = form.created as CreatedApiToken;
+      showCreate = false;
       createDescription = '';
       createProductId = '';
       createUserId = '';
       createEntitlements = [];
     }
   });
+
+  function resetCreate() {
+    showCreate = false;
+    createDescription = '';
+    createProductId = '';
+    createUserId = '';
+    createEntitlements = [];
+  }
 
   // ── edit form ────────────────────────────────────────────────────────
   let editingId = $state<string | null>(null);
@@ -61,11 +71,18 @@
 </script>
 
 <div class="mx-auto max-w-[860px]">
-  <div class="mb-6">
-    <h1 class="mb-1 text-[20px] font-semibold tracking-[-0.01em]">API tokens</h1>
-    <p class="text-[13px] text-ink-muted dark:text-ink-mutedDark">
-      Tokens authenticate API calls. Scope a token to a product and/or user, then select the entitlements it should carry.
-    </p>
+  <div class="mb-6 flex items-end justify-between">
+    <div>
+      <h1 class="mb-1 text-[20px] font-semibold tracking-[-0.01em]">API tokens</h1>
+      <p class="text-[13px] text-ink-muted dark:text-ink-mutedDark">
+        Tokens authenticate API calls. Scope a token to a product and/or user, then select the entitlements it should carry.
+      </p>
+    </div>
+    <button
+      type="button"
+      onclick={() => (showCreate = !showCreate)}
+      class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white"
+    >New token</button>
   </div>
 
   <!-- One-time token display -->
@@ -93,93 +110,96 @@
   {/if}
 
   <!-- Create token form -->
-  <form
-    method="POST"
-    action="?/create"
-    use:enhance={() => async ({ update }) => { await update({ reset: false }); }}
-    class="mb-6 rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-4 py-3"
-  >
-    <p class="mb-3 text-[12px] font-medium uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">New token</p>
-
-    <div class="grid gap-3 sm:grid-cols-3">
-      <label class="flex flex-col">
-        <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Description</span>
-        <input
-          name="description"
-          bind:value={createDescription}
-          placeholder="e.g. CI pipeline"
-          required
-          class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1.5 text-[13px] outline-none"
-        />
-      </label>
-      <label class="flex flex-col">
-        <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Product (optional)</span>
-        <select
-          name="productId"
-          bind:value={createProductId}
-          class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1.5 text-[13px] outline-none"
-        >
-          <option value="">— Any product —</option>
-          {#each data.products as p}
-            <option value={p.id}>{p.name}</option>
-          {/each}
-        </select>
-      </label>
-      <label class="flex flex-col">
-        <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">User (optional)</span>
-        <select
-          name="userId"
-          bind:value={createUserId}
-          class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1.5 text-[13px] outline-none"
-        >
-          <option value="">— No user —</option>
-          {#each data.users as u}
-            <option value={u.id}>{u.name || u.email}</option>
-          {/each}
-        </select>
-      </label>
-    </div>
-
-    <div class="mt-3">
-      <div class="mb-1.5 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Entitlements</div>
-      <div class="flex flex-wrap gap-2">
-        {#each data.entitlements as ent}
-          {@const avail = entAvailable(ent, createProductId, createUserId)}
-          {@const checked = createEntitlements.includes(ent.name) && avail}
-          <label
-            class="flex items-center gap-1.5 rounded border border-line dark:border-line-dark px-2.5 py-1.5 text-[12px] select-none"
-            class:opacity-40={!avail}
-            class:cursor-not-allowed={!avail}
-            class:cursor-pointer={avail}
+  {#if showCreate}
+    <form
+      method="POST"
+      action="?/create"
+      use:enhance={() => async ({ update }) => { await update({ reset: false }); }}
+      class="mb-6 rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-4 py-3"
+    >
+      <div class="grid gap-3 sm:grid-cols-3">
+        <label class="flex flex-col">
+          <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Description</span>
+          <input
+            name="description"
+            bind:value={createDescription}
+            placeholder="e.g. CI pipeline"
+            required
+            class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1.5 text-[13px] outline-none"
+          />
+        </label>
+        <label class="flex flex-col">
+          <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Product (optional)</span>
+          <select
+            name="productId"
+            bind:value={createProductId}
+            class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1.5 text-[13px] outline-none"
           >
-            <input
-              type="checkbox"
-              name="entitlement"
-              value={ent.name}
-              disabled={!avail}
-              {checked}
-              onchange={(e) => (createEntitlements = toggleEnt(createEntitlements, ent.name, e.currentTarget.checked))}
-            />
-            <span class="font-mono text-[11px]">{ent.name}</span>
-            <span class="text-ink-muted dark:text-ink-mutedDark">— {ent.description}</span>
-          </label>
-        {/each}
+            <option value="">— Any product —</option>
+            {#each data.products as p}
+              <option value={p.id}>{p.name}</option>
+            {/each}
+          </select>
+        </label>
+        <label class="flex flex-col">
+          <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">User (optional)</span>
+          <select
+            name="userId"
+            bind:value={createUserId}
+            class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1.5 text-[13px] outline-none"
+          >
+            <option value="">— No user —</option>
+            {#each data.users as u}
+              <option value={u.id}>{u.name || u.email}</option>
+            {/each}
+          </select>
+        </label>
       </div>
-    </div>
 
-    <div class="mt-3 flex items-center justify-between">
-      {#if form?.error && !form?.created}
-        <p class="text-[12px] text-red-600 dark:text-red-400">{form.error}</p>
-      {:else}
-        <span></span>
-      {/if}
-      <button
-        type="submit"
-        disabled={!createDescription.trim()}
-        class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
-      >Create</button>
-    </div>
-  </form>
+      <div class="mt-3">
+        <div class="mb-1.5 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Entitlements</div>
+        <div class="flex flex-wrap gap-2">
+          {#each data.entitlements as ent}
+            {@const avail = entAvailable(ent, createProductId, createUserId)}
+            {@const checked = createEntitlements.includes(ent.name) && avail}
+            <label
+              class="flex items-center gap-1.5 rounded border border-line dark:border-line-dark px-2.5 py-1.5 text-[12px] select-none"
+              class:opacity-40={!avail}
+              class:cursor-not-allowed={!avail}
+              class:cursor-pointer={avail}
+            >
+              <input
+                type="checkbox"
+                name="entitlement"
+                value={ent.name}
+                disabled={!avail}
+                {checked}
+                onchange={(e) => (createEntitlements = toggleEnt(createEntitlements, ent.name, e.currentTarget.checked))}
+              />
+              <span class="font-mono text-[11px]">{ent.name}</span>
+              <span class="text-ink-muted dark:text-ink-mutedDark">— {ent.description}</span>
+            </label>
+          {/each}
+        </div>
+      </div>
+
+      <div class="mt-3 flex items-center justify-between">
+        {#if form?.error && !form?.created}
+          <p class="text-[12px] text-red-600 dark:text-red-400">{form.error}</p>
+        {:else}
+          <span></span>
+        {/if}
+        <div class="flex gap-2">
+          <button type="button" onclick={resetCreate} class="rounded-md border border-line dark:border-line-dark bg-transparent px-3 py-1.5 text-[13px]">Cancel</button>
+          <button
+            type="submit"
+            disabled={!createDescription.trim()}
+            class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
+          >Create</button>
+        </div>
+      </div>
+    </form>
+  {/if}
 
   <!-- Token list -->
   {#if data.tokens.length === 0}
