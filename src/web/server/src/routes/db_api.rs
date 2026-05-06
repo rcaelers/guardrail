@@ -1682,7 +1682,7 @@ async fn delete_symbol(
 // API tokens
 // --------------------------------------------------------------------
 
-const API_TOKEN_PROJ: &str = "meta::id(id) AS id, description, entitlements, is_active, last_used_at, expires_at, created_at";
+const API_TOKEN_PROJ: &str = "meta::id(id) AS id, description, entitlements, is_active AS isActive, last_used_at AS lastUsedAt, expires_at AS expiresAt, created_at AS createdAt";
 
 async fn list_api_tokens(
     State(s): State<AppState>,
