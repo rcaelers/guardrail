@@ -46,7 +46,8 @@ export const actions: Actions = {
 
     const form = await request.formData();
     const is_admin = form.get('is_admin') === 'true';
-    const expires_at = (form.get('expires_at') as string) || null;
+    const expires_at_raw = (form.get('expires_at') as string) || null;
+    const expires_at = expires_at_raw ? `${expires_at_raw}:00Z` : null;
     const max_uses_raw = form.get('max_uses') as string;
     const max_uses = max_uses_raw ? parseInt(max_uses_raw, 10) : null;
 
@@ -79,7 +80,8 @@ export const actions: Actions = {
     if (!id) return fail(400, { error: 'missing id' });
 
     const is_admin = form.get('is_admin') === 'true';
-    const expires_at = (form.get('expires_at') as string) || null;
+    const expires_at_raw = (form.get('expires_at') as string) || null;
+    const expires_at = expires_at_raw ? `${expires_at_raw}:00Z` : null;
     const max_uses_raw = form.get('max_uses') as string;
     const max_uses = max_uses_raw ? parseInt(max_uses_raw, 10) : null;
 
