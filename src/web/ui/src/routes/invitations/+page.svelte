@@ -170,8 +170,7 @@
           <div class="mb-1.5 flex items-center gap-2 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-2 text-[13px]">
             <span class="flex-1 font-medium">{productName(g.product_id)}</span>
             <select
-              value={g.role}
-              onchange={(e) => { g.role = e.currentTarget.value as Role; createGrants = [...createGrants]; }}
+              bind:value={g.role}
               class="rounded border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-2 py-0.5 text-[12px]"
             >
               <option value="readonly">Read-only</option>
@@ -370,14 +369,13 @@
 
               {#each editGrants as g (g.product_id)}
                 {@const editable = data.assignableProducts.some((p) => p.id === g.product_id)}
-                <input type="hidden" name="grant_product" value={g.product_id} />
-                <input type="hidden" name="grant_role" value={g.role} />
                 <div class="mb-1.5 flex items-center gap-2 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-2 text-[13px]">
                   <span class="flex-1 font-medium {editable ? '' : 'text-ink-muted dark:text-ink-mutedDark'}">{productName(g.product_id)}</span>
                   {#if editable}
+                    <input type="hidden" name="grant_product" value={g.product_id} />
+                    <input type="hidden" name="grant_role" value={g.role} />
                     <select
-                      value={g.role}
-                      onchange={(e) => { g.role = e.currentTarget.value as Role; editGrants = [...editGrants]; }}
+                      bind:value={g.role}
                       class="rounded border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-2 py-0.5 text-[12px]"
                     >
                       <option value="readonly">Read-only</option>
