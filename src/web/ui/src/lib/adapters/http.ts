@@ -118,7 +118,8 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     if (res.ok) return;
     const body = await responseBodyForLog(res);
     logApiResponseFailure(res, what, body);
-    throw new Error(`${what} ${res.status}`);
+    const detail = body.trim();
+    throw new Error(detail || `${what} ${res.status}`);
   }
 
   async function json<T>(res: Response, what: string): Promise<T> {
