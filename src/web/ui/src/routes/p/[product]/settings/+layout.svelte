@@ -6,7 +6,7 @@
   const productId = $derived($page.params.product);
   const current = $derived.by(() => {
     const segs = $page.url.pathname.split('/');
-    return segs[5] ?? 'members';
+    return segs[4] ?? 'members';
   });
 
   const NAV: Array<[string, string]> = [
