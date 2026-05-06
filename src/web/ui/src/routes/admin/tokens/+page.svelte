@@ -142,7 +142,7 @@
                 <span>Never used</span>
               {/if}
               {#if !token.isActive}
-                <span class="text-red-500 dark:text-red-400">Revoked</span>
+                <span class="text-red-500 dark:text-red-400">Inactive</span>
               {/if}
             </div>
             <div class="mt-1 flex flex-wrap gap-1">
