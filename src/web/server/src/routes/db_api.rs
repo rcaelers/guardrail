@@ -1803,9 +1803,9 @@ async fn list_all_api_tokens(
         &db,
         &format!(
             "SELECT {API_TOKEN_PROJ}, \
-             meta::id(product_id) AS productId, \
+             IF product_id IS NOT NONE THEN meta::id(product_id) ELSE NONE END AS productId, \
              product_id.name AS productName, \
-             meta::id(user_id) AS userId, \
+             IF user_id IS NOT NONE THEN meta::id(user_id) ELSE NONE END AS userId, \
              user_id.name AS userName \
              FROM api_tokens \
              ORDER BY created_at DESC"
