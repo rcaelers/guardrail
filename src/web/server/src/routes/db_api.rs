@@ -1851,7 +1851,7 @@ async fn create_admin_api_token(
             description: $description,
             token_id: $token_id,
             token_hash: $token_hash,
-            product_id: IF $pid IS NOT NONE THEN type::record('products', $pid) ELSE NONE END,
+            product_id: IF type::is::string($pid) THEN type::record('products', $pid) ELSE NONE END,
             user_id: NONE,
             entitlements: $entitlements,
             expires_at: NONE,
