@@ -159,11 +159,22 @@ pub async fn callback(
         fetch_userinfo(&state, &discovery.userinfo_endpoint, &token.access_token).await?;
     let username = resolve_username(&userinfo);
 
-    let authenticated_user = get_or_create_local_user(&state, &userinfo.sub, &username)
+    let authenticated_user = get_or_create_local_user(&state, &userinfo.sub, &username, userinfo.email.as_deref())
         .await
         .map_err(|e| {
             AppError::internal(format!("failed to get or create user '{username}': {e}"))
         })?;
+
+    let Some(authenticated_user) = authenticated_user else {
+        return Ok(Redirect::to(
+            login_path(
+                Some(login_state.next.as_str()),
+                Some("Your account has not been granted access to Guardrail. Contact an administrator."),
+            )
+            .as_str(),
+        )
+        .into_response());
+    };
 
     session
         .insert(AUTHENTICATED_USER_SESSION_KEY, authenticated_user.clone())
@@ -361,15 +372,25 @@ async fn get_or_create_local_user(
     state: &AppState,
     sub: &str,
     username: &str,
-) -> AppResult<AuthenticatedUser> {
+    email: Option<&str>,
+) -> AppResult<Option<AuthenticatedUser>> {
     let pending = repos::pending_access::PendingAccessRepo::get_by_sub(&state.repo.db, sub)
         .await
         .map_err(AppError::internal)?;
 
-    if let Some(user) = repos::user::UserRepo::get_by_name(&state.repo.db, username)
+    // Look up by username first, then fall back to email if the OIDC provider
+    // returns an email as the username but the stored record uses a different username.
+    let existing = repos::user::UserRepo::get_by_name(&state.repo.db, username)
         .await
         .map_err(AppError::internal)?
-    {
+        .or(match email {
+            Some(e) => repos::user::UserRepo::get_by_email(&state.repo.db, e)
+                .await
+                .map_err(AppError::internal)?,
+            None => None,
+        });
+
+    if let Some(user) = existing {
         if let Some(pa) = pending {
             repos::pending_access::PendingAccessRepo::apply_and_delete(
                 &state.repo.db,
@@ -379,37 +400,30 @@ async fn get_or_create_local_user(
             .await
             .map_err(AppError::internal)?;
         }
-        return Ok(AuthenticatedUser::new(user.id, user.username, user.is_admin));
+        return Ok(Some(AuthenticatedUser::new(user.id, user.username, user.is_admin)));
     }
 
-    let is_admin = match &pending {
-        Some(pa) => pa.is_admin,
-        None => {
-            repos::user::UserRepo::count(&state.repo.db)
-                .await
-                .map_err(AppError::internal)?
-                == 0
-        }
+    // No existing user — only create one if they arrived via an invitation.
+    let Some(pa) = pending else {
+        return Ok(None);
     };
 
     let user_id = repos::user::UserRepo::create(
         &state.repo.db,
         NewUser {
             username: username.to_owned(),
-            email: None,
-            is_admin,
+            email: email.map(str::to_string),
+            is_admin: pa.is_admin,
         },
     )
     .await
     .map_err(AppError::internal)?;
 
-    if let Some(pa) = pending {
-        repos::pending_access::PendingAccessRepo::apply_and_delete(&state.repo.db, &user_id, &pa)
-            .await
-            .map_err(AppError::internal)?;
-    }
+    repos::pending_access::PendingAccessRepo::apply_and_delete(&state.repo.db, &user_id, &pa)
+        .await
+        .map_err(AppError::internal)?;
 
-    Ok(AuthenticatedUser::new(user_id, username.to_owned(), is_admin))
+    Ok(Some(AuthenticatedUser::new(user_id, username.to_owned(), pa.is_admin)))
 }
 
 pub fn sanitize_next(next: Option<&str>) -> String {

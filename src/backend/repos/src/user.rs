@@ -36,6 +36,16 @@ impl UserRepo {
         Ok(users.into_iter().next())
     }
 
+    pub async fn get_by_email(db: &Surreal<Any>, email: &str) -> Result<Option<User>, RepoError> {
+        let mut result = db
+            .query("SELECT *, meta::id(id) as id FROM users WHERE email = $email LIMIT 1")
+            .bind(("email", email.to_owned()))
+            .await
+            .map_err(handle_surreal_error)?;
+        let users: Vec<User> = crate::take_many(&mut result, 0)?;
+        Ok(users.into_iter().next())
+    }
+
     pub async fn get_all_names(db: &Surreal<Any>) -> Result<HashSet<String>, RepoError> {
         let mut result = db
             .query("SELECT username FROM users")
