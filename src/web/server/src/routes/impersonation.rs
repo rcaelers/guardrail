@@ -1,7 +1,6 @@
 use axum::{
     Router,
     extract::{Path, State},
-    http::{HeaderValue, header::SET_COOKIE},
     response::{IntoResponse, Redirect, Response},
     routing::post,
 };
@@ -14,8 +13,6 @@ use crate::{
 };
 
 const ORIGINAL_USER_SESSION_KEY: &str = "original_user";
-
-const COOKIE_MAX_AGE: u32 = 60 * 60 * 24 * 30;
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -30,7 +27,7 @@ async fn start_impersonation(
     session: Session,
     Path(user_id): Path<String>,
 ) -> AppResult<Response> {
-    let current = access::require_session_admin(&session).await?;
+    let current = access::require_session_admin(&session, &state.repo.db).await?;
 
     // Prevent chaining one impersonation on top of another.
     if session
@@ -63,22 +60,7 @@ async fn start_impersonation(
         .await
         .map_err(AppError::internal)?;
 
-    // gr_uid drives SvelteKit's user resolution; gr_real_uid signals the banner.
-    let uid_cookie =
-        format!("gr_uid={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}", target.id, COOKIE_MAX_AGE);
-    let real_uid_cookie = format!(
-        "gr_real_uid={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-        current.id, COOKIE_MAX_AGE
-    );
-
-    let mut response = Redirect::to("/").into_response();
-    response
-        .headers_mut()
-        .append(SET_COOKIE, HeaderValue::from_str(&uid_cookie).map_err(AppError::internal)?);
-    response
-        .headers_mut()
-        .append(SET_COOKIE, HeaderValue::from_str(&real_uid_cookie).map_err(AppError::internal)?);
-    Ok(response)
+    Ok(Redirect::to("/").into_response())
 }
 
 /// Restore the original admin session; clear impersonation.
@@ -98,18 +80,5 @@ async fn stop_impersonation(session: Session) -> AppResult<Response> {
         .await
         .map_err(AppError::internal)?;
 
-    let uid_cookie = format!(
-        "gr_uid={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-        original.id, COOKIE_MAX_AGE
-    );
-    let clear_real_uid = "gr_real_uid=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
-
-    let mut response = Redirect::to("/").into_response();
-    response
-        .headers_mut()
-        .append(SET_COOKIE, HeaderValue::from_str(&uid_cookie).map_err(AppError::internal)?);
-    response
-        .headers_mut()
-        .append(SET_COOKIE, HeaderValue::from_str(clear_real_uid).map_err(AppError::internal)?);
-    Ok(response)
+    Ok(Redirect::to("/").into_response())
 }

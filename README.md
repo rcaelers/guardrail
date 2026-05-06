@@ -109,44 +109,10 @@ GUARDRAIL_CARGO_BUILD_RUSTFLAGS='' \
   --parallel 1 -f dev/docker-compose.yml up -d --build
 ```
 
-## Web UI + mock data
+## Web UI
 
-The SvelteKit UI under `src/web/ui/` can run against three different backends.
-Pick the one you need:
-
-### 1. In-memory TypeScript mock (no backend at all)
-
-Fastest path when you just want to see the UI. The mock adapter lives in
-`src/web/ui/src/lib/adapters/mock.ts` and seeds itself deterministically.
-
-```sh
-cd src/web/ui
-bun install
-bun run dev
-```
-
-The adapter is selected at boot in `src/lib/adapters/index.ts`: if
-`GUARDRAIL_API_URL` is unset, the TS mock is used.
-
-### 2. Standalone Rust mock server (`mock_server`)
-
-Serves the same JSON from an in-memory copy of `src/web/server/mock/seed.json`.
-Useful for exercising the HTTP adapter without SurrealDB.
-
-```sh
-# terminal 1
-cargo run -p web --bin mock_server
-# listens on http://127.0.0.1:4500/api/v1
-
-# terminal 2
-cd src/web/ui
-GUARDRAIL_API_URL=http://127.0.0.1:4500/api/v1 bun run dev
-```
-
-Routes and tests live in `src/web/server/src/mock_api.rs` and
-`src/web/server/tests/mock_api.rs`.
-
-### 3. Real SurrealDB (`db_server` + `import_mock`)
+The SvelteKit UI under `src/web/ui/` talks to the backend through
+`GUARDRAIL_API_URL`.
 
 End-to-end path: SurrealDB holds the data, the Rust server queries it, and
 the UI talks to the server.
@@ -183,7 +149,6 @@ Key files:
 - `src/web/server/src/db_api.rs` — REST handlers, SurrealDB queries
 - `src/web/server/src/bin/import_mock.rs` — seed importer
 - `src/web/server/src/bin/db_server.rs` — standalone wrapper
-- `src/web/server/src/bin/mock_server.rs` — in-memory alternative
 - `src/web/server/mock/seed.json` — source of truth for mock data
 
 Test Workrave API tokens:

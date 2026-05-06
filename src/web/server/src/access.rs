@@ -80,8 +80,11 @@ pub async fn require_session(session: &Session) -> AppResult<AuthenticatedUser> 
 /// Use for session-only admin actions such as impersonation that must never
 /// accept a token.
 #[allow(dead_code)]
-pub async fn require_session_admin(session: &Session) -> AppResult<AuthenticatedUser> {
-    let user = require_session(session).await?;
+pub async fn require_session_admin(
+    session: &Session,
+    db: &Surreal<Any>,
+) -> AppResult<AuthenticatedUser> {
+    let user = require_current_session_user(session, db).await?;
     if !user.is_admin {
         return Err(AppError::forbidden());
     }
@@ -112,9 +115,7 @@ pub async fn require_entitlement(
 
 /// Require an admin principal.
 ///
-/// * Browser users must have `is_admin = true`. The db API accepts the
-///   tower session when present and falls back to the `gr_uid` cookie that
-///   drives the SvelteKit UI's authenticated DB handle.
+/// * Browser users must have `is_admin = true` in the trusted tower session.
 /// * Bearer token callers must present a *global* token (no product
 ///   restriction).
 pub async fn require_admin(
@@ -130,7 +131,7 @@ pub async fn require_admin(
         }
         return Ok(Principal::Token(token));
     }
-    let user = require_session_or_gr_uid_user(session, headers, db).await?;
+    let user = require_current_session_user(session, db).await?;
     if !user.is_admin {
         return Err(AppError::forbidden());
     }
@@ -140,9 +141,7 @@ pub async fn require_admin(
 /// Require maintainer-level access for a specific product.
 ///
 /// * Browser users must have the maintainer role for `product_id` (admins
-///   are always allowed). The db API accepts the tower session when present
-///   and falls back to the `gr_uid` cookie that drives the SvelteKit UI's
-///   authenticated DB handle.
+///   are always allowed).
 /// * Bearer token callers must present a token scoped to `product_id` *or* a
 ///   global token (no product restriction).
 pub async fn require_product_maintainer(
@@ -162,7 +161,7 @@ pub async fn require_product_maintainer(
         }
         return Ok(Principal::Token(token));
     }
-    let user = require_session_or_gr_uid_user(session, headers, db).await?;
+    let user = require_current_session_user(session, db).await?;
     if user.is_admin {
         return Ok(Principal::User(user));
     }
@@ -171,6 +170,30 @@ pub async fn require_product_maintainer(
         return Err(AppError::forbidden());
     }
     Ok(Principal::User(user))
+}
+
+/// Require a browser user to be reading their own user-scoped data, or an
+/// admin browser user to be reading any user's data.
+pub async fn require_user_or_admin(
+    session: &Session,
+    headers: &HeaderMap,
+    db: &Surreal<Any>,
+    user_id: &str,
+) -> AppResult<Principal> {
+    if has_bearer_token(headers) {
+        let token_str = extract_bearer_token(headers).ok_or_else(AppError::forbidden)?;
+        let token = verify_and_touch_token(db, token_str, None).await?;
+        if token.product_id.is_some() {
+            return Err(AppError::forbidden());
+        }
+        return Ok(Principal::Token(token));
+    }
+
+    let user = require_current_session_user(session, db).await?;
+    if user.is_admin || repos::record_key(&user.id) == repos::record_key(user_id) {
+        return Ok(Principal::User(user));
+    }
+    Err(AppError::forbidden())
 }
 
 /// Require authentication via session OR a Bearer token with the given
@@ -223,24 +246,17 @@ pub async fn get_maintained_product_ids(
     Ok(ids)
 }
 
-async fn require_session_or_gr_uid_user(
+async fn require_current_session_user(
     session: &Session,
-    headers: &HeaderMap,
     db: &Surreal<Any>,
 ) -> AppResult<AuthenticatedUser> {
     let session_user = session
         .get::<AuthenticatedUser>(SESSION_KEY)
         .await
-        .map_err(AppError::internal)?;
+        .map_err(AppError::internal)?
+        .ok_or_else(AppError::forbidden)?;
 
-    if let Some(user) = session_user {
-        return current_user_by_id(db, &user.id)
-            .await?
-            .ok_or_else(AppError::forbidden);
-    }
-
-    let uid = extract_cookie(headers, "gr_uid").ok_or_else(AppError::forbidden)?;
-    current_user_by_id(db, &uid)
+    current_user_by_id(db, &session_user.id)
         .await?
         .ok_or_else(AppError::forbidden)
 }
@@ -278,18 +294,6 @@ async fn current_user_by_id(
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
     Ok(Some(AuthenticatedUser::new(id, username, is_admin)))
-}
-
-fn extract_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
-    let raw = headers.get(header::COOKIE)?.to_str().ok()?;
-    raw.split(';').find_map(|part| {
-        let (k, v) = part.trim().split_once('=')?;
-        if k.trim() == name {
-            Some(v.trim().to_string())
-        } else {
-            None
-        }
-    })
 }
 
 /// True when the request carries a `Bearer` or `Token` Authorization header.

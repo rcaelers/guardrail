@@ -2,7 +2,7 @@
 // SQL-over-tauri, etc.) should implement GuardrailAdapter.
 //
 // The adapter has three concerns:
-//   - Session + identity (signIn, me, currentProduct)
+//   - Session + identity (me, currentProduct)
 //   - Product-scoped reads (crashes, symbols, members)
 //   - Admin writes (users, products)
 
@@ -445,7 +445,6 @@ export interface CreateAdminApiTokenSpec {
 
 export interface GuardrailAdapter {
   // --- session ---
-  signIn(email: string): Promise<User | null>;
   getMe(): Promise<User | null>;
   getUser(id: string): Promise<User | null>;
 

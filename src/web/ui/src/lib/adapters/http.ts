@@ -2,7 +2,6 @@
 // Every adapter must satisfy GuardrailAdapter — swap this in via index.ts.
 //
 // Endpoints assumed here (rename to match your API):
-//   POST /auth/signin                     { email } -> User
 //   GET  /users/:id                                  -> User | 404
 //   GET  /users                                      -> User[]
 //   POST /users                           { email, name }
@@ -161,11 +160,6 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
 
   return {
     // --- session ---
-    async signIn(email) {
-      const r = await jpost('/auth/signin', { email });
-      if (r.status === 404 || r.status === 401) return null;
-      return json<User>(r, 'signIn');
-    },
     async getMe() {
       const r = await req('/me');
       if (r.status === 401 || r.status === 404) return null;

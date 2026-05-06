@@ -31,9 +31,13 @@ pub fn router() -> Router<AppState> {
 async fn logout(session: Session) -> impl IntoResponse {
     let _ = session.flush().await;
     let mut response = Redirect::to("/").into_response();
-    response.headers_mut().insert(
+    response.headers_mut().append(
         SET_COOKIE,
         HeaderValue::from_static("gr_uid=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"),
+    );
+    response.headers_mut().append(
+        SET_COOKIE,
+        HeaderValue::from_static("gr_real_uid=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"),
     );
     response
 }

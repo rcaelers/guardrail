@@ -1,6 +1,5 @@
 use axum::{
     extract::{Query, State},
-    http::{HeaderValue, header::SET_COOKIE},
     response::{IntoResponse, Redirect, Response},
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -171,18 +170,7 @@ pub async fn callback(
         .await
         .map_err(AppError::internal)?;
 
-    // Set gr_uid so the SvelteKit app can resolve the session without an
-    // extra round-trip to a /auth/me endpoint.
-    let gr_cookie = format!(
-        "gr_uid={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-        authenticated_user.id,
-        60 * 60 * 24 * 30
-    );
-    let mut response = Redirect::to(login_state.next.as_str()).into_response();
-    response
-        .headers_mut()
-        .insert(SET_COOKIE, HeaderValue::from_str(&gr_cookie).map_err(AppError::internal)?);
-    Ok(response)
+    Ok(Redirect::to(login_state.next.as_str()).into_response())
 }
 
 fn oidc_settings(state: &AppState) -> AppResult<&Oidc> {

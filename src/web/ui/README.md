@@ -5,7 +5,7 @@ Svelte 5 + SvelteKit + Tailwind port of the `Crashdumps.html` prototype in the p
 ## Stack
 
 - **Svelte 5** (runes: `$state`, `$derived`, `$effect`, `$props`)
-- **SvelteKit 2** (file-based routes, server `load`, form actions, cookie session)
+- **SvelteKit 2** (file-based routes, server `load`, form actions)
 - **Tailwind CSS 4.2.4** (design tokens mirror the prototype's `aTheme` in `tailwind.config.js`)
 - **TypeScript**
 
@@ -13,8 +13,7 @@ Svelte 5 + SvelteKit + Tailwind port of the `Crashdumps.html` prototype in the p
 
 ```
 /                                 → redirect (first product, or /admin, or /no-access)
-/login                            sign-in form (fake — accepts any seeded email)
-/logout                           POST clears the session cookie
+/login                            redirects to the Rust OIDC login flow
 /no-access                        friendly landing when you have no memberships
 
 /p/[product]/crashes              product-scoped list + split-pane detail
@@ -39,10 +38,8 @@ src/
   app.html              shell, loads Inter + JetBrains Mono
   app.css               Tailwind entry + scrollbar polish
   app.d.ts              App.Locals typing (user: User | null)
-  hooks.server.ts       resolves locals.user from the session cookie
+  hooks.server.ts       resolves locals.user through the backend session
   lib/
-    server/
-      session.ts        cookie read/write/clear helpers (httpOnly, 30 days)
     adapters/
       types.ts          GuardrailAdapter interface + shared types
       http.ts           fetch()-based adapter for the backend API
@@ -63,7 +60,6 @@ src/
     +layout.server.ts        session gate; loads user + accessible products
     +page.server.ts          smart redirect (see above)
     login/                   auth form + form action
-    logout/                  sign-out form action
     no-access/               empty-state page
     admin/                   admin console (layout + users/products tabs)
     p/[product]/             product-scoped shell
@@ -77,8 +73,9 @@ src/
 ## Auth
 
 The Rust server owns the Pocket ID OIDC flow. `/login` redirects to
-`/auth/login/start`, and `hooks.server.ts` resolves the `gr_uid` cookie to
-`locals.user` on every request through the backend API.
+`/auth/login/start`, and `hooks.server.ts` resolves `locals.user` on every
+request through the backend API. The backend authenticates those API calls
+with the trusted Rust tower session cookie.
 
 ## Roles
 

@@ -1,10 +1,10 @@
 // REST API backed by SurrealDB. Returns JSON shapes consumed by
 // the SvelteKit http adapter.
 //
-// Every handler reads the `gr_uid` cookie from the request and generates a
-// short-lived JWT for that user so SurrealDB row-level security (RLS) rules
-// are enforced on every query.  When no cookie is present, an anonymous JWT
-// is used, which grants access only to public data.
+// Handlers generate a short-lived JWT from the authenticated tower session so
+// SurrealDB row-level security (RLS) rules are enforced on every query.  When
+// no session is present, an anonymous JWT is used, which grants access only to
+// public data.
 
 use std::sync::Arc;
 
@@ -17,6 +17,7 @@ use axum::{
     routing::{delete, get, post},
 };
 use chrono::Utc;
+use common::AuthenticatedUser;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path as ObjectPath};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -30,7 +31,6 @@ const ANON_CACHE_KEY: &str = "__anon__";
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/auth/signin", post(signin))
         .route("/me", get(get_me))
         .route("/users", get(list_users).post(create_user))
         .route("/users/{id}", get(get_user).post(update_user).delete(delete_user))
@@ -59,31 +59,25 @@ pub fn router() -> Router<AppState> {
 // per-request authenticated DB
 // --------------------------------------------------------------------
 
-fn extract_cookie(headers: &HeaderMap, name: &str) -> Option<String> {
-    let raw = headers.get(header::COOKIE)?.to_str().ok()?;
-    raw.split(';').find_map(|part| {
-        let (k, v) = part.trim().split_once('=')?;
-        if k.trim() == name {
-            Some(v.trim().to_string())
-        } else {
-            None
-        }
-    })
-}
-
 impl AppState {
-    /// Returns a SurrealDB handle authenticated as the user identified by the
-    /// `gr_uid` request cookie.  Falls back to an anonymous JWT (public data
-    /// only) when the cookie is absent or the user cannot be found.
+    /// Returns a SurrealDB handle authenticated as the current tower session
+    /// user. Falls back to an anonymous JWT (public data only) when no session
+    /// user exists or the user cannot be found.
     ///
     /// Authenticated handles are cached per user for `DB_HANDLE_CACHE_TTL` to
     /// avoid per-request clone()+authenticate() churn on the WebSocket
     /// connection.  Concurrent requests for the same user safely share the
     /// same handle via Arc.
-    pub async fn user_db(&self, headers: &HeaderMap) -> Arc<Surreal<Any>> {
-        let Some(uid) = extract_cookie(headers, "gr_uid") else {
+    pub async fn user_db(&self, session: &Session) -> Arc<Surreal<Any>> {
+        let session_user = session
+            .get::<AuthenticatedUser>(crate::access::SESSION_KEY)
+            .await
+            .ok()
+            .flatten();
+        let Some(session_user) = session_user else {
             return self.anon_db().await;
         };
+        let uid = repos::record_key(&session_user.id);
         if let Some(cached) = self.auth_cache.get(&uid).await {
             return cached;
         }
@@ -356,39 +350,17 @@ async fn split_crash_attachments(
 // auth / users
 // --------------------------------------------------------------------
 
-#[derive(Deserialize)]
-struct SignInBody {
-    email: String,
-}
-
-async fn signin(
-    State(s): State<AppState>,
-    headers: HeaderMap,
-    Json(body): Json<SignInBody>,
-) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&headers).await;
-    let email = body.email.trim().to_lowercase();
-    let rows = run_value(
-        &db,
-        &format!("SELECT {USER_PROJ} FROM users WHERE string::lowercase(email) = $email LIMIT 1"),
-        vec![("email", Value::String(email))],
-    )
-    .await?;
-    rows.into_iter()
-        .next()
-        .map(Json)
-        .ok_or_else(|| (StatusCode::NOT_FOUND, "user not found".into()))
-}
-
 async fn get_me(
     State(s): State<AppState>,
-    headers: HeaderMap,
+    session: Session,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&headers).await;
+    let user = crate::access::require_session(&session)
+        .await
+        .map_err(access_err)?;
     let rows = run_value(
-        &db,
-        &format!("SELECT {USER_PROJ} FROM users WHERE username = fn::auth::username() LIMIT 1"),
-        vec![],
+        &s.repo.db,
+        &format!("SELECT {USER_PROJ} FROM ONLY type::record('users', $id)"),
+        vec![("id", Value::String(user.id))],
     )
     .await?;
     rows.into_iter()
@@ -405,7 +377,7 @@ async fn list_users(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let rows =
         run_value(&db, &format!("SELECT {USER_PROJ} FROM users ORDER BY created_at"), vec![])
             .await?;
@@ -421,7 +393,7 @@ async fn get_user(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let rows = run_value(
         &db,
         &format!("SELECT {USER_PROJ} FROM ONLY type::record('users', $id)"),
@@ -455,7 +427,7 @@ async fn create_user(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let email = body.email.trim().to_lowercase();
     let name = body
         .name
@@ -516,7 +488,7 @@ async fn update_user(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let email = body
         .email
         .as_deref()
@@ -580,7 +552,7 @@ async fn delete_user(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     run_value(
         &db,
         "DELETE user_access WHERE user_id = type::record('users', $id)",
@@ -607,7 +579,7 @@ async fn set_admin(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     run_value(
         &db,
         "UPDATE type::record('users', $id) SET is_admin = $v, updated_at = time::now()",
@@ -623,10 +595,10 @@ async fn memberships_for(
     headers: HeaderMap,
     Path(user_id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    crate::access::require_session(&session)
+    crate::access::require_user_or_admin(&session, &headers, &s.repo.db, &user_id)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let rows = run_value(
         &db,
         "SELECT
@@ -659,12 +631,12 @@ struct ListProductsQuery {
 
 async fn list_products(
     State(s): State<AppState>,
-    headers: HeaderMap,
+    session: Session,
     Query(q): Query<ListProductsQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     match q.scope.as_deref() {
         Some("mine") => {
-            let db = s.user_db(&headers).await;
+            let db = s.user_db(&session).await;
             let Some(uid) = q.user.as_deref() else {
                 return Ok(Json(Value::Array(vec![])));
             };
@@ -690,7 +662,7 @@ async fn list_products(
             Ok(Json(Value::Array(rows)))
         }
         _ => {
-            let db = s.user_db(&headers).await;
+            let db = s.user_db(&session).await;
             let rows = run_value(
                 &db,
                 &format!("SELECT {PRODUCT_PROJ} FROM products ORDER BY name"),
@@ -704,10 +676,10 @@ async fn list_products(
 
 async fn get_product(
     State(s): State<AppState>,
-    headers: HeaderMap,
+    session: Session,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let rows = run_value(
         &db,
         &format!("SELECT {PRODUCT_PROJ} FROM ONLY type::record('products', $id)"),
@@ -745,7 +717,7 @@ async fn create_product(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let slug = body
         .slug
         .as_deref()
@@ -793,7 +765,7 @@ async fn update_product(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let name = body
         .name
         .as_deref()
@@ -855,7 +827,7 @@ async fn delete_product(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let args = vec![("id", Value::String(id))];
     for sql in [
         "DELETE annotations WHERE product_id = type::record('products', $id)",
@@ -876,10 +848,10 @@ async fn delete_product(
 
 async fn list_members(
     State(s): State<AppState>,
-    headers: HeaderMap,
+    session: Session,
     Path(pid): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let rows = run_value(
         &db,
         "SELECT
@@ -916,7 +888,7 @@ async fn grant_access(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     run_value(
         &db,
         "DELETE user_access WHERE user_id = type::record('users', $uid)
@@ -955,7 +927,7 @@ async fn revoke_access(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     run_value(
         &db,
         "DELETE user_access WHERE user_id = type::record('users', $uid)
@@ -984,10 +956,10 @@ struct ListGroupsQuery {
 
 async fn list_groups(
     State(s): State<AppState>,
-    headers: HeaderMap,
+    session: Session,
     Query(q): Query<ListGroupsQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let base_sql = format!(
         "{GROUP_BASE_SELECT}
         WHERE product_id = type::record('products', $pid)
@@ -1135,10 +1107,10 @@ async fn list_groups(
 
 async fn get_group(
     State(s): State<AppState>,
-    headers: HeaderMap,
+    session: Session,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let g = compose_group(&db, &id).await?;
     match g {
         Some(v) => Ok(Json(v)),
@@ -1148,10 +1120,10 @@ async fn get_group(
 
 async fn get_crash(
     State(s): State<AppState>,
-    headers: HeaderMap,
+    session: Session,
     Path(crash_id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let crashes = run_value(
         &db,
         "SELECT * FROM ONLY type::record('crashes', $cid)",
@@ -1378,10 +1350,10 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
 
 async fn download_attachment(
     State(s): State<AppState>,
-    headers: HeaderMap,
+    session: Session,
     Path(id): Path<String>,
 ) -> Result<Response, (StatusCode, String)> {
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let rows = run_value(
         &db,
         "SELECT
@@ -1445,14 +1417,13 @@ struct SetStatusBody {
 async fn set_status(
     State(s): State<AppState>,
     session: Session,
-    headers: HeaderMap,
     Path(id): Path<String>,
     Json(body): Json<SetStatusBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     crate::access::require_session(&session)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     run_value(
         &db,
         "UPDATE type::record('crash_groups', $id) SET status = $st, updated_at = time::now()",
@@ -1474,14 +1445,13 @@ struct AddNoteBody {
 async fn add_note(
     State(s): State<AppState>,
     session: Session,
-    headers: HeaderMap,
     Path(id): Path<String>,
     Json(payload): Json<AddNoteBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     crate::access::require_session(&session)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let prod_rows = run_value(
         &db,
         "SELECT meta::id(product_id) AS pid FROM ONLY type::record('crash_groups', $id)",
@@ -1532,14 +1502,13 @@ struct MergeBody {
 async fn merge_groups(
     State(s): State<AppState>,
     session: Session,
-    headers: HeaderMap,
     Path(primary_id): Path<String>,
     Json(body): Json<MergeBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     crate::access::require_session(&session)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let pid = Value::String(primary_id.clone());
     let mid = Value::String(body.merged_id);
     run_value(
@@ -1575,11 +1544,11 @@ struct SymbolsQuery {
 
 async fn list_symbols(
     State(s): State<AppState>,
-    headers: HeaderMap,
+    session: Session,
     Path(pid): Path<String>,
     Query(q): Query<SymbolsQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let mut rows = run_value(
         &db,
         &format!(
@@ -1659,7 +1628,7 @@ async fn upload_symbol(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let id = uuid::Uuid::new_v4().to_string();
     let module_id = body.name;
     let build_id = uuid::Uuid::new_v4().to_string();
@@ -1698,14 +1667,13 @@ async fn upload_symbol(
 async fn delete_symbol(
     State(s): State<AppState>,
     session: Session,
-    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
     // No pid in path — require a session; RLS enforces product-level access.
     crate::access::require_session(&session)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     run_value(&db, "DELETE type::record('symbols', $id)", vec![("id", Value::String(id))]).await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1725,7 +1693,7 @@ async fn list_api_tokens(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let rows = run_value(
         &db,
         &format!(
@@ -1755,7 +1723,7 @@ async fn create_api_token(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
 
     let description = body.description.trim().to_string();
     if description.is_empty() {
@@ -1810,7 +1778,7 @@ async fn delete_api_token(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let _ = pid;
     run_value(&db, "DELETE type::record('api_tokens', $id)", vec![("id", Value::String(id))])
         .await?;
@@ -1829,7 +1797,7 @@ async fn list_all_api_tokens(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     let rows = run_value(
         &db,
         &format!(
@@ -1862,7 +1830,7 @@ async fn create_admin_api_token(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
 
     let description = body.description.trim().to_string();
     if description.is_empty() {
@@ -1918,7 +1886,7 @@ async fn delete_admin_api_token(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&headers).await;
+    let db = s.user_db(&session).await;
     run_value(&db, "DELETE type::record('api_tokens', $id)", vec![("id", Value::String(id))])
         .await?;
     Ok(StatusCode::NO_CONTENT)
