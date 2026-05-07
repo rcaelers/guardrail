@@ -28,9 +28,14 @@ export const actions: Actions = {
     const { role, product } = await requireProductAccess(locals.user, params.product!, adapter);
     if (!canManage(role, locals.user.isAdmin)) throw error(403, 'Maintainer required');
     const form = await request.formData();
-    const userId = String(form.get('userId') ?? '');
+    let userId = String(form.get('userId') ?? '').trim();
     const newRole = String(form.get('role') ?? 'readonly') as Role;
     if (!userId) return fail(400, { error: 'missing userId' });
+    if (!locals.user.isAdmin) {
+      const found = await adapter.findUser(userId);
+      if (!found) return fail(400, { error: `No user found for "${userId}".` });
+      userId = found.id;
+    }
     await adapter.grantAccess({ userId, productId: product.id, role: newRole });
     return { ok: true };
   },

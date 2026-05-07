@@ -200,6 +200,11 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
       const r = await req('/users');
       return json<User[]>(r, 'listUsers');
     },
+    async findUser(q) {
+      const r = await req(`/users/find?q=${encodeURIComponent(q)}`);
+      if (r.status === 404) return null;
+      return json<User>(r, 'findUser');
+    },
     async createUser(spec) {
       const r = await jpost('/users', spec);
       return json<User>(r, 'createUser');

@@ -471,6 +471,7 @@ export interface GuardrailAdapter {
 
   // --- users ---
   listUsers(): Promise<User[]>;
+  findUser(q: string): Promise<User | null>;
   createUser(spec: { email: string; name?: string; isAdmin?: boolean }): Promise<User>;
   updateUser(id: string, patch: { email?: string; name?: string }): Promise<User>;
   deleteUser(id: string): Promise<void>;

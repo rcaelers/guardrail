@@ -33,6 +33,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/me", get(get_me))
         .route("/users", get(list_users).post(create_user))
+        .route("/users/find", get(find_user))
         .route("/users/{id}", get(get_user).post(update_user).delete(delete_user))
         .route("/users/{id}/admin", post(set_admin))
         .route("/users/{id}/memberships", get(memberships_for))
@@ -408,6 +409,36 @@ async fn get_user(
         .next()
         .map(Json)
         .ok_or_else(|| not_found(&id))
+}
+
+#[derive(Deserialize)]
+struct FindUserQuery {
+    q: String,
+}
+
+async fn find_user(
+    State(s): State<AppState>,
+    session: Session,
+    Query(q): Query<FindUserQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_session(&session)
+        .await
+        .map_err(access_err)?;
+    let name = q.q.trim().to_lowercase();
+    let rows = run_value(
+        &s.repo.db,
+        &format!(
+            "SELECT {USER_PROJ} FROM users \
+             WHERE string::lowercase(username) = $q OR string::lowercase(email) = $q \
+             LIMIT 1"
+        ),
+        vec![("q", Value::String(name.clone()))],
+    )
+    .await?;
+    rows.into_iter()
+        .next()
+        .map(Json)
+        .ok_or_else(|| not_found(&name))
 }
 
 #[derive(Deserialize)]
