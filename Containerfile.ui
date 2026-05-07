@@ -30,7 +30,7 @@ ENV HOST=0.0.0.0
 
 EXPOSE 3000
 
-CMD ["bun", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+CMD ["sh", "-c", "while true; do bun run dev -- --host 0.0.0.0 --port 3000; echo '[restart] vite exited, restarting...'; sleep 1; done"]
 
 #
 # Runtime
