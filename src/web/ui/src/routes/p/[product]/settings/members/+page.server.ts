@@ -15,7 +15,7 @@ export const load: PageServerLoad = async ({ parent, request, locals }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
   const { product, role } = await parent();
   const members = await adapter.listMembers(product.id);
-  const nonMembers = canManage(role, locals.user?.isAdmin ?? false)
+  const nonMembers = (locals.user?.isAdmin ?? false)
     ? (await adapter.listUsers()).filter((u) => !members.some((m) => m.userId === u.id))
     : [];
   return { members, nonMembers };
