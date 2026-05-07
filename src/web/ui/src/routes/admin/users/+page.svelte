@@ -14,6 +14,7 @@
   let addRole = $state('readonly');
   let showCreate = $state(false);
   let editingUserId = $state<string | null>(null);
+  let editFormRef = $state<HTMLFormElement | null>(null);
   let pendingConfirm = $state<{ message: string; confirmLabel: string; form: HTMLFormElement } | null>(null);
 
   const availableForNew = $derived(
@@ -245,6 +246,7 @@
         <div class="border-t border-line bg-surface-panel/55 px-4 py-4 dark:border-line-dark dark:bg-surface-panelDark/55">
           <div class="grid gap-4 lg:grid-cols-[1.1fr,1fr]">
             <form
+              bind:this={editFormRef}
               method="POST"
               action="?/update"
               use:enhance={() => async ({ update, result }) => {
@@ -267,9 +269,6 @@
                   <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Email</span>
                   <input name="email" type="email" value={u.email} required class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-3 py-1.5 text-[13px]" />
                 </label>
-                <div class="flex justify-end">
-                  <button type="submit" class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white">Save user</button>
-                </div>
               </div>
             </form>
 
@@ -381,6 +380,11 @@
                 </div>
               </form>
             {/if}
+          </div>
+
+          <div class="mt-4 flex justify-end gap-2">
+            <button type="button" onclick={() => (editingUserId = null)} class="rounded-md border border-line dark:border-line-dark bg-transparent px-3 py-1.5 text-[13px]">Close</button>
+            <button type="button" onclick={() => editFormRef?.requestSubmit()} class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white">Save user</button>
           </div>
         </div>
       {/if}
