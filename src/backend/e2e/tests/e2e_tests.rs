@@ -87,7 +87,7 @@ impl TestHarness {
         let (token, _api_token) = create_test_token(
             &db,
             "E2E Token",
-            Some(product.id),
+            Some(product.id.clone()),
             Some(user.id),
             &["symbol-upload", "token"],
         )
@@ -112,7 +112,7 @@ impl TestHarness {
         Some(Self {
             db,
             storage,
-            product_id: product.id,
+            product_id: product.id.parse().expect("product id is not a valid UUID"),
             product_name,
             api_token: token,
             ingestion,
@@ -355,7 +355,7 @@ async fn wait_for_uploaded_symbol(harness: &TestHarness) {
                     .ok()?;
                 let matches: Vec<_> = syms
                     .into_iter()
-                    .filter(|symbol| symbol.product_id == product_id)
+                    .filter(|symbol| symbol.product_id == product_id.to_string())
                     .collect();
                 if matches.is_empty() {
                     None
@@ -371,7 +371,7 @@ async fn wait_for_uploaded_symbol(harness: &TestHarness) {
     assert_eq!(symbols.len(), 1, "expected exactly one symbol record");
 
     let symbol = &symbols[0];
-    assert_eq!(symbol.product_id, harness.product_id);
+    assert_eq!(symbol.product_id, harness.product_id.to_string());
     assert_eq!(symbol.os, "windows");
     assert_eq!(symbol.arch, "x86_64");
     assert_eq!(symbol.build_id, "EE9E2672A6863B084C4C44205044422E1");
@@ -509,13 +509,13 @@ async fn test_e2e_crash_flow() {
     .await;
 
     // ── 3. Verify crash data ────────────────────────────────────────────
-    assert_eq!(crash.id, crash_id);
-    assert_eq!(crash.product_id, harness.product_id);
-    assert!(crash.signature.is_some(), "expected a crash signature");
+    assert_eq!(crash.id, crash_id.to_string());
+    assert_eq!(crash.product_id, harness.product_id.to_string());
+    assert!(crash.fingerprint.is_some(), "expected a crash signature");
     assert!(crash.report.is_some(), "expected a crash report");
     assert_decoded_report_matches_expected(
         crash.report.as_ref().expect("expected a crash report"),
-        crash.signature.as_deref(),
+        crash.fingerprint.as_deref(),
     );
 
     // Verify annotations
@@ -624,10 +624,10 @@ async fn test_e2e_crash_flow_with_attachments() {
     .await;
 
     // ── 3. Verify ───────────────────────────────────────────────────────
-    assert!(crash.signature.is_some(), "expected a crash signature");
+    assert!(crash.fingerprint.is_some(), "expected a crash signature");
     assert_decoded_report_matches_expected(
         crash.report.as_ref().expect("expected a crash report"),
-        crash.signature.as_deref(),
+        crash.fingerprint.as_deref(),
     );
 
     // Verify annotations
