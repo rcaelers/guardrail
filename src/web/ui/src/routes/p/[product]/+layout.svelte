@@ -26,10 +26,12 @@
     localStorage.setItem('gr-dark', dark ? '1' : '0');
   });
 
+  const canAccessSettings = $derived(data.role === 'maintainer' || data.user?.isAdmin);
+
   const TABS = $derived([
     ['crashes', 'Crashes'] as [string, string],
     ['symbols', 'Symbols'] as [string, string],
-    ...(data.user ? [['settings', 'Settings']] as Array<[string, string]> : []),
+    ...(canAccessSettings ? [['settings', 'Settings']] as Array<[string, string]> : []),
   ]);
 </script>
 

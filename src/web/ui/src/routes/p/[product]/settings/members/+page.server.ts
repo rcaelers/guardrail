@@ -11,13 +11,13 @@ function canManage(role: string | null | undefined, isAdmin: boolean): boolean {
   return isAdmin || role === 'maintainer';
 }
 
-export const load: PageServerLoad = async ({ parent, request }) => {
+export const load: PageServerLoad = async ({ parent, request, locals }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
-  const { product } = await parent();
+  const { product, role } = await parent();
   const members = await adapter.listMembers(product.id);
-  const allUsers = await adapter.listUsers();
-  const memberIds = new Set(members.map((m) => m.userId));
-  const nonMembers = allUsers.filter((u) => !memberIds.has(u.id));
+  const nonMembers = canManage(role, locals.user?.isAdmin ?? false)
+    ? (await adapter.listUsers()).filter((u) => !members.some((m) => m.userId === u.id))
+    : [];
   return { members, nonMembers };
 };
 

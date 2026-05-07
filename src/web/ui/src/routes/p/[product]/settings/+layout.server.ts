@@ -8,9 +8,7 @@ import { error } from '@sveltejs/kit';
 export const load: LayoutServerLoad = async ({ parent }) => {
   const { user, role, product } = await parent();
   if (!user) throw error(401);
-  // Settings visible to anyone with any role (or admin). Individual
-  // destructive actions enforce stricter requirements.
-  if (!role && !user.isAdmin)
-    throw error(403, `No access to ${product.name} settings`);
+  if (role !== 'maintainer' && !user.isAdmin)
+    throw error(403, `Maintainer access required for ${product.name} settings`);
   return {};
 };

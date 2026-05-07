@@ -9,15 +9,13 @@
     return segs[4] ?? 'members';
   });
 
-  const canManageInvitations = $derived(
-    data.role === 'maintainer' || data.user?.isAdmin
-  );
+  const canManage = $derived(data.role === 'maintainer' || data.user?.isAdmin);
 
   const NAV = $derived([
     ['members', 'Members'] as [string, string],
-    ['tokens', 'API tokens'] as [string, string],
-    ...(canManageInvitations ? [['invitations', 'Invitations']] as Array<[string, string]> : []),
-    ['danger', 'Danger zone'] as [string, string],
+    ...(canManage ? [['tokens', 'API tokens']] as Array<[string, string]> : []),
+    ...(canManage ? [['invitations', 'Invitations']] as Array<[string, string]> : []),
+    ...(canManage ? [['danger', 'Danger zone']] as Array<[string, string]> : []),
   ]);
 </script>
 

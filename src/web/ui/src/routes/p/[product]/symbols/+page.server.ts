@@ -11,16 +11,7 @@ function canWrite(role: string | null | undefined): boolean {
   return role === 'readwrite' || role === 'maintainer';
 }
 
-async function optionalUploaders(adapter: ReturnType<typeof createAdapter>) {
-  try {
-    return await adapter.listUsers();
-  } catch (e) {
-    if (e instanceof Error && e.message === 'listUsers 403') return [];
-    throw e;
-  }
-}
-
-export const load: PageServerLoad = async ({ url, parent, request }) => {
+export const load: PageServerLoad = async ({ url, parent, request, locals }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
   const { product } = await parent();
 
@@ -32,7 +23,7 @@ export const load: PageServerLoad = async ({ url, parent, request }) => {
   };
 
   const symbols = await adapter.listSymbols(product.id, q);
-  const uploaders = await optionalUploaders(adapter);
+  const uploaders = locals.user?.isAdmin ? await adapter.listUsers() : [];
 
   return { symbols, uploaders, filters: q };
 };

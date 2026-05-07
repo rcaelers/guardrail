@@ -3,10 +3,11 @@ import { createAdapter } from '$lib/adapters';
 import { error, fail } from '@sveltejs/kit';
 import { requireProductAccess } from '$lib/server/product-access';
 
-export const load: PageServerLoad = async ({ parent, request }) => {
+export const load: PageServerLoad = async ({ parent, request, locals }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
-  const { product } = await parent();
-  const tokens = await adapter.listApiTokens(product.id);
+  const { product, role } = await parent();
+  const canManage = role === 'maintainer' || (locals.user?.isAdmin ?? false);
+  const tokens = canManage ? await adapter.listApiTokens(product.id) : [];
   return { tokens };
 };
 
