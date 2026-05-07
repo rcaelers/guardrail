@@ -9,11 +9,16 @@
     return segs[4] ?? 'members';
   });
 
-  const NAV: Array<[string, string]> = [
-    ['members', 'Members'],
-    ['tokens', 'API tokens'],
-    ['danger', 'Danger zone']
-  ];
+  const canManageInvitations = $derived(
+    data.role === 'maintainer' || data.user?.isAdmin
+  );
+
+  const NAV = $derived([
+    ['members', 'Members'] as [string, string],
+    ['tokens', 'API tokens'] as [string, string],
+    ...(canManageInvitations ? [['invitations', 'Invitations']] as Array<[string, string]> : []),
+    ['danger', 'Danger zone'] as [string, string],
+  ]);
 </script>
 
 <div class="flex h-full min-h-0">

@@ -30,7 +30,6 @@
     ['crashes', 'Crashes'] as [string, string],
     ['symbols', 'Symbols'] as [string, string],
     ...(data.user ? [['settings', 'Settings']] as Array<[string, string]> : []),
-    ...((data.role === 'maintainer' || data.user?.isAdmin) ? [['invitations', 'Invitations']] as Array<[string, string]> : [])
   ]);
 </script>
 
