@@ -2,10 +2,12 @@
   import { enhance } from '$app/forms';
   import type { PageData, ActionData } from './$types';
   import type { CreatedApiToken, EntitlementDef } from '$lib/adapters/types';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
   // ── create form ──────────────────────────────────────────────────────
+  let pendingConfirm = $state<{ message: string; confirmLabel: string; form: HTMLFormElement } | null>(null);
   let showCreate = $state(false);
   let createDescription = $state('');
   let createProductId = $state('');
@@ -69,6 +71,15 @@
     setTimeout(() => (copied = false), 2000);
   }
 </script>
+
+{#if pendingConfirm}
+  <ConfirmDialog
+    message={pendingConfirm.message}
+    confirmLabel={pendingConfirm.confirmLabel}
+    onconfirm={() => { pendingConfirm!.form.requestSubmit(); pendingConfirm = null; }}
+    oncancel={() => (pendingConfirm = null)}
+  />
+{/if}
 
 <div class="mx-auto max-w-[860px]">
   <div class="mb-6 flex items-end justify-between">
@@ -261,8 +272,8 @@
             <form method="POST" action="?/delete" use:enhance>
               <input type="hidden" name="id" value={token.id} />
               <button
-                type="submit"
-                onclick={(e) => { if (!confirm('Delete this token?')) e.preventDefault(); }}
+                type="button"
+                onclick={(e) => { pendingConfirm = { message: 'Delete this token?', confirmLabel: 'Delete', form: (e.currentTarget as HTMLElement).closest('form')! }; }}
                 class="rounded-md border border-line dark:border-line-dark px-2.5 py-1 text-[12px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
               >Delete</button>
             </form>

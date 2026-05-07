@@ -3,10 +3,12 @@
   import type { PageData, ActionData } from './$types';
   import type { InvitationGrant, Role } from '$lib/adapters/types';
   import { fmtDate, fmtDateOnly } from '$lib/utils/format';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
   // --- Create form state ---
+  let pendingConfirm = $state<{ message: string; confirmLabel: string; form: HTMLFormElement } | null>(null);
   let showCreate = $state(false);
   let createGrants = $state<InvitationGrant[]>([]);
   let createIsAdmin = $state(false);
@@ -89,6 +91,15 @@
     return 'text-ink-muted dark:text-ink-mutedDark';
   }
 </script>
+
+{#if pendingConfirm}
+  <ConfirmDialog
+    message={pendingConfirm.message}
+    confirmLabel={pendingConfirm.confirmLabel}
+    onconfirm={() => { pendingConfirm!.form.requestSubmit(); pendingConfirm = null; }}
+    oncancel={() => (pendingConfirm = null)}
+  />
+{/if}
 
 <div class="mx-auto max-w-[1100px]">
   <div class="mb-6 flex items-end justify-between">
@@ -303,8 +314,8 @@
             <form method="POST" action="?/revoke" use:enhance>
               <input type="hidden" name="id" value={inv.id} />
               <button
-                type="submit"
-                onclick={(e) => { if (!confirm('Revoke this invitation?')) e.preventDefault(); }}
+                type="button"
+                onclick={(e) => { pendingConfirm = { message: 'Revoke this invitation?', confirmLabel: 'Revoke', form: (e.currentTarget as HTMLElement).closest('form')! }; }}
                 class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted hover:text-red-600"
               >Revoke</button>
             </form>

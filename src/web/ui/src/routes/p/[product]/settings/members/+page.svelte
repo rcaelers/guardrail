@@ -2,6 +2,7 @@
   import { enhance } from '$app/forms';
   import type { PageData } from './$types';
   import { fmtDate } from '$lib/utils/format';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
   let { data }: { data: PageData } = $props();
 
@@ -9,7 +10,17 @@
 
   let grantUserId = $state('');
   let grantRole = $state<'readonly' | 'readwrite' | 'maintainer'>('readonly');
+  let pendingConfirm = $state<{ message: string; confirmLabel: string; form: HTMLFormElement } | null>(null);
 </script>
+
+{#if pendingConfirm}
+  <ConfirmDialog
+    message={pendingConfirm.message}
+    confirmLabel={pendingConfirm.confirmLabel}
+    onconfirm={() => { pendingConfirm!.form.requestSubmit(); pendingConfirm = null; }}
+    oncancel={() => (pendingConfirm = null)}
+  />
+{/if}
 
 <div class="mx-auto max-w-[920px]">
   <div class="mb-6">
@@ -112,9 +123,9 @@
             <form method="POST" action="?/revoke" use:enhance>
               <input type="hidden" name="userId" value={m.userId} />
               <button
-                type="submit"
+                type="button"
                 class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark hover:text-red-600"
-                onclick={(e) => { if (!confirm(`Revoke access for ${m.user.name}?`)) e.preventDefault(); }}
+                onclick={(e) => { pendingConfirm = { message: `Revoke access for ${m.user.name}?`, confirmLabel: 'Revoke', form: (e.currentTarget as HTMLElement).closest('form')! }; }}
               >Revoke</button>
             </form>
           {/if}

@@ -2,6 +2,7 @@
   import { enhance } from '$app/forms';
   import type { PageData, ActionData } from './$types';
   import { fmtDate } from '$lib/utils/format';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -13,6 +14,7 @@
   let addRole = $state('readonly');
   let showCreate = $state(false);
   let editingUserId = $state<string | null>(null);
+  let pendingConfirm = $state<{ message: string; confirmLabel: string; form: HTMLFormElement } | null>(null);
 
   const availableForNew = $derived(
     data.products.filter((p) => !newPermissions.some((np) => np.productId === p.id))
@@ -25,6 +27,15 @@
     addRole = 'readonly';
   }
 </script>
+
+{#if pendingConfirm}
+  <ConfirmDialog
+    message={pendingConfirm.message}
+    confirmLabel={pendingConfirm.confirmLabel}
+    onconfirm={() => { pendingConfirm!.form.requestSubmit(); pendingConfirm = null; }}
+    oncancel={() => (pendingConfirm = null)}
+  />
+{/if}
 
 <div class="mx-auto max-w-[1100px]">
   <div class="mb-6 flex items-end justify-between">
@@ -220,9 +231,9 @@
             <form method="POST" action="?/delete" use:enhance>
               <input type="hidden" name="id" value={u.id} />
               <button
-                type="submit"
+                type="button"
                 class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark hover:text-red-600"
-                onclick={(e) => { if (!confirm(`Delete ${u.name}?`)) e.preventDefault(); }}
+                onclick={(e) => { pendingConfirm = { message: `Delete ${u.name}?`, confirmLabel: 'Delete', form: (e.currentTarget as HTMLElement).closest('form')! }; }}
               >Delete</button>
             </form>
           {/if}
@@ -333,9 +344,9 @@
                           <input type="hidden" name="userId" value={u.id} />
                           <input type="hidden" name="productId" value={permission.productId} />
                           <button
-                            type="submit"
+                            type="button"
                             class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark hover:text-red-600"
-                            onclick={(e) => { if (!confirm(`Revoke ${permission.product.name} access for ${u.name}?`)) e.preventDefault(); }}
+                            onclick={(e) => { pendingConfirm = { message: `Revoke ${permission.product.name} access for ${u.name}?`, confirmLabel: 'Revoke', form: (e.currentTarget as HTMLElement).closest('form')! }; }}
                           >Revoke</button>
                         </form>
                       {/if}

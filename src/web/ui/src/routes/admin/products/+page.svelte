@@ -1,15 +1,26 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import type { PageData, ActionData } from './$types';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
   let showCreate = $state(false);
   let editingProductId = $state<string | null>(null);
+  let pendingConfirm = $state<{ message: string; confirmLabel: string; form: HTMLFormElement } | null>(null);
   let newName = $state('');
   let newSlug = $state('');
   let newDesc = $state('');
 </script>
+
+{#if pendingConfirm}
+  <ConfirmDialog
+    message={pendingConfirm.message}
+    confirmLabel={pendingConfirm.confirmLabel}
+    onconfirm={() => { pendingConfirm!.form.requestSubmit(); pendingConfirm = null; }}
+    oncancel={() => (pendingConfirm = null)}
+  />
+{/if}
 
 <div class="mx-auto max-w-[1100px]">
   <div class="mb-6 flex items-end justify-between">
@@ -98,9 +109,9 @@
           <form method="POST" action="?/delete" use:enhance>
             <input type="hidden" name="id" value={p.id} />
             <button
-              type="submit"
+              type="button"
               class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark hover:text-red-600"
-              onclick={(e) => { if (!confirm(`Delete ${p.name}? This also deletes all crashes, symbols and memberships.`)) e.preventDefault(); }}
+              onclick={(e) => { pendingConfirm = { message: `Delete ${p.name}? This also deletes all crashes, symbols and memberships.`, confirmLabel: 'Delete', form: (e.currentTarget as HTMLElement).closest('form')! }; }}
             >Delete</button>
           </form>
         </div>

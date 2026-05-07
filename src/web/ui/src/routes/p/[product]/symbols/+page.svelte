@@ -5,11 +5,13 @@
   import type { PageData } from './$types';
   import Select from '$lib/components/Select.svelte';
   import { fmtDate } from '$lib/utils/format';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
   let { data }: { data: PageData } = $props();
 
   const canUpload = $derived(data.role === 'readwrite' || data.role === 'maintainer');
   const canDelete = $derived(data.role === 'maintainer');
+  let pendingConfirm = $state<{ message: string; confirmLabel: string; form: HTMLFormElement } | null>(null);
 
   async function updateParam(key: string, value: string) {
     const url = new URL($page.url);
@@ -28,6 +30,15 @@
     return data.uploaders.find((u) => u.id === id)?.name ?? id;
   }
 </script>
+
+{#if pendingConfirm}
+  <ConfirmDialog
+    message={pendingConfirm.message}
+    confirmLabel={pendingConfirm.confirmLabel}
+    onconfirm={() => { pendingConfirm!.form.requestSubmit(); pendingConfirm = null; }}
+    oncancel={() => (pendingConfirm = null)}
+  />
+{/if}
 
 <div class="flex h-full min-h-0 flex-col">
   <!-- Toolbar -->
@@ -148,9 +159,9 @@
             <form method="POST" action="?/delete" use:enhance>
               <input type="hidden" name="id" value={s.id} />
               <button
-                type="submit"
+                type="button"
                 class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark hover:text-red-600"
-                onclick={(e) => { if (!confirm(`Delete ${s.name} (${s.version})?`)) e.preventDefault(); }}
+                onclick={(e) => { pendingConfirm = { message: `Delete ${s.name} (${s.version})?`, confirmLabel: 'Delete', form: (e.currentTarget as HTMLElement).closest('form')! }; }}
               >Delete</button>
             </form>
           {/if}
