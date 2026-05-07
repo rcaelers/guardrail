@@ -10,7 +10,7 @@
   {% endif %}
 
   {% if auth.is_authenticated() %}
-  <p>You are signed in as <strong>{{ auth.current_username() }}</strong>.</p>
+  <p>You are signed in as <strong>{{ auth.current_name() }}</strong>.</p>
   {% else %}
   <p>Sign in with OpenID Connect to access the web UI.</p>
   <p><a class="button" href="{{ login_url }}">Open login</a></p>

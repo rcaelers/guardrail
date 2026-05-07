@@ -10,10 +10,9 @@
 //   3. Either — session or Bearer depending on what the endpoint accepts.
 
 use axum::http::{HeaderMap, header};
-use common::{
-    AuthenticatedUser,
-    token::{decode_api_token, verify_api_secret},
-};
+use common::token::{decode_api_token, verify_api_secret};
+
+use crate::auth_user::{AuthenticatedUser, User};
 use data::api_token::ApiToken;
 use repos::api_token::ApiTokenRepo;
 use surrealdb::Surreal;
@@ -44,7 +43,7 @@ impl Principal {
     #[allow(dead_code)]
     pub fn is_admin(&self) -> bool {
         match self {
-            Principal::User(u) => u.is_admin,
+            Principal::User(u) => u.is_admin(),
             Principal::Token(t) => t.product_id.is_none(),
         }
     }
@@ -53,7 +52,7 @@ impl Principal {
     #[allow(dead_code)]
     pub fn display_id(&self) -> String {
         match self {
-            Principal::User(u) => u.id.clone(),
+            Principal::User(u) => u.active().id.clone(),
             Principal::Token(t) => format!("api-token:{}", t.id),
         }
     }
@@ -84,7 +83,7 @@ pub async fn require_session_admin(
     db: &Surreal<Any>,
 ) -> AppResult<AuthenticatedUser> {
     let user = require_current_session_user(session, db).await?;
-    if !user.is_admin {
+    if !user.is_admin() {
         return Err(AppError::forbidden());
     }
     Ok(user)
@@ -131,7 +130,7 @@ pub async fn require_admin(
         return Ok(Principal::Token(token));
     }
     let user = require_current_session_user(session, db).await?;
-    if !user.is_admin {
+    if !user.is_admin() {
         return Err(AppError::forbidden());
     }
     Ok(Principal::User(user))
@@ -161,10 +160,10 @@ pub async fn require_product_maintainer(
         return Ok(Principal::Token(token));
     }
     let user = require_current_session_user(session, db).await?;
-    if user.is_admin {
+    if user.is_admin() {
         return Ok(Principal::User(user));
     }
-    let maintained = get_maintained_product_ids(db, &user.id).await?;
+    let maintained = get_maintained_product_ids(db, &user.active().id).await?;
     if !maintained.contains(&product_id.to_string()) {
         return Err(AppError::forbidden());
     }
@@ -189,7 +188,7 @@ pub async fn require_user_or_admin(
     }
 
     let user = require_current_session_user(session, db).await?;
-    if user.is_admin || repos::record_key(&user.id) == repos::record_key(user_id) {
+    if user.is_admin() || repos::record_key(&user.active().id) == repos::record_key(user_id) {
         return Ok(Principal::User(user));
     }
     Err(AppError::forbidden())
@@ -249,25 +248,31 @@ async fn require_current_session_user(
     session: &Session,
     db: &Surreal<Any>,
 ) -> AppResult<AuthenticatedUser> {
-    let session_user = session
+    let session_auth = session
         .get::<AuthenticatedUser>(SESSION_KEY)
         .await
         .map_err(AppError::internal)?
         .ok_or_else(AppError::forbidden)?;
 
-    current_user_by_id(db, &session_user.id)
+    let active_id = session_auth
+        .user
+        .as_ref()
+        .ok_or_else(AppError::forbidden)?
+        .id
+        .clone();
+
+    let user = fetch_user(db, &active_id)
         .await?
-        .ok_or_else(AppError::forbidden)
+        .ok_or_else(AppError::forbidden)?;
+
+    Ok(AuthenticatedUser { user: Some(user), real_user: session_auth.real_user })
 }
 
-async fn current_user_by_id(
-    db: &Surreal<Any>,
-    user_id: &str,
-) -> AppResult<Option<AuthenticatedUser>> {
+async fn fetch_user(db: &Surreal<Any>, user_id: &str) -> AppResult<Option<User>> {
     let uid = repos::record_key(user_id);
     let mut result = db
         .query(
-            "SELECT meta::id(id) AS id, username, is_admin \
+            "SELECT meta::id(id) AS id, username, is_admin, avatar \
              FROM ONLY type::record('users', $uid)",
         )
         .bind(("uid", uid))
@@ -278,21 +283,12 @@ async fn current_user_by_id(
     let Some(row) = rows.into_iter().next() else {
         return Ok(None);
     };
-    let id = row
-        .get("id")
-        .and_then(|v| v.as_str())
-        .unwrap_or(user_id)
-        .to_string();
-    let username = row
-        .get("username")
-        .and_then(|v| v.as_str())
-        .unwrap_or("anonymous")
-        .to_string();
-    let is_admin = row
-        .get("is_admin")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    Ok(Some(AuthenticatedUser::new(id, username, is_admin)))
+    Ok(Some(User {
+        id: row.get("id").and_then(|v| v.as_str()).unwrap_or(user_id).to_string(),
+        name: row.get("username").and_then(|v| v.as_str()).unwrap_or("anonymous").to_string(),
+        is_admin: row.get("is_admin").and_then(|v| v.as_bool()).unwrap_or(false),
+        avatar: row.get("avatar").and_then(|v| v.as_str()).map(str::to_owned),
+    }))
 }
 
 /// True when the request carries a `Bearer` or `Token` Authorization header.

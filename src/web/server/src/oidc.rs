@@ -3,7 +3,9 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use common::{AuthenticatedUser, settings::Oidc};
+use common::settings::Oidc;
+
+use crate::auth_user::{AuthenticatedUser, User};
 use data::user::NewUser;
 use rand::RngExt;
 use serde::{Deserialize, Serialize};
@@ -70,7 +72,7 @@ pub async fn login_start(
         .get::<AuthenticatedUser>(AUTHENTICATED_USER_SESSION_KEY)
         .await
         .map_err(AppError::internal)?
-        .is_some()
+        .is_some_and(|a| a.is_authenticated())
     {
         return Ok(Redirect::to(sanitize_next(query.next.as_deref()).as_str()));
     }
@@ -400,7 +402,12 @@ async fn get_or_create_local_user(
             .await
             .map_err(AppError::internal)?;
         }
-        return Ok(Some(AuthenticatedUser::new(user.id, user.username, user.is_admin)));
+        return Ok(Some(AuthenticatedUser::authenticated(User {
+            id: user.id,
+            name: user.username,
+            is_admin: user.is_admin,
+            avatar: None,
+        })));
     }
 
     // No existing user — only create one if they arrived via an invitation.
@@ -423,7 +430,12 @@ async fn get_or_create_local_user(
         .await
         .map_err(AppError::internal)?;
 
-    Ok(Some(AuthenticatedUser::new(user_id, username.to_owned(), pa.is_admin)))
+    Ok(Some(AuthenticatedUser::authenticated(User {
+        id: user_id,
+        name: username.to_owned(),
+        is_admin: pa.is_admin,
+        avatar: None,
+    })))
 }
 
 pub fn sanitize_next(next: Option<&str>) -> String {

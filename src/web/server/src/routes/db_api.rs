@@ -17,7 +17,7 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use chrono::Utc;
-use common::AuthenticatedUser;
+use crate::auth_user::AuthenticatedUser;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path as ObjectPath};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -78,7 +78,10 @@ impl AppState {
         let Some(session_user) = session_user else {
             return self.anon_db().await;
         };
-        let uid = repos::record_key(&session_user.id);
+        let Some(active) = session_user.user.as_ref() else {
+            return self.anon_db().await;
+        };
+        let uid = repos::record_key(&active.id);
         if let Some(cached) = self.auth_cache.get(&uid).await {
             return cached;
         }
@@ -361,7 +364,7 @@ async fn get_me(
     let rows = run_value(
         &s.repo.db,
         &format!("SELECT {USER_PROJ} FROM ONLY type::record('users', $id)"),
-        vec![("id", Value::String(user.id))],
+        vec![("id", Value::String(user.active().id.clone()))],
     )
     .await?;
     rows.into_iter()

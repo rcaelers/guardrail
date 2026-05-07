@@ -5,12 +5,11 @@ use axum::{
     response::{IntoResponse, Redirect},
     routing::{get, post},
 };
-use common::AuthenticatedUser;
 use serde_json::Value;
 use tower_sessions::Session;
 
 use crate::{
-    AppState,
+    AppState, access,
     error::{AppError, AppResult},
     oidc,
 };
@@ -42,14 +41,11 @@ async fn logout(session: Session) -> impl IntoResponse {
 /// Reads from the session (trusted server-side state) and queries root DB.
 /// 404 if not currently impersonating.
 async fn get_real_user(State(state): State<AppState>, session: Session) -> AppResult<Json<Value>> {
-    let original = session
-        .get::<AuthenticatedUser>("original_user")
-        .await
-        .map_err(AppError::internal)?;
-
-    let Some(original) = original else {
-        return Err(AppError::not_found("not impersonating"));
-    };
+    let user = access::require_session(&session).await?;
+    let admin_id = user
+        .real_user
+        .ok_or_else(|| AppError::not_found("not impersonating"))?
+        .id;
 
     let mut result = state
         .repo
@@ -59,7 +55,7 @@ async fn get_real_user(State(state): State<AppState>, session: Session) -> AppRe
              is_admin AS isAdmin, created_at AS joinedAt \
              FROM ONLY type::record('users', $id)",
         )
-        .bind(("id", original.id.clone()))
+        .bind(("id", admin_id))
         .await
         .map_err(AppError::internal)?;
 

@@ -1,11 +1,10 @@
 use axum::{Router, extract::{Query, State}, response::Html, routing::get};
-use common::AuthenticatedUser;
 use serde::Deserialize;
 use tower_sessions::Session;
 
 use crate::{
     AppState,
-    auth::AuthSession,
+    auth_user::AuthenticatedUser,
     error::AppResult,
     oidc,
     templates::HomeTemplate,
@@ -28,7 +27,11 @@ async fn home(
     session: Session,
     Query(query): Query<HomeQuery>,
 ) -> AppResult<Html<String>> {
-    let auth = auth_session(&session).await;
+    let auth = session
+        .get::<AuthenticatedUser>(crate::access::SESSION_KEY)
+        .await
+        .unwrap_or(None)
+        .unwrap_or_default();
     let next = oidc::sanitize_next(query.next.as_deref());
     let error = query.error.unwrap_or_default();
     let has_error = !error.is_empty();
@@ -48,12 +51,4 @@ async fn home(
         login_url: oidc::login_start_path(Some(next.as_str())),
         self_service_url,
     })
-}
-
-async fn auth_session(session: &Session) -> AuthSession {
-    let user = session
-        .get::<AuthenticatedUser>(crate::access::SESSION_KEY)
-        .await
-        .unwrap_or(None);
-    AuthSession { user }
 }

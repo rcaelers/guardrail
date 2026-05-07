@@ -15,9 +15,9 @@
         <nav class="nav">
           {% if auth.is_authenticated() %}
           {% if !self_service_url.is_empty() %}
-          <a class="user" href="{{ self_service_url }}" target="_blank" rel="noopener noreferrer">{{ auth.current_username() }}</a>
+          <a class="user" href="{{ self_service_url }}" target="_blank" rel="noopener noreferrer">{{ auth.current_name() }}</a>
           {% else %}
-          <span class="user">{{ auth.current_username() }}</span>
+          <span class="user">{{ auth.current_name() }}</span>
           {% endif %}
           <form method="post" action="/auth/logout">
             <button type="submit">Log out</button>

@@ -16,7 +16,7 @@ use super::render;
 use crate::{
     AppState, access,
     access::Principal,
-    auth::AuthSession,
+    auth_user::AuthenticatedUser,
     error::{AppError, AppResult},
     provisioner::CreateUserRequest,
     templates::InviteTemplate,
@@ -58,11 +58,11 @@ async fn list_invitations(
     session: Session,
 ) -> AppResult<Json<Vec<Invitation>>> {
     let user = access::require_session(&session).await?;
-    let maintained_ids = access::get_maintained_product_ids(&state.repo.db, &user.id).await?;
+    let maintained_ids = access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
     let invitations = repos::invitation::InvitationRepo::get_for_user(
         &state.repo.db,
-        &user.id,
-        user.is_admin,
+        &user.active().id,
+        user.is_admin(),
         &maintained_ids,
     )
     .await
@@ -90,9 +90,9 @@ async fn create_invitation(
             format!("api-token:{}", token.id)
         }
         Principal::User(user) => {
-            if !user.is_admin {
+            if !user.is_admin() {
                 let maintained_ids =
-                    access::get_maintained_product_ids(&state.repo.db, &user.id).await?;
+                    access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
                 if maintained_ids.is_empty() {
                     return Err(AppError::forbidden());
                 }
@@ -105,7 +105,7 @@ async fn create_invitation(
                     }
                 }
             }
-            user.id.clone()
+            user.active().id.clone()
         }
     };
 
@@ -137,16 +137,16 @@ async fn update_invitation(
         .map_err(AppError::internal)?
         .ok_or_else(|| AppError::not_found("Invitation not found"))?;
 
-    let (grants, is_admin) = if user.is_admin {
+    let (grants, is_admin) = if user.is_admin() {
         (body.grants, body.is_admin)
     } else {
-        let maintained_ids = access::get_maintained_product_ids(&state.repo.db, &user.id).await?;
+        let maintained_ids = access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
 
         let has_overlap = invitation
             .grants
             .iter()
             .any(|g| maintained_ids.contains(&g.product_id))
-            || invitation.created_by == user.id;
+            || invitation.created_by == user.active().id;
         if !has_overlap {
             return Err(AppError::forbidden());
         }
@@ -191,14 +191,14 @@ async fn revoke_invitation(
 ) -> AppResult<Json<serde_json::Value>> {
     let user = access::require_session(&session).await?;
 
-    if !user.is_admin {
+    if !user.is_admin() {
         let invitation = repos::invitation::InvitationRepo::get_by_id(&state.repo.db, &id)
             .await
             .map_err(AppError::internal)?
             .ok_or_else(|| AppError::not_found("Invitation not found"))?;
 
-        let maintained_ids = access::get_maintained_product_ids(&state.repo.db, &user.id).await?;
-        let can_revoke = invitation.created_by == user.id
+        let maintained_ids = access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
+        let can_revoke = invitation.created_by == user.active().id
             || invitation
                 .grants
                 .iter()
@@ -382,7 +382,7 @@ async fn show_invite_form(
     render(InviteTemplate {
         title: "Create account",
         app_name: &state.settings.auth.name,
-        auth: AuthSession::default(),
+        auth: AuthenticatedUser::default(),
         self_service_url: String::new(),
         code,
         error: error.clone(),

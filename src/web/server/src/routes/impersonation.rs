@@ -4,15 +4,13 @@ use axum::{
     response::{IntoResponse, Redirect, Response},
     routing::post,
 };
-use common::AuthenticatedUser;
 use tower_sessions::Session;
 
 use crate::{
     AppState, access,
+    auth_user::{AuthenticatedUser, User},
     error::{AppError, AppResult},
 };
-
-const ORIGINAL_USER_SESSION_KEY: &str = "original_user";
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -29,17 +27,11 @@ async fn start_impersonation(
 ) -> AppResult<Response> {
     let current = access::require_session_admin(&session, &state.repo.db).await?;
 
-    // Prevent chaining one impersonation on top of another.
-    if session
-        .get::<AuthenticatedUser>(ORIGINAL_USER_SESSION_KEY)
-        .await
-        .map_err(AppError::internal)?
-        .is_some()
-    {
+    if current.is_impersonating() {
         return Err(AppError::failure("Already impersonating — stop first"));
     }
 
-    if current.id == user_id {
+    if current.active().id == user_id {
         return Err(AppError::failure("Cannot impersonate yourself"));
     }
 
@@ -48,13 +40,16 @@ async fn start_impersonation(
         .map_err(AppError::internal)?
         .ok_or_else(|| AppError::not_found("User not found"))?;
 
-    let target_auth = AuthenticatedUser::new(target.id.clone(), target.username, target.is_admin);
+    let target_auth = AuthenticatedUser {
+        user: Some(User {
+            id: target.id,
+            name: target.username,
+            is_admin: target.is_admin,
+            avatar: None,
+        }),
+        real_user: current.user,
+    };
 
-    // Swap the effective user in the session; preserve the real admin.
-    session
-        .insert(ORIGINAL_USER_SESSION_KEY, current.clone())
-        .await
-        .map_err(AppError::internal)?;
     session
         .insert(access::SESSION_KEY, target_auth)
         .await
@@ -65,18 +60,13 @@ async fn start_impersonation(
 
 /// Restore the original admin session; clear impersonation.
 async fn stop_impersonation(session: Session) -> AppResult<Response> {
-    let original = session
-        .get::<AuthenticatedUser>(ORIGINAL_USER_SESSION_KEY)
-        .await
-        .map_err(AppError::internal)?
+    let user = access::require_session(&session).await?;
+    let admin = user
+        .real_user
         .ok_or_else(|| AppError::failure("Not currently impersonating"))?;
 
     session
-        .insert(access::SESSION_KEY, original.clone())
-        .await
-        .map_err(AppError::internal)?;
-    session
-        .remove::<AuthenticatedUser>(ORIGINAL_USER_SESSION_KEY)
+        .insert(access::SESSION_KEY, AuthenticatedUser::authenticated(admin))
         .await
         .map_err(AppError::internal)?;
 
