@@ -4,11 +4,11 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-repos = { path = "../repos" }
-data = { path = "../data", default-features = false, features = [
+repos = { path = "../../common/repos" }
+data = { path = "../../common/data", default-features = false, features = [
   "ssr",
 ] }
-common = { path = "../common", default-features = false, features = [
+common = { path = "../../common/common", default-features = false, features = [
   "ssr",
 ] }
 

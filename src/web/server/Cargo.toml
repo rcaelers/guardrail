@@ -12,9 +12,9 @@ name = "guardrailctl"
 path = "src/bin/tool.rs"
 
 [dependencies]
-repos = { path = "../../backend/repos" }
-data = { path = "../../backend/data", default-features = false, features = ["ssr"] }
-common = { path = "../../backend/common", default-features = false, features = ["ssr"] }
+repos = { path = "../../common/repos" }
+data = { path = "../../common/data", default-features = false, features = ["ssr"] }
+common = { path = "../../common/common", default-features = false, features = ["ssr"] }
 
 askama.workspace = true
 async-trait.workspace = true

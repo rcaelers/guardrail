@@ -4,7 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-common = { path = "../common", default-features = false, features = ["ssr"] }
+common = { path = "../../common/common", default-features = false, features = ["ssr"] }
 
 # Serde / json
 serde.workspace = true
@@ -50,11 +50,11 @@ default = []
 auth = ["dep:repos", "dep:data", "dep:surrealdb"]
 
 [dependencies.repos]
-path = "../repos"
+path = "../../common/repos"
 optional = true
 
 [dependencies.data]
-path = "../data"
+path = "../../common/data"
 default-features = false
 features = ["ssr"]
 optional = true

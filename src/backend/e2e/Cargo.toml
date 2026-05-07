@@ -9,8 +9,8 @@ ingestion = { path = "../ingestion" }
 processor = { path = "../processor" }
 curator = { path = "../curator" }
 api = { path = "../api" }
-repos = { path = "../repos" }
-common = { path = "../common", default-features = false, features = ["ssr"] }
+repos = { path = "../../common/repos" }
+common = { path = "../../common/common", default-features = false, features = ["ssr"] }
 testware = { path = "../testware" }
 
 # Serde / json

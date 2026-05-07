@@ -13,7 +13,7 @@ ingestion = { path = "../ingestion" }
 processor = { path = "../processor" }
 curator = { path = "../curator" }
 web = { path = "../../web/server" }
-common = { path = "../common", default-features = false, features = ["ssr"] }
+common = { path = "../../common/common", default-features = false, features = ["ssr"] }
 
 clap.workspace = true
 tokio.workspace = true
