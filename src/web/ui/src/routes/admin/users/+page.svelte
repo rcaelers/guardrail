@@ -7,8 +7,23 @@
 
   let newEmail = $state('');
   let newName = $state('');
+  let newIsAdmin = $state(false);
+  let newPermissions = $state<Array<{ productId: string; role: string }>>([]);
+  let addProductId = $state('');
+  let addRole = $state('readonly');
   let showCreate = $state(false);
   let editingUserId = $state<string | null>(null);
+
+  const availableForNew = $derived(
+    data.products.filter((p) => !newPermissions.some((np) => np.productId === p.id))
+  );
+
+  function addNewPermission() {
+    if (!addProductId) return;
+    newPermissions = [...newPermissions, { productId: addProductId, role: addRole }];
+    addProductId = '';
+    addRole = 'readonly';
+  }
 </script>
 
 <div class="mx-auto max-w-[1100px]">
@@ -39,21 +54,124 @@
         if (result.type === 'success') {
           newEmail = '';
           newName = '';
+          newIsAdmin = false;
+          newPermissions = [];
           showCreate = false;
         }
       }}
-      class="mb-5 flex items-end gap-3 rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-4 py-3"
+      class="mb-5 rounded-md border border-line dark:border-line-dark bg-surface-panel/55 dark:bg-surface-panelDark/55 px-4 py-4"
     >
-      <label class="flex flex-1 flex-col">
-        <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Email</span>
-        <input name="email" type="email" required bind:value={newEmail} class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]" />
-      </label>
-      <label class="flex flex-1 flex-col">
-        <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Name</span>
-        <input name="name" bind:value={newName} class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]" />
-      </label>
-      <button type="submit" class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white">Create</button>
-      <button type="button" onclick={() => (showCreate = false)} class="rounded-md border border-line dark:border-line-dark bg-transparent px-3 py-1.5 text-[13px]">Cancel</button>
+      <input type="hidden" name="isAdmin" value={newIsAdmin} />
+      <input type="hidden" name="permissions" value={JSON.stringify(newPermissions)} />
+      <div class="grid gap-4 lg:grid-cols-[1.1fr,1fr]">
+        <div class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-4 py-3">
+          <h2 class="mb-3 text-[13px] font-medium">Account</h2>
+          <div class="grid gap-3">
+            <label class="flex flex-col">
+              <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Name</span>
+              <input name="name" bind:value={newName} class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-3 py-1.5 text-[13px]" />
+            </label>
+            <label class="flex flex-col">
+              <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Email</span>
+              <input name="email" type="email" required bind:value={newEmail} class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-3 py-1.5 text-[13px]" />
+            </label>
+          </div>
+        </div>
+
+        <div class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-4 py-3">
+          <div class="mb-3 flex items-center justify-between">
+            <h2 class="text-[13px] font-medium">Global access</h2>
+            <span class="text-[11px] text-ink-muted dark:text-ink-mutedDark">Admin applies across all products</span>
+          </div>
+          <label class="flex flex-col">
+            <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Admin access</span>
+            <select
+              bind:value={newIsAdmin}
+              class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-2 py-1.5 text-[13px]"
+            >
+              <option value={false}>Member</option>
+              <option value={true}>Administrator</option>
+            </select>
+          </label>
+        </div>
+      </div>
+
+      <div class="mt-4 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-4 py-3">
+        <div class="mb-3 flex items-center justify-between">
+          <h2 class="text-[13px] font-medium">Product permissions</h2>
+          <span class="text-[11px] text-ink-muted dark:text-ink-mutedDark">{newPermissions.length} assigned</span>
+        </div>
+
+        <div class="space-y-2">
+          {#if newPermissions.length === 0}
+            <p class="text-[12px] text-ink-muted dark:text-ink-mutedDark">No product access yet.</p>
+          {:else}
+            {#each newPermissions as perm (perm.productId)}
+              {@const product = data.products.find((p) => p.id === perm.productId)}
+              <div class="grid items-center gap-3 rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-3 py-2 lg:grid-cols-[1.2fr,160px,100px]">
+                <div class="flex min-w-0 items-center gap-2">
+                  <span class="inline-block h-[10px] w-[10px] shrink-0 rounded-[3px]" style:background={product?.color}></span>
+                  <span class="truncate text-[12.5px] font-medium">{product?.name}</span>
+                </div>
+                <select
+                  value={perm.role}
+                  onchange={(e) => {
+                    newPermissions = newPermissions.map((np) =>
+                      np.productId === perm.productId ? { ...np, role: e.currentTarget.value } : np
+                    );
+                  }}
+                  class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1 text-[12px]"
+                >
+                  <option value="readonly">Read-only</option>
+                  <option value="readwrite">Read · write</option>
+                  <option value="maintainer">Maintainer</option>
+                </select>
+                <div class="flex justify-end">
+                  <button
+                    type="button"
+                    onclick={() => { newPermissions = newPermissions.filter((np) => np.productId !== perm.productId); }}
+                    class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark hover:text-red-600"
+                  >Remove</button>
+                </div>
+              </div>
+            {/each}
+          {/if}
+        </div>
+
+        {#if availableForNew.length > 0}
+          <div class="mt-4 grid gap-3 rounded-md border border-dashed border-line dark:border-line-dark px-3 py-3 lg:grid-cols-[1.4fr,160px,120px]">
+            <label class="flex flex-col">
+              <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Add product</span>
+              <select bind:value={addProductId} class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-2 py-1.5 text-[13px]">
+                <option value="" disabled>Pick a product…</option>
+                {#each availableForNew as product}
+                  <option value={product.id}>{product.name}</option>
+                {/each}
+              </select>
+            </label>
+            <label class="flex flex-col">
+              <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Role</span>
+              <select bind:value={addRole} class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-2 py-1.5 text-[13px]">
+                <option value="readonly">Read-only</option>
+                <option value="readwrite">Read · write</option>
+                <option value="maintainer">Maintainer</option>
+              </select>
+            </label>
+            <div class="flex items-end justify-end">
+              <button
+                type="button"
+                onclick={addNewPermission}
+                class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white"
+              >Add</button>
+            </div>
+          </div>
+        {/if}
+      </div>
+
+      <div class="mt-4 flex justify-end gap-2">
+        <button type="button" onclick={() => (showCreate = false)} class="rounded-md border border-line dark:border-line-dark bg-transparent px-3 py-1.5 text-[13px]">Cancel</button>
+        <button type="submit" class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white">Create user</button>
+      </div>
     </form>
   {/if}
 

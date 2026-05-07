@@ -38,9 +38,16 @@ export const actions: Actions = {
     const form = await request.formData();
     const email = String(form.get('email') ?? '').trim();
     const name = String(form.get('name') ?? '').trim();
+    const isAdmin = form.get('isAdmin') === 'true';
+    const permissions: Array<{ productId: string; role: Role }> = JSON.parse(
+      String(form.get('permissions') ?? '[]')
+    );
     if (!email) return fail(400, { error: 'Email required.' });
     try {
-      await adapter.createUser({ email, name });
+      const user = await adapter.createUser({ email, name, isAdmin });
+      for (const p of permissions) {
+        await adapter.grantAccess({ userId: user.id, productId: p.productId, role: p.role });
+      }
       return { ok: true };
     } catch (e) {
       return fail(400, { error: (e as Error).message });

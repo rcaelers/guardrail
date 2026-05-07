@@ -414,6 +414,7 @@ async fn get_user(
 struct CreateUserBody {
     email: String,
     name: Option<String>,
+    is_admin: Option<bool>,
 }
 
 #[derive(Deserialize)]
@@ -458,7 +459,7 @@ async fn create_user(
         &format!(
             "CREATE type::record('users', $id) CONTENT {{
             username: $email, email: $email, name: $name, avatar: $avatar,
-            is_admin: false, created_at: time::now(), updated_at: time::now()
+            is_admin: $is_admin, created_at: time::now(), updated_at: time::now()
         }} RETURN {USER_PROJ}"
         ),
         vec![
@@ -473,6 +474,7 @@ async fn create_user(
                     avatar
                 }),
             ),
+            ("is_admin", Value::Bool(body.is_admin.unwrap_or(false))),
         ],
     )
     .await?;
