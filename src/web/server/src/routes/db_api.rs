@@ -8,6 +8,7 @@
 
 use std::sync::Arc;
 
+use crate::auth_user::AuthenticatedUser;
 use axum::{
     Json, Router,
     body::Body,
@@ -17,7 +18,6 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use chrono::Utc;
-use crate::auth_user::AuthenticatedUser;
 use object_store::{ObjectStore, ObjectStoreExt, path::Path as ObjectPath};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -31,30 +31,30 @@ const ANON_CACHE_KEY: &str = "__anon__";
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/me", get(get_me))
+        .route("/api-tokens", get(list_all_api_tokens).post(create_admin_api_token))
+        .route("/api-tokens/{id}", patch(update_admin_api_token).delete(delete_admin_api_token))
+        .route("/api-tokens/entitlements", get(list_entitlements_handler))
+        .route("/attachments/{id}/download", get(download_attachment))
+        .route("/crashes", get(list_groups))
+        .route("/crashes/{id}", get(get_group))
+        .route("/crashes/{id}/merge", post(merge_groups))
+        .route("/crashes/{id}/notes", post(add_note))
+        .route("/crashes/{id}/status", post(set_status))
+        .route("/crashes/by-crash/{crash_id}", get(get_crash))
+        .route("/products", get(list_products).post(create_product))
+        .route("/products/{id}", get(get_product).post(update_product).delete(delete_product))
+        .route("/products/{pid}/api-tokens", get(list_api_tokens).post(create_api_token))
+        .route("/products/{pid}/api-tokens/{id}", delete(delete_api_token))
+        .route("/products/{pid}/members", get(list_members))
+        .route("/products/{pid}/members/{uid}", post(grant_access).delete(revoke_access))
+        .route("/products/{pid}/symbols", get(list_symbols).post(upload_symbol))
+        .route("/symbols/{id}", delete(delete_symbol))
         .route("/users", get(list_users).post(create_user))
-        .route("/users/find", get(find_user))
         .route("/users/{id}", get(get_user).post(update_user).delete(delete_user))
         .route("/users/{id}/admin", post(set_admin))
         .route("/users/{id}/memberships", get(memberships_for))
-        .route("/products", get(list_products).post(create_product))
-        .route("/products/{id}", get(get_product).post(update_product).delete(delete_product))
-        .route("/products/{pid}/members", get(list_members))
-        .route("/products/{pid}/members/{uid}", post(grant_access).delete(revoke_access))
-        .route("/crashes", get(list_groups))
-        .route("/crashes/{id}", get(get_group))
-        .route("/crashes/by-crash/{crash_id}", get(get_crash))
-        .route("/attachments/{id}/download", get(download_attachment))
-        .route("/crashes/{id}/status", post(set_status))
-        .route("/crashes/{id}/notes", post(add_note))
-        .route("/crashes/{id}/merge", post(merge_groups))
-        .route("/products/{pid}/symbols", get(list_symbols).post(upload_symbol))
-        .route("/symbols/{id}", delete(delete_symbol))
-        .route("/products/{pid}/api-tokens", get(list_api_tokens).post(create_api_token))
-        .route("/products/{pid}/api-tokens/{id}", delete(delete_api_token))
-        .route("/api-tokens", get(list_all_api_tokens).post(create_admin_api_token))
-        .route("/api-tokens/entitlements", get(list_entitlements_handler))
-        .route("/api-tokens/{id}", patch(update_admin_api_token).delete(delete_admin_api_token))
+        .route("/users/find", get(find_user))
+        .route("/me", get(get_me))
 }
 
 // --------------------------------------------------------------------
@@ -1778,7 +1778,7 @@ async fn create_api_token(
         &db,
         "CREATE type::record('api_tokens', $id) CONTENT {
             description: $description,
-            token_id: $token_id,
+            token_id: type::uuid($token_id),
             token_hash: $token_hash,
             product_id: type::record('products', $pid),
             user_id: NONE,
@@ -1854,7 +1854,7 @@ async fn list_all_api_tokens(
 
 const ENTITLEMENT_DEFS: &[(&str, &str, &str)] = &[
     ("minidump-upload", "Upload crash reports", "product"),
-    ("symbol-upload",   "Upload debug symbols", "product"),
+    ("symbol-upload", "Upload debug symbols", "product"),
     ("invitation-create", "Create user invitations", "general"),
     ("token", "Generate JWT tokens as the bound user", "user"),
 ];
@@ -1912,10 +1912,10 @@ async fn create_admin_api_token(
         &db,
         "CREATE type::record('api_tokens', $id) CONTENT {
             description: $description,
-            token_id: $token_id,
+            token_id: type::uuid($token_id),
             token_hash: $token_hash,
-            product_id: IF type::is::string($pid) THEN type::record('products', $pid) ELSE NONE END,
-            user_id: IF type::is::string($uid) THEN type::record('users', $uid) ELSE NONE END,
+            product_id: IF $pid != NONE THEN type::record('products', $pid) ELSE NONE END,
+            user_id: IF $uid != NONE THEN type::record('users', $uid) ELSE NONE END,
             entitlements: $entitlements,
             expires_at: NONE,
             is_active: true,
@@ -1976,14 +1976,17 @@ async fn update_admin_api_token(
             description = $description, \
             is_active = $is_active, \
             entitlements = $entitlements, \
-            product_id = IF type::is::string($pid) THEN type::record('products', $pid) ELSE NONE END, \
-            user_id = IF type::is::string($uid) THEN type::record('users', $uid) ELSE NONE END, \
+            product_id = IF $pid != NONE THEN type::record('products', $pid) ELSE NONE END, \
+            user_id = IF $uid != NONE THEN type::record('users', $uid) ELSE NONE END, \
             updated_at = time::now()",
         vec![
             ("id", Value::String(id)),
             ("description", Value::String(description)),
             ("is_active", Value::Bool(body.is_active)),
-            ("entitlements", Value::Array(body.entitlements.into_iter().map(Value::String).collect())),
+            (
+                "entitlements",
+                Value::Array(body.entitlements.into_iter().map(Value::String).collect()),
+            ),
             ("pid", body.product_id.map(Value::String).unwrap_or(Value::Null)),
             ("uid", body.user_id.map(Value::String).unwrap_or(Value::Null)),
         ],

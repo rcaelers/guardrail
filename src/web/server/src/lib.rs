@@ -13,3 +13,6 @@ pub(crate) mod templates;
 pub(crate) use state::AppState;
 
 pub mod app;
+
+#[cfg(test)]
+mod tests;

@@ -4,7 +4,8 @@
   import { fmtDate } from '$lib/utils/format';
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
-  let { data }: { data: PageData } = $props();
+  import type { ActionData } from './$types';
+  let { data, form }: { data: PageData; form: ActionData } = $props();
 
   const canManage = $derived(data.role === 'maintainer' || data.user?.isAdmin === true);
 
@@ -40,17 +41,28 @@
     >
       <label class="flex min-w-0 flex-1 flex-col">
         <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Add user</span>
-        <select
-          name="userId"
-          bind:value={grantUserId}
-          required
-          class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1.5 text-[13px]"
-        >
-          <option value="" disabled>Pick a user…</option>
-          {#each data.nonMembers as u}
-            <option value={u.id}>{u.name} · {u.email}</option>
-          {/each}
-        </select>
+        {#if data.user?.isAdmin && data.nonMembers.length > 0}
+          <select
+            name="userId"
+            bind:value={grantUserId}
+            required
+            class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1.5 text-[13px]"
+          >
+            <option value="" disabled>Pick a user…</option>
+            {#each data.nonMembers as u}
+              <option value={u.id}>{u.name} · {u.email}</option>
+            {/each}
+          </select>
+        {:else}
+          <input
+            type="text"
+            name="userId"
+            bind:value={grantUserId}
+            required
+            placeholder="Username or email…"
+            class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1.5 text-[13px]"
+          />
+        {/if}
       </label>
       <label class="flex flex-col">
         <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Role</span>
@@ -64,9 +76,14 @@
           <option value="maintainer">Maintainer</option>
         </select>
       </label>
-      <button type="submit" class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white" disabled={!grantUserId}>
-        Grant access
-      </button>
+      <div class="flex flex-col gap-1">
+        <button type="submit" class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white" disabled={!grantUserId}>
+          Grant access
+        </button>
+        {#if form?.error}
+          <p class="text-[11px] text-red-600 dark:text-red-400">{form.error}</p>
+        {/if}
+      </div>
     </form>
   {/if}
 
