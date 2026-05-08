@@ -19,9 +19,10 @@ use testware::{create_settings, create_test_product, create_test_token, create_t
 use crate::access::SESSION_KEY;
 use crate::auth_cache::AuthCache;
 use crate::auth_user::{AuthenticatedUser, User};
-use crate::routes::{db_api, invite};
+use crate::routes::{auth, db_api, home, impersonation, invite};
 use crate::state::AppState;
 use repos::Repo;
+use uuid::Uuid;
 
 type Db = surrealdb::Surreal<surrealdb::engine::any::Any>;
 
@@ -83,8 +84,12 @@ impl TestApp {
             .with_expiry(Expiry::OnInactivity(time::Duration::hours(4)))
             .with_secure(false);
         let router = Router::new()
+            .merge(home::router())
+            .merge(auth::router())
+            .merge(impersonation::router())
             .merge(db_api::router())
             .merge(invite::api_router())
+            .merge(invite::router())
             .route("/test/login", post(test_login_handler))
             .layer(session_layer)
             .with_state(state);
@@ -145,6 +150,19 @@ impl TestApp {
         let (status, bytes, _) = self.send(b.body(body_bytes).unwrap()).await;
         (status, bytes)
     }
+
+    /// Call an endpoint and parse the response body as JSON.
+    async fn call_json(
+        &self,
+        method: &str,
+        uri: &str,
+        body: Option<Value>,
+        cookie: Option<&str>,
+    ) -> (StatusCode, Value) {
+        let (status, bytes) = self.call_full(method, uri, body, cookie).await;
+        let json = serde_json::from_slice(&bytes).unwrap_or(Value::Null);
+        (status, json)
+    }
 }
 
 async fn grant_product_role(db: &Db, user_id: &str, product_id: &str, role: &str) {
@@ -165,6 +183,45 @@ async fn grant_product_role(db: &Db, user_id: &str, product_id: &str, role: &str
     .bind(("role", role_s))
     .await
     .expect("grant_product_role failed");
+}
+
+// ---------------------------------------------------------------------------
+// Extra helpers
+// ---------------------------------------------------------------------------
+
+/// Create an invitation via the API; return (id, code).
+async fn api_create_invitation(app: &TestApp, cookie: &str, body: Value) -> (String, String) {
+    let (status, v) = app.call_json("POST", "/invitations", Some(body), Some(cookie)).await;
+    assert_eq!(status, StatusCode::OK, "api_create_invitation failed");
+    let id = v["id"].as_str().expect("no id").to_string();
+    let code = v["code"].as_str().expect("no code").to_string();
+    (id, code)
+}
+
+/// Insert a minimal crash_group directly into the DB (bypasses ingestion).
+/// Uses a no-hyphen alphanumeric ID so that SurrealDB's meta::id() returns it
+/// without backtick escaping, which would break `WHERE meta::id(id) = $id`.
+async fn create_test_crash_group(db: &Db, product_id: &str) -> String {
+    let gid = Uuid::new_v4().to_string().replace('-', "");
+    db.query(
+        "CREATE type::record('crash_groups', $gid) CONTENT {
+            product_id: type::record('products', $pid),
+            fingerprint: 'test-fp',
+            signal: 'SIGSEGV',
+            count: 0,
+            status: 'new',
+            assignee: NONE,
+            first_seen: time::now(),
+            last_seen: time::now(),
+            created_at: time::now(),
+            updated_at: time::now()
+        }",
+    )
+    .bind(("gid", gid.clone()))
+    .bind(("pid", product_id.to_string()))
+    .await
+    .expect("create_test_crash_group failed");
+    gid
 }
 
 // ---------------------------------------------------------------------------
@@ -1003,4 +1060,390 @@ async fn test_revoke_invitation_requires_session() {
     let imp_non_admin_got =
         app.call("DELETE", "/invitations/nonexistent", None, Some(&f.imp_non_admin)).await;
     assert_ne!(imp_non_admin_got, StatusCode::FORBIDDEN, "imp_non_admin should not be 403");
+}
+
+// ---------------------------------------------------------------------------
+// Tests: home page
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_home_page() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    // / is public; renders HTML for all contexts
+    assert_eq!(app.call("GET", "/", None, None).await, StatusCode::OK);
+    assert_eq!(app.call("GET", "/", None, Some(&f.admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", "/", None, Some(&f.non_admin)).await, StatusCode::OK);
+    // with query params
+    assert_eq!(app.call("GET", "/?next=/dashboard&error=login+failed", None, None).await, StatusCode::OK);
+    assert_eq!(app.call("GET", "/?error=oops", None, None).await, StatusCode::OK);
+}
+
+// ---------------------------------------------------------------------------
+// Tests: auth routes
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_logout() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    // Logout always succeeds → 303 redirect to /
+    let req = Request::builder()
+        .method("POST")
+        .uri("/auth/logout")
+        .header("cookie", &f.admin)
+        .body(Body::empty())
+        .unwrap();
+    let (status, _, _) = app.send(req).await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    // Works without a session too
+    let req = Request::builder().method("POST").uri("/auth/logout").body(Body::empty()).unwrap();
+    let (status, _, _) = app.send(req).await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+}
+
+#[tokio::test]
+async fn test_get_real_user() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    // no session → 403
+    assert_eq!(app.call("GET", "/auth/real-user", None, None).await, StatusCode::FORBIDDEN);
+    // session but not impersonating → 404
+    assert_eq!(app.call("GET", "/auth/real-user", None, Some(&f.admin)).await, StatusCode::NOT_FOUND);
+    assert_eq!(app.call("GET", "/auth/real-user", None, Some(&f.non_admin)).await, StatusCode::NOT_FOUND);
+    // impersonating → 200 (real user exists in DB)
+    assert_eq!(app.call("GET", "/auth/real-user", None, Some(&f.imp_admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", "/auth/real-user", None, Some(&f.imp_non_admin)).await, StatusCode::OK);
+}
+
+// ---------------------------------------------------------------------------
+// Tests: impersonation routes
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_start_impersonation() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let target_uri = format!("/auth/impersonate/{}", f.non_admin_id);
+
+    // no session → 403
+    assert_eq!(app.call("POST", &target_uri, None, None).await, StatusCode::FORBIDDEN);
+    // non-admin → 403
+    assert_eq!(app.call("POST", &target_uri, None, Some(&f.non_admin)).await, StatusCode::FORBIDDEN);
+    // already impersonating → 400 (AppError::failure)
+    assert_eq!(app.call("POST", &target_uri, None, Some(&f.imp_admin)).await, StatusCode::BAD_REQUEST);
+    // impersonate self → 400
+    let self_uri = format!("/auth/impersonate/{}", f.admin_id);
+    assert_eq!(app.call("POST", &self_uri, None, Some(&f.admin)).await, StatusCode::BAD_REQUEST);
+    // target not found → 404
+    assert_eq!(
+        app.call("POST", "/auth/impersonate/nonexistent-user-id", None, Some(&f.admin)).await,
+        StatusCode::NOT_FOUND,
+    );
+    // success: admin impersonates non_admin → 303
+    let req = Request::builder()
+        .method("POST")
+        .uri(&target_uri)
+        .header("cookie", &f.admin)
+        .body(Body::empty())
+        .unwrap();
+    let (status, _, _) = app.send(req).await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+}
+
+#[tokio::test]
+async fn test_stop_impersonation() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+
+    // no session → 403
+    assert_eq!(app.call("POST", "/auth/impersonate/stop", None, None).await, StatusCode::FORBIDDEN);
+    // not impersonating → 400 (AppError::failure)
+    assert_eq!(app.call("POST", "/auth/impersonate/stop", None, Some(&f.admin)).await, StatusCode::BAD_REQUEST);
+    assert_eq!(app.call("POST", "/auth/impersonate/stop", None, Some(&f.non_admin)).await, StatusCode::BAD_REQUEST);
+    // impersonating → 303
+    let req = Request::builder()
+        .method("POST")
+        .uri("/auth/impersonate/stop")
+        .header("cookie", &f.imp_admin)
+        .body(Body::empty())
+        .unwrap();
+    let (status, _, _) = app.send(req).await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+    let req = Request::builder()
+        .method("POST")
+        .uri("/auth/impersonate/stop")
+        .header("cookie", &f.imp_non_admin)
+        .body(Body::empty())
+        .unwrap();
+    let (status, _, _) = app.send(req).await;
+    assert_eq!(status, StatusCode::SEE_OTHER);
+}
+
+// ---------------------------------------------------------------------------
+// Tests: product read endpoints
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_get_product() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let uri = format!("/products/{}", f.products[0].id);
+    // GET /products/{id} is unguarded — all contexts return 200
+    for (cookie, label) in &f.sessions() {
+        assert_eq!(app.call("GET", &uri, None, *cookie).await, StatusCode::OK, "{label}");
+    }
+    assert_eq!(app.call("GET", &uri, None, None).await, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_list_products() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+
+    // Default scope (no query): all contexts get a 200
+    assert_eq!(app.call("GET", "/products", None, Some(&f.admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", "/products", None, None).await, StatusCode::OK);
+
+    // scope=mine with explicit user
+    let mine = format!("/products?scope=mine&user={}", f.non_admin_id);
+    assert_eq!(app.call("GET", &mine, None, Some(&f.non_admin)).await, StatusCode::OK);
+
+    // scope=mine without user → empty 200
+    assert_eq!(app.call("GET", "/products?scope=mine", None, Some(&f.admin)).await, StatusCode::OK);
+
+    // scope=public → 200 (no session needed)
+    assert_eq!(app.call("GET", "/products?scope=public", None, None).await, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_list_members() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let uri = format!("/products/{}/members", f.products[0].id);
+    // list_members has no auth guard — RLS scopes results
+    assert_eq!(app.call("GET", &uri, None, Some(&f.admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &uri, None, Some(&f.non_admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &uri, None, None).await, StatusCode::OK);
+}
+
+// ---------------------------------------------------------------------------
+// Tests: symbol read endpoint with filters
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_list_symbols() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[2].id; // maintainer product
+
+    // Seed one symbol
+    app.call(
+        "POST",
+        &format!("/products/{pid}/symbols"),
+        Some(json!({"name": "app.pdb", "arch": "x86_64"})),
+        Some(&f.admin),
+    )
+    .await;
+
+    let base = format!("/products/{pid}/symbols");
+    // plain list
+    assert_eq!(app.call("GET", &base, None, Some(&f.admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &base, None, None).await, StatusCode::OK);
+    // search filter
+    assert_eq!(app.call("GET", &format!("{base}?search=app"), None, Some(&f.admin)).await, StatusCode::OK);
+    // arch filter
+    assert_eq!(app.call("GET", &format!("{base}?arch=x86_64"), None, Some(&f.admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &format!("{base}?arch=all"), None, Some(&f.admin)).await, StatusCode::OK);
+    // sort variants
+    assert_eq!(app.call("GET", &format!("{base}?sort=name"), None, Some(&f.admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &format!("{base}?sort=size"), None, Some(&f.admin)).await, StatusCode::OK);
+}
+
+// ---------------------------------------------------------------------------
+// Tests: crash group endpoints
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_list_groups() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+
+    // Empty product: basic list
+    let base = format!("/crashes?productId={pid}");
+    assert_eq!(app.call("GET", &base, None, Some(&f.admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &base, None, None).await, StatusCode::OK);
+
+    // Seed a crash group to exercise the merge/filter/sort paths
+    create_test_crash_group(&app.db, pid).await;
+    assert_eq!(app.call("GET", &base, None, Some(&f.admin)).await, StatusCode::OK);
+
+    // filters
+    assert_eq!(app.call("GET", &format!("{base}&status=unresolved"), None, Some(&f.admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &format!("{base}&status=all"), None, Some(&f.admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &format!("{base}&version=1.0"), None, Some(&f.admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &format!("{base}&search=test"), None, Some(&f.admin)).await, StatusCode::OK);
+    // sort variants
+    assert_eq!(app.call("GET", &format!("{base}&sort=recent"), None, Some(&f.admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &format!("{base}&sort=similarity"), None, Some(&f.admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &format!("{base}&sort=version"), None, Some(&f.admin)).await, StatusCode::OK);
+    // pagination
+    assert_eq!(app.call("GET", &format!("{base}&limit=5&offset=0"), None, Some(&f.admin)).await, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_get_group() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+
+    // Nonexistent group → 404
+    assert_eq!(app.call("GET", "/crashes/nonexistent-group", None, Some(&f.admin)).await, StatusCode::NOT_FOUND);
+
+    // Real group → 200 for admin and non_admin (products[0] grants readonly to non_admin)
+    // No session → 404 because products[0] is non-public
+    let gid = create_test_crash_group(&app.db, pid).await;
+    let uri = format!("/crashes/{gid}");
+    assert_eq!(app.call("GET", &uri, None, Some(&f.admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &uri, None, Some(&f.non_admin)).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &uri, None, None).await, StatusCode::NOT_FOUND);
+}
+
+// ---------------------------------------------------------------------------
+// Tests: invitation redemption flow
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_get_invite_info() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+
+    // invalid code → 404
+    assert_eq!(app.call("GET", "/invitations/redeem/no-such-code", None, None).await, StatusCode::NOT_FOUND);
+
+    // valid code → { valid: true }
+    let (_, code) = api_create_invitation(&app, &f.admin, json!({"is_admin": false, "grants": []})).await;
+    assert_eq!(app.call("GET", &format!("/invitations/redeem/{code}"), None, None).await, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_redeem_invite_json_no_provisioner() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+
+    // invalid code → 404
+    let body = json!({"username": "u", "email": "u@e.com"});
+    assert_eq!(
+        app.call("POST", "/invitations/redeem/no-such-code", Some(body.clone()), None).await,
+        StatusCode::NOT_FOUND,
+    );
+
+    // valid code, no provisioner configured → 400
+    let (_, code) = api_create_invitation(&app, &f.admin, json!({"is_admin": false, "grants": []})).await;
+    assert_eq!(
+        app.call("POST", &format!("/invitations/redeem/{code}"), Some(body.clone()), None).await,
+        StatusCode::BAD_REQUEST,
+    );
+
+    // max_uses exceeded → 404 ("Invitation has been fully used")
+    let (id_lim, code_lim) =
+        api_create_invitation(&app, &f.admin, json!({"is_admin": false, "grants": [], "max_uses": 1})).await;
+    app.db
+        .query("UPDATE type::record('invitations', $id) SET use_count = 1")
+        .bind(("id", id_lim))
+        .await
+        .unwrap();
+    assert_eq!(
+        app.call("POST", &format!("/invitations/redeem/{code_lim}"), Some(body), None).await,
+        StatusCode::NOT_FOUND,
+    );
+}
+
+#[tokio::test]
+async fn test_show_invite_form() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+
+    // invalid code → 404
+    assert_eq!(app.call("GET", "/invite/no-such-code", None, None).await, StatusCode::NOT_FOUND);
+
+    // valid code, no provisioner → renders form (200)
+    let (_, code) = api_create_invitation(&app, &f.admin, json!({"is_admin": false, "grants": []})).await;
+    assert_eq!(app.call("GET", &format!("/invite/{code}"), None, None).await, StatusCode::OK);
+    assert_eq!(app.call("GET", &format!("/invite/{code}?error=oops"), None, None).await, StatusCode::OK);
+}
+
+// ---------------------------------------------------------------------------
+// Tests: invitation update / revoke success paths
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_update_invitation_success() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+
+    // Admin can update any invitation
+    let (id, _) = api_create_invitation(&app, &f.admin, json!({"is_admin": false, "grants": []})).await;
+    let uri = format!("/invitations/{id}");
+    let update = json!({"is_admin": false, "grants": []});
+    assert_eq!(app.call("PUT", &uri, Some(update.clone()), Some(&f.admin)).await, StatusCode::OK);
+
+    // Non-admin cannot update an admin-created invitation (no overlap) → 403
+    assert_eq!(app.call("PUT", &uri, Some(update), Some(&f.non_admin)).await, StatusCode::FORBIDDEN);
+
+    // Non-admin can update an invitation they created (created_by overlap)
+    let (id2, _) = api_create_invitation(
+        &app,
+        &f.non_admin,
+        json!({"is_admin": false, "grants": [{"product_id": f.products[2].id, "role": "readonly"}]}),
+    )
+    .await;
+    let uri2 = format!("/invitations/{id2}");
+    let update2 =
+        json!({"is_admin": false, "grants": [{"product_id": f.products[2].id, "role": "readonly"}]});
+    assert_eq!(app.call("PUT", &uri2, Some(update2), Some(&f.non_admin)).await, StatusCode::OK);
+
+    // Non-admin cannot add grants for products they don't maintain → 403
+    let bad_update = json!({"is_admin": false, "grants": [{"product_id": f.products[3].id, "role": "readonly"}]});
+    assert_eq!(app.call("PUT", &uri2, Some(bad_update), Some(&f.non_admin)).await, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
+async fn test_revoke_invitation_existing() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+
+    // Admin can revoke any invitation
+    let (id, _) = api_create_invitation(&app, &f.admin, json!({"is_admin": false, "grants": []})).await;
+    assert_eq!(
+        app.call("DELETE", &format!("/invitations/{id}"), None, Some(&f.admin)).await,
+        StatusCode::OK,
+    );
+
+    // Non-admin can revoke invitation for a maintained product
+    let (id2, _) = api_create_invitation(
+        &app,
+        &f.admin,
+        json!({"is_admin": false, "grants": [{"product_id": f.products[2].id, "role": "readonly"}]}),
+    )
+    .await;
+    assert_eq!(
+        app.call("DELETE", &format!("/invitations/{id2}"), None, Some(&f.non_admin)).await,
+        StatusCode::OK,
+        "non_admin maintainer can revoke",
+    );
+
+    // Non-admin cannot revoke invitation for a product they don't maintain → 403
+    let (id3, _) = api_create_invitation(
+        &app,
+        &f.admin,
+        json!({"is_admin": false, "grants": [{"product_id": f.products[3].id, "role": "readonly"}]}),
+    )
+    .await;
+    assert_eq!(
+        app.call("DELETE", &format!("/invitations/{id3}"), None, Some(&f.non_admin)).await,
+        StatusCode::FORBIDDEN,
+        "non_admin cannot revoke unowned product invitation",
+    );
 }
