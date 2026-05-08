@@ -39,6 +39,12 @@ strip = "symbols"
 [profile.dev]
 debug = 1 # line-level info only; full DWARF (debug=2) is slow to emit and link
 
+[profile.coverage]
+inherits = "dev"
+opt-level = 0     # disable optimisations that can hide branches / dead code
+codegen-units = 1 # required for accurate per-line/branch instrumentation
+debug = 2         # full DWARF so llvm-cov maps counters back to source lines
+
 [workspace.dependencies]
 
 askama = "0.16.0"
