@@ -758,7 +758,420 @@ impl MinidumpApi {
 mod tests {
     use super::*;
     use crate::annotations::TrackedAnnotations;
+    use crate::product_cache::ProductCache;
+    use crate::worker::TestWorker;
+    use axum::body::Body;
+    use axum::extract::FromRequest;
+    use axum::http::Request;
+    use axum::http::header::CONTENT_TYPE;
+    use common::product_info::ProductInfo;
+    use object_store::memory::InMemory;
     use rhai::{Engine, Scope};
+    use serde_json::json;
+    use std::collections::HashMap;
+    use std::sync::Arc;
+
+    fn crash_info() -> CrashInfo {
+        CrashInfo {
+            crash_id: "crash-1".to_string(),
+            submission_timestamp: "2023-01-01T00:00:00Z".to_string(),
+            product: Some("TestProduct".to_string()),
+            product_id: Some("product-1".to_string()),
+            product_metadata: Some(json!({
+                "string": "value",
+                "bool": true,
+                "int": 7,
+                "float": 1.5,
+                "array": [1, "two"],
+                "object": {"nested": "yes"},
+                "null": null
+            })),
+            minidump: Some(Minidump {
+                filename: "crash.dmp".to_string(),
+                content_type: "application/octet-stream".to_string(),
+                size: 123,
+                storage_path: "minidumps/one".to_string(),
+                storage_id: uuid::Uuid::nil(),
+            }),
+            attachments: vec![Attachment {
+                name: "log".to_string(),
+                filename: "log.txt".to_string(),
+                content_type: "text/plain".to_string(),
+                size: 12,
+                storage_path: "attachments/one".to_string(),
+                storage_id: uuid::Uuid::nil(),
+            }],
+            annotations: HashMap::from([(
+                "product".to_string(),
+                AnnotationEntry {
+                    value: "TestProduct".to_string(),
+                    source: "submission".to_string(),
+                },
+            )]),
+        }
+    }
+
+    fn state_with_settings(settings: common::settings::Settings) -> AppState {
+        let product = ProductInfo {
+            id: "product-1".to_string(),
+            name: "TestProduct".to_string(),
+            accepting_crashes: true,
+            metadata: json!({"release": "stable"}),
+        };
+        AppState {
+            product_cache: ProductCache::from_map(HashMap::from([(
+                "TestProduct".to_string(),
+                product,
+            )])),
+            settings: Arc::new(settings),
+            storage: Arc::new(InMemory::new()),
+            worker: Arc::new(TestWorker::new()),
+        }
+    }
+
+    fn write_script(name: &str, body: &str) -> (String, String) {
+        let dir = std::env::temp_dir().join(format!(
+            "guardrail-ingestion-test-{}-{}",
+            name,
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file_name = format!("{name}.rhai");
+        std::fs::write(dir.join(&file_name), body).unwrap();
+        (dir.to_string_lossy().to_string(), file_name)
+    }
+
+    #[test]
+    fn validators_accept_and_reject_expected_values() {
+        assert!(MinidumpApi::validate_annotation_content_type("text/plain").is_ok());
+        assert!(MinidumpApi::validate_annotation_content_type("text/markdown").is_ok());
+        assert!(MinidumpApi::validate_annotation_content_type("").is_ok());
+        assert!(matches!(
+            MinidumpApi::validate_annotation_content_type("application/json"),
+            Err(ApiError::Failure(message)) if message.contains("invalid annotation")
+        ));
+
+        assert!(MinidumpApi::validate_minidump_content_type("application/octet-stream").is_ok());
+        assert!(MinidumpApi::validate_minidump_content_type("").is_ok());
+        assert!(matches!(
+            MinidumpApi::validate_minidump_content_type("text/plain"),
+            Err(ApiError::Failure(message)) if message.contains("invalid minidump")
+        ));
+
+        assert!(MinidumpApi::validate_key("product").is_ok());
+        assert!(matches!(
+            MinidumpApi::validate_key("bad\nkey"),
+            Err(ApiError::Failure(message)) if message.contains("printable ASCII")
+        ));
+        assert!(matches!(
+            MinidumpApi::validate_key("cafe\u{00e9}"),
+            Err(ApiError::Failure(message)) if message.contains("printable ASCII")
+        ));
+    }
+
+    #[test]
+    fn validates_minidump_and_mandatory_annotations() {
+        let mut info = crash_info();
+        assert!(MinidumpApi::validate_minidump_presence(&info).is_ok());
+        assert!(
+            MinidumpApi::validate_mandatory_annotations(&info, &["product".to_string()]).is_ok()
+        );
+
+        info.minidump = None;
+        assert!(matches!(
+            MinidumpApi::validate_minidump_presence(&info),
+            Err(ApiError::Failure(message)) if message.contains("no minidump")
+        ));
+
+        info.minidump = crash_info().minidump;
+        assert!(matches!(
+            MinidumpApi::validate_mandatory_annotations(&info, &["version".to_string()]),
+            Err(ApiError::Failure(message)) if message.contains("required annotation 'version' is missing")
+        ));
+
+        info.annotations.insert(
+            "version".to_string(),
+            AnnotationEntry {
+                value: "   ".to_string(),
+                source: "submission".to_string(),
+            },
+        );
+        assert!(matches!(
+            MinidumpApi::validate_mandatory_annotations(&info, &["version".to_string()]),
+            Err(ApiError::Failure(message)) if message.contains("cannot be empty")
+        ));
+    }
+
+    #[test]
+    fn converts_crash_info_to_rhai_map_with_nested_metadata() {
+        let map = MinidumpApi::convert_crash_info_to_rhai_map(&crash_info());
+
+        assert_eq!(map["crash_id"].clone().into_string().unwrap(), "crash-1");
+        assert_eq!(map["product"].clone().into_string().unwrap(), "TestProduct");
+        assert!(map.contains_key("product_metadata"));
+        assert!(map.contains_key("minidump"));
+        assert_eq!(map["attachments"].clone().into_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn rhai_engine_helpers_return_expected_values() {
+        let engine = MinidumpApi::create_rhai_engine("crash-1");
+        let valid = engine
+            .eval::<rhai::Map>("validation_success()")
+            .expect("validation_success should return a map");
+        assert_eq!(valid["valid"].as_bool().unwrap(), true);
+
+        let invalid = engine
+            .eval::<rhai::Map>("validation_error(\"bad\")")
+            .expect("validation_error should return a map");
+        assert_eq!(invalid["valid"].as_bool().unwrap(), false);
+        assert_eq!(invalid["error"].clone().into_string().unwrap(), "bad");
+
+        let timestamp = engine
+            .eval::<rhai::Dynamic>("parse_iso8601(\"2023-01-01T00:00:00Z\")")
+            .unwrap();
+        assert_eq!(timestamp.as_int().unwrap(), 1_672_531_200);
+        assert!(
+            engine
+                .eval::<rhai::Dynamic>("parse_iso8601(\"not-a-date\")")
+                .unwrap()
+                .is_unit()
+        );
+    }
+
+    #[test]
+    fn validation_result_paths_are_checked() {
+        let mut info = crash_info();
+        let mut scope = Scope::new();
+
+        assert!(matches!(
+            MinidumpApi::handle_validation_result("not a map".into(), &mut scope, &mut info),
+            Err(ApiError::ValidationError(_, message)) if message == "Validation script failed"
+        ));
+
+        let missing_valid = rhai::Map::new();
+        assert!(matches!(
+            MinidumpApi::extract_validation_result(&missing_valid, &info),
+            Err(ApiError::ValidationError(_, message)) if message == "Invalid validation result"
+        ));
+
+        let mut failure = rhai::Map::new();
+        failure.insert("valid".into(), false.into());
+        failure.insert("error".into(), "blocked".into());
+        assert!(matches!(
+            MinidumpApi::handle_validation_result(failure.into(), &mut scope, &mut info),
+            Err(ApiError::ValidationError(product, message))
+                if product == "TestProduct" && message == "blocked"
+        ));
+
+        let mut failure_without_error = rhai::Map::new();
+        failure_without_error.insert("valid".into(), false.into());
+        assert!(matches!(
+            MinidumpApi::handle_validation_result(
+                failure_without_error.into(),
+                &mut scope,
+                &mut info
+            ),
+            Err(ApiError::ValidationError(_, message)) if message == "Validation failed"
+        ));
+
+        let mut success = rhai::Map::new();
+        success.insert("valid".into(), true.into());
+        assert!(
+            MinidumpApi::handle_validation_result(success.into(), &mut scope, &mut info).is_ok()
+        );
+    }
+
+    #[test]
+    fn validation_success_applies_modified_annotations_from_scope() {
+        let mut info = crash_info();
+        let mut map = MinidumpApi::convert_crash_info_to_rhai_map(&info);
+        let annotations = map
+            .get("annotations")
+            .and_then(|value| value.clone().try_cast::<TrackedAnnotations>())
+            .unwrap();
+        annotations.set("script_key".to_string(), "script_value".to_string());
+        map.insert("annotations".into(), rhai::Dynamic::from(annotations));
+
+        let mut scope = Scope::new();
+        scope.push("crash_info", map);
+
+        MinidumpApi::handle_validation_success(&mut scope, &mut info).unwrap();
+
+        assert_eq!(info.annotations.get("script_key").unwrap().value, "script_value");
+    }
+
+    #[test]
+    fn validation_scripts_handle_global_product_and_error_cases() {
+        let (config_dir, script_file) = write_script(
+            "success",
+            r#"
+                crash_info.annotations["validated"] = "yes";
+                validation_success()
+            "#,
+        );
+        let mut settings = testware::create_settings();
+        settings.config_dir = config_dir.clone();
+        let state = state_with_settings(settings);
+        let mut info = crash_info();
+
+        MinidumpApi::run_global_validation_script(&mut info, &state, &script_file).unwrap();
+        assert_eq!(info.annotations["validated"].value, "yes");
+
+        MinidumpApi::run_product_specific_validation_script(
+            &mut info,
+            &state,
+            "^TestProduct$",
+            &script_file,
+        )
+        .unwrap();
+
+        MinidumpApi::run_product_specific_validation_script(
+            &mut info,
+            &state,
+            "^OtherProduct$",
+            &script_file,
+        )
+        .unwrap();
+
+        assert!(matches!(
+            MinidumpApi::run_product_specific_validation_script(
+                &mut info,
+                &state,
+                "(",
+                &script_file,
+            ),
+            Err(ApiError::Failure(message)) if message.contains("Invalid regex pattern")
+        ));
+
+        let mut no_product = info;
+        no_product.product = None;
+        MinidumpApi::run_product_specific_validation_script(
+            &mut no_product,
+            &state,
+            "^TestProduct$",
+            &script_file,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn run_validation_scripts_handles_none_and_script_errors() {
+        let mut info = crash_info();
+        let mut settings = testware::create_settings();
+        settings.minidumps.validation_scripts = None;
+        let state = state_with_settings(settings);
+        MinidumpApi::run_validation_scripts(&mut info, &state).unwrap();
+
+        let (config_dir, script_file) = write_script(
+            "product_specific_success",
+            r#"
+                crash_info.annotations["product_specific"] = "yes";
+                validation_success()
+            "#,
+        );
+        let mut settings = testware::create_settings();
+        settings.config_dir = config_dir;
+        settings.minidumps.validation_scripts =
+            Some(vec![common::settings::ValidationScript::ProductSpecific {
+                product: "^TestProduct$".to_string(),
+                script: script_file,
+            }]);
+        let state = state_with_settings(settings);
+        MinidumpApi::run_validation_scripts(&mut info, &state).unwrap();
+        assert_eq!(info.annotations["product_specific"].value, "yes");
+
+        let mut settings = testware::create_settings();
+        settings.config_dir = std::env::temp_dir().to_string_lossy().to_string();
+        settings.minidumps.validation_scripts =
+            Some(vec![common::settings::ValidationScript::Global(
+                "missing-file.rhai".to_string(),
+            )]);
+        let state = state_with_settings(settings);
+        assert!(matches!(
+            MinidumpApi::run_validation_scripts(&mut info, &state),
+            Err(ApiError::Failure(message)) if message.contains("Failed to load validation script")
+        ));
+    }
+
+    #[test]
+    fn validate_with_rhai_script_reports_invalid_results_and_runtime_errors() {
+        let (config_dir, non_map) = write_script("non_map", "42");
+        let mut info = crash_info();
+        let path = format!("{config_dir}/{non_map}");
+        assert!(matches!(
+            MinidumpApi::validate_with_rhai_script(&path, &mut info),
+            Err(ApiError::ValidationError(_, message)) if message == "Validation script failed"
+        ));
+
+        let (config_dir, runtime_error) =
+            write_script("runtime_error", "let x = 1 / 0; validation_success()");
+        let path = format!("{config_dir}/{runtime_error}");
+        assert!(matches!(
+            MinidumpApi::validate_with_rhai_script(&path, &mut info),
+            Err(ApiError::ValidationError(_, message)) if message == "Validation script failed"
+        ));
+    }
+
+    #[tokio::test]
+    async fn upload_crash_writes_json_to_storage() {
+        let store = Arc::new(InMemory::new());
+        MinidumpApi::upload_crash(store.clone(), "crash-1", json!({"ok": true}))
+            .await
+            .unwrap();
+
+        let bytes = store
+            .get(&object_store::path::Path::from("crashes/crash-1.json"))
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap();
+        assert_eq!(bytes.as_ref(), br#"{"ok":true}"#);
+    }
+
+    #[tokio::test]
+    async fn process_crash_reports_worker_failures() {
+        let worker = Arc::new(TestWorker::new());
+        worker.failure();
+        let mut settings = testware::create_settings();
+        settings.minidumps.mandatory_annotations = None;
+        settings.minidumps.validation_scripts = None;
+        let product = ProductInfo {
+            id: "product-1".to_string(),
+            name: "TestProduct".to_string(),
+            accepting_crashes: true,
+            metadata: json!({}),
+        };
+        let state = AppState {
+            product_cache: ProductCache::from_map(HashMap::from([(
+                "TestProduct".to_string(),
+                product,
+            )])),
+            settings: Arc::new(settings),
+            storage: Arc::new(InMemory::new()),
+            worker,
+        };
+        let mut info = crash_info();
+        info.minidump = None;
+        info.annotations.clear();
+        let boundary = "----guardrail-ingestion-boundary";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"upload_file_minidump\"; filename=\"test.dmp\"\r\nContent-Type: application/octet-stream\r\n\r\nMINIDUMP DATA\r\n\
+             --{boundary}\r\nContent-Disposition: form-data; name=\"product\"\r\nContent-Type: text/plain\r\n\r\nTestProduct\r\n\
+             --{boundary}--\r\n"
+        );
+        let request = Request::builder()
+            .header(CONTENT_TYPE, format!("multipart/form-data; boundary={boundary}"))
+            .body(Body::from(body))
+            .unwrap();
+        let multipart = Multipart::from_request(request, &state).await.unwrap();
+
+        assert!(matches!(
+            MinidumpApi::handle_upload(state, multipart, &mut info).await,
+            Err(ApiError::Failure(message)) if message == "failed to queue minidump job"
+        ));
+    }
 
     #[test]
     fn test_crash_info_annotations_is_tracked_annotations_in_rhai() {

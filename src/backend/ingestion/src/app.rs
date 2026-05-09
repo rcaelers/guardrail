@@ -92,25 +92,24 @@ impl GuardrailIngestionApp {
             .with_state(self.state.clone())
     }
 
+    fn tls_configured(settings: &Settings) -> bool {
+        settings
+            .ingestion_server
+            .public_key
+            .as_deref()
+            .is_some_and(|key| !key.is_empty())
+            && settings
+                .ingestion_server
+                .private_key
+                .as_deref()
+                .is_some_and(|key| !key.is_empty())
+    }
+
     pub async fn serve(&self) {
         let router = self.router().await;
         let settings = &self.state.settings;
 
-        if settings.ingestion_server.public_key.is_some()
-            && settings.ingestion_server.private_key.is_some()
-            && settings
-                .ingestion_server
-                .public_key
-                .clone()
-                .unwrap_or_default()
-                != ""
-            && settings
-                .ingestion_server
-                .private_key
-                .clone()
-                .unwrap_or_default()
-                != ""
-        {
+        if Self::tls_configured(settings) {
             info!("Starting ingestion server with TLS");
             let config = RustlsConfig::from_pem(
                 settings
@@ -143,5 +142,72 @@ impl GuardrailIngestionApp {
                 .await
                 .unwrap();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::Request;
+    use object_store::memory::InMemory;
+    use std::collections::HashMap;
+    use tower::ServiceExt;
+
+    use crate::worker::TestWorker;
+
+    fn state() -> AppState {
+        AppState {
+            product_cache: ProductCache::from_map(HashMap::new()),
+            settings: Arc::new(testware::create_settings()),
+            storage: Arc::new(InMemory::new()),
+            worker: Arc::new(TestWorker::new()),
+        }
+    }
+
+    #[tokio::test]
+    async fn new_and_router_wire_health_routes() {
+        let app = GuardrailIngestionApp::new(state());
+        let router = app.router().await;
+
+        let response = router
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/live")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri("/api/minidump/ready")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn tls_configured_requires_both_non_empty_keys() {
+        let mut settings = testware::create_settings();
+        settings.ingestion_server.public_key = None;
+        settings.ingestion_server.private_key = None;
+        assert!(!GuardrailIngestionApp::tls_configured(&settings));
+
+        settings.ingestion_server.public_key = Some("public".to_string());
+        assert!(!GuardrailIngestionApp::tls_configured(&settings));
+
+        settings.ingestion_server.private_key = Some(String::new());
+        assert!(!GuardrailIngestionApp::tls_configured(&settings));
+
+        settings.ingestion_server.private_key = Some("private".to_string());
+        assert!(GuardrailIngestionApp::tls_configured(&settings));
     }
 }

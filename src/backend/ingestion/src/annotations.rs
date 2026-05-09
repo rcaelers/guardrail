@@ -335,4 +335,77 @@ mod tests {
         assert!(keys.contains(&"key2".to_string()));
         assert!(keys.contains(&"key3".to_string()));
     }
+
+    #[test]
+    fn test_tracked_annotations_remove_serialize_and_custom_methods() {
+        let tracked = TrackedAnnotations::default();
+        tracked.set("alpha".to_string(), "one".to_string());
+        tracked.set("beta".to_string(), "two".to_string());
+
+        let removed = tracked.remove("alpha").expect("alpha should be removed");
+        assert_eq!(removed.value, "one");
+        assert!(tracked.get("alpha").is_none());
+        assert!(tracked.was_modified());
+
+        let json = serde_json::to_value(&tracked).expect("tracked annotations should serialize");
+        assert!(json["modified"]["beta"].is_object());
+
+        let mut engine = Engine::new();
+        engine.build_type::<TrackedAnnotations>();
+        let mut scope = Scope::new();
+        scope.push("annotations", tracked);
+        let script = r#"
+            let before = annotations.has("beta");
+            let keys = annotations.keys();
+            let removed = annotations.remove("beta");
+            let after = annotations.has("beta");
+            #{ before: before, after: after, removed: removed, keys: keys }
+        "#;
+
+        let result = engine
+            .eval_with_scope::<rhai::Map>(&mut scope, script)
+            .expect("custom methods should work");
+        assert_eq!(result["before"].as_bool().unwrap(), true);
+        assert_eq!(result["after"].as_bool().unwrap(), false);
+        assert_eq!(result["removed"].clone().into_string().unwrap(), "two");
+        let keys = result["keys"].clone().try_cast::<Vec<String>>().unwrap();
+        assert_eq!(keys.len(), 1);
+    }
+
+    #[test]
+    fn test_tracked_annotations_rhai_get_and_set_methods() {
+        let mut engine = Engine::new();
+        engine.build_type::<TrackedAnnotations>();
+        let mut scope = Scope::new();
+        scope.push("annotations", TrackedAnnotations::default());
+
+        let script = r#"
+            annotations.set("method_key", "method_value");
+            annotations.get("method_key")
+        "#;
+
+        let result = engine
+            .eval_with_scope::<String>(&mut scope, script)
+            .expect("custom get/set methods should work");
+        assert_eq!(result, "method_value");
+    }
+
+    #[test]
+    fn test_tracked_annotations_handle_poisoned_lock() {
+        let tracked = TrackedAnnotations::default();
+        let data = tracked.data.clone();
+        let _ = std::thread::spawn(move || {
+            let _guard = data.lock().unwrap();
+            panic!("poison annotation lock");
+        })
+        .join();
+
+        assert!(tracked.get("missing").is_none());
+        tracked.set("key".to_string(), "value".to_string());
+        assert!(tracked.remove("key").is_none());
+        assert!(tracked.keys().is_empty());
+        assert!(tracked.clone().finalize().is_empty());
+        assert!(!tracked.was_modified());
+        assert!(serde_json::to_value(&tracked).is_err());
+    }
 }

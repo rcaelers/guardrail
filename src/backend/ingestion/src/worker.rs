@@ -91,3 +91,38 @@ impl Worker for TestWorker {
         Ok(crash["id"].to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_worker_records_requests_and_returns_id_value() {
+        let worker = TestWorker::new();
+        let result = worker
+            .queue_minidump(json!({"id": "crash-1"}))
+            .await
+            .unwrap();
+
+        assert_eq!(result, "\"crash-1\"");
+        let requests = worker.requests.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert_eq!(requests[0], json!({"id": "crash-1"}).to_string());
+    }
+
+    #[tokio::test]
+    async fn test_worker_can_be_forced_to_fail() {
+        let worker = TestWorker::default();
+        worker.failure();
+
+        let err = worker
+            .queue_minidump(json!({"id": "crash-1"}))
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(err, ApiError::Failure(message) if message == "failed to queue minidump job")
+        );
+    }
+}

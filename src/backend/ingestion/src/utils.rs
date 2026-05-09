@@ -44,3 +44,45 @@ where
     .await
     .map_err(|_err| ApiError::InternalFailure())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use futures::stream;
+    use object_store::memory::InMemory;
+
+    #[tokio::test]
+    async fn stream_to_s3_writes_all_chunks() {
+        let store = Arc::new(InMemory::new());
+        let chunks = stream::iter([
+            Ok::<_, std::io::Error>(Bytes::from_static(b"hello ")),
+            Ok(Bytes::from_static(b"world")),
+        ]);
+
+        let written = stream_to_s3(store.clone(), "objects/test.txt", chunks)
+            .await
+            .unwrap();
+
+        assert_eq!(written, 11);
+        let bytes = store
+            .get_opts(&Path::from("objects/test.txt"), Default::default())
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap();
+        assert_eq!(bytes.as_ref(), b"hello world");
+    }
+
+    #[tokio::test]
+    async fn stream_to_s3_maps_stream_errors() {
+        let store = Arc::new(InMemory::new());
+        let chunks = stream::iter([Err::<Bytes, _>(std::io::Error::other("boom"))]);
+
+        let err = stream_to_s3(store, "objects/fail.txt", chunks)
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, ApiError::InternalFailure()));
+    }
+}

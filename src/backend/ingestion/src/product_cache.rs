@@ -72,3 +72,56 @@ impl ProductCache {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::product_info::ProductInfo;
+    use serde_json::json;
+
+    fn product(name: &str, accepting_crashes: bool) -> ProductInfo {
+        ProductInfo {
+            id: format!("{name}-id"),
+            name: name.to_string(),
+            accepting_crashes,
+            metadata: json!({"kind": name}),
+        }
+    }
+
+    #[tokio::test]
+    async fn memory_cache_returns_products_by_case_insensitive_key() {
+        let cache = ProductCache::from_map(HashMap::from([(
+            "Workrave".to_string(),
+            product("Workrave", true),
+        )]));
+
+        let found = cache
+            .get_product_by_name("workrave")
+            .await
+            .unwrap()
+            .expect("product should be found");
+        assert_eq!(found.id, "Workrave-id");
+        assert!(found.accepting_crashes);
+        assert_eq!(found.metadata, json!({"kind": "Workrave"}));
+    }
+
+    #[tokio::test]
+    async fn memory_cache_returns_none_for_unknown_product() {
+        let cache =
+            ProductCache::from_map(HashMap::from([("Known".to_string(), product("Known", true))]));
+
+        assert!(
+            cache
+                .get_product_by_name("unknown")
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn memory_cache_is_healthy() {
+        let cache = ProductCache::from_map(HashMap::new());
+        assert!(cache.is_healthy().await);
+    }
+}
