@@ -465,6 +465,9 @@ async fn create_user(
         .map_err(access_err)?;
     let db = s.user_db(&session).await;
     let email = body.email.trim().to_lowercase();
+    if email.is_empty() {
+        return Err(bad("Email required."));
+    }
     let name = body
         .name
         .as_deref()
@@ -1403,7 +1406,8 @@ async fn download_attachment(
         vec![("id", Value::String(id.clone()))],
     )
     .await?;
-    let Some(row) = rows.into_iter().next() else {
+    let row = rows.into_iter().next().filter(|v| v.is_object());
+    let Some(row) = row else {
         return Err(not_found(&id));
     };
 
@@ -1555,12 +1559,25 @@ async fn merge_groups(
         vec![("pid", pid.clone()), ("mid", mid.clone())],
     )
     .await?;
+    // Fetch the merged group's count separately — SurrealDB loses $token context in
+    // UPDATE subqueries, causing RLS to filter out the subquery result as NONE.
+    let merged_count_rows = run_value(
+        &db,
+        "SELECT VALUE count FROM ONLY type::record('crash_groups', $mid)",
+        vec![("mid", mid.clone())],
+    )
+    .await?;
+    let merged_count = merged_count_rows
+        .into_iter()
+        .next()
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
     run_value(
         &db,
         "UPDATE type::record('crash_groups', $pid) SET
-           count = count + (SELECT VALUE count FROM ONLY type::record('crash_groups', $mid)),
+           count = count + $c,
            updated_at = time::now()",
-        vec![("pid", pid), ("mid", mid.clone())],
+        vec![("pid", pid), ("c", Value::Number(merged_count.into()))],
     )
     .await?;
     run_value(&db, "DELETE type::record('crash_groups', $mid)", vec![("mid", mid)]).await?;
