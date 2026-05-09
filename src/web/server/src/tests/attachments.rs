@@ -13,6 +13,8 @@ use super::common::*;
 // | ---------------------------------------------- | --------------------- |
 // | admin with missing attachment                  | 404                   |
 // | admin with existing private-product attachment | 200 with stored bytes |
+// | read-only member with private-product file     | 200 with stored bytes |
+// | anonymous user with private-product file       | 404                   |
 #[tokio::test]
 async fn test_download_attachment() {
     let app = TestApp::new().await;
@@ -59,4 +61,16 @@ async fn test_download_attachment() {
         .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body.as_ref(), content);
+
+    let (status, body) = app
+        .call_full("GET", &format!("/attachments/{}/download", att.id), None, Some(&f.non_admin))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body.as_ref(), content);
+
+    assert_eq!(
+        app.call("GET", &format!("/attachments/{}/download", att.id), None, None)
+            .await,
+        StatusCode::NOT_FOUND
+    );
 }

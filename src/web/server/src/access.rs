@@ -170,6 +170,45 @@ pub async fn require_product_maintainer(
     Ok(Principal::User(user))
 }
 
+/// Require a browser user to have at least `required_role` on `product_id`.
+///
+/// Admin users satisfy every product role. The hierarchy is:
+/// `maintainer > readwrite > readonly`.
+pub async fn require_session_product_role(
+    session: &Session,
+    db: &Surreal<Any>,
+    product_id: &str,
+    required_role: &str,
+) -> AppResult<AuthenticatedUser> {
+    let user = require_current_session_user(session, db).await?;
+    if user.is_admin() {
+        return Ok(user);
+    }
+
+    let uid = repos::record_key(&user.active().id);
+    let pid = repos::record_key(product_id);
+    let mut result = db
+        .query(
+            "SELECT VALUE role FROM user_access
+             WHERE user_id = type::record('users', $uid)
+               AND product_id = type::record('products', $pid)",
+        )
+        .bind(("uid", uid))
+        .bind(("pid", pid))
+        .await
+        .map_err(AppError::internal)?;
+
+    let roles: Vec<String> = result.take(0).map_err(AppError::internal)?;
+    if roles
+        .iter()
+        .any(|role| product_role_satisfies(role, required_role))
+    {
+        return Ok(user);
+    }
+
+    Err(AppError::forbidden())
+}
+
 /// Require a browser user to be reading their own user-scoped data, or an
 /// admin browser user to be reading any user's data.
 pub async fn require_user_or_admin(
@@ -242,6 +281,19 @@ pub async fn get_maintained_product_ids(
         .filter_map(|v| v.get("pid").and_then(|p| p.as_str()).map(str::to_owned))
         .collect();
     Ok(ids)
+}
+
+fn product_role_satisfies(actual: &str, required: &str) -> bool {
+    let rank = |role: &str| match role {
+        "readonly" => Some(1),
+        "readwrite" => Some(2),
+        "maintainer" => Some(3),
+        _ => None,
+    };
+    match (rank(actual), rank(required)) {
+        (Some(actual), Some(required)) => actual >= required,
+        _ => false,
+    }
 }
 
 async fn require_current_session_user(

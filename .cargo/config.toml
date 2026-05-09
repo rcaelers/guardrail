@@ -6,7 +6,7 @@ rustflags = ["-C", "link-arg=-fuse-ld=mold"]
 
 [alias]
 build-maxperf = "build --profile maxperf"
-run-maxperf   = "run --profile maxperf"
+run-maxperf = "run --profile maxperf"
 
 # Coverage (line + branch summary) for the web server.
 #
@@ -24,6 +24,7 @@ run-maxperf   = "run --profile maxperf"
 # production code only.
 cov-web = "llvm-cov --profile coverage --package web --lib --html --output-dir target/llvm-cov/html --ignore-filename-regex '(^|/)tests\\.rs$'"
 cov-web-lcov = "llvm-cov --profile coverage --package web --lib --lcov --output-path target/llvm-cov/web.lcov.info --ignore-filename-regex '(^|/)tests\\.rs$'"
+cov-all = "llvm-cov --profile coverage --workspace --lib --html --output-dir target/llvm-cov/html --ignore-filename-regex '(^|/)tests\\.rs$'"
 
 # Tarpaulin coverage for the web server (line coverage; branch NOT implemented).
 #

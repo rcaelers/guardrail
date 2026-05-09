@@ -265,23 +265,47 @@ async fn test_revoke_access_all_contexts() {
 // | ------ | ---------------------- |
 // | GET    | /products/{product_id} |
 // Cases:
-// | Auth context  | Expected |
-// | ------------- | -------- |
-// | no_session    | 200      |
-// | admin         | 200      |
-// | non_admin     | 200      |
-// | imp_admin     | 200      |
-// | imp_non_admin | 200      |
+// | Case                                  | Expected |
+// | ------------------------------------- | -------- |
+// | no_session with private product       | 404      |
+// | no_session with public product        | 200      |
+// | admin with private product            | 200      |
+// | non_admin with read-only product role | 200      |
 #[tokio::test]
 async fn test_get_product() {
     let app = TestApp::new().await;
     let f = Fixture::setup(&app).await;
-    let uri = format!("/products/{}", f.products[0].id);
-    // GET /products/{id} is unguarded — all contexts return 200
-    for (cookie, label) in &f.sessions() {
-        assert_eq!(app.call("GET", &uri, None, *cookie).await, StatusCode::OK, "{label}");
-    }
-    assert_eq!(app.call("GET", &uri, None, None).await, StatusCode::OK);
+    let private_uri = format!("/products/{}", f.products[0].id);
+
+    assert_eq!(
+        app.call("GET", &private_uri, None, None).await,
+        StatusCode::NOT_FOUND,
+        "anonymous cannot read private product"
+    );
+    assert_eq!(
+        app.call("GET", &private_uri, None, Some(&f.admin)).await,
+        StatusCode::OK,
+        "admin can read private product"
+    );
+    assert_eq!(
+        app.call("GET", &private_uri, None, Some(&f.non_admin))
+            .await,
+        StatusCode::OK,
+        "read-only product member can read product"
+    );
+
+    let public_product = create_test_product(&app.db).await;
+    app.db
+        .query("UPDATE type::record('products', $pid) SET public = true")
+        .bind(("pid", public_product.id.clone()))
+        .await
+        .expect("mark public product failed");
+    let public_uri = format!("/products/{}", public_product.id);
+    assert_eq!(
+        app.call("GET", &public_uri, None, None).await,
+        StatusCode::OK,
+        "anonymous can read public product"
+    );
 }
 
 // API calls:
@@ -294,19 +318,40 @@ async fn test_get_product() {
 // Cases:
 // | Case                                    | Expected |
 // | --------------------------------------- | -------- |
-// | default listing: no_session             | 200      |
+// | default listing: no_session             | 200 with only public products |
 // | default listing: admin                  | 200      |
 // | scope=mine with explicit non_admin user | 200      |
 // | scope=mine without user as admin        | 200      |
-// | scope=public without session            | 200      |
+// | scope=public without session            | 200 with only public products |
 #[tokio::test]
 async fn test_list_products() {
     let app = TestApp::new().await;
     let f = Fixture::setup(&app).await;
+    let public_product = create_test_product(&app.db).await;
+    app.db
+        .query("UPDATE type::record('products', $pid) SET public = true")
+        .bind(("pid", public_product.id.clone()))
+        .await
+        .expect("mark public product failed");
 
     // Default scope (no query): all contexts get a 200
     assert_eq!(app.call("GET", "/products", None, Some(&f.admin)).await, StatusCode::OK);
-    assert_eq!(app.call("GET", "/products", None, None).await, StatusCode::OK);
+    let (status, anonymous_products) = app.call_json("GET", "/products", None, None).await;
+    assert_eq!(status, StatusCode::OK);
+    let anonymous_ids: Vec<_> = anonymous_products
+        .as_array()
+        .expect("products response should be an array")
+        .iter()
+        .filter_map(|p| p.get("id").and_then(|id| id.as_str()))
+        .collect();
+    assert!(
+        anonymous_ids.contains(&public_product.id.as_str()),
+        "anonymous list should include public product: {anonymous_products}"
+    );
+    assert!(
+        !anonymous_ids.contains(&f.products[0].id.as_str()),
+        "anonymous list must not include private product: {anonymous_products}"
+    );
 
     // scope=mine with explicit user
     let mine = format!("/products?scope=mine&user={}", f.non_admin_id);
@@ -320,7 +365,18 @@ async fn test_list_products() {
     );
 
     // scope=public → 200 (no session needed)
-    assert_eq!(app.call("GET", "/products?scope=public", None, None).await, StatusCode::OK);
+    let (status, public_products) = app
+        .call_json("GET", "/products?scope=public", None, None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let public_ids: Vec<_> = public_products
+        .as_array()
+        .expect("public products response should be an array")
+        .iter()
+        .filter_map(|p| p.get("id").and_then(|id| id.as_str()))
+        .collect();
+    assert!(public_ids.contains(&public_product.id.as_str()));
+    assert!(!public_ids.contains(&f.products[0].id.as_str()));
 }
 
 // API calls:

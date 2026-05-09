@@ -84,6 +84,105 @@ async fn test_merge_groups_requires_session() {
     .await;
 }
 
+// API calls:
+// | Method | Route                      |
+// | ------ | -------------------------- |
+// | POST   | /crashes/{group_id}/status |
+// | POST   | /crashes/{group_id}/notes  |
+// | POST   | /crashes/{group_id}/merge  |
+// Cases:
+// | Case                                   | Expected |
+// | -------------------------------------- | -------- |
+// | read-only user changes status          | 403      |
+// | read-write user changes status         | 204      |
+// | read-only user adds note               | 403      |
+// | read-write user adds note              | 200      |
+// | read-write user merges groups          | 403      |
+// | maintainer user merges maintained group | 204      |
+#[tokio::test]
+async fn test_crash_mutations_by_product_role() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+
+    let readonly_group = create_test_crash_group(&app.db, &f.products[0].id).await;
+    let readwrite_group = create_test_crash_group(&app.db, &f.products[1].id).await;
+    let maintainer_primary = create_test_crash_group(&app.db, &f.products[2].id).await;
+    let maintainer_merged = create_test_crash_group(&app.db, &f.products[2].id).await;
+    create_test_crash_in_group(&app.db, &f.products[2].id, &maintainer_merged).await;
+
+    let status_body = json!({"status": "resolved"});
+    assert_eq!(
+        app.call(
+            "POST",
+            &format!("/crashes/{readonly_group}/status"),
+            Some(status_body.clone()),
+            Some(&f.non_admin),
+        )
+        .await,
+        StatusCode::FORBIDDEN,
+        "read-only users cannot change crash status"
+    );
+    assert_eq!(
+        app.call(
+            "POST",
+            &format!("/crashes/{readwrite_group}/status"),
+            Some(status_body),
+            Some(&f.non_admin),
+        )
+        .await,
+        StatusCode::NO_CONTENT,
+        "read-write users can change crash status"
+    );
+
+    let note_body = json!({"body": "A role-checked note", "author": "tester"});
+    assert_eq!(
+        app.call(
+            "POST",
+            &format!("/crashes/{readonly_group}/notes"),
+            Some(note_body.clone()),
+            Some(&f.non_admin),
+        )
+        .await,
+        StatusCode::FORBIDDEN,
+        "read-only users cannot add notes"
+    );
+    assert_eq!(
+        app.call(
+            "POST",
+            &format!("/crashes/{readwrite_group}/notes"),
+            Some(note_body),
+            Some(&f.non_admin),
+        )
+        .await,
+        StatusCode::OK,
+        "read-write users can add notes"
+    );
+
+    let readwrite_merged = create_test_crash_group(&app.db, &f.products[1].id).await;
+    assert_eq!(
+        app.call(
+            "POST",
+            &format!("/crashes/{readwrite_group}/merge"),
+            Some(json!({"mergedId": readwrite_merged})),
+            Some(&f.non_admin),
+        )
+        .await,
+        StatusCode::FORBIDDEN,
+        "read-write users cannot merge groups"
+    );
+    assert_eq!(
+        app.call(
+            "POST",
+            &format!("/crashes/{maintainer_primary}/merge"),
+            Some(json!({"mergedId": maintainer_merged})),
+            Some(&f.non_admin),
+        )
+        .await,
+        StatusCode::NO_CONTENT,
+        "maintainers can merge groups for maintained products"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Tests: crash group endpoints
 // ---------------------------------------------------------------------------

@@ -218,6 +218,50 @@ fn storage_error(err: object_store::Error) -> (StatusCode, String) {
     }
 }
 
+async fn product_id_for_crash_group(
+    db: &Surreal<Any>,
+    group_id: &str,
+) -> Result<String, (StatusCode, String)> {
+    let rows = run_value(
+        db,
+        "SELECT meta::id(product_id) AS productId
+         FROM ONLY type::record('crash_groups', $id)",
+        vec![("id", Value::String(group_id.to_string()))],
+    )
+    .await?;
+    rows.into_iter()
+        .next()
+        .filter(|v| !v.is_null())
+        .and_then(|row| {
+            row.get("productId")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        })
+        .ok_or_else(|| not_found(group_id))
+}
+
+async fn product_id_for_symbol(
+    db: &Surreal<Any>,
+    symbol_id: &str,
+) -> Result<String, (StatusCode, String)> {
+    let rows = run_value(
+        db,
+        "SELECT meta::id(product_id) AS productId
+         FROM ONLY type::record('symbols', $id)",
+        vec![("id", Value::String(symbol_id.to_string()))],
+    )
+    .await?;
+    rows.into_iter()
+        .next()
+        .filter(|v| !v.is_null())
+        .and_then(|row| {
+            row.get("productId")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        })
+        .ok_or_else(|| not_found(symbol_id))
+}
+
 fn avatar_initials(name: &str) -> String {
     let avatar = name
         .split_whitespace()
@@ -756,7 +800,7 @@ async fn get_product(
     )
     .await?;
     rows.into_iter()
-        .next()
+        .find(|v| !v.is_null())
         .map(Json)
         .ok_or_else(|| not_found(&id))
 }
@@ -1493,6 +1537,10 @@ async fn set_status(
     crate::access::require_session(&session)
         .await
         .map_err(access_err)?;
+    let product_id = product_id_for_crash_group(&s.repo.db, &id).await?;
+    crate::access::require_session_product_role(&session, &s.repo.db, &product_id, "readwrite")
+        .await
+        .map_err(access_err)?;
     let db = s.user_db(&session).await;
     run_value(
         &db,
@@ -1519,6 +1567,10 @@ async fn add_note(
     Json(payload): Json<AddNoteBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     crate::access::require_session(&session)
+        .await
+        .map_err(access_err)?;
+    let product_id = product_id_for_crash_group(&s.repo.db, &id).await?;
+    crate::access::require_session_product_role(&session, &s.repo.db, &product_id, "readwrite")
         .await
         .map_err(access_err)?;
     let db = s.user_db(&session).await;
@@ -1578,6 +1630,19 @@ async fn merge_groups(
     crate::access::require_session(&session)
         .await
         .map_err(access_err)?;
+    let primary_product_id = product_id_for_crash_group(&s.repo.db, &primary_id).await?;
+    let merged_product_id = product_id_for_crash_group(&s.repo.db, &body.merged_id).await?;
+    if merged_product_id != primary_product_id {
+        return Err(bad("Cannot merge crash groups from different products."));
+    }
+    crate::access::require_product_maintainer(
+        &session,
+        &HeaderMap::new(),
+        &s.repo.db,
+        &primary_product_id,
+    )
+    .await
+    .map_err(access_err)?;
     let db = s.user_db(&session).await;
     let pid = Value::String(primary_id.clone());
     let mid = Value::String(body.merged_id);
@@ -1750,10 +1815,14 @@ async fn upload_symbol(
 async fn delete_symbol(
     State(s): State<AppState>,
     session: Session,
+    headers: HeaderMap,
     Path(id): Path<String>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    // No pid in path — require a session; RLS enforces product-level access.
     crate::access::require_session(&session)
+        .await
+        .map_err(access_err)?;
+    let product_id = product_id_for_symbol(&s.repo.db, &id).await?;
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &product_id)
         .await
         .map_err(access_err)?;
     let db = s.user_db(&session).await;

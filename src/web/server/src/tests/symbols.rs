@@ -38,18 +38,52 @@ async fn test_upload_symbol_all_contexts() {
 // | ------ | -------------------- |
 // | DELETE | /symbols/{symbol_id} |
 // Cases:
-// | Auth context  | Expected |
-// | ------------- | -------- |
-// | no_session    | 403      |
-// | admin         | not 403  |
-// | non_admin     | not 403  |
-// | imp_admin     | not 403  |
-// | imp_non_admin | not 403  |
+// | Case                                   | Expected |
+// | -------------------------------------- | -------- |
+// | no_session                             | 403      |
+// | admin with nonexistent symbol          | 404      |
+// | non_admin with nonexistent symbol      | 404      |
+// | non_admin with read-write product role | 403      |
+// | non_admin with maintainer product role | 204      |
 #[tokio::test]
 async fn test_delete_symbol_requires_session() {
     let app = TestApp::new().await;
     let f = Fixture::setup(&app).await;
     assert_session_only_not_forbidden(&app, &f, "DELETE", "/symbols/nonexistent", None).await;
+
+    let rw_symbol = testware::create_test_symbols(
+        &app.db,
+        "linux",
+        "x86_64",
+        "rw-build",
+        "rw-module",
+        "symbols/rw",
+        Some(f.products[1].id.clone()),
+    )
+    .await;
+    assert_eq!(
+        app.call("DELETE", &format!("/symbols/{}", rw_symbol.id), None, Some(&f.non_admin))
+            .await,
+        StatusCode::FORBIDDEN,
+        "read-write users cannot delete symbols"
+    );
+
+    let maint_symbol = testware::create_test_symbols(
+        &app.db,
+        "linux",
+        "x86_64",
+        "maint-build",
+        "maint-module",
+        "symbols/maint",
+        Some(f.products[2].id.clone()),
+    )
+    .await;
+    assert_eq!(
+        app.call("DELETE", &format!("/symbols/{}", maint_symbol.id), None, Some(&f.non_admin))
+            .await,
+        StatusCode::NO_CONTENT,
+        "maintainers can delete symbols"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -67,7 +101,9 @@ async fn test_delete_symbol_requires_session() {
 // | Case                        | Expected |
 // | --------------------------- | -------- |
 // | plain list as admin         | 200      |
-// | plain list without session  | 200      |
+// | read-only member sees row   | 200      |
+// | no-session private product  | empty    |
+// | no-session public product   | sees row |
 // | search filter as admin      | 200      |
 // | arch=x86_64 filter as admin | 200      |
 // | arch=all filter as admin    | 200      |
@@ -91,7 +127,41 @@ async fn test_list_symbols() {
     let base = format!("/products/{pid}/symbols");
     // plain list
     assert_eq!(app.call("GET", &base, None, Some(&f.admin)).await, StatusCode::OK);
-    assert_eq!(app.call("GET", &base, None, None).await, StatusCode::OK);
+    let (status, readonly_symbols) = app.call_json("GET", &base, None, Some(&f.non_admin)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        readonly_symbols
+            .as_array()
+            .expect("symbols response should be an array")
+            .len(),
+        1,
+        "read-only-or-better user should see private product symbols"
+    );
+    let (status, anonymous_private_symbols) = app.call_json("GET", &base, None, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        anonymous_private_symbols
+            .as_array()
+            .expect("symbols response should be an array")
+            .is_empty(),
+        "anonymous users must not see private product symbols"
+    );
+
+    app.db
+        .query("UPDATE type::record('products', $pid) SET public = true")
+        .bind(("pid", pid.to_string()))
+        .await
+        .expect("mark symbol product public failed");
+    let (status, anonymous_public_symbols) = app.call_json("GET", &base, None, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        anonymous_public_symbols
+            .as_array()
+            .expect("symbols response should be an array")
+            .len(),
+        1,
+        "anonymous users can see public product symbols"
+    );
     // search filter
     assert_eq!(
         app.call("GET", &format!("{base}?search=app"), None, Some(&f.admin))
