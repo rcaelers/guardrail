@@ -1,6 +1,6 @@
 pub(crate) mod access;
-pub(crate) mod auth_user;
 pub(crate) mod auth_cache;
+pub(crate) mod auth_user;
 pub(crate) mod error;
 pub(crate) mod jwt;
 pub(crate) mod oidc;
