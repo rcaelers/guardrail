@@ -63,6 +63,7 @@ struct OidcLoginState {
     code_verifier: Option<String>,
 }
 
+// Performs outbound OIDC discovery and redirects through an external identity provider.
 pub async fn login_start(
     State(state): State<AppState>,
     session: Session,
@@ -109,6 +110,7 @@ pub async fn login_start(
     Ok(Redirect::to(authorize_url.as_str()))
 }
 
+// Performs the full OIDC callback exchange against external provider endpoints.
 pub async fn callback(
     State(state): State<AppState>,
     session: Session,
@@ -462,4 +464,162 @@ pub fn login_start_path(next: Option<&str>) -> String {
     let next = sanitize_next(next);
     serializer.append_pair("next", next.as_str());
     format!("/auth/login/start?{}", serializer.finish())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::auth_cache::AuthCache;
+    use object_store::memory::InMemory;
+    use repos::Repo;
+    use std::sync::Arc;
+
+    fn oidc() -> Oidc {
+        Oidc {
+            issuer_url: "https://issuer.example".to_string(),
+            internal_issuer_url: None,
+            client_id: "client".to_string(),
+            client_secret: "secret".to_string(),
+            callback_url: "https://guardrail.example/auth/oidc/callback".to_string(),
+            logout_callback_url: String::new(),
+            launch_url: None,
+            self_service_url: None,
+            pkce: Some(true),
+            allow_insecure_tls: None,
+        }
+    }
+
+    async fn state_with_oidc(oidc: Option<Oidc>) -> AppState {
+        testware::setup::TestSetup::init();
+        let db = testware::setup::TestSetup::create_db().await;
+        let mut settings = testware::create_settings();
+        settings.auth.oidc = oidc;
+        let storage: Arc<dyn object_store::ObjectStore> = Arc::new(InMemory::new());
+        AppState {
+            repo: Arc::new(Repo::new(db)),
+            settings: Arc::new(settings),
+            http_client: reqwest::Client::new(),
+            provisioner: None,
+            storage,
+            auth_cache: AuthCache::default(),
+        }
+    }
+
+    #[tokio::test]
+    async fn oidc_settings_validate_presence_and_required_fields() {
+        let missing = state_with_oidc(None).await;
+        assert!(matches!(oidc_settings(&missing), Err(AppError::Failure(_))));
+
+        let mut incomplete = oidc();
+        incomplete.client_secret.clear();
+        let incomplete = state_with_oidc(Some(incomplete)).await;
+        assert!(matches!(oidc_settings(&incomplete), Err(AppError::Failure(_))));
+
+        let valid = state_with_oidc(Some(oidc())).await;
+        assert_eq!(oidc_settings(&valid).unwrap().client_id, "client");
+    }
+
+    #[test]
+    fn internal_endpoint_rewrite_only_applies_to_public_issuer_prefix() {
+        let mut oidc = oidc();
+        let mut endpoint = "https://issuer.example/token".to_string();
+        rewrite_internal_endpoint(&mut endpoint, &oidc);
+        assert_eq!(endpoint, "https://issuer.example/token");
+
+        oidc.internal_issuer_url = Some("http://issuer-internal".to_string());
+        rewrite_internal_endpoint(&mut endpoint, &oidc);
+        assert_eq!(endpoint, "http://issuer-internal/token");
+
+        let mut other = "https://other.example/token".to_string();
+        rewrite_internal_endpoint(&mut other, &oidc);
+        assert_eq!(other, "https://other.example/token");
+    }
+
+    #[test]
+    fn build_authorize_url_includes_required_oidc_and_pkce_params() {
+        let oidc = oidc();
+        let url = build_authorize_url(
+            "https://issuer.example/authorize",
+            &oidc,
+            "csrf",
+            Some("challenge"),
+        )
+        .unwrap();
+        let params: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
+
+        assert_eq!(params.get("response_type").unwrap(), "code");
+        assert_eq!(params.get("client_id").unwrap(), "client");
+        assert_eq!(
+            params.get("redirect_uri").unwrap(),
+            "https://guardrail.example/auth/oidc/callback"
+        );
+        assert_eq!(params.get("scope").unwrap(), OIDC_SCOPE);
+        assert_eq!(params.get("state").unwrap(), "csrf");
+        assert_eq!(params.get("prompt").unwrap(), "login");
+        assert_eq!(params.get("code_challenge").unwrap(), "challenge");
+        assert_eq!(params.get("code_challenge_method").unwrap(), "S256");
+
+        let no_pkce =
+            build_authorize_url("https://issuer.example/authorize", &oidc, "csrf", None).unwrap();
+        assert!(!no_pkce.query().unwrap().contains("code_challenge"));
+    }
+
+    #[test]
+    fn pkce_and_username_helpers_cover_fallbacks() {
+        let verifier = generate_code_verifier();
+        assert!(!verifier.is_empty());
+        assert_eq!(derive_code_challenge("abc"), "ungWv48Bz-pBQUDeXa4iI7ADYaOWF3qctBD_YfIAFa0");
+
+        assert_eq!(
+            resolve_username(&OidcUserInfo {
+                sub: "sub".into(),
+                preferred_username: Some("preferred".into()),
+                email: Some("email@example.com".into()),
+                name: Some("Name".into()),
+            }),
+            "preferred"
+        );
+        assert_eq!(
+            resolve_username(&OidcUserInfo {
+                sub: "sub".into(),
+                preferred_username: None,
+                email: Some("email@example.com".into()),
+                name: Some("Name".into()),
+            }),
+            "email@example.com"
+        );
+        assert_eq!(
+            resolve_username(&OidcUserInfo {
+                sub: "sub".into(),
+                preferred_username: None,
+                email: None,
+                name: Some("Name".into()),
+            }),
+            "Name"
+        );
+        assert_eq!(
+            resolve_username(&OidcUserInfo {
+                sub: "sub".into(),
+                preferred_username: None,
+                email: None,
+                name: None,
+            }),
+            "sub"
+        );
+    }
+
+    #[test]
+    fn login_paths_sanitize_redirect_targets() {
+        assert_eq!(sanitize_next(Some("/dashboard")), "/dashboard");
+        assert_eq!(sanitize_next(Some("//evil.example")), "/");
+        assert_eq!(sanitize_next(Some("https://evil.example")), "/");
+        assert_eq!(sanitize_next(None), "/");
+
+        assert_eq!(login_path(Some("/dashboard"), None), "/login?next=%2Fdashboard");
+        assert_eq!(
+            login_path(Some("/dashboard"), Some("bad login")),
+            "/login?next=%2Fdashboard&error=bad+login"
+        );
+        assert_eq!(login_start_path(Some("/dashboard")), "/auth/login/start?next=%2Fdashboard");
+    }
 }

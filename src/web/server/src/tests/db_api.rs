@@ -58,3 +58,29 @@ async fn test_user_db_null_user_session() {
         .await;
     assert_ne!(status, StatusCode::INTERNAL_SERVER_ERROR);
 }
+
+// API calls:
+// | Method | Route     |
+// | ------ | --------- |
+// | GET    | /products |
+// Cases:
+// | Case                                              | Expected |
+// | ------------------------------------------------- | -------- |
+// | no session with invalid anonymous JWT signing key | not 500  |
+// | user session with invalid user JWT signing key    | not 500  |
+#[tokio::test]
+async fn test_db_handles_jwt_generation_failure() {
+    let app = TestApp::new_with_invalid_jwt_key().await;
+
+    let (status, _) = app.call_json("GET", "/products", None, None).await;
+    assert_ne!(status, StatusCode::INTERNAL_SERVER_ERROR);
+
+    let user = create_test_user(&app.db, "jwt_failure_user", false).await;
+    let session = app
+        .make_session(json!({"user_id": user.id, "name": "Jwt Failure", "is_admin": false}))
+        .await;
+    let (status, _) = app
+        .call_json("GET", "/products", None, Some(&session))
+        .await;
+    assert_ne!(status, StatusCode::INTERNAL_SERVER_ERROR);
+}

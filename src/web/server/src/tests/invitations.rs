@@ -544,6 +544,31 @@ async fn test_create_invitation_via_api_token() {
     assert_eq!(status4, StatusCode::OK);
 }
 
+// API calls:
+// | Method | Route        |
+// | ------ | ------------ |
+// | POST   | /invitations |
+// Cases:
+// | Bearer token                                 | Expected |
+// | -------------------------------------------- | -------- |
+// | global token missing invitation-create grant | 403      |
+#[tokio::test]
+async fn test_create_invitation_via_api_token_missing_entitlement() {
+    let app = TestApp::new().await;
+    let (raw_token, _) =
+        create_test_token(&app.db, "invite-token-no-entitlement", None, None, &["token"]).await;
+
+    let req = Request::builder()
+        .method("POST")
+        .uri("/invitations")
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {raw_token}"))
+        .body(Body::from(json!({"is_admin": false, "grants": []}).to_string()))
+        .unwrap();
+    let (status, _, _) = app.send(req).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
 // ---------------------------------------------------------------------------
 // Tests: invite – non-admin with no maintained products → 403
 // ---------------------------------------------------------------------------

@@ -62,3 +62,25 @@ pub fn make_jwt(
 pub fn make_anon_jwt(settings: &Settings) -> Result<String, jsonwebtoken::errors::Error> {
     make_jwt("anonymous", None, false, settings)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use testware::create_settings;
+
+    #[test]
+    fn user_record_id_preserves_full_record_ids() {
+        assert_eq!(user_record_id("ignored", Some("users:already")), "users:already");
+        assert_eq!(user_record_id("alice", None), "users:alice");
+        assert_eq!(user_record_id("alice", Some("plain")), "users:plain");
+    }
+
+    #[test]
+    fn jwt_uses_default_validity_when_config_is_zero() {
+        let mut settings = create_settings();
+        settings.auth.jwk.token_validity_in_minutes = 0;
+
+        let token = make_anon_jwt(&settings).expect("jwt should be created");
+        assert!(!token.is_empty());
+    }
+}

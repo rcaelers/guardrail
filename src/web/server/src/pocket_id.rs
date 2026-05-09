@@ -73,6 +73,7 @@ impl IdentityProvisioner for PocketIdProvisioner {
 }
 
 impl PocketIdProvisioner {
+    // Performs an outbound Pocket ID API call; invite handlers cover provisioner success/failure through mocks.
     async fn create_pocket_id_user(
         &self,
         req: &CreateUserRequest,
@@ -118,6 +119,7 @@ impl PocketIdProvisioner {
         Ok(user.id)
     }
 
+    // Performs an outbound Pocket ID API call; invite handlers cover setup-url behavior through mocks.
     async fn create_one_time_token(&self, user_id: &str) -> Result<String, ProvisionerError> {
         let url = self
             .api_url

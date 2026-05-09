@@ -284,6 +284,7 @@ async fn test_list_groups_with_crash_data() {
 // | admin with real crash                 | 200      |
 // | non_admin with read-only product role | 200      |
 // | no_session on private product         | 404      |
+// | admin with crash whose group is gone  | 404      |
 #[tokio::test]
 async fn test_get_crash_handler() {
     let app = TestApp::new().await;
@@ -308,6 +309,16 @@ async fn test_get_crash_handler() {
     assert_eq!(app.call("GET", &uri, None, Some(&f.non_admin)).await, StatusCode::OK);
     // No session → private product → 404
     assert_eq!(app.call("GET", &uri, None, None).await, StatusCode::NOT_FOUND);
+
+    let missing_group = create_test_crash_group(&app.db, pid).await;
+    let orphan_cid = create_test_crash_in_group(&app.db, pid, &missing_group).await;
+    app.db
+        .query("DELETE type::record('crash_groups', $gid)")
+        .bind(("gid", missing_group))
+        .await
+        .expect("delete crash group failed");
+    let uri = format!("/crashes/by-crash/{orphan_cid}");
+    assert_eq!(app.call("GET", &uri, None, Some(&f.admin)).await, StatusCode::NOT_FOUND);
 }
 
 // ---------------------------------------------------------------------------

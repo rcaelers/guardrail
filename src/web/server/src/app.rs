@@ -28,6 +28,7 @@ pub struct GuardrailWebApp {
 }
 
 impl GuardrailWebApp {
+    // Requires live SurrealDB and object-storage configuration; covered by deployment/e2e smoke tests.
     pub async fn from_settings(settings: Arc<Settings>) -> Self {
         let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
@@ -135,6 +136,7 @@ impl GuardrailWebApp {
         Self { state }
     }
 
+    // Starts a long-running HTTP/TLS listener; endpoint behavior is covered through router-level tests.
     pub async fn serve(&self) {
         let state = &self.state;
         let settings = &state.settings;

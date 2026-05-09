@@ -42,3 +42,36 @@ impl AuthCache {
         cache.insert(key, (handle, Instant::now()));
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn mem_handle() -> Arc<Surreal<Any>> {
+        Arc::new(
+            surrealdb::engine::any::connect("mem://")
+                .await
+                .expect("mem db should connect"),
+        )
+    }
+
+    #[tokio::test]
+    async fn returns_none_for_expired_entry() {
+        let cache = AuthCache::default();
+        cache.0.lock().await.insert(
+            "expired".to_string(),
+            (mem_handle().await, Instant::now() - TTL - Duration::from_secs(1)),
+        );
+
+        assert!(cache.get("expired").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn returns_cached_handle_before_expiry() {
+        let cache = AuthCache::default();
+        let handle = mem_handle().await;
+        cache.insert("fresh".to_string(), Arc::clone(&handle)).await;
+
+        assert!(Arc::ptr_eq(&handle, &cache.get("fresh").await.expect("cache hit")));
+    }
+}

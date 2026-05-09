@@ -115,21 +115,10 @@ impl AppState {
 
         let Ok(jwt) = crate::jwt::make_jwt(username, user_id.as_deref(), is_admin, &self.settings)
         else {
-            tracing::error!("JWT generation failed for user {uid}");
-            return self.anon_db().await;
+            return self.user_jwt_failure_fallback(&uid).await;
         };
 
-        match self.repo.authenticated(&jwt).await {
-            Ok(db) => {
-                let handle = Arc::new(db);
-                self.auth_cache.insert(uid, Arc::clone(&handle)).await;
-                handle
-            }
-            Err(e) => {
-                tracing::error!("DB authentication failed for user {uid}: {e}");
-                self.anon_db().await
-            }
-        }
+        self.authenticate_user_db_handle(&uid, &jwt).await
     }
 
     async fn anon_db(&self) -> Arc<Surreal<Any>> {
@@ -138,9 +127,26 @@ impl AppState {
         }
 
         let Ok(jwt) = crate::jwt::make_anon_jwt(&self.settings) else {
-            return Arc::new(self.repo.db.clone());
+            return self.root_db_fallback();
         };
-        match self.repo.authenticated(&jwt).await {
+        self.authenticate_anon_db_handle(&jwt).await
+    }
+
+    async fn authenticate_user_db_handle(&self, uid: &str, jwt: &str) -> Arc<Surreal<Any>> {
+        match self.repo.authenticated(jwt).await {
+            Ok(db) => {
+                let handle = Arc::new(db);
+                self.auth_cache
+                    .insert(uid.to_string(), Arc::clone(&handle))
+                    .await;
+                handle
+            }
+            Err(e) => self.user_db_auth_failure_fallback(uid, e).await,
+        }
+    }
+
+    async fn authenticate_anon_db_handle(&self, jwt: &str) -> Arc<Surreal<Any>> {
+        match self.repo.authenticated(jwt).await {
             Ok(db) => {
                 let handle = Arc::new(db);
                 self.auth_cache
@@ -148,11 +154,31 @@ impl AppState {
                     .await;
                 handle
             }
-            Err(e) => {
-                tracing::warn!("Anonymous JWT auth failed, falling back to root session: {e}");
-                Arc::new(self.repo.db.clone())
-            }
+            Err(e) => self.anon_db_auth_failure_fallback(e),
         }
+    }
+
+    async fn user_jwt_failure_fallback(&self, uid: &str) -> Arc<Surreal<Any>> {
+        tracing::error!("JWT generation failed for user {uid}");
+        self.anon_db().await
+    }
+
+    async fn user_db_auth_failure_fallback(
+        &self,
+        uid: &str,
+        err: impl std::fmt::Display,
+    ) -> Arc<Surreal<Any>> {
+        tracing::error!("DB authentication failed for user {uid}: {err}");
+        self.anon_db().await
+    }
+
+    fn anon_db_auth_failure_fallback(&self, err: impl std::fmt::Display) -> Arc<Surreal<Any>> {
+        tracing::warn!("Anonymous JWT auth failed, falling back to root session: {err}");
+        self.root_db_fallback()
+    }
+
+    fn root_db_fallback(&self) -> Arc<Surreal<Any>> {
+        Arc::new(self.repo.db.clone())
     }
 }
 
@@ -189,6 +215,20 @@ fn storage_error(err: object_store::Error) -> (StatusCode, String) {
             tracing::error!("db_api storage: {other}");
             (StatusCode::INTERNAL_SERVER_ERROR, format!("storage error: {other}"))
         }
+    }
+}
+
+fn avatar_initials(name: &str) -> String {
+    let avatar = name
+        .split_whitespace()
+        .filter_map(|w| w.chars().next())
+        .take(2)
+        .collect::<String>()
+        .to_uppercase();
+    if avatar.is_empty() {
+        "U".to_string()
+    } else {
+        avatar
     }
 }
 
@@ -301,10 +341,8 @@ async fn load_user_text(
     let Some(storage_path) = attachment.get("storagePath").and_then(|v| v.as_str()) else {
         return Ok(None);
     };
-    let object = match storage.get(&ObjectPath::from(storage_path)).await {
-        Ok(obj) => obj,
-        Err(object_store::Error::NotFound { .. }) => return Ok(None),
-        Err(e) => return Err(storage_error(e)),
+    let Some(object) = load_user_text_object(storage, storage_path).await? else {
+        return Ok(None);
     };
     let bytes = object.bytes().await.map_err(storage_error)?;
     let body = String::from_utf8_lossy(&bytes).into_owned();
@@ -317,6 +355,21 @@ async fn load_user_text(
         "createdAt": attachment.get("createdAt").cloned().unwrap_or(Value::Null),
         "body": body,
     })))
+}
+
+async fn load_user_text_object(
+    storage: &dyn ObjectStore,
+    storage_path: &str,
+) -> Result<Option<object_store::GetResult>, (StatusCode, String)> {
+    match storage.get(&ObjectPath::from(storage_path)).await {
+        Ok(obj) => Ok(Some(obj)),
+        Err(object_store::Error::NotFound { .. }) => Ok(None),
+        Err(e) => unexpected_storage_read_error(e),
+    }
+}
+
+fn unexpected_storage_read_error<T>(err: object_store::Error) -> Result<T, (StatusCode, String)> {
+    Err(storage_error(err))
 }
 
 async fn split_crash_attachments(
@@ -482,12 +535,7 @@ async fn create_user(
         .chars()
         .filter(|c| c.is_ascii_alphanumeric())
         .collect();
-    let avatar: String = name
-        .split_whitespace()
-        .filter_map(|w| w.chars().next())
-        .take(2)
-        .collect::<String>()
-        .to_uppercase();
+    let avatar = avatar_initials(&name);
     let rows = run_value(
         &db,
         &format!(
@@ -500,14 +548,7 @@ async fn create_user(
             ("id", Value::String(format!("u-{slug}"))),
             ("email", Value::String(email)),
             ("name", Value::String(name)),
-            (
-                "avatar",
-                Value::String(if avatar.is_empty() {
-                    "U".into()
-                } else {
-                    avatar
-                }),
-            ),
+            ("avatar", Value::String(avatar)),
             ("is_admin", Value::Bool(body.is_admin.unwrap_or(false))),
         ],
     )
@@ -543,12 +584,7 @@ async fn update_user(
         .filter(|s| !s.is_empty())
         .ok_or_else(|| bad("Name required."))?
         .to_string();
-    let avatar: String = name
-        .split_whitespace()
-        .filter_map(|w| w.chars().next())
-        .take(2)
-        .collect::<String>()
-        .to_uppercase();
+    let avatar = avatar_initials(&name);
 
     let rows = run_value(
         &db,
@@ -565,14 +601,7 @@ async fn update_user(
             ("id", Value::String(id.clone())),
             ("email", Value::String(email)),
             ("name", Value::String(name)),
-            (
-                "avatar",
-                Value::String(if avatar.is_empty() {
-                    "U".into()
-                } else {
-                    avatar
-                }),
-            ),
+            ("avatar", Value::String(avatar)),
         ],
     )
     .await?;
@@ -1170,7 +1199,7 @@ async fn get_crash(
         vec![("cid", Value::String(crash_id.clone()))],
     )
     .await?;
-    let Some(row) = crashes.into_iter().next() else {
+    let Some(row) = crashes.into_iter().find(|v| !v.is_null()) else {
         return Err(not_found(&crash_id));
     };
 
@@ -2025,4 +2054,97 @@ async fn delete_admin_api_token(
     run_value(&db, "DELETE type::record('api_tokens', $id)", vec![("id", Value::String(id))])
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use object_store::memory::InMemory;
+
+    #[test]
+    fn local_error_helpers_return_expected_statuses() {
+        assert_eq!(bad("bad"), (StatusCode::BAD_REQUEST, "bad".to_string()));
+        assert_eq!(not_found("thing"), (StatusCode::NOT_FOUND, "not found: thing".to_string()));
+        assert_eq!(
+            server_error("boom"),
+            (StatusCode::INTERNAL_SERVER_ERROR, "db error: boom".to_string())
+        );
+        assert_eq!(
+            access_err(crate::error::AppError::Forbidden),
+            (StatusCode::FORBIDDEN, "forbidden".to_string())
+        );
+        assert_eq!(
+            access_err(crate::error::AppError::NotFound("gone".to_string())),
+            (StatusCode::NOT_FOUND, "gone".to_string())
+        );
+        assert_eq!(
+            access_err(crate::error::AppError::failure("bad")),
+            (StatusCode::INTERNAL_SERVER_ERROR, "internal error".to_string())
+        );
+    }
+
+    #[test]
+    fn avatar_initials_use_name_initials_or_default() {
+        assert_eq!(avatar_initials("Ada Lovelace"), "AL");
+        assert_eq!(avatar_initials("single"), "S");
+        assert_eq!(avatar_initials("   "), "U");
+    }
+
+    #[tokio::test]
+    async fn load_user_text_returns_none_without_storage_path() {
+        let storage = InMemory::new();
+        let attachment = json!({
+            "id": "attachments:test",
+            "name": "user-text",
+            "filename": "note.txt",
+        });
+
+        assert_eq!(load_user_text(&storage, &attachment).await.unwrap(), None);
+    }
+
+    #[tokio::test]
+    async fn split_crash_attachments_keeps_first_user_text_and_regular_files() {
+        let storage = InMemory::new();
+        storage
+            .put_opts(
+                &ObjectPath::from("user-text/one.txt"),
+                object_store::PutPayload::from_static(b"first note"),
+                Default::default(),
+            )
+            .await
+            .expect("put should work");
+
+        let rows = vec![
+            json!({
+                "id": "attachments:usertext1",
+                "name": "user-text",
+                "filename": "user1.txt",
+                "storagePath": "user-text/one.txt",
+                "createdAt": "2026-01-01T00:00:00Z",
+            }),
+            json!({
+                "id": "attachments:usertext2",
+                "name": "user-text",
+                "filename": "user2.txt",
+                "storagePath": "user-text/two.txt",
+                "createdAt": "2026-01-01T00:00:01Z",
+            }),
+            json!({
+                "id": "attachments:minidump",
+                "name": "minidump",
+                "filename": "crash.dmp",
+                "mimeType": "application/octet-stream",
+                "size": 10,
+                "createdAt": "2026-01-01T00:00:02Z",
+            }),
+        ];
+
+        let (attachments, user_text) = split_crash_attachments(&storage, rows).await.unwrap();
+
+        assert_eq!(attachments.len(), 1);
+        assert_eq!(attachments[0]["id"], "minidump");
+        let user_text = user_text.expect("first user-text attachment should load");
+        assert_eq!(user_text["attachmentId"], "usertext1");
+        assert_eq!(user_text["body"], "first note");
+    }
 }

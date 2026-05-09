@@ -1,4 +1,12 @@
 use super::common::*;
+use base64::{Engine as _, engine::general_purpose::URL_SAFE};
+
+fn tamper_token_secret(token: &str) -> String {
+    let mut raw = URL_SAFE.decode(token).expect("test token should decode");
+    let last = raw.last_mut().expect("test token should not be empty");
+    *last ^= 0xff;
+    URL_SAFE.encode(raw)
+}
 
 // ---------------------------------------------------------------------------
 // Tests: product API tokens (product-maintainer)
@@ -335,4 +343,155 @@ async fn test_api_token_empty_description() {
         .await,
         StatusCode::BAD_REQUEST,
     );
+}
+
+// API calls:
+// | Method | Route       |
+// | ------ | ----------- |
+// | GET    | /api-tokens |
+// Cases:
+// | Bearer token                    | Expected |
+// | ------------------------------- | -------- |
+// | global token                    | 200      |
+// | product-scoped token            | 403      |
+// | malformed token encoding        | 403      |
+// | valid token id with bad secret  | 403      |
+// | valid token with bad hash in DB | 403      |
+#[tokio::test]
+async fn test_admin_api_tokens_with_bearer_tokens() {
+    let app = TestApp::new().await;
+    let product = create_test_product(&app.db).await;
+
+    let (global_token, _) =
+        create_test_token(&app.db, "global-admin-token", None, None, &["token"]).await;
+    assert_eq!(
+        app.call_bearer("GET", "/api-tokens", None, &global_token)
+            .await,
+        StatusCode::OK
+    );
+
+    let (scoped_token, _) =
+        create_test_token(&app.db, "scoped-admin-token", Some(product.id), None, &["token"]).await;
+    assert_eq!(
+        app.call_bearer("GET", "/api-tokens", None, &scoped_token)
+            .await,
+        StatusCode::FORBIDDEN
+    );
+
+    assert_eq!(
+        app.call_bearer("GET", "/api-tokens", None, "not-a-valid-api-token")
+            .await,
+        StatusCode::FORBIDDEN
+    );
+
+    let bad_secret = tamper_token_secret(&global_token);
+    assert_eq!(
+        app.call_bearer("GET", "/api-tokens", None, &bad_secret)
+            .await,
+        StatusCode::FORBIDDEN
+    );
+
+    let (bad_hash_token, bad_hash_record) =
+        create_test_token(&app.db, "bad-hash-token", None, None, &["token"]).await;
+    app.db
+        .query("UPDATE type::record('api_tokens', $id) SET token_hash = 'not-a-phc-hash'")
+        .bind(("id", bad_hash_record.id))
+        .await
+        .expect("failed to poison token hash");
+    assert_eq!(
+        app.call_bearer("GET", "/api-tokens", None, &bad_hash_token)
+            .await,
+        StatusCode::FORBIDDEN
+    );
+}
+
+// API calls:
+// | Method | Route                                  |
+// | ------ | -------------------------------------- |
+// | GET    | /products/{product_id}/api-tokens      |
+// | POST   | /products/{product_id}/api-tokens      |
+// | DELETE | /products/{product_id}/api-tokens/{id} |
+// Cases:
+// | Bearer token                      | Expected |
+// | --------------------------------- | -------- |
+// | global token                      | 200/204  |
+// | product-scoped token for product  | 200/204  |
+// | product-scoped token for mismatch | 403      |
+#[tokio::test]
+async fn test_product_api_tokens_with_bearer_tokens() {
+    let app = TestApp::new().await;
+    let product = create_test_product(&app.db).await;
+    let other_product = create_test_product(&app.db).await;
+
+    let (global_token, _) =
+        create_test_token(&app.db, "global-product-token", None, None, &["token"]).await;
+    let (scoped_token, _) = create_test_token(
+        &app.db,
+        "scoped-product-token",
+        Some(product.id.clone()),
+        None,
+        &["token"],
+    )
+    .await;
+    let (mismatch_token, _) = create_test_token(
+        &app.db,
+        "mismatch-product-token",
+        Some(other_product.id),
+        None,
+        &["token"],
+    )
+    .await;
+
+    let list_uri = format!("/products/{}/api-tokens", product.id);
+    assert_eq!(app.call_bearer("GET", &list_uri, None, &global_token).await, StatusCode::OK);
+    assert_eq!(app.call_bearer("GET", &list_uri, None, &scoped_token).await, StatusCode::OK);
+    assert_eq!(
+        app.call_bearer("GET", &list_uri, None, &mismatch_token)
+            .await,
+        StatusCode::FORBIDDEN
+    );
+
+    assert_eq!(
+        app.call_bearer(
+            "POST",
+            &list_uri,
+            Some(json!({"description": "bearer-created token"})),
+            &scoped_token,
+        )
+        .await,
+        StatusCode::OK
+    );
+
+    let (_, token_record) = create_test_token(
+        &app.db,
+        "delete-with-scoped-token",
+        Some(product.id.clone()),
+        None,
+        &["token"],
+    )
+    .await;
+    let delete_uri = format!("/products/{}/api-tokens/{}", product.id, token_record.id);
+    assert_eq!(
+        app.call_bearer("DELETE", &delete_uri, None, &scoped_token)
+            .await,
+        StatusCode::NO_CONTENT
+    );
+}
+
+// API calls:
+// | Method | Route       |
+// | ------ | ----------- |
+// | GET    | /api-tokens |
+// Cases:
+// | Session state                         | Expected |
+// | ------------------------------------- | -------- |
+// | session user no longer exists in DB   | 403      |
+#[tokio::test]
+async fn test_admin_api_tokens_reject_deleted_session_user() {
+    let app = TestApp::new().await;
+    let ghost = app
+        .make_session(json!({"user_id": "missing-admin", "name": "Ghost", "is_admin": true}))
+        .await;
+
+    assert_eq!(app.call("GET", "/api-tokens", None, Some(&ghost)).await, StatusCode::FORBIDDEN);
 }

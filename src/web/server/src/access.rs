@@ -282,8 +282,8 @@ async fn fetch_user(db: &Surreal<Any>, user_id: &str) -> AppResult<Option<User>>
         .await
         .map_err(AppError::internal)?;
 
-    let rows: Vec<serde_json::Value> = result.take(0).map_err(AppError::internal)?;
-    let Some(row) = rows.into_iter().next() else {
+    let row: Option<serde_json::Value> = result.take(0).map_err(AppError::internal)?;
+    let Some(row) = row.filter(|v| !v.is_null()) else {
         return Ok(None);
     };
     Ok(Some(User {
@@ -355,9 +355,70 @@ async fn verify_and_touch_token(
         return Err(AppError::forbidden());
     }
 
-    if let Err(err) = ApiTokenRepo::update_last_used(db, &token.id).await {
-        tracing::warn!("failed to update token last_used_at: {err}");
-    }
+    touch_token_last_used(db, &token.id).await;
 
     Ok(token)
+}
+
+async fn touch_token_last_used(db: &Surreal<Any>, token_id: &str) {
+    if let Err(err) = ApiTokenRepo::update_last_used(db, token_id).await {
+        warn_token_last_used_update_failed(err);
+    }
+}
+
+fn warn_token_last_used_update_failed(err: impl std::fmt::Display) {
+    tracing::warn!("failed to update token last_used_at: {err}");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use chrono::Utc;
+    use uuid::Uuid;
+
+    fn api_token(id: &str, product_id: Option<&str>) -> ApiToken {
+        ApiToken {
+            id: id.to_string(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            description: "test".to_string(),
+            token_id: Uuid::new_v4(),
+            token_hash: "hash".to_string(),
+            product_id: product_id.map(str::to_string),
+            user_id: None,
+            entitlements: vec![],
+            last_used_at: None,
+            expires_at: None,
+            is_active: true,
+        }
+    }
+
+    #[test]
+    fn principal_admin_and_display_id_cover_user_and_token_variants() {
+        let user = AuthenticatedUser::authenticated(User {
+            id: "user-1".to_string(),
+            name: "User".to_string(),
+            is_admin: true,
+            avatar: None,
+        });
+        let user_principal = Principal::User(user);
+        assert!(user_principal.is_admin());
+        assert_eq!(user_principal.display_id(), "user-1");
+
+        let global_token = Principal::Token(api_token("token-1", None));
+        assert!(global_token.is_admin());
+        assert_eq!(global_token.display_id(), "api-token:token-1");
+
+        let scoped_token = Principal::Token(api_token("token-2", Some("product-1")));
+        assert!(!scoped_token.is_admin());
+        assert_eq!(scoped_token.display_id(), "api-token:token-2");
+    }
+
+    #[tokio::test]
+    async fn fetch_user_returns_none_for_missing_record() {
+        testware::setup::TestSetup::init();
+        let db = testware::setup::TestSetup::create_db().await;
+
+        assert!(fetch_user(&db, "missing").await.unwrap().is_none());
+    }
 }

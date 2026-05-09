@@ -122,13 +122,17 @@ impl crate::provisioner::IdentityProvisioner for FailingMockProvisioner {
 }
 
 impl TestApp {
-    pub(super) async fn new() -> Self {
+    async fn with_options(
+        provisioner: Option<Arc<dyn crate::provisioner::IdentityProvisioner>>,
+        mutate_settings: impl FnOnce(&mut common::settings::Settings),
+    ) -> Self {
         TestSetup::init();
         let db = TestSetup::create_db().await;
         // Match the ns/db in JWTs to the in-memory test DB (ns=test, db=test).
         let mut settings = create_settings();
         settings.database.namespace = "test".to_string();
         settings.database.database = "test".to_string();
+        mutate_settings(&mut settings);
         let settings = Arc::new(settings);
         let storage_inner = Arc::new(InMemory::new());
         let storage: Arc<dyn object_store::ObjectStore> = storage_inner.clone();
@@ -136,7 +140,7 @@ impl TestApp {
             repo: Arc::new(Repo::new(db.clone())),
             settings,
             http_client: reqwest::Client::new(),
-            provisioner: None,
+            provisioner,
             storage,
             auth_cache: AuthCache::default(),
         };
@@ -161,86 +165,25 @@ impl TestApp {
             router,
             storage: storage_inner,
         }
+    }
+
+    pub(super) async fn new() -> Self {
+        Self::with_options(None, |_| {}).await
     }
 
     pub(super) async fn new_with_provisioner() -> Self {
-        TestSetup::init();
-        let db = TestSetup::create_db().await;
-        let mut settings = create_settings();
-        settings.database.namespace = "test".to_string();
-        settings.database.database = "test".to_string();
-        let settings = Arc::new(settings);
-        let storage_inner = Arc::new(InMemory::new());
-        let storage: Arc<dyn object_store::ObjectStore> = storage_inner.clone();
-        let state = AppState {
-            repo: Arc::new(Repo::new(db.clone())),
-            settings,
-            http_client: reqwest::Client::new(),
-            provisioner: Some(Arc::new(MockProvisioner)),
-            storage,
-            auth_cache: AuthCache::default(),
-        };
-        let session_store = MemoryStore::default();
-        let session_layer = SessionManagerLayer::new(session_store)
-            .with_name("guardrail")
-            .with_same_site(SameSite::Lax)
-            .with_expiry(Expiry::OnInactivity(time::Duration::hours(4)))
-            .with_secure(false);
-        let router = Router::new()
-            .merge(home::router())
-            .merge(auth::router())
-            .merge(impersonation::router())
-            .merge(db_api::router())
-            .merge(invite::api_router())
-            .merge(invite::router())
-            .route("/test/login", post(test_login_handler))
-            .layer(session_layer)
-            .with_state(state);
-        Self {
-            db,
-            router,
-            storage: storage_inner,
-        }
+        Self::with_options(Some(Arc::new(MockProvisioner)), |_| {}).await
     }
 
     pub(super) async fn new_with_failing_provisioner() -> Self {
-        TestSetup::init();
-        let db = TestSetup::create_db().await;
-        let mut settings = create_settings();
-        settings.database.namespace = "test".to_string();
-        settings.database.database = "test".to_string();
-        let settings = Arc::new(settings);
-        let storage_inner = Arc::new(InMemory::new());
-        let storage: Arc<dyn object_store::ObjectStore> = storage_inner.clone();
-        let state = AppState {
-            repo: Arc::new(Repo::new(db.clone())),
-            settings,
-            http_client: reqwest::Client::new(),
-            provisioner: Some(Arc::new(FailingMockProvisioner)),
-            storage,
-            auth_cache: AuthCache::default(),
-        };
-        let session_store = MemoryStore::default();
-        let session_layer = SessionManagerLayer::new(session_store)
-            .with_name("guardrail")
-            .with_same_site(SameSite::Lax)
-            .with_expiry(Expiry::OnInactivity(time::Duration::hours(4)))
-            .with_secure(false);
-        let router = Router::new()
-            .merge(home::router())
-            .merge(auth::router())
-            .merge(impersonation::router())
-            .merge(db_api::router())
-            .merge(invite::api_router())
-            .merge(invite::router())
-            .route("/test/login", post(test_login_handler))
-            .layer(session_layer)
-            .with_state(state);
-        Self {
-            db,
-            router,
-            storage: storage_inner,
-        }
+        Self::with_options(Some(Arc::new(FailingMockProvisioner)), |_| {}).await
+    }
+
+    pub(super) async fn new_with_invalid_jwt_key() -> Self {
+        Self::with_options(None, |settings| {
+            settings.auth.jwk.private_key = "not a pem key".to_string();
+        })
+        .await
     }
 
     pub(super) async fn send(&self, req: Request<Body>) -> (StatusCode, Bytes, Option<String>) {
@@ -299,6 +242,27 @@ impl TestApp {
             .unwrap_or_else(Body::empty);
         let (status, bytes, _) = self.send(b.body(body_bytes).unwrap()).await;
         (status, bytes)
+    }
+
+    pub(super) async fn call_bearer(
+        &self,
+        method: &str,
+        uri: &str,
+        body: Option<Value>,
+        token: &str,
+    ) -> StatusCode {
+        let mut b = Request::builder()
+            .method(method)
+            .uri(uri)
+            .header("authorization", format!("Bearer {token}"));
+        if body.is_some() {
+            b = b.header("content-type", "application/json");
+        }
+        let body_bytes = body
+            .map(|v| Body::from(v.to_string()))
+            .unwrap_or_else(Body::empty);
+        let (status, _, _) = self.send(b.body(body_bytes).unwrap()).await;
+        status
     }
 
     /// Call an endpoint and parse the response body as JSON.

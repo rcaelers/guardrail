@@ -311,6 +311,32 @@ async fn test_memberships_self_or_admin() {
     );
 }
 
+// API calls:
+// | Method | Route                         |
+// | ------ | ----------------------------- |
+// | GET    | /users/{user_id}/memberships  |
+// Cases:
+// | Bearer token         | Expected |
+// | -------------------- | -------- |
+// | global token         | 200      |
+// | product-scoped token | 403      |
+#[tokio::test]
+async fn test_memberships_with_bearer_tokens() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let product = create_test_product(&app.db).await;
+
+    let (global_token, _) =
+        create_test_token(&app.db, "memberships-global-token", None, None, &["token"]).await;
+    let (scoped_token, _) =
+        create_test_token(&app.db, "memberships-scoped-token", Some(product.id), None, &["token"])
+            .await;
+
+    let uri = format!("/users/{}/memberships", f.non_admin_id);
+    assert_eq!(app.call_bearer("GET", &uri, None, &global_token).await, StatusCode::OK);
+    assert_eq!(app.call_bearer("GET", &uri, None, &scoped_token).await, StatusCode::FORBIDDEN);
+}
+
 // ---------------------------------------------------------------------------
 // Tests: db_api – bad request helpers (bad() function)
 // ---------------------------------------------------------------------------

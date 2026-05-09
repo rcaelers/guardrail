@@ -67,3 +67,42 @@ impl IntoResponse for AppError {
         (status, message).into_response()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+
+    async fn response_text(err: AppError) -> (StatusCode, String) {
+        let response = err.into_response();
+        let status = response.status();
+        let body = axum::body::to_bytes(response.into_body(), 1024)
+            .await
+            .expect("body should read");
+        (status, String::from_utf8(body.to_vec()).expect("body should be utf8"))
+    }
+
+    #[tokio::test]
+    async fn constructors_map_to_expected_responses() {
+        assert_eq!(
+            response_text(AppError::internal("boom")).await,
+            (StatusCode::INTERNAL_SERVER_ERROR, "internal failure".to_string())
+        );
+        assert_eq!(
+            response_text(AppError::failure("bad input")).await,
+            (StatusCode::BAD_REQUEST, "general failure: bad input".to_string())
+        );
+        assert_eq!(
+            response_text(AppError::not_found("thing")).await,
+            (StatusCode::NOT_FOUND, "not found: thing".to_string())
+        );
+        assert_eq!(
+            response_text(AppError::corrupt_session()).await,
+            (StatusCode::BAD_REQUEST, "corrupt session".to_string())
+        );
+        assert_eq!(
+            response_text(AppError::forbidden()).await,
+            (StatusCode::FORBIDDEN, "forbidden".to_string())
+        );
+    }
+}
