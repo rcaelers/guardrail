@@ -3,9 +3,9 @@ use std::sync::Arc;
 use object_store::ObjectStore;
 use repos::Repo;
 
-use common::settings::Settings;
 use crate::auth_cache::AuthCache;
 use crate::provisioner::IdentityProvisioner;
+use common::settings::Settings;
 
 #[derive(Clone)]
 pub struct AppState {

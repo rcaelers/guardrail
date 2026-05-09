@@ -100,11 +100,13 @@ impl PocketIdClient {
         Ok(())
     }
 
-    fn find_user<'a>(&self, users: &'a [PocketIdUser], identifier: &str) -> Option<&'a PocketIdUser> {
+    fn find_user<'a>(
+        &self,
+        users: &'a [PocketIdUser],
+        identifier: &str,
+    ) -> Option<&'a PocketIdUser> {
         users.iter().find(|u| {
-            u.id == identifier
-                || u.username == identifier
-                || u.email.as_deref() == Some(identifier)
+            u.id == identifier || u.username == identifier || u.email.as_deref() == Some(identifier)
         })
     }
 }

@@ -1,13 +1,14 @@
-use axum::{Router, extract::{Query, State}, response::Html, routing::get};
+use axum::{
+    Router,
+    extract::{Query, State},
+    response::Html,
+    routing::get,
+};
 use serde::Deserialize;
 use tower_sessions::Session;
 
 use crate::{
-    AppState,
-    auth_user::AuthenticatedUser,
-    error::AppResult,
-    oidc,
-    templates::HomeTemplate,
+    AppState, auth_user::AuthenticatedUser, error::AppResult, oidc, templates::HomeTemplate,
 };
 
 use super::render;

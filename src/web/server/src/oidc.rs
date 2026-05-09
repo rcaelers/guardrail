@@ -161,11 +161,12 @@ pub async fn callback(
         fetch_userinfo(&state, &discovery.userinfo_endpoint, &token.access_token).await?;
     let username = resolve_username(&userinfo);
 
-    let authenticated_user = get_or_create_local_user(&state, &userinfo.sub, &username, userinfo.email.as_deref())
-        .await
-        .map_err(|e| {
-            AppError::internal(format!("failed to get or create user '{username}': {e}"))
-        })?;
+    let authenticated_user =
+        get_or_create_local_user(&state, &userinfo.sub, &username, userinfo.email.as_deref())
+            .await
+            .map_err(|e| {
+                AppError::internal(format!("failed to get or create user '{username}': {e}"))
+            })?;
 
     let Some(authenticated_user) = authenticated_user else {
         return Ok(Redirect::to(

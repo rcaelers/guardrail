@@ -21,7 +21,10 @@ pub struct AuthenticatedUser {
 
 impl AuthenticatedUser {
     pub fn authenticated(user: User) -> Self {
-        Self { user: Some(user), real_user: None }
+        Self {
+            user: Some(user),
+            real_user: None,
+        }
     }
 
     pub fn is_authenticated(&self) -> bool {
@@ -39,7 +42,9 @@ impl AuthenticatedUser {
     /// Returns the active user.  Only call after a session guard has confirmed
     /// authentication — panics if `user` is `None`.
     pub fn active(&self) -> &User {
-        self.user.as_ref().expect("active() called on unauthenticated session")
+        self.user
+            .as_ref()
+            .expect("active() called on unauthenticated session")
     }
 
     pub fn current_name(&self) -> &str {

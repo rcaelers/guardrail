@@ -58,7 +58,8 @@ async fn list_invitations(
     session: Session,
 ) -> AppResult<Json<Vec<Invitation>>> {
     let user = access::require_session(&session).await?;
-    let maintained_ids = access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
+    let maintained_ids =
+        access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
     let invitations = repos::invitation::InvitationRepo::get_for_user(
         &state.repo.db,
         &user.active().id,
@@ -140,7 +141,8 @@ async fn update_invitation(
     let (grants, is_admin) = if user.is_admin() {
         (body.grants, body.is_admin)
     } else {
-        let maintained_ids = access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
+        let maintained_ids =
+            access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
 
         let has_overlap = invitation
             .grants
@@ -197,7 +199,8 @@ async fn revoke_invitation(
             .map_err(AppError::internal)?
             .ok_or_else(|| AppError::not_found("Invitation not found"))?;
 
-        let maintained_ids = access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
+        let maintained_ids =
+            access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
         let can_revoke = invitation.created_by == user.active().id
             || invitation
                 .grants

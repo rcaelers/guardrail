@@ -265,7 +265,10 @@ async fn require_current_session_user(
         .await?
         .ok_or_else(AppError::forbidden)?;
 
-    Ok(AuthenticatedUser { user: Some(user), real_user: session_auth.real_user })
+    Ok(AuthenticatedUser {
+        user: Some(user),
+        real_user: session_auth.real_user,
+    })
 }
 
 async fn fetch_user(db: &Surreal<Any>, user_id: &str) -> AppResult<Option<User>> {
@@ -284,10 +287,24 @@ async fn fetch_user(db: &Surreal<Any>, user_id: &str) -> AppResult<Option<User>>
         return Ok(None);
     };
     Ok(Some(User {
-        id: row.get("id").and_then(|v| v.as_str()).unwrap_or(user_id).to_string(),
-        name: row.get("username").and_then(|v| v.as_str()).unwrap_or("anonymous").to_string(),
-        is_admin: row.get("is_admin").and_then(|v| v.as_bool()).unwrap_or(false),
-        avatar: row.get("avatar").and_then(|v| v.as_str()).map(str::to_owned),
+        id: row
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or(user_id)
+            .to_string(),
+        name: row
+            .get("username")
+            .and_then(|v| v.as_str())
+            .unwrap_or("anonymous")
+            .to_string(),
+        is_admin: row
+            .get("is_admin")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        avatar: row
+            .get("avatar")
+            .and_then(|v| v.as_str())
+            .map(str::to_owned),
     }))
 }
 
