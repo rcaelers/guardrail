@@ -36,3 +36,4 @@ cov-all = "llvm-cov --profile coverage --workspace --lib --html --output-dir tar
 #   cargo tarp-web-lcov          → target/tarpaulin/web.lcov.info
 tarp-web = "tarpaulin --packages web --lib --engine Llvm --output-dir target/tarpaulin --include-files src/web/server/src/* --exclude-files */bin/* --exclude-files */tests.rs --out Html"
 tarp-web-lcov = "tarpaulin --packages web --lib --engine Llvm --output-dir target/tarpaulin --include-files src/web/server/src/* --exclude-files */bin/* --exclude-files */tests.rs --out Lcov"
+tarp-all = "tarpaulin --workspace --lib --engine Llvm --output-dir target/tarpaulin --include-files src/web/server/src/* --exclude-files */bin/* --exclude-files */tests.rs --out Html"
