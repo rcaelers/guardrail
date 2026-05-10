@@ -92,3 +92,91 @@ impl IntoResponse for ApiError {
         (status, body).into_response()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::to_bytes;
+
+    async fn response_parts(error: ApiError) -> (StatusCode, serde_json::Value) {
+        let response = error.into_response();
+        let status = response.status();
+        let body = to_bytes(response.into_body(), 1024 * 1024).await.unwrap();
+        (status, serde_json::from_slice(&body).unwrap())
+    }
+
+    #[tokio::test]
+    async fn maps_errors_to_expected_responses() {
+        let cases = [
+            (ApiError::InternalFailure(), StatusCode::INTERNAL_SERVER_ERROR, "internal failure"),
+            (ApiError::Failure("bad".to_string()), StatusCode::BAD_REQUEST, "general failure: bad"),
+            (ApiError::InvalidToken("missing".to_string()), StatusCode::UNAUTHORIZED, "missing"),
+            (ApiError::Forbidden("no".to_string()), StatusCode::FORBIDDEN, "no"),
+            (
+                ApiError::ProductAccessDenied("product".to_string()),
+                StatusCode::FORBIDDEN,
+                "access denied for product product",
+            ),
+            (
+                ApiError::ProductNotFound("product".to_string()),
+                StatusCode::BAD_REQUEST,
+                "product product not found",
+            ),
+            (
+                ApiError::ProductNotAcceptingCrashes("product".to_string()),
+                StatusCode::BAD_REQUEST,
+                "product product not accepting crashes",
+            ),
+            (
+                ApiError::ValidationError("product".to_string(), "bad".to_string()),
+                StatusCode::BAD_REQUEST,
+                "validation of product product failed: bad",
+            ),
+            (
+                ApiError::UserNotFound("user".to_string()),
+                StatusCode::BAD_REQUEST,
+                "user user not found",
+            ),
+            (
+                ApiError::UserAlreadyExists("user".to_string()),
+                StatusCode::BAD_REQUEST,
+                "user user already exists",
+            ),
+            (
+                ApiError::RepoError(repos::error::RepoError::ConnectionError()),
+                StatusCode::SERVICE_UNAVAILABLE,
+                "database unavailable",
+            ),
+        ];
+
+        for (error, expected_status, expected_message) in cases {
+            let (status, body) = response_parts(error).await;
+            assert_eq!(status, expected_status);
+            assert_eq!(body["result"], "failed");
+            assert_eq!(body["error"], expected_message);
+        }
+    }
+
+    #[tokio::test]
+    async fn maps_query_rejection_to_bad_request() {
+        #[allow(dead_code)]
+        #[derive(Debug, serde::Deserialize)]
+        struct Params {
+            value: u32,
+        }
+
+        let rejection =
+            axum::extract::Query::<Params>::try_from_uri(&"/test?value=abc".parse().unwrap())
+                .unwrap_err();
+        let (status, body) = response_parts(ApiError::from(rejection)).await;
+
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert_eq!(body["result"], "failed");
+        assert!(
+            body["error"]
+                .as_str()
+                .unwrap()
+                .contains("Failed to deserialize")
+        );
+    }
+}

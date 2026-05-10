@@ -131,15 +131,24 @@ impl GuardrailApiApp {
             .with_state(self.state.clone())
     }
 
+    fn tls_configured(settings: &Settings) -> bool {
+        settings
+            .api_server
+            .public_key
+            .as_deref()
+            .is_some_and(|key| !key.is_empty())
+            && settings
+                .api_server
+                .private_key
+                .as_deref()
+                .is_some_and(|key| !key.is_empty())
+    }
+
     pub async fn serve(&self) {
         let router = self.router().await;
         let settings = &self.state.settings;
 
-        if settings.api_server.public_key.is_some()
-            && settings.api_server.private_key.is_some()
-            && settings.api_server.public_key.clone().unwrap_or_default() != ""
-            && settings.api_server.private_key.clone().unwrap_or_default() != ""
-        {
+        if Self::tls_configured(settings) {
             info!("Starting server with TLS");
             info!("Public key: {}", settings.api_server.public_key.clone().unwrap_or_default());
             info!("Private key: {}", settings.api_server.private_key.clone().unwrap_or_default());
@@ -177,9 +186,9 @@ impl GuardrailApiApp {
     }
 
     pub async fn ensure_default_api_token(&self) -> Result<(), Box<dyn std::error::Error>> {
+        use common::token::generate_api_token;
         use data::api_token::NewApiToken;
         use repos::api_token::ApiTokenRepo;
-        use common::token::generate_api_token;
 
         let tokens = ApiTokenRepo::get_all(&self.state.repo.db).await?;
         if !tokens.is_empty() {
@@ -211,9 +220,14 @@ impl GuardrailApiApp {
         Ok(())
     }
 
-    async fn create_k8s_initial_token_secret(token: &str) -> Result<(), Box<dyn std::error::Error>> {
+    async fn create_k8s_initial_token_secret(
+        token: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         use k8s_openapi::api::core::v1::Secret;
-        use kube::{Api, Client, api::{ObjectMeta, PostParams}};
+        use kube::{
+            Api, Client,
+            api::{ObjectMeta, PostParams},
+        };
 
         const SECRET_NAME: &str = "guardrail-initial-admin-token";
 
@@ -246,5 +260,63 @@ impl GuardrailApiApp {
 
         secrets.create(&PostParams::default(), &secret).await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::Request;
+    use object_store::memory::InMemory;
+    use tower::ServiceExt;
+
+    use crate::worker::TestWorker;
+
+    async fn state() -> AppState {
+        let db = surrealdb::engine::any::connect("mem://").await.unwrap();
+        db.use_ns("test").use_db("test").await.unwrap();
+        AppState {
+            repo: Repo::new(db),
+            settings: Arc::new(common::settings::Settings::default()),
+            storage: Arc::new(InMemory::new()),
+            worker: Arc::new(TestWorker::new()),
+        }
+    }
+
+    #[test]
+    fn tls_configured_requires_both_non_empty_keys() {
+        let mut settings = common::settings::Settings::default();
+        settings.api_server.public_key = None;
+        settings.api_server.private_key = None;
+        assert!(!GuardrailApiApp::tls_configured(&settings));
+
+        settings.api_server.public_key = Some("public".to_string());
+        assert!(!GuardrailApiApp::tls_configured(&settings));
+
+        settings.api_server.private_key = Some(String::new());
+        assert!(!GuardrailApiApp::tls_configured(&settings));
+
+        settings.api_server.private_key = Some("private".to_string());
+        assert!(GuardrailApiApp::tls_configured(&settings));
+    }
+
+    #[tokio::test]
+    async fn new_repo_and_router_wire_health_routes() {
+        let state = state().await;
+        let app = GuardrailApiApp::new(state.clone());
+        assert_eq!(app.repo().db.health().await, Ok(()));
+
+        let router = app.router().await;
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri("/api/live")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
     }
 }

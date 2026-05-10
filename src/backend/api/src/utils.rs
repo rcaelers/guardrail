@@ -132,3 +132,159 @@ pub fn validate_api_token_for_product(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::extract::{FromRequest, Multipart};
+    use axum::http::{Request, header::CONTENT_TYPE};
+    use bytes::Bytes;
+    use chrono::Utc;
+    use futures::{TryStreamExt, stream};
+    use object_store::memory::InMemory;
+    use uuid::Uuid;
+
+    fn token(product_id: Option<&str>) -> ApiToken {
+        ApiToken {
+            id: "api_tokens:test".to_string(),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            description: "test".to_string(),
+            token_id: Uuid::new_v4(),
+            token_hash: "hash".to_string(),
+            product_id: product_id.map(str::to_string),
+            user_id: None,
+            entitlements: vec!["symbol-upload".to_string()],
+            last_used_at: None,
+            expires_at: None,
+            is_active: true,
+        }
+    }
+
+    fn product(id: &str) -> Product {
+        Product {
+            id: id.to_string(),
+            name: "TestProduct".to_string(),
+            slug: "test-product".to_string(),
+            description: String::new(),
+            public: false,
+            accepting_crashes: true,
+            metadata: serde_json::json!({}),
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_to_s3_writes_all_chunks() {
+        let store = Arc::new(InMemory::new());
+        let chunks = stream::iter([
+            Ok::<_, std::io::Error>(Bytes::from_static(b"hello ")),
+            Ok(Bytes::from_static(b"world")),
+        ]);
+
+        let written = stream_to_s3(store.clone(), "objects/test.txt", chunks)
+            .await
+            .unwrap();
+
+        assert_eq!(written, 11);
+        let bytes = store
+            .get_opts(&Path::from("objects/test.txt"), Default::default())
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap();
+        assert_eq!(bytes.as_ref(), b"hello world");
+    }
+
+    #[tokio::test]
+    async fn stream_to_s3_maps_stream_errors() {
+        let chunks = stream::iter([
+            Ok::<_, std::io::Error>(Bytes::from_static(b"partial")),
+            Err(std::io::Error::other("stream failed")),
+        ]);
+
+        let err = stream_to_s3(Arc::new(InMemory::new()), "objects/test.txt", chunks)
+            .await
+            .unwrap_err();
+
+        assert!(matches!(err, ApiError::InternalFailure()));
+    }
+
+    #[tokio::test]
+    async fn peek_line_returns_first_line_and_replays_stream() {
+        let boundary = "----guardrail-api-test";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"upload_file_symbols\"; filename=\"app.sym\"\r\nContent-Type: application/octet-stream\r\n\r\nMODULE Linux x86 AABBCC app.pdb\nPUBLIC 1 0 main\r\n--{boundary}--\r\n"
+        );
+        let request = Request::builder()
+            .header(CONTENT_TYPE, format!("multipart/form-data; boundary={boundary}"))
+            .body(Body::from(body))
+            .unwrap();
+        let mut multipart = Multipart::from_request(request, &()).await.unwrap();
+        let field = multipart.next_field().await.unwrap().unwrap();
+
+        let (line, stream) = peek_line(field).await.unwrap();
+        let bytes = stream
+            .try_fold(Vec::new(), |mut acc, chunk| async move {
+                acc.extend_from_slice(&chunk);
+                Ok(acc)
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(line, "MODULE Linux x86 AABBCC app.pdb\n");
+        assert_eq!(
+            String::from_utf8(bytes).unwrap(),
+            "MODULE Linux x86 AABBCC app.pdb\nPUBLIC 1 0 main"
+        );
+    }
+
+    #[tokio::test]
+    async fn peek_line_reports_missing_newline() {
+        let boundary = "----guardrail-api-test";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"upload_file_symbols\"; filename=\"app.sym\"\r\nContent-Type: application/octet-stream\r\n\r\nMODULE without newline\r\n--{boundary}--\r\n"
+        );
+        let request = Request::builder()
+            .header(CONTENT_TYPE, format!("multipart/form-data; boundary={boundary}"))
+            .body(Body::from(body))
+            .unwrap();
+        let mut multipart = Multipart::from_request(request, &()).await.unwrap();
+        let field = multipart.next_field().await.unwrap().unwrap();
+
+        let error = match peek_line(field).await {
+            Ok(_) => panic!("expected missing newline error"),
+            Err(error) => error,
+        };
+        assert_eq!(error.kind(), io::ErrorKind::UnexpectedEof);
+        assert_eq!(error.to_string(), "No complete line found");
+    }
+
+    #[test]
+    fn validate_api_token_allows_global_or_matching_product_tokens() {
+        let product = product("products:one");
+
+        assert!(validate_api_token_for_product(&token(None), &product, "TestProduct").is_ok());
+        assert!(
+            validate_api_token_for_product(&token(Some("products:one")), &product, "TestProduct")
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn validate_api_token_rejects_other_products() {
+        let product = product("products:one");
+
+        assert!(matches!(
+            validate_api_token_for_product(
+                &token(Some("products:two")),
+                &product,
+                "TestProduct"
+            ),
+            Err(ApiError::ProductAccessDenied(product)) if product == "TestProduct"
+        ));
+    }
+}
