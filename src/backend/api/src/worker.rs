@@ -91,3 +91,41 @@ impl Worker for TestWorker {
         Ok(symbol_info["symbol_upload_id"].to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_worker_records_requests_and_returns_upload_id_value() {
+        let worker = TestWorker::new();
+        let upload_id = worker
+            .queue_symbol(json!({"symbol_upload_id": "upload-1", "module_id": "app.pdb"}))
+            .await
+            .unwrap();
+
+        assert_eq!(upload_id, "\"upload-1\"");
+        let requests = worker.requests.lock().unwrap();
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].contains("upload-1"));
+    }
+
+    #[test]
+    fn test_worker_default_creates_empty_worker() {
+        let worker = TestWorker::default();
+        assert!(worker.requests.lock().unwrap().is_empty());
+        assert!(!*worker.failure.lock().unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_worker_can_be_forced_to_fail() {
+        let worker = TestWorker::new();
+        worker.failure();
+
+        assert!(matches!(
+            worker.queue_symbol(json!({"symbol_upload_id": "upload-1"})).await,
+            Err(ApiError::Failure(message)) if message == "failed to queue symbol job"
+        ));
+    }
+}

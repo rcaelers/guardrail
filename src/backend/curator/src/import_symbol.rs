@@ -131,3 +131,105 @@ impl ImportSymbolProcessor {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use object_store::PutPayload;
+
+    async fn memory_repo() -> repos::Repo {
+        let db = surrealdb::engine::any::connect("mem://").await.unwrap();
+        db.use_ns("test").use_db("test").await.unwrap();
+        repos::Repo::new(db)
+    }
+
+    #[tokio::test]
+    async fn get_processed_symbol_reads_bytes_and_reports_missing_objects() {
+        let storage = Arc::new(object_store::memory::InMemory::new());
+        storage
+            .put(
+                &Path::from("processed-symbols/upload-1.json"),
+                PutPayload::from_static(br#"{"ok":true}"#),
+            )
+            .await
+            .unwrap();
+        let processor = ImportSymbolProcessor {
+            storage: storage.clone(),
+            repo: memory_repo().await,
+        };
+
+        let bytes = processor.get_processed_symbol("upload-1").await.unwrap();
+        assert_eq!(bytes.as_ref(), br#"{"ok":true}"#);
+
+        assert!(matches!(
+            processor.get_processed_symbol("missing").await,
+            Err(JobError::Failure(message)) if message == "Failed to retrieve processed symbol"
+        ));
+    }
+
+    #[tokio::test]
+    async fn cleanup_processed_symbol_deletes_object_when_present() {
+        let storage = Arc::new(object_store::memory::InMemory::new());
+        storage
+            .put(
+                &Path::from("processed-symbols/upload-1.json"),
+                PutPayload::from_static(br#"{"ok":true}"#),
+            )
+            .await
+            .unwrap();
+        let processor = ImportSymbolProcessor {
+            storage: storage.clone(),
+            repo: memory_repo().await,
+        };
+
+        processor
+            .cleanup_processed_symbol("upload-1".to_string())
+            .await;
+        assert!(
+            storage
+                .get(&Path::from("processed-symbols/upload-1.json"))
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn create_symbol_validates_required_fields_before_database_write() {
+        let repo = memory_repo().await;
+        let mut symbol_info = serde_json::json!({});
+        assert!(matches!(
+            ImportSymbolProcessor::create_symbol(&repo.db, &symbol_info).await,
+            Err(JobError::Failure(message)) if message == "product_id is missing"
+        ));
+
+        symbol_info["product_id"] = "products:test".into();
+        assert!(matches!(
+            ImportSymbolProcessor::create_symbol(&repo.db, &symbol_info).await,
+            Err(JobError::Failure(message)) if message == "os is missing"
+        ));
+
+        symbol_info["os"] = "linux".into();
+        assert!(matches!(
+            ImportSymbolProcessor::create_symbol(&repo.db, &symbol_info).await,
+            Err(JobError::Failure(message)) if message == "arch is missing"
+        ));
+
+        symbol_info["arch"] = "x86_64".into();
+        assert!(matches!(
+            ImportSymbolProcessor::create_symbol(&repo.db, &symbol_info).await,
+            Err(JobError::Failure(message)) if message == "build_id is missing"
+        ));
+
+        symbol_info["build_id"] = "build".into();
+        assert!(matches!(
+            ImportSymbolProcessor::create_symbol(&repo.db, &symbol_info).await,
+            Err(JobError::Failure(message)) if message == "module_id is missing"
+        ));
+
+        symbol_info["module_id"] = "app.pdb".into();
+        assert!(matches!(
+            ImportSymbolProcessor::create_symbol(&repo.db, &symbol_info).await,
+            Err(JobError::Failure(message)) if message == "storage_path is missing"
+        ));
+    }
+}

@@ -162,3 +162,143 @@ impl OrphanedMinidumpCleaner {
         Ok(deleted_count)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use object_store::PutPayload;
+
+    #[tokio::test]
+    async fn get_s3_minidumps_filters_uuid_paths() {
+        let storage = object_store::memory::InMemory::new();
+        let valid_id = Uuid::new_v4();
+        storage
+            .put(&Path::from(format!("minidumps/{valid_id}")), PutPayload::from_static(b"dump"))
+            .await
+            .unwrap();
+        storage
+            .put(&Path::from("minidumps/not-a-uuid"), PutPayload::from_static(b"dump"))
+            .await
+            .unwrap();
+        storage
+            .put(&Path::from("minidumps/directory/"), PutPayload::from_static(b""))
+            .await
+            .unwrap();
+
+        let minidumps = OrphanedMinidumpCleaner::get_s3_minidumps(&storage)
+            .await
+            .unwrap();
+
+        assert_eq!(minidumps.len(), 1);
+        assert_eq!(minidumps.get(&valid_id), Some(&Path::from(format!("minidumps/{valid_id}"))));
+    }
+
+    #[tokio::test]
+    async fn extract_minidump_uuid_from_crash_info_handles_valid_and_invalid_json() {
+        let storage = object_store::memory::InMemory::new();
+        let valid_id = Uuid::new_v4();
+        storage
+            .put(
+                &Path::from("crashes/valid.json"),
+                PutPayload::from(
+                    serde_json::json!({"minidump": {"storage_id": valid_id.to_string()}})
+                        .to_string()
+                        .into_bytes(),
+                ),
+            )
+            .await
+            .unwrap();
+        storage
+            .put(&Path::from("crashes/invalid.json"), PutPayload::from_static(b"{"))
+            .await
+            .unwrap();
+        storage
+            .put(
+                &Path::from("crashes/bad-id.json"),
+                PutPayload::from_static(br#"{"minidump":{"storage_id":"not-a-uuid"}}"#),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(
+            OrphanedMinidumpCleaner::extract_minidump_uuid_from_crash_info(
+                &storage,
+                &Path::from("crashes/valid.json")
+            )
+            .await,
+            Some(valid_id)
+        );
+        assert!(
+            OrphanedMinidumpCleaner::extract_minidump_uuid_from_crash_info(
+                &storage,
+                &Path::from("crashes/invalid.json")
+            )
+            .await
+            .is_none()
+        );
+        assert!(
+            OrphanedMinidumpCleaner::extract_minidump_uuid_from_crash_info(
+                &storage,
+                &Path::from("crashes/bad-id.json")
+            )
+            .await
+            .is_none()
+        );
+        assert!(
+            OrphanedMinidumpCleaner::extract_minidump_uuid_from_crash_info(
+                &storage,
+                &Path::from("crashes/missing.json")
+            )
+            .await
+            .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_orphaned_minidumps_keeps_referenced_files() {
+        let storage = object_store::memory::InMemory::new();
+        let orphan = Uuid::new_v4();
+        let in_db = Uuid::new_v4();
+        let in_crash_info = Uuid::new_v4();
+        let s3_paths = HashMap::from([
+            (orphan, Path::from(format!("minidumps/{orphan}"))),
+            (in_db, Path::from(format!("minidumps/{in_db}"))),
+            (in_crash_info, Path::from(format!("minidumps/{in_crash_info}"))),
+        ]);
+        for path in s3_paths.values() {
+            storage
+                .put(path, PutPayload::from_static(b"dump"))
+                .await
+                .unwrap();
+        }
+
+        let deleted = OrphanedMinidumpCleaner::delete_orphaned_minidumps(
+            &storage,
+            &s3_paths,
+            &HashSet::from([in_db]),
+            &HashSet::from([in_crash_info]),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(deleted, 1);
+        assert!(
+            storage
+                .get(&Path::from(format!("minidumps/{orphan}")))
+                .await
+                .is_err()
+        );
+        assert!(
+            storage
+                .get(&Path::from(format!("minidumps/{in_db}")))
+                .await
+                .is_ok()
+        );
+        assert!(
+            storage
+                .get(&Path::from(format!("minidumps/{in_crash_info}")))
+                .await
+                .is_ok()
+        );
+    }
+}

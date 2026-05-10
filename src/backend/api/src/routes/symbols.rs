@@ -422,3 +422,199 @@ impl SymbolsApi {
         }))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::extract::FromRequest;
+    use axum::http::{Request, header::CONTENT_TYPE};
+    use object_store::memory::InMemory;
+    use repos::Repo;
+    use std::sync::Arc;
+
+    use crate::worker::TestWorker;
+
+    fn symbols_info_with_symbols() -> SymbolsInfo {
+        SymbolsInfo {
+            submission_timestamp: "2024-01-01T00:00:00Z".to_string(),
+            product: Some("TestProduct".to_string()),
+            annotations: std::collections::HashMap::new(),
+            symbols: Some(Symbols {
+                filename: "app.sym".to_string(),
+                size: 12,
+                storage_path: "symbols/app.pdb-BUILD".to_string(),
+                storage_filename: "app.pdb-BUILD".to_string(),
+                header: SymbolsHeader {
+                    os: "Linux".to_string(),
+                    arch: "x86_64".to_string(),
+                    build_id: "AABBCC".to_string(),
+                    module_id: "app.pdb".to_string(),
+                },
+            }),
+        }
+    }
+
+    async fn state() -> AppState {
+        let db = surrealdb::engine::any::connect("mem://").await.unwrap();
+        db.use_ns("test").use_db("test").await.unwrap();
+        AppState {
+            repo: Repo::new(db),
+            settings: Arc::new(common::settings::Settings::default()),
+            storage: Arc::new(InMemory::new()),
+            worker: Arc::new(TestWorker::new()),
+        }
+    }
+
+    #[test]
+    fn validates_build_and_module_identifiers() {
+        assert!(SymbolsApi::validate_build_id("ABCDEF-1234").is_ok());
+        assert!(matches!(
+            SymbolsApi::validate_build_id(""),
+            Err(ApiError::Failure(message)) if message == "invalid build_id length"
+        ));
+        assert!(matches!(
+            SymbolsApi::validate_build_id(&"a".repeat(65)),
+            Err(ApiError::Failure(message)) if message == "invalid build_id length"
+        ));
+        assert!(matches!(
+            SymbolsApi::validate_build_id("not hex"),
+            Err(ApiError::Failure(message)) if message == "invalid build_id format"
+        ));
+
+        assert!(SymbolsApi::validate_module_id("app.pdb").is_ok());
+        assert!(matches!(
+            SymbolsApi::validate_module_id(""),
+            Err(ApiError::Failure(message)) if message == "invalid module_id length"
+        ));
+        assert!(matches!(
+            SymbolsApi::validate_module_id(&"a".repeat(257)),
+            Err(ApiError::Failure(message)) if message == "invalid module_id length"
+        ));
+        for bad in ["../app.pdb", "dir/app.pdb", "dir\\app.pdb", "bad&pdb"] {
+            assert!(matches!(
+                SymbolsApi::validate_module_id(bad),
+                Err(ApiError::Failure(message)) if message == "invalid module_id format"
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn processes_symbols_header() {
+        let header = SymbolsApi::process_header("MODULE Linux x86_64 AABBCC app.pdb\n".to_string())
+            .await
+            .unwrap();
+        assert_eq!(header.os, "Linux");
+        assert_eq!(header.arch, "x86_64");
+        assert_eq!(header.build_id, "AABBCC");
+        assert_eq!(header.module_id, "app.pdb");
+
+        assert!(matches!(
+            SymbolsApi::process_header("MODULE Linux AABBCC app.pdb\n".to_string()).await,
+            Err(ApiError::Failure(message)) if message == "invalid symbols file header"
+        ));
+    }
+
+    #[test]
+    fn validates_annotation_and_symbols_content_types() {
+        assert!(SymbolsApi::validate_annotation_content_type("text/plain").is_ok());
+        assert!(SymbolsApi::validate_annotation_content_type("text/markdown").is_ok());
+        assert!(SymbolsApi::validate_annotation_content_type("").is_ok());
+        assert!(matches!(
+            SymbolsApi::validate_annotation_content_type("application/json"),
+            Err(ApiError::Failure(message))
+                if message == "invalid annotation content type: application/json"
+        ));
+
+        assert!(SymbolsApi::validate_symbols_content_type("application/octet-stream").is_ok());
+        assert!(matches!(
+            SymbolsApi::validate_symbols_content_type("text/plain"),
+            Err(ApiError::Failure(message)) if message == "invalid symbols content type: text/plain"
+        ));
+    }
+
+    #[test]
+    fn validates_annotation_keys() {
+        assert!(SymbolsApi::validate_key("product").is_ok());
+        assert!(matches!(
+            SymbolsApi::validate_key("bad\nkey"),
+            Err(ApiError::Failure(message))
+                if message == "annotation key must contain only printable ASCII characters"
+        ));
+        assert!(matches!(
+            SymbolsApi::validate_key("caf\u{00e9}"),
+            Err(ApiError::Failure(message))
+                if message == "annotation key must contain only printable ASCII characters"
+        ));
+    }
+
+    #[test]
+    fn build_symbol_info_requires_symbols_and_uses_header_metadata() {
+        let context = SymbolsContext {
+            product_id: "products:one".to_string(),
+            version: "1.0".to_string(),
+            channel: "stable".to_string(),
+            commit: "abc".to_string(),
+            build_id: "AABBCC".to_string(),
+        };
+
+        assert!(matches!(
+            SymbolsApi::build_symbol_info(&SymbolsInfo::default(), &context),
+            Err(ApiError::Failure(message)) if message == "no symbols found to queue"
+        ));
+
+        let info = symbols_info_with_symbols();
+        let value = SymbolsApi::build_symbol_info(&info, &context).unwrap();
+        assert!(value["symbol_upload_id"].as_str().is_some());
+        assert_eq!(value["product_id"], "products:one");
+        assert_eq!(value["os"], "Linux");
+        assert_eq!(value["arch"], "x86_64");
+        assert_eq!(value["build_id"], "AABBCC");
+        assert_eq!(value["module_id"], "app.pdb");
+        assert_eq!(value["storage_path"], "symbols/app.pdb-BUILD");
+        assert_eq!(value["filename"], "app.sym");
+        assert_eq!(value["submission_timestamp"], "2024-01-01T00:00:00Z");
+    }
+
+    #[tokio::test]
+    async fn handle_symbols_upload_rejects_duplicate_symbols_before_reading_field() {
+        let mut info = symbols_info_with_symbols();
+        let boundary = "----guardrail-api-test";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"upload_file_symbols\"; filename=\"app.sym\"\r\nContent-Type: application/octet-stream\r\n\r\nMODULE Linux x86 AABBCC app.pdb\n\r\n--{boundary}--\r\n"
+        );
+        let request = Request::builder()
+            .header(CONTENT_TYPE, format!("multipart/form-data; boundary={boundary}"))
+            .body(Body::from(body))
+            .unwrap();
+        let test_state = state().await;
+        let mut multipart = Multipart::from_request(request, &test_state).await.unwrap();
+        let field = multipart.next_field().await.unwrap().unwrap();
+
+        assert!(matches!(
+            SymbolsApi::handle_symbols_upload(field, &mut info, test_state).await,
+            Err(ApiError::Failure(message)) if message == "symbols file already processed"
+        ));
+    }
+
+    #[tokio::test]
+    async fn handle_annotation_upload_requires_field_name() {
+        let boundary = "----guardrail-api-test";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data\r\nContent-Type: text/plain\r\n\r\nvalue\r\n--{boundary}--\r\n"
+        );
+        let request = Request::builder()
+            .header(CONTENT_TYPE, format!("multipart/form-data; boundary={boundary}"))
+            .body(Body::from(body))
+            .unwrap();
+        let test_state = state().await;
+        let mut multipart = Multipart::from_request(request, &test_state).await.unwrap();
+        let field = multipart.next_field().await.unwrap().unwrap();
+        let mut info = SymbolsInfo::default();
+
+        assert!(matches!(
+            SymbolsApi::handle_annotation_upload(field, &mut info).await,
+            Err(ApiError::Failure(message)) if message == "name field is missing for annotation"
+        ));
+    }
+}

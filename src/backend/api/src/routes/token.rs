@@ -101,3 +101,20 @@ pub async fn generate_token(
         serde_json::json!({ "token_id": token_id, "token": token, "token_hash": token_hash }),
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn user_record_id_uses_user_id_when_present() {
+        assert_eq!(user_record_id("alice", Some("users:alice-id")), "users:alice-id");
+        assert_eq!(user_record_id("alice", Some("alice-id")), "users:alice-id");
+    }
+
+    #[test]
+    fn user_record_id_falls_back_to_username() {
+        assert_eq!(user_record_id("alice", None), "users:alice");
+        assert_eq!(user_record_id("users:alice", None), "users:alice");
+    }
+}

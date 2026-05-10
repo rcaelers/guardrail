@@ -30,3 +30,22 @@ impl From<fancy_regex::Error> for JobError {
         JobError::Regex(Box::new(error))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn formats_job_error_variants() {
+        assert_eq!(JobError::InternalFailure().to_string(), "internal failure");
+        assert_eq!(JobError::Failure("bad".to_string()).to_string(), "general failure: `bad'");
+        assert_eq!(JobError::ApalisError("queue".to_string()).to_string(), "apalis error: `queue'");
+    }
+
+    #[test]
+    fn converts_regex_errors() {
+        let err: JobError = fancy_regex::Regex::new("(").unwrap_err().into();
+        assert!(matches!(err, JobError::Regex(_)));
+        assert!(err.to_string().contains("Regex error"));
+    }
+}

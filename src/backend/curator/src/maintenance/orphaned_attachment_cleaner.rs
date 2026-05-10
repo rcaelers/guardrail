@@ -182,3 +182,156 @@ impl OrphanedAttachmentCleaner {
         Ok(deleted_count)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use object_store::PutPayload;
+
+    #[tokio::test]
+    async fn get_s3_attachments_filters_uuid_paths() {
+        let storage = object_store::memory::InMemory::new();
+        let valid_id = Uuid::new_v4();
+        storage
+            .put(
+                &Path::from(format!("attachments/{valid_id}")),
+                PutPayload::from_static(b"attachment"),
+            )
+            .await
+            .unwrap();
+        storage
+            .put(&Path::from("attachments/not-a-uuid"), PutPayload::from_static(b"attachment"))
+            .await
+            .unwrap();
+        storage
+            .put(&Path::from("attachments/directory/"), PutPayload::from_static(b""))
+            .await
+            .unwrap();
+
+        let attachments = OrphanedAttachmentCleaner::get_s3_attachments(&storage)
+            .await
+            .unwrap();
+
+        assert_eq!(attachments.len(), 1);
+        assert_eq!(
+            attachments.get(&valid_id),
+            Some(&Path::from(format!("attachments/{valid_id}")))
+        );
+    }
+
+    #[tokio::test]
+    async fn extract_attachment_uuids_from_crash_info_handles_valid_and_invalid_json() {
+        let storage = object_store::memory::InMemory::new();
+        let first = Uuid::new_v4();
+        let second = Uuid::new_v4();
+        storage
+            .put(
+                &Path::from("crashes/valid.json"),
+                PutPayload::from(
+                    serde_json::json!({
+                        "attachments": [
+                            {"storage_id": first.to_string()},
+                            {"storage_id": "not-a-uuid"},
+                            {"storage_id": second.to_string()},
+                            {}
+                        ]
+                    })
+                    .to_string()
+                    .into_bytes(),
+                ),
+            )
+            .await
+            .unwrap();
+        storage
+            .put(
+                &Path::from("crashes/empty.json"),
+                PutPayload::from_static(br#"{"attachments":[]}"#),
+            )
+            .await
+            .unwrap();
+        storage
+            .put(&Path::from("crashes/invalid.json"), PutPayload::from_static(b"{"))
+            .await
+            .unwrap();
+
+        let uuids = OrphanedAttachmentCleaner::extract_attachment_uuids_from_crash_info(
+            &storage,
+            &Path::from("crashes/valid.json"),
+        )
+        .await
+        .unwrap();
+        assert_eq!(uuids, vec![first, second]);
+        assert!(
+            OrphanedAttachmentCleaner::extract_attachment_uuids_from_crash_info(
+                &storage,
+                &Path::from("crashes/empty.json")
+            )
+            .await
+            .is_none()
+        );
+        assert!(
+            OrphanedAttachmentCleaner::extract_attachment_uuids_from_crash_info(
+                &storage,
+                &Path::from("crashes/invalid.json")
+            )
+            .await
+            .is_none()
+        );
+        assert!(
+            OrphanedAttachmentCleaner::extract_attachment_uuids_from_crash_info(
+                &storage,
+                &Path::from("crashes/missing.json")
+            )
+            .await
+            .is_none()
+        );
+    }
+
+    #[tokio::test]
+    async fn delete_orphaned_attachments_keeps_referenced_files() {
+        let storage = object_store::memory::InMemory::new();
+        let orphan = Uuid::new_v4();
+        let in_db = Uuid::new_v4();
+        let in_crash_info = Uuid::new_v4();
+        let s3_paths = HashMap::from([
+            (orphan, Path::from(format!("attachments/{orphan}"))),
+            (in_db, Path::from(format!("attachments/{in_db}"))),
+            (in_crash_info, Path::from(format!("attachments/{in_crash_info}"))),
+        ]);
+        for path in s3_paths.values() {
+            storage
+                .put(path, PutPayload::from_static(b"attachment"))
+                .await
+                .unwrap();
+        }
+
+        let deleted = OrphanedAttachmentCleaner::delete_orphaned_attachments(
+            &storage,
+            &s3_paths,
+            &HashSet::from([in_db]),
+            &HashSet::from([in_crash_info]),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(deleted, 1);
+        assert!(
+            storage
+                .get(&Path::from(format!("attachments/{orphan}")))
+                .await
+                .is_err()
+        );
+        assert!(
+            storage
+                .get(&Path::from(format!("attachments/{in_db}")))
+                .await
+                .is_ok()
+        );
+        assert!(
+            storage
+                .get(&Path::from(format!("attachments/{in_crash_info}")))
+                .await
+                .is_ok()
+        );
+    }
+}

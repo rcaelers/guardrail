@@ -224,7 +224,19 @@ impl MinidumpProcessor {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use apalis::prelude::Data;
+    use object_store::{ObjectStore, ObjectStoreExt, PutPayload, path::Path};
     use serde_json::json;
+    use std::sync::Arc;
+
+    fn processor_with_storage(storage: Arc<dyn ObjectStore>) -> MinidumpProcessor {
+        MinidumpProcessor {
+            storage,
+            signature_generator: SignatureGenerator::new(SignatureGeneratorConfig::default())
+                .unwrap(),
+        }
+    }
 
     #[test]
     fn test_annotation_processing() {
@@ -343,5 +355,84 @@ mod tests {
 
         assert!(submission_annotations.is_empty());
         assert!(script_annotations.is_empty());
+    }
+
+    #[tokio::test]
+    async fn new_uses_processor_settings() {
+        let mut settings = common::settings::Settings::default();
+        settings.processor.delimiter = Some(" -> ".to_string());
+        settings.processor.maximum_frame_count = Some(1);
+        let state =
+            AppState::new(Arc::new(settings), Arc::new(object_store::memory::InMemory::new()));
+
+        let processor = MinidumpProcessor::new(Data::new(state));
+        let report = json!({
+            "crashing_thread": {
+                "frames": [
+                    {"module": "app.exe", "function": "first()"},
+                    {"module": "app.exe", "function": "second()"}
+                ]
+            }
+        });
+
+        let signature = processor.generate_signature(&report).await.unwrap();
+        assert_eq!(signature, "app.exe!first");
+    }
+
+    #[tokio::test]
+    async fn generate_signature_requires_crashing_thread() {
+        let processor = processor_with_storage(Arc::new(object_store::memory::InMemory::new()));
+
+        assert!(matches!(
+            processor.generate_signature(&json!({})).await,
+            Err(JobError::Failure(message)) if message == "Failed to get crashing thread"
+        ));
+    }
+
+    #[tokio::test]
+    async fn minidump_object_reads_bytes_and_reports_missing_objects() {
+        let store = Arc::new(object_store::memory::InMemory::new());
+        store
+            .put(&Path::from("minidumps/one"), PutPayload::from_static(b"dump"))
+            .await
+            .unwrap();
+        let processor = processor_with_storage(store);
+
+        let bytes = processor
+            .get_minidump_object("minidumps/one")
+            .await
+            .unwrap();
+        assert_eq!(bytes.as_ref(), b"dump");
+
+        assert!(matches!(
+            processor.get_minidump_object("minidumps/missing").await,
+            Err(JobError::Failure(message)) if message == "Failed to retrieve minidump"
+        ));
+    }
+
+    #[tokio::test]
+    async fn write_processed_crash_persists_combined_payload() {
+        let store = Arc::new(object_store::memory::InMemory::new());
+        let processor = processor_with_storage(store.clone());
+
+        processor
+            .write_processed_crash(
+                "crash-1",
+                &json!({"crash_id": "crash-1"}),
+                &json!({"status": "processed"}),
+            )
+            .await
+            .unwrap();
+
+        let bytes = store
+            .get(&Path::from("processed-crashes/crash-1.json"))
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(payload["crash_info"]["crash_id"], "crash-1");
+        assert_eq!(payload["report"]["status"], "processed");
     }
 }

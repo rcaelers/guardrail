@@ -124,3 +124,67 @@ impl SymbolProcessor {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use object_store::{ObjectStore, PutPayload, path::Path};
+    use serde_json::json;
+    use std::sync::Arc;
+
+    fn processor_with_storage(storage: Arc<dyn ObjectStore>) -> SymbolProcessor {
+        SymbolProcessor { storage }
+    }
+
+    #[tokio::test]
+    async fn symbol_object_reads_bytes_and_reports_missing_objects() {
+        let store = Arc::new(object_store::memory::InMemory::new());
+        store
+            .put(
+                &Path::from("symbols/app.sym"),
+                PutPayload::from_static(b"MODULE Linux x86 id app\n"),
+            )
+            .await
+            .unwrap();
+        let processor = processor_with_storage(store);
+
+        let bytes = processor
+            .get_symbol_object("symbols/app.sym")
+            .await
+            .unwrap();
+        assert_eq!(bytes.as_ref(), b"MODULE Linux x86 id app\n");
+
+        assert!(matches!(
+            processor.get_symbol_object("symbols/missing.sym").await,
+            Err(JobError::Failure(message)) if message == "Failed to retrieve symbol file"
+        ));
+    }
+
+    #[tokio::test]
+    async fn write_processed_symbol_persists_symbol_metadata() {
+        let store = Arc::new(object_store::memory::InMemory::new());
+        let processor = processor_with_storage(store.clone());
+
+        processor
+            .write_processed_symbol(
+                "upload-1",
+                &json!({
+                    "symbol_upload_id": "upload-1",
+                    "module_id": "app.pdb"
+                }),
+            )
+            .await
+            .unwrap();
+
+        let bytes = store
+            .get(&Path::from("processed-symbols/upload-1.json"))
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap();
+        let payload: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(payload["symbol_upload_id"], "upload-1");
+        assert_eq!(payload["module_id"], "app.pdb");
+    }
+}

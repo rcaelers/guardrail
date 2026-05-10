@@ -474,7 +474,15 @@ fn derive_platform(os_name: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use object_store::{PutPayload, path::Path};
     use serde_json::json;
+    use std::sync::Arc;
+
+    async fn memory_repo() -> Repo {
+        let db = surrealdb::engine::any::connect("mem://").await.unwrap();
+        db.use_ns("test").use_db("test").await.unwrap();
+        Repo::new(db)
+    }
 
     #[test]
     fn test_annotation_processing() {
@@ -647,5 +655,133 @@ mod tests {
         assert_eq!(enriched["title"], "crash.exe!crash2|crash.exe!main");
         assert_eq!(enriched["version"], "1.2.3");
         assert_eq!(enriched["similarity"], 1.0);
+    }
+
+    #[test]
+    fn derive_report_fields_preserves_existing_values_and_handles_fallbacks() {
+        let report = json!({
+            "exceptionType": "existing",
+            "crash_info": {
+                "type": "SIGSEGV",
+                "address": "0x1"
+            },
+            "crashing_thread": {
+                "frames": [{}]
+            },
+            "system_info": {
+                "os": "Darwin",
+                "os_ver": ""
+            }
+        });
+        let crash_info = json!({
+            "fingerprint": "fingerprint",
+            "annotations": {
+                "BuildID": "build-1",
+                "Email": "user@example.test",
+                "GitRevision": {"value": "abc123"}
+            }
+        });
+
+        let enriched = derive_report_fields(report, &crash_info);
+        assert_eq!(enriched["exceptionType"], "existing");
+        assert_eq!(enriched["signal"], "SIGSEGV");
+        assert_eq!(enriched["platform"], "macos");
+        assert_eq!(enriched["os"], "Darwin");
+        assert_eq!(enriched["build"], "build-1");
+        assert_eq!(enriched["user"], "user@example.test");
+        assert_eq!(enriched["commit"], "abc123");
+
+        assert_eq!(derive_platform("Android 14"), "linux");
+        assert_eq!(derive_platform("Plan 9"), "Plan 9");
+        assert_eq!(shorten_exception_type("EXCEPTION_ACCESS_VIOLATION_EXEC"), "ACCESS_VIOLATION");
+        assert_eq!(shorten_exception_type("EXCEPTION_ACCESS_VIOLATION_DEP"), "ACCESS_VIOLATION");
+    }
+
+    #[test]
+    fn derive_report_fields_returns_non_object_reports_unchanged() {
+        let report = json!("not an object");
+        assert_eq!(derive_report_fields(report.clone(), &json!({})), report);
+    }
+
+    #[tokio::test]
+    async fn get_processed_crash_reads_bytes_and_reports_missing_objects() {
+        let storage = Arc::new(object_store::memory::InMemory::new());
+        storage
+            .put(
+                &Path::from("processed-crashes/crash-1.json"),
+                PutPayload::from_static(br#"{"ok":true}"#),
+            )
+            .await
+            .unwrap();
+        let processor = ImportCrashProcessor {
+            storage: storage.clone(),
+            repo: memory_repo().await,
+        };
+
+        let bytes = processor.get_processed_crash("crash-1").await.unwrap();
+        assert_eq!(bytes.as_ref(), br#"{"ok":true}"#);
+
+        assert!(matches!(
+            processor.get_processed_crash("missing").await,
+            Err(JobError::Failure(message)) if message == "Failed to retrieve processed crash"
+        ));
+    }
+
+    #[tokio::test]
+    async fn cleanup_processed_crash_deletes_object_when_present() {
+        let storage = Arc::new(object_store::memory::InMemory::new());
+        storage
+            .put(
+                &Path::from("processed-crashes/crash-1.json"),
+                PutPayload::from_static(br#"{"ok":true}"#),
+            )
+            .await
+            .unwrap();
+        let processor = ImportCrashProcessor {
+            storage: storage.clone(),
+            repo: memory_repo().await,
+        };
+
+        processor
+            .cleanup_processed_crash("crash-1".to_string())
+            .await;
+        assert!(
+            storage
+                .get(&Path::from("processed-crashes/crash-1.json"))
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn create_crash_validates_required_minidump_fields_before_database_lookup() {
+        let repo = memory_repo().await;
+
+        assert!(matches!(
+            ImportCrashProcessor::create_crash(&repo.db, "crash-1", json!({}), json!({})).await,
+            Err(JobError::Failure(message)) if message == "product_id is missing"
+        ));
+
+        assert!(matches!(
+            ImportCrashProcessor::create_crash(
+                &repo.db,
+                "crash-1",
+                json!({"product_id": "products:test", "minidump": {}}),
+                json!({})
+            )
+            .await,
+            Err(JobError::Failure(message)) if message == "minidump_id is missing"
+        ));
+
+        assert!(matches!(
+            ImportCrashProcessor::create_crash(
+                &repo.db,
+                "crash-1",
+                json!({"product_id": "products:test", "minidump": {"storage_id": "bad"}}),
+                json!({})
+            )
+            .await,
+            Err(JobError::Failure(message)) if message == "invalid minidump_id format"
+        ));
     }
 }

@@ -20,3 +20,22 @@ impl AppState {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use object_store::memory::InMemory;
+
+    #[tokio::test]
+    async fn new_stores_repo_settings_and_storage() {
+        let db = surrealdb::engine::any::connect("mem://").await.unwrap();
+        let repo = Repo::new(db);
+        let settings = Arc::new(Settings::default());
+        let storage: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
+
+        let state = AppState::new(repo, settings.clone(), storage.clone());
+
+        assert!(Arc::ptr_eq(&state.settings, &settings));
+        assert!(Arc::ptr_eq(&state.storage, &storage));
+    }
+}

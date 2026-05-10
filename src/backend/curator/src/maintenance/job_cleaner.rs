@@ -134,3 +134,73 @@ impl JobCleaner {
         Ok(crash_info_files)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use object_store::PutPayload;
+
+    #[test]
+    fn extract_crash_id_from_job_returns_job_id() {
+        assert_eq!(
+            JobCleaner::extract_crash_id_from_job(&ImportCrashJob {
+                crash_id: "crash-1".to_string(),
+            }),
+            Some("crash-1".to_string())
+        );
+    }
+
+    #[tokio::test]
+    async fn get_existing_crash_info_files_filters_crash_json_paths() {
+        let storage = object_store::memory::InMemory::new();
+        storage
+            .put(&Path::from("crashes/crash-1.json"), PutPayload::from_static(b"{}"))
+            .await
+            .unwrap();
+        storage
+            .put(&Path::from("crashes/crash-2.txt"), PutPayload::from_static(b"{}"))
+            .await
+            .unwrap();
+        storage
+            .put(&Path::from("other/crash-3.json"), PutPayload::from_static(b"{}"))
+            .await
+            .unwrap();
+
+        let files = JobCleaner::get_existing_crash_info_files(&storage)
+            .await
+            .unwrap();
+        assert_eq!(files, vec![("crash-1".to_string(), Path::from("crashes/crash-1.json"))]);
+    }
+
+    #[tokio::test]
+    async fn remove_crash_info_files_deletes_only_completed_jobs() {
+        let storage = object_store::memory::InMemory::new();
+        storage
+            .put(&Path::from("crashes/remove-me.json"), PutPayload::from_static(b"{}"))
+            .await
+            .unwrap();
+        storage
+            .put(&Path::from("crashes/keep-me.json"), PutPayload::from_static(b"{}"))
+            .await
+            .unwrap();
+        let crash_ids = HashSet::from(["remove-me".to_string()]);
+
+        let deleted = JobCleaner::remove_crash_info_files(&storage, &crash_ids)
+            .await
+            .unwrap();
+
+        assert_eq!(deleted, 1);
+        assert!(
+            storage
+                .get(&Path::from("crashes/remove-me.json"))
+                .await
+                .is_err()
+        );
+        assert!(
+            storage
+                .get(&Path::from("crashes/keep-me.json"))
+                .await
+                .is_ok()
+        );
+    }
+}

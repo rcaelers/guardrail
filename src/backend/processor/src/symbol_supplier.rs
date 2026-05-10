@@ -116,6 +116,29 @@ mod test {
     use super::*;
 
     #[tokio::test]
+    async fn get_symbols_object_and_parse_symbols_report_failures() {
+        let supplier = S3SymbolSupplier::new(Arc::new(object_store::memory::InMemory::new()));
+
+        assert!(matches!(
+            supplier.get_symbols_object("symbols/missing.sym").await,
+            Err(SymbolError::NotFound)
+        ));
+        assert!(matches!(
+            supplier.parse_symbols(b"not a breakpad symbol file").await,
+            Err(SymbolError::NotFound)
+        ));
+    }
+
+    #[tokio::test]
+    async fn parse_symbols_accepts_minimal_breakpad_module() {
+        let supplier = S3SymbolSupplier::new(Arc::new(object_store::memory::InMemory::new()));
+        supplier
+            .parse_symbols(b"MODULE Linux x86 ABCDEF test\n")
+            .await
+            .expect("minimal symbol file should parse");
+    }
+
+    #[tokio::test]
     async fn test_s3_symbol_supplier_standard_path() {
         let store = Arc::new(object_store::memory::InMemory::new());
 
