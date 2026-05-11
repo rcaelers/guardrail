@@ -15,6 +15,7 @@ path = "src/bin/tool.rs"
 repos = { path = "../../common/repos" }
 data = { path = "../../common/data", default-features = false, features = ["ssr"] }
 common = { path = "../../common/common", default-features = false, features = ["ssr"] }
+email = { path = "../../common/email" }
 
 askama.workspace = true
 async-trait.workspace = true

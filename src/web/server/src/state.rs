@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use email::EmailSender;
 use object_store::ObjectStore;
 use repos::Repo;
 
@@ -13,6 +14,7 @@ pub struct AppState {
     pub(crate) settings: Arc<Settings>,
     pub(crate) http_client: reqwest::Client,
     pub(crate) provisioner: Option<Arc<dyn IdentityProvisioner>>,
+    pub(crate) email_sender: Option<Arc<dyn EmailSender>>,
     pub(crate) storage: Arc<dyn ObjectStore>,
     pub(crate) auth_cache: AuthCache,
 }

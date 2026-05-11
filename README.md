@@ -232,13 +232,13 @@ docker compose -f dev/docker-compose.yml exec pocket-id /app/pocket-id one-time-
 
 ### Getting an Admin Login Code on Kubernetes
 
-**Development** (namespace `guardrail-dev`):
+**Development** (namespace `guardrail`):
 
 ```sh
-kubectl exec -n guardrail-dev deployment/pocket-id -- /app/pocket-id one-time-access-token <username or email>
+kubectl exec -n guardrail deployment/pocket-id -- /app/pocket-id one-time-access-token <username or email>
 ```
 
-**Production**: substitute `guardrail-prd` for the namespace.
+**Production**: substitute `guardrail` for the namespace.
 
 Export the generated OIDC settings before starting the Rust web server:
 
@@ -375,21 +375,21 @@ It requires `provisioner.pocket_id` to be configured in the settings.
 List all Pocket ID users and their current admin status:
 
 ```sh
-kubectl exec -n guardrail-dev deploy/guardrail-web -- \
+kubectl exec -n guardrail deploy/guardrail-web -- \
   /app/guardrailctl -C /config user list
 ```
 
 Grant admin to an existing user (accepts username, email, or Pocket ID user ID):
 
 ```sh
-kubectl exec -n guardrail-dev deploy/guardrail-web -- \
+kubectl exec -n guardrail deploy/guardrail-web -- \
   /app/guardrailctl -C /config user set-admin rob.caelers@gmail.com
 ```
 
 Remove admin from a user:
 
 ```sh
-kubectl exec -n guardrail-dev deploy/guardrail-web -- \
+kubectl exec -n guardrail deploy/guardrail-web -- \
   /app/guardrailctl -C /config user unset-admin rob.caelers@gmail.com
 ```
 

@@ -6,9 +6,11 @@ use data::{
     invitation::{Invitation, InvitationGrant, NewInvitation},
     product::{NewProduct, Product},
 };
+use email::{Email, EmailSender, LogEmailSender, ResendEmailSender};
 use repos::{api_token::ApiTokenRepo, invitation::InvitationRepo, product::ProductRepo};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::sync::Arc;
 use surrealdb::{Surreal, engine::any::Any, opt::auth::Root};
 
 type AnyErr = Box<dyn std::error::Error + Send + Sync>;
@@ -171,6 +173,10 @@ struct InviteCreateArgs {
 
     #[arg(long)]
     api_key_product_id: Option<String>,
+
+    /// Send the invitation link to this email address (requires email to be configured in settings).
+    #[arg(long)]
+    email: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -271,6 +277,7 @@ struct InviteCreateOutput {
     invitation: Invitation,
     invite_url: String,
     api_token: Option<CreatedToken>,
+    email_sent: Option<String>,
 }
 
 #[tokio::main]
@@ -359,10 +366,40 @@ async fn run_invite(
                 settings.auth.origin.trim_end_matches('/'),
                 invitation.code
             );
+
+            let email_sent = if let Some(to) = args.email.as_deref() {
+                if settings.email.from.is_empty() {
+                    return Err("email.from is not configured in settings".into());
+                }
+                let sender = build_email_sender(settings);
+                let email = Email {
+                    from: settings.email.from.clone(),
+                    to: to.to_string(),
+                    subject: format!("You've been invited to {}", settings.auth.name),
+                    html: format!(
+                        "<p>You have been invited to join <strong>{name}</strong>.</p>\
+                         <p><a href=\"{url}\">Accept invitation</a></p>\
+                         <p>Or copy this link: {url}</p>",
+                        name = settings.auth.name,
+                        url = invite_url,
+                    ),
+                    text: Some(format!(
+                        "You have been invited to join {name}. Accept here: {url}",
+                        name = settings.auth.name,
+                        url = invite_url,
+                    )),
+                };
+                sender.send(email).await?;
+                Some(to.to_string())
+            } else {
+                None
+            };
+
             let output = InviteCreateOutput {
                 invitation,
                 invite_url,
                 api_token,
+                email_sent,
             };
             print_invite_create(cli, &output)?;
         }
@@ -372,6 +409,14 @@ async fn run_invite(
         }
     }
     Ok(())
+}
+
+fn build_email_sender(settings: &Settings) -> Arc<dyn EmailSender> {
+    if let Some(key) = settings.email.resend.as_ref().map(|r| r.key.as_str()).filter(|k| !k.is_empty()) {
+        Arc::new(ResendEmailSender::new(key.to_string()))
+    } else {
+        Arc::new(LogEmailSender)
+    }
 }
 
 async fn run_token(cli: &Cli, db: &Surreal<Any>, command: &TokenCommand) -> Result<(), AnyErr> {
@@ -591,6 +636,9 @@ fn print_invite_create(cli: &Cli, output: &InviteCreateOutput) -> Result<(), Any
         println!("Created invitation {}", output.invitation.id);
         println!("Code: {}", output.invitation.code);
         println!("URL: {}", output.invite_url);
+        if let Some(to) = &output.email_sent {
+            println!("Email sent to: {to}");
+        }
         Ok(())
     }
 }

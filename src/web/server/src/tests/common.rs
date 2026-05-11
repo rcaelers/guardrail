@@ -141,6 +141,7 @@ impl TestApp {
             settings,
             http_client: reqwest::Client::new(),
             provisioner,
+            email_sender: None,
             storage,
             auth_cache: AuthCache::default(),
         };

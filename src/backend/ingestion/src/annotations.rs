@@ -365,8 +365,8 @@ mod tests {
         let result = engine
             .eval_with_scope::<rhai::Map>(&mut scope, script)
             .expect("custom methods should work");
-        assert_eq!(result["before"].as_bool().unwrap(), true);
-        assert_eq!(result["after"].as_bool().unwrap(), false);
+        assert!(result["before"].as_bool().unwrap());
+        assert!(!result["after"].as_bool().unwrap());
         assert_eq!(result["removed"].clone().into_string().unwrap(), "two");
         let keys = result["keys"].clone().try_cast::<Vec<String>>().unwrap();
         assert_eq!(keys.len(), 1);

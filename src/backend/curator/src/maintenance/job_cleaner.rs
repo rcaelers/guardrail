@@ -58,15 +58,9 @@ impl JobCleaner {
                 page_size: Some(page_size),
             };
 
-            let tasks = redis
-                .list_tasks("guardrail::Jobs", &filter)
-                .await
-                .map_err(|e| {
-                    JobError::Failure(format!(
-                        "Failed to list tasks with status {:?}: {}",
-                        status, e
-                    ))
-                })?;
+            let tasks = redis.list_tasks(&filter).await.map_err(|e| {
+                JobError::Failure(format!("Failed to list tasks with status {:?}: {}", status, e))
+            })?;
 
             if tasks.is_empty() {
                 break;

@@ -1,0 +1,10 @@
+[package]
+name = "email"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+resend-rs.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

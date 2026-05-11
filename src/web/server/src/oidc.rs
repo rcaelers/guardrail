@@ -500,6 +500,7 @@ mod tests {
             settings: Arc::new(settings),
             http_client: reqwest::Client::new(),
             provisioner: None,
+            email_sender: None,
             storage,
             auth_cache: AuthCache::default(),
         }

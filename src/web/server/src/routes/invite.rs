@@ -9,6 +9,7 @@ use chrono::{DateTime, Utc};
 use data::api_token::{ApiToken, ENTITLEMENT_INVITATION_CREATE};
 use data::invitation::{Invitation, InvitationGrant, NewInvitation, UpdateInvitation};
 use data::pending_access::{NewPendingAccess, PendingAccessGrant};
+use email::Email;
 use serde::Deserialize;
 use tower_sessions::Session;
 
@@ -39,6 +40,8 @@ pub fn router() -> Router<AppState> {
 
 #[derive(Deserialize)]
 struct CreateInvitationRequest {
+    /// If provided, an invitation email is sent to this address.
+    to: Option<String>,
     is_admin: bool,
     grants: Vec<InvitationGrant>,
     expires_at: Option<DateTime<Utc>>,
@@ -122,6 +125,32 @@ async fn create_invitation(
     )
     .await
     .map_err(AppError::internal)?;
+
+    if let (Some(to), Some(sender)) = (body.to.as_deref(), state.email_sender.as_deref()) {
+        let origin = state.settings.auth.origin.trim_end_matches('/');
+        let invite_url = format!("{origin}/invite/{}", invitation.code);
+        let email = Email {
+            from: state.settings.email.from.clone(),
+            to: to.to_string(),
+            subject: format!("You've been invited to {}", state.settings.auth.name),
+            html: format!(
+                "<p>You have been invited to join <strong>{name}</strong>.</p>\
+                 <p><a href=\"{url}\">Accept invitation</a></p>\
+                 <p>Or copy this link: {url}</p>",
+                name = state.settings.auth.name,
+                url = invite_url,
+            ),
+            text: Some(format!(
+                "You have been invited to join {name}. Accept here: {url}",
+                name = state.settings.auth.name,
+                url = invite_url,
+            )),
+        };
+        if let Err(e) = sender.send(email).await {
+            tracing::warn!(to, "failed to send invitation email: {e}");
+        }
+    }
+
     Ok(Json(invitation))
 }
 

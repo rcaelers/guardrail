@@ -289,7 +289,7 @@ impl MinidumpApi {
         state: &AppState,
         script_file: &str,
     ) -> Result<(), ApiError> {
-        let script_path = format!("{}/{}", &state.settings.config_dir, script_file);
+        let script_path = format!("{}/{}", state.settings.config_dir, script_file);
         debug!(script_file = %script_path, "Running global validation script");
         Self::validate_with_rhai_script(&script_path, crash_info)
     }
@@ -332,7 +332,7 @@ impl MinidumpApi {
         })?;
 
         if matches {
-            let script_path = format!("{}/{}", &state.settings.config_dir, script_file);
+            let script_path = format!("{}/{}", state.settings.config_dir, script_file);
             debug!(
                 script_file = %script_path,
                 product_pattern = %product_pattern,
@@ -919,12 +919,12 @@ mod tests {
         let valid = engine
             .eval::<rhai::Map>("validation_success()")
             .expect("validation_success should return a map");
-        assert_eq!(valid["valid"].as_bool().unwrap(), true);
+        assert!(valid["valid"].as_bool().unwrap());
 
         let invalid = engine
             .eval::<rhai::Map>("validation_error(\"bad\")")
             .expect("validation_error should return a map");
-        assert_eq!(invalid["valid"].as_bool().unwrap(), false);
+        assert!(!invalid["valid"].as_bool().unwrap());
         assert_eq!(invalid["error"].clone().into_string().unwrap(), "bad");
 
         let timestamp = engine

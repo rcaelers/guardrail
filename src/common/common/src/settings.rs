@@ -202,6 +202,40 @@ pub struct ProvisionerSettings {
     pub pocket_id: Option<PocketIdSettings>,
 }
 
+#[derive(Deserialize, Default)]
+#[serde(default)]
+pub struct ResendSettings {
+    /// Resend API key (`re_...`). Env var: `GUARDRAIL_EMAIL_RESEND_KEY`.
+    pub key: String,
+}
+
+impl fmt::Debug for ResendSettings {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ResendSettings")
+            .field("key", &if self.key.is_empty() { "[not set]" } else { "[REDACTED]" })
+            .finish()
+    }
+}
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+pub struct EmailSettings {
+    /// Sender address, e.g. `"Guardrail <noreply@example.com>"`.
+    /// When empty, email sending is disabled. Env var: `GUARDRAIL_EMAIL_FROM`.
+    pub from: String,
+    /// Resend provider settings. When absent, emails are logged instead of sent.
+    pub resend: Option<ResendSettings>,
+}
+
+impl fmt::Debug for EmailSettings {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EmailSettings")
+            .field("from", &self.from)
+            .field("resend", &self.resend)
+            .finish()
+    }
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub struct Settings {
     pub api_server: ApiServer,
@@ -215,6 +249,8 @@ pub struct Settings {
     pub minidumps: Minidumps,
     #[serde(default)]
     pub provisioner: ProvisionerSettings,
+    #[serde(default)]
+    pub email: EmailSettings,
     #[serde(skip)]
     pub config_dir: String,
 }
