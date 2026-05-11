@@ -22,3 +22,8 @@ node_modules
 *~
 
 dev/_*
+
+# Secrets — never commit these
+.env
+.env.local
+config/secrets.yaml
