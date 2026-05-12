@@ -31,7 +31,8 @@ import type {
   User, Product, Role, MembershipWithUser, MembershipWithProduct,
   Symbol as SymbolRow, SymbolQuery,
   Invitation, CreateInvitationSpec, UpdateInvitationSpec,
-  ApiToken, CreatedApiToken, CreateApiTokenSpec, CreateAdminApiTokenSpec, UpdateAdminApiTokenSpec, EntitlementDef
+  ApiToken, CreatedApiToken, CreateApiTokenSpec, CreateAdminApiTokenSpec, UpdateAdminApiTokenSpec, EntitlementDef,
+  ProductEmailSettings, AppEmailSettings
 } from './types';
 
 type ResponseMeta = {
@@ -193,6 +194,14 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     async deleteProduct(id) {
       const r = await jdel(`/products/${encodeURIComponent(id)}`);
       await assertOk(r, 'deleteProduct');
+    },
+    async getProductEmailSettings(id) {
+      const r = await req(`/products/${encodeURIComponent(id)}/email-settings`);
+      return json<ProductEmailSettings>(r, 'getProductEmailSettings');
+    },
+    async updateProductEmailSettings(id, settings) {
+      const r = await jpost(`/products/${encodeURIComponent(id)}/email-settings`, settings);
+      return json<ProductEmailSettings>(r, 'updateProductEmailSettings');
     },
 
     // --- users ---
@@ -360,6 +369,14 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     async deleteAdminApiToken(id) {
       const r = await jdel(`/api-tokens/${encodeURIComponent(id)}`);
       await assertOk(r, 'deleteAdminApiToken');
+    },
+    async getAppEmailSettings() {
+      const r = await req('/settings/email');
+      return json<AppEmailSettings>(r, 'getAppEmailSettings');
+    },
+    async updateAppEmailSettings(settings) {
+      const r = await jpost('/settings/email', settings);
+      return json<AppEmailSettings>(r, 'updateAppEmailSettings');
     }
   };
 }

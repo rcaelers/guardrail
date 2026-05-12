@@ -30,5 +30,10 @@
       data-sveltekit-reload
       class="block w-full rounded-md bg-ink dark:bg-ink-dark px-3 py-2 text-center text-[13px] font-medium text-surface dark:text-surface-dark"
     >Try again</a>
+
+    <p class="mt-4 text-center text-[12px] text-ink-muted dark:text-ink-mutedDark">
+      Lost your passkey?
+      <a href="/recover" class="text-accent hover:underline">Request a login link</a>
+    </p>
   </div>
 </div>

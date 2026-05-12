@@ -41,4 +41,16 @@ pub trait IdentityProvisioner: Send + Sync {
     /// Issue a fresh credential-setup URL for an already-provisioned user.
     /// Called when a user returns to redeem an invite they previously abandoned.
     async fn create_setup_url(&self, external_id: &str) -> Result<Url, ProvisionerError>;
+
+    /// Look up the identity provider's internal user ID by email, falling back
+    /// to username. Returns `None` if no matching user exists.
+    async fn find_user_id(
+        &self,
+        email: &str,
+        username: &str,
+    ) -> Result<Option<String>, ProvisionerError>;
+
+    /// Issue a short-lived one-time login URL for account recovery (lost passkey).
+    /// The TTL is intentionally short — use `create_setup_url` for invitation flows.
+    async fn create_recovery_url(&self, external_id: &str) -> Result<Url, ProvisionerError>;
 }

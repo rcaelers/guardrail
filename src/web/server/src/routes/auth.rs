@@ -5,6 +5,8 @@ use axum::{
     response::{IntoResponse, Redirect},
     routing::{get, post},
 };
+use email::Email;
+use serde::Deserialize;
 use serde_json::Value;
 use tower_sessions::Session;
 
@@ -14,6 +16,13 @@ use crate::{
     oidc,
 };
 
+const DEFAULT_RECOVERY_HTML: &str = include_str!("../../templates/email/recovery.html");
+const DEFAULT_RECOVERY_TEXT: &str = include_str!("../../templates/email/recovery.txt");
+
+fn render_recovery_template(template: &str, recovery_url: &str) -> String {
+    template.replace("{{recovery_url}}", recovery_url)
+}
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/auth/login", get(oidc::login_start))
@@ -21,6 +30,79 @@ pub fn router() -> Router<AppState> {
         .route("/auth/oidc/callback", get(oidc::callback))
         .route("/auth/logout", post(logout))
         .route("/auth/real-user", get(get_real_user))
+        .route("/auth/recovery", post(request_recovery))
+}
+
+#[derive(Deserialize)]
+struct RecoveryRequest {
+    email: String,
+}
+
+async fn request_recovery(
+    State(state): State<AppState>,
+    Json(body): Json<RecoveryRequest>,
+) -> AppResult<Json<Value>> {
+    // Look up the user by email. We proceed silently regardless of outcome to
+    // avoid leaking whether a given email is registered.
+    let result: AppResult<()> = async {
+        let user = repos::user::UserRepo::get_by_email(&state.repo.db, &body.email)
+            .await
+            .map_err(AppError::internal)?;
+        let Some(user) = user else { return Ok(()); };
+
+        let provisioner = state.provisioner.as_ref().ok_or_else(|| {
+            AppError::failure("No identity provisioner configured")
+        })?;
+
+        let pocket_id = provisioner
+            .find_user_id(&user.email, &user.username)
+            .await
+            .map_err(|e| {
+                tracing::warn!(email = %body.email, "failed to look up user in identity provider: {e}");
+                AppError::failure(e.to_string())
+            })?
+            .ok_or_else(|| AppError::not_found("User not found in identity provider"))?;
+
+        let recovery_url = provisioner
+            .create_recovery_url(&pocket_id)
+            .await
+            .map_err(|e| {
+                tracing::warn!(email = %body.email, "failed to create recovery URL: {e}");
+                AppError::failure(e.to_string())
+            })?;
+
+        if let Some(sender) = state.email_sender.as_deref() {
+            let app_settings = repos::app_settings::AppSettingsRepo::get_or_create(&state.repo.db)
+                .await
+                .unwrap_or_default();
+            let html_template = app_settings.email.recovery_html_template
+                .unwrap_or_else(|| DEFAULT_RECOVERY_HTML.to_string());
+            let text_template = app_settings.email.recovery_text_template
+                .unwrap_or_else(|| DEFAULT_RECOVERY_TEXT.to_string());
+            let url_str = recovery_url.as_str();
+            let email = Email {
+                from: state.settings.email.from.clone(),
+                to: body.email.clone(),
+                subject: "Your one-time login link".to_string(),
+                html: render_recovery_template(&html_template, url_str),
+                text: Some(render_recovery_template(&text_template, url_str)),
+            };
+            if let Err(e) = sender.send(email).await {
+                tracing::warn!(email = %body.email, "failed to send recovery email: {e}");
+            }
+        } else {
+            tracing::info!(email = %body.email, url = %recovery_url, "recovery URL generated (no email sender configured)");
+        }
+
+        Ok(())
+    }
+    .await;
+
+    if let Err(e) = result {
+        tracing::warn!(email = %body.email, "recovery request failed: {e}");
+    }
+
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 async fn logout(session: Session) -> impl IntoResponse {

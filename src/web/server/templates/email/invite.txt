@@ -1,0 +1,6 @@
+You've been invited to {{app_name}}
+
+You have been invited to join {{app_name}}.
+
+Accept your invitation here:
+{{invite_url}}

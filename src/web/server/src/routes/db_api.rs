@@ -43,6 +43,7 @@ pub fn router() -> Router<AppState> {
         .route("/crashes/by-crash/{crash_id}", get(get_crash))
         .route("/products", get(list_products).post(create_product))
         .route("/products/{id}", get(get_product).post(update_product).delete(delete_product))
+        .route("/products/{id}/email-settings", get(get_product_email_settings).post(update_product_email_settings))
         .route("/products/{pid}/api-tokens", get(list_api_tokens).post(create_api_token))
         .route("/products/{pid}/api-tokens/{id}", delete(delete_api_token))
         .route("/products/{pid}/members", get(list_members))
@@ -55,6 +56,7 @@ pub fn router() -> Router<AppState> {
         .route("/users/{id}/memberships", get(memberships_for))
         .route("/users/find", get(find_user))
         .route("/me", get(get_me))
+        .route("/settings/email", get(get_app_email_settings).post(update_app_email_settings))
 }
 
 // --------------------------------------------------------------------
@@ -953,6 +955,110 @@ async fn delete_product(
         run_value(&db, sql, args.clone()).await?;
     }
     Ok(StatusCode::NO_CONTENT)
+}
+
+async fn get_product_email_settings(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
+        .await
+        .map_err(access_err)?;
+    let db = s.user_db(&session).await;
+
+    let settings = repos::product_settings::ProductSettingsRepo::get_or_create(&db, &id)
+        .await
+        .map_err(server_error)?;
+    let email = settings.email;
+    Ok(Json(json!({
+        "invite_html_template": email.invite_html_template.unwrap_or_default(),
+        "invite_text_template": email.invite_text_template.unwrap_or_default(),
+    })))
+}
+
+#[derive(Deserialize)]
+struct UpdateEmailSettingsBody {
+    invite_html_template: Option<String>,
+    invite_text_template: Option<String>,
+}
+
+async fn update_product_email_settings(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateEmailSettingsBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
+        .await
+        .map_err(access_err)?;
+    let db = s.user_db(&session).await;
+
+    let email = data::product_settings::EmailSettings {
+        invite_html_template: body.invite_html_template.filter(|s| !s.is_empty()),
+        invite_text_template: body.invite_text_template.filter(|s| !s.is_empty()),
+    };
+    let saved = repos::product_settings::ProductSettingsRepo::upsert_email(&db, &id, email)
+        .await
+        .map_err(server_error)?;
+    Ok(Json(json!({
+        "invite_html_template": saved.email.invite_html_template.unwrap_or_default(),
+        "invite_text_template": saved.email.invite_text_template.unwrap_or_default(),
+    })))
+}
+
+// --------------------------------------------------------------------
+// Global app settings (admin-only)
+// --------------------------------------------------------------------
+
+async fn get_app_email_settings(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db)
+        .await
+        .map_err(access_err)?;
+
+    let settings = repos::app_settings::AppSettingsRepo::get_or_create(&s.repo.db)
+        .await
+        .map_err(server_error)?;
+    let email = settings.email;
+    Ok(Json(json!({
+        "recovery_html_template": email.recovery_html_template.unwrap_or_default(),
+        "recovery_text_template": email.recovery_text_template.unwrap_or_default(),
+    })))
+}
+
+#[derive(Deserialize)]
+struct UpdateAppEmailSettingsBody {
+    recovery_html_template: Option<String>,
+    recovery_text_template: Option<String>,
+}
+
+async fn update_app_email_settings(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Json(body): Json<UpdateAppEmailSettingsBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_admin(&session, &headers, &s.repo.db)
+        .await
+        .map_err(access_err)?;
+
+    let email = data::app_settings::AppEmailSettings {
+        recovery_html_template: body.recovery_html_template.filter(|s| !s.is_empty()),
+        recovery_text_template: body.recovery_text_template.filter(|s| !s.is_empty()),
+    };
+    let saved = repos::app_settings::AppSettingsRepo::upsert_email(&s.repo.db, email)
+        .await
+        .map_err(server_error)?;
+    Ok(Json(json!({
+        "recovery_html_template": saved.email.recovery_html_template.unwrap_or_default(),
+        "recovery_text_template": saved.email.recovery_text_template.unwrap_or_default(),
+    })))
 }
 
 // --------------------------------------------------------------------

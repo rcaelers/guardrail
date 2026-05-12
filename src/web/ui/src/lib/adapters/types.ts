@@ -342,6 +342,16 @@ export interface Invitation {
   updated_at: string;
 }
 
+export interface ProductEmailSettings {
+  invite_html_template: string;
+  invite_text_template: string;
+}
+
+export interface AppEmailSettings {
+  recovery_html_template: string;
+  recovery_text_template: string;
+}
+
 export interface CreateInvitationSpec {
   is_admin: boolean;
   grants: InvitationGrant[];
@@ -468,6 +478,8 @@ export interface GuardrailAdapter {
     color?: string;
   }): Promise<Product>;
   deleteProduct(id: string): Promise<void>;
+  getProductEmailSettings(id: string): Promise<ProductEmailSettings>;
+  updateProductEmailSettings(id: string, settings: ProductEmailSettings): Promise<ProductEmailSettings>;
 
   // --- users ---
   listUsers(): Promise<User[]>;
@@ -523,6 +535,10 @@ export interface GuardrailAdapter {
   createAdminApiToken(spec: CreateAdminApiTokenSpec): Promise<CreatedApiToken>;
   updateAdminApiToken(id: string, spec: UpdateAdminApiTokenSpec): Promise<void>;
   deleteAdminApiToken(id: string): Promise<void>;
+
+  // --- global app email settings ---
+  getAppEmailSettings(): Promise<AppEmailSettings>;
+  updateAppEmailSettings(settings: AppEmailSettings): Promise<AppEmailSettings>;
 }
 
 export interface UpdateAdminApiTokenSpec {

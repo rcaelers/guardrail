@@ -23,6 +23,15 @@ use crate::{
     templates::InviteTemplate,
 };
 
+const DEFAULT_HTML: &str = include_str!("../../templates/email/invite.html");
+const DEFAULT_TEXT: &str = include_str!("../../templates/email/invite.txt");
+
+fn render_invite_template(template: &str, app_name: &str, invite_url: &str) -> String {
+    template
+        .replace("{{app_name}}", app_name)
+        .replace("{{invite_url}}", invite_url)
+}
+
 /// Invitation API routes, to be nested under /api/v1 in main.rs.
 pub fn api_router() -> Router<AppState> {
     Router::new()
@@ -129,22 +138,23 @@ async fn create_invitation(
     if let (Some(to), Some(sender)) = (body.to.as_deref(), state.email_sender.as_deref()) {
         let origin = state.settings.auth.origin.trim_end_matches('/');
         let invite_url = format!("{origin}/invite/{}", invitation.code);
+
+        let (product_html, product_text) = if invitation.grants.len() == 1 {
+            product_email_templates(&state.repo.db, &invitation.grants[0].product_id).await
+        } else {
+            (None, None)
+        };
+
+        let html_template = product_html.unwrap_or_else(|| DEFAULT_HTML.to_string());
+        let text_template = product_text.unwrap_or_else(|| DEFAULT_TEXT.to_string());
+        let html = render_invite_template(&html_template, &state.settings.auth.name, &invite_url);
+        let text = render_invite_template(&text_template, &state.settings.auth.name, &invite_url);
         let email = Email {
             from: state.settings.email.from.clone(),
             to: to.to_string(),
             subject: format!("You've been invited to {}", state.settings.auth.name),
-            html: format!(
-                "<p>You have been invited to join <strong>{name}</strong>.</p>\
-                 <p><a href=\"{url}\">Accept invitation</a></p>\
-                 <p>Or copy this link: {url}</p>",
-                name = state.settings.auth.name,
-                url = invite_url,
-            ),
-            text: Some(format!(
-                "You have been invited to join {name}. Accept here: {url}",
-                name = state.settings.auth.name,
-                url = invite_url,
-            )),
+            html,
+            text: Some(text),
         };
         if let Err(e) = sender.send(email).await {
             tracing::warn!(to, "failed to send invitation email: {e}");
@@ -489,6 +499,18 @@ async fn redeem_invite(
 
 fn non_empty(s: String) -> Option<String> {
     if s.is_empty() { None } else { Some(s) }
+}
+
+/// Returns per-product HTML and text invite email templates from `product_settings`.
+/// Returns `(None, None)` if no custom templates are configured for the product.
+async fn product_email_templates(
+    db: &surrealdb::Surreal<surrealdb::engine::any::Any>,
+    product_id: &str,
+) -> (Option<String>, Option<String>) {
+    let Ok(Some(settings)) = repos::product_settings::ProductSettingsRepo::get(db, product_id).await else {
+        return (None, None);
+    };
+    (settings.email.invite_html_template, settings.email.invite_text_template)
 }
 
 /// Validates that a product-scoped token is not used to create grants

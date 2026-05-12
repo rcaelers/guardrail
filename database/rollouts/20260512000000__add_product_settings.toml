@@ -1,0 +1,20 @@
+id = "20260512000000__add_product_settings"
+name = "add_product_settings"
+source_schema_hash = "d3080e94c42229a2f08c0c2cfe5e346562917dcf089d26fe84564e26393bed8e"
+target_schema_hash = "bf48201381c79f5f68274d3a98966ccfd00d78f7f2b0478c533a659afdfc720d"
+compatibility = "backward"
+renames = []
+
+[[steps]]
+id = "apply_schema"
+phase = "start"
+kind = "apply_schema"
+files = ["database/schema/guardrail.surql"]
+entities = []
+
+[[steps]]
+id = "rollback_schema"
+phase = "rollback"
+kind = "apply_schema"
+files = ["database/rollouts/20260512000000__add_product_settings_rollback.surql"]
+entities = []

@@ -1,0 +1,8 @@
+Your one-time login link
+
+You requested a one-time login link.
+
+Sign in here (link expires in 15 minutes):
+{{recovery_url}}
+
+If you did not request this, you can safely ignore this email.

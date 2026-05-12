@@ -42,6 +42,18 @@ struct OneTimeAccessTokenResponse {
     token: String,
 }
 
+#[derive(Deserialize)]
+struct PocketIdUser {
+    id: String,
+    username: String,
+    email: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct PocketIdUserList {
+    data: Vec<PocketIdUser>,
+}
+
 // --- Implementation ---
 
 #[async_trait]
@@ -59,7 +71,71 @@ impl IdentityProvisioner for PocketIdProvisioner {
     }
 
     async fn create_setup_url(&self, external_id: &str) -> Result<Url, ProvisionerError> {
-        let token = self.create_one_time_token(external_id).await?;
+        self.build_login_code_url(external_id, "168h").await
+    }
+
+    async fn find_user_id(
+        &self,
+        email: &str,
+        username: &str,
+    ) -> Result<Option<String>, ProvisionerError> {
+        // Search by email first; the search is a LIKE so we verify exact match.
+        if let Some(id) = self.search_exact(email, |u| {
+            u.email.as_deref().map(str::to_lowercase) == Some(email.to_lowercase())
+        }).await? {
+            return Ok(Some(id));
+        }
+        // Fall back to username.
+        self.search_exact(username, |u| {
+            u.username.to_lowercase() == username.to_lowercase()
+        }).await
+    }
+
+    async fn create_recovery_url(&self, external_id: &str) -> Result<Url, ProvisionerError> {
+        self.build_login_code_url(external_id, "15m").await
+    }
+}
+
+impl PocketIdProvisioner {
+    /// Calls `GET /api/users?search=<term>` and returns the first result where
+    /// `predicate` returns true, or `None` if no match is found.
+    async fn search_exact(
+        &self,
+        term: &str,
+        predicate: impl Fn(&PocketIdUser) -> bool,
+    ) -> Result<Option<String>, ProvisionerError> {
+        let url = self
+            .api_url
+            .join("/api/users")
+            .map_err(|e| ProvisionerError::ApiError(e.to_string()))?;
+
+        let response = self
+            .client
+            .get(url)
+            .header("X-API-KEY", &self.api_key)
+            .query(&[("search", term), ("pagination[limit]", "10")])
+            .send()
+            .await
+            .map_err(|e| ProvisionerError::HttpError(e.to_string()))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(ProvisionerError::ApiError(format!(
+                "user search returned {status}: {body}"
+            )));
+        }
+
+        let list: PocketIdUserList = response
+            .json()
+            .await
+            .map_err(|e| ProvisionerError::ApiError(format!("parse user list: {e}")))?;
+
+        Ok(list.data.into_iter().find(|u| predicate(u)).map(|u| u.id))
+    }
+
+    async fn build_login_code_url(&self, user_id: &str, ttl: &str) -> Result<Url, ProvisionerError> {
+        let token = self.create_one_time_token(user_id, ttl).await?;
         let path = format!("{}/{}", self.setup_path.trim_end_matches('/'), token);
         let mut url = self
             .public_url
@@ -70,9 +146,7 @@ impl IdentityProvisioner for PocketIdProvisioner {
         }
         Ok(url)
     }
-}
 
-impl PocketIdProvisioner {
     // Performs an outbound Pocket ID API call; invite handlers cover provisioner success/failure through mocks.
     async fn create_pocket_id_user(
         &self,
@@ -120,7 +194,7 @@ impl PocketIdProvisioner {
     }
 
     // Performs an outbound Pocket ID API call; invite handlers cover setup-url behavior through mocks.
-    async fn create_one_time_token(&self, user_id: &str) -> Result<String, ProvisionerError> {
+    async fn create_one_time_token(&self, user_id: &str, ttl: &str) -> Result<String, ProvisionerError> {
         let url = self
             .api_url
             .join(&format!("/api/users/{user_id}/one-time-access-token"))
@@ -130,7 +204,7 @@ impl PocketIdProvisioner {
             .client
             .post(url)
             .header("X-API-KEY", &self.api_key)
-            .json(&serde_json::json!({ "ttl": "168h" }))
+            .json(&serde_json::json!({ "ttl": ttl }))
             .send()
             .await
             .map_err(|e| ProvisionerError::HttpError(e.to_string()))?;

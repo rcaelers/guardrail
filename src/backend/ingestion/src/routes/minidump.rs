@@ -652,10 +652,6 @@ impl MinidumpApi {
             map.insert("product_metadata".into(), Self::json_to_rhai_dynamic(metadata));
         }
 
-        if let Some(ref metadata) = crash_info.product_metadata {
-            map.insert("product_metadata".into(), Self::json_to_rhai_dynamic(metadata));
-        }
-
         let tracked_annotations = TrackedAnnotations::from_map(crash_info.annotations.clone());
         map.insert("annotations".into(), rhai::Dynamic::from(tracked_annotations));
 

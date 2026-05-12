@@ -1,4 +1,5 @@
 pub mod annotation;
+pub mod app_settings;
 pub mod api_token;
 pub mod attachment;
 pub mod crash;
@@ -6,5 +7,6 @@ pub mod crash_group;
 pub mod invitation;
 pub mod pending_access;
 pub mod product;
+pub mod product_settings;
 pub mod symbols;
 pub mod user;

@@ -21,6 +21,39 @@ DEFINE INDEX idx_products_name ON TABLE products COLUMNS name UNIQUE;
 DEFINE INDEX idx_products_slug ON TABLE products COLUMNS slug UNIQUE;
 
 -- ============================================================
+-- Product settings
+-- ============================================================
+-- Per-product configuration. One record per product; the record ID mirrors
+-- the product ID so upserts are lock-free.  Each top-level field is a
+-- settings category (email, …); add new categories here as the product grows.
+DEFINE TABLE product_settings SCHEMAFULL;
+
+DEFINE FIELD product_id ON TABLE product_settings TYPE record<products> ASSERT $value != NONE;
+
+-- Email settings
+DEFINE FIELD email ON TABLE product_settings TYPE object DEFAULT {};
+DEFINE FIELD email.invite_html_template ON TABLE product_settings TYPE option<string>;
+DEFINE FIELD email.invite_text_template ON TABLE product_settings TYPE option<string>;
+
+DEFINE FIELD created_at ON TABLE product_settings TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE product_settings TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+
+-- ============================================================
+-- App settings (global singleton)
+-- ============================================================
+-- Global application configuration. One record: app_settings:main.
+-- Use UPSERT to create or update. Admin-only access.
+DEFINE TABLE app_settings SCHEMAFULL;
+
+-- Email settings
+DEFINE FIELD email ON TABLE app_settings TYPE object DEFAULT {};
+DEFINE FIELD email.recovery_html_template ON TABLE app_settings TYPE option<string>;
+DEFINE FIELD email.recovery_text_template ON TABLE app_settings TYPE option<string>;
+
+DEFINE FIELD created_at ON TABLE app_settings TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE app_settings TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+
+-- ============================================================
 -- Users
 -- ============================================================
 -- `username` is the JWT subject and the auth identity used by fn::auth::*.
@@ -351,6 +384,11 @@ DEFINE TABLE OVERWRITE products SCHEMAFULL
 		FOR update WHERE fn::auth::is_admin()
 		FOR delete WHERE fn::auth::is_admin();
 
+DEFINE TABLE OVERWRITE product_settings SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE fn::auth::is_product_admin(product_id)
+		FOR create, update, delete WHERE fn::auth::is_product_admin(product_id);
+
 DEFINE TABLE OVERWRITE users SCHEMAFULL
 	PERMISSIONS
 		FOR select WHERE fn::auth::is_admin()
@@ -401,5 +439,9 @@ DEFINE TABLE OVERWRITE api_tokens SCHEMAFULL
 			OR (product_id != NONE AND fn::auth::is_product_admin(product_id))
 		FOR create, update, delete WHERE fn::auth::is_admin()
 			OR (product_id != NONE AND fn::auth::is_product_admin(product_id));
+
+DEFINE TABLE OVERWRITE app_settings SCHEMAFULL
+	PERMISSIONS
+		FOR select, create, update, delete WHERE fn::auth::is_admin();
 
 DEFINE TABLE OVERWRITE sessions SCHEMAFULL PERMISSIONS NONE;
