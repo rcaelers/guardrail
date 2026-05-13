@@ -50,14 +50,18 @@ struct UpdateUserBody<'a> {
 
 struct PocketIdClient {
     api_url: url::Url,
+    public_url: url::Url,
+    setup_path: String,
     api_key: String,
     client: reqwest::Client,
 }
 
 impl PocketIdClient {
-    fn new(api_url: &str, api_key: &str) -> Result<Self, AnyErr> {
+    fn new(api_url: &str, public_url: &str, setup_path: &str, api_key: &str) -> Result<Self, AnyErr> {
         Ok(Self {
             api_url: api_url.parse()?,
+            public_url: public_url.parse()?,
+            setup_path: setup_path.to_string(),
             api_key: api_key.to_string(),
             client: reqwest::Client::new(),
         })
@@ -110,6 +114,33 @@ impl PocketIdClient {
         users.iter().find(|u| {
             u.id == identifier || u.username == identifier || u.email.as_deref() == Some(identifier)
         })
+    }
+
+    async fn create_one_time_token(&self, user_id: &str, ttl: &str) -> Result<String, AnyErr> {
+        let url = self
+            .api_url
+            .join(&format!("/api/users/{user_id}/one-time-access-token"))?;
+        let response = self
+            .client
+            .post(url)
+            .header("X-API-KEY", &self.api_key)
+            .json(&serde_json::json!({ "ttl": ttl }))
+            .send()
+            .await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let text = response.text().await.unwrap_or_default();
+            return Err(format!("one-time-access-token failed: {status}: {text}").into());
+        }
+        #[derive(Deserialize)]
+        struct TokenResponse { token: String }
+        let data: TokenResponse = response.json().await?;
+        Ok(data.token)
+    }
+
+    fn build_login_url(&self, token: &str) -> Result<url::Url, AnyErr> {
+        let path = format!("{}/{}", self.setup_path.trim_end_matches('/'), token);
+        Ok(self.public_url.join(&path)?)
     }
 }
 
@@ -257,12 +288,23 @@ enum UserSubcommand {
     List,
     SetAdmin(UserIdentifierArgs),
     UnsetAdmin(UserIdentifierArgs),
+    GenerateLoginCode(UserGenerateLoginCodeArgs),
 }
 
 #[derive(Args, Debug)]
 struct UserIdentifierArgs {
     /// Pocket ID username, email address, or user ID
     identifier: String,
+}
+
+#[derive(Args, Debug)]
+struct UserGenerateLoginCodeArgs {
+    /// Pocket ID username, email address, or user ID
+    identifier: String,
+
+    /// Token time-to-live (e.g. "15m", "1h", "168h")
+    #[arg(long, default_value = "15m")]
+    ttl: String,
 }
 
 #[derive(Serialize)]
@@ -534,7 +576,15 @@ async fn run_user(cli: &Cli, settings: &Settings, command: &UserCommand) -> Resu
         .pocket_id
         .as_ref()
         .ok_or("provisioner.pocket_id is not configured")?;
-    let client = PocketIdClient::new(&pocket_id.api_url, &pocket_id.api_key)?;
+    let public_url = pocket_id
+        .public_url
+        .as_deref()
+        .unwrap_or(&pocket_id.api_url);
+    let setup_path = pocket_id
+        .setup_path
+        .as_deref()
+        .unwrap_or("/lc/");
+    let client = PocketIdClient::new(&pocket_id.api_url, public_url, setup_path, &pocket_id.api_key)?;
 
     match &command.command {
         UserSubcommand::List => {
@@ -565,6 +615,15 @@ async fn run_user(cli: &Cli, settings: &Settings, command: &UserCommand) -> Resu
                 print_status(cli, "unset-admin", "user", &user.id)?;
             }
         }
+        UserSubcommand::GenerateLoginCode(args) => {
+            let users = client.list_users().await?;
+            let user = client
+                .find_user(&users, &args.identifier)
+                .ok_or_else(|| format!("user not found: {}", args.identifier))?;
+            let token = client.create_one_time_token(&user.id, &args.ttl).await?;
+            let url = client.build_login_url(&token)?;
+            print_login_code(cli, &user.id, &url.to_string())?;
+        }
     }
     Ok(())
 }
@@ -583,6 +642,14 @@ fn print_users(cli: &Cli, users: &[PocketIdUser]) -> Result<(), AnyErr> {
             user.email.as_deref().unwrap_or("-")
         );
     }
+    Ok(())
+}
+
+fn print_login_code(cli: &Cli, user_id: &str, url: &str) -> Result<(), AnyErr> {
+    if cli.json {
+        return print_json(&serde_json::json!({ "user_id": user_id, "login_url": url }));
+    }
+    println!("Login URL: {url}");
     Ok(())
 }
 
