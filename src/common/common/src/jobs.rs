@@ -29,8 +29,8 @@ pub struct ImportSymbolJob {
 }
 
 pub mod queue {
-    pub const MINIDUMP_JOBS: &str = "guardrail::MinidumpJobs";
-    pub const SYMBOL_JOBS: &str = "guardrail::SymbolJobs";
-    pub const IMPORT_CRASH_JOBS: &str = "guardrail::ImportCrashJobs";
-    pub const IMPORT_SYMBOL_JOBS: &str = "guardrail::ImportSymbolJobs";
+    pub const MINIDUMP_JOBS: &str = "guardrail::queues::MinidumpJobs";
+    pub const SYMBOL_JOBS: &str = "guardrail::queues::SymbolJobs";
+    pub const IMPORT_CRASH_JOBS: &str = "guardrail::queues::ImportCrashJobs";
+    pub const IMPORT_SYMBOL_JOBS: &str = "guardrail::queues::ImportSymbolJobs";
 }
