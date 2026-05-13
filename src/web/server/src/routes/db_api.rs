@@ -44,6 +44,7 @@ pub fn router() -> Router<AppState> {
         .route("/products", get(list_products).post(create_product))
         .route("/products/{id}", get(get_product).post(update_product).delete(delete_product))
         .route("/products/{id}/email-settings", get(get_product_email_settings).post(update_product_email_settings))
+        .route("/products/{id}/ingestion-token", post(update_product_ingestion_token))
         .route("/products/{pid}/api-tokens", get(list_api_tokens).post(create_api_token))
         .route("/products/{pid}/api-tokens/{id}", delete(delete_api_token))
         .route("/products/{pid}/members", get(list_members))
@@ -1010,6 +1011,45 @@ async fn update_product_email_settings(
         "invite_html_template": saved.email.invite_html_template.unwrap_or_default(),
         "invite_text_template": saved.email.invite_text_template.unwrap_or_default(),
     })))
+}
+
+#[derive(Deserialize)]
+struct UpdateIngestionTokenBody {
+    ingestion_token: Option<String>,
+}
+
+async fn update_product_ingestion_token(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateIngestionTokenBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
+        .await
+        .map_err(access_err)?;
+    let db = s.user_db(&session).await;
+
+    let token = body
+        .ingestion_token
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string());
+
+    let rows = run_value(
+        &db,
+        &format!("UPDATE type::record('products', $id) SET ingestion_token = $token RETURN {PRODUCT_PROJ}"),
+        vec![
+            ("id", Value::String(id.clone())),
+            ("token", Value::String(token)),
+        ],
+    )
+    .await?;
+
+    rows.into_iter()
+        .next()
+        .map(Json)
+        .ok_or_else(|| not_found(&id))
 }
 
 // --------------------------------------------------------------------

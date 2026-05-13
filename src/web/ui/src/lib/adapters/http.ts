@@ -203,6 +203,10 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
       const r = await jpost(`/products/${encodeURIComponent(id)}/email-settings`, settings);
       return json<ProductEmailSettings>(r, 'updateProductEmailSettings');
     },
+    async updateProductIngestionToken(id, token) {
+      const r = await jpost(`/products/${encodeURIComponent(id)}/ingestion-token`, { ingestion_token: token ?? null });
+      return json<Product>(r, 'updateProductIngestionToken');
+    },
 
     // --- users ---
     async listUsers() {

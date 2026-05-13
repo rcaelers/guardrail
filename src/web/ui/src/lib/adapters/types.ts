@@ -301,6 +301,7 @@ export interface Product {
   description: string;
   color: string; // hex
   public: boolean;
+  ingestionToken?: string | null;
 }
 
 export interface Membership {
@@ -480,6 +481,7 @@ export interface GuardrailAdapter {
   deleteProduct(id: string): Promise<void>;
   getProductEmailSettings(id: string): Promise<ProductEmailSettings>;
   updateProductEmailSettings(id: string, settings: ProductEmailSettings): Promise<ProductEmailSettings>;
+  updateProductIngestionToken(id: string, token?: string): Promise<Product>;
 
   // --- users ---
   listUsers(): Promise<User[]>;
