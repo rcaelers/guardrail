@@ -10,7 +10,7 @@ pub struct ProductInfo {
 }
 
 pub fn product_cache_key(product_identifier: &str) -> String {
-    format!("product:by-name:{}", product_identifier.trim().to_ascii_lowercase())
+    format!("guardrail::product:by-name:{}", product_identifier.trim().to_ascii_lowercase())
 }
 
 pub fn product_cache_keys(product_name: &str, product_slug: Option<&str>) -> Vec<String> {
@@ -32,8 +32,8 @@ mod tests {
 
     #[test]
     fn product_cache_key_normalizes_case_and_whitespace() {
-        assert_eq!(product_cache_key(" Workrave "), "product:by-name:workrave");
-        assert_eq!(product_cache_key("workrave"), "product:by-name:workrave");
+        assert_eq!(product_cache_key(" Workrave "), "guardrail::product:by-name:workrave");
+        assert_eq!(product_cache_key("workrave"), "guardrail::product:by-name:workrave");
     }
 
     #[test]
@@ -41,14 +41,14 @@ mod tests {
         assert_eq!(
             product_cache_keys("Workrave Demo", Some("workrave-demo")),
             vec![
-                "product:by-name:workrave demo".to_string(),
-                "product:by-name:workrave-demo".to_string()
+                "guardrail::product:by-name:workrave demo".to_string(),
+                "guardrail::product:by-name:workrave-demo".to_string()
             ]
         );
 
         assert_eq!(
             product_cache_keys("Workrave", Some("workrave")),
-            vec!["product:by-name:workrave".to_string()]
+            vec!["guardrail::product:by-name:workrave".to_string()]
         );
     }
 }
