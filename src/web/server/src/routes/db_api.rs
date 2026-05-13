@@ -294,7 +294,7 @@ async fn run_value(
 
 const USER_PROJ: &str =
     "meta::id(id) AS id, email, name, avatar, is_admin AS isAdmin, created_at AS joinedAt";
-const PRODUCT_PROJ: &str = "meta::id(id) AS id, name, slug, description, color, public";
+const PRODUCT_PROJ: &str = "meta::id(id) AS id, name, slug, description, color, public, ingestion_token AS ingestionToken";
 const SYMBOL_PROJ: &str = "meta::id(id) AS id, meta::id(product_id) AS productId, \
     module_id AS name, '' AS version, arch, 'Breakpad' AS format, '' AS size, \
     build_id AS debugId, '' AS codeId, created_at AS uploadedAt, '' AS uploadedBy, 0 AS referencedBy";
@@ -848,12 +848,14 @@ async fn create_product(
                 .trim_matches('-')
                 .to_string()
         });
+    let ingestion_token = uuid::Uuid::new_v4().simple().to_string();
     let rows = run_value(
         &db,
         &format!(
             "CREATE type::record('products', $id) CONTENT {{
             name: $name, slug: $slug, description: $description,
-            color: '#6b7280', public: false, accepting_crashes: true, metadata: {{}}
+            color: '#6b7280', public: false, accepting_crashes: true,
+            ingestion_token: $ingestion_token, metadata: {{}}
         }} RETURN {PRODUCT_PROJ}"
         ),
         vec![
@@ -861,6 +863,7 @@ async fn create_product(
             ("name", Value::String(body.name)),
             ("slug", Value::String(slug)),
             ("description", Value::String(body.description.unwrap_or_default())),
+            ("ingestion_token", Value::String(ingestion_token)),
         ],
     )
     .await?;

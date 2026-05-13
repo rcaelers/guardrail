@@ -11,8 +11,8 @@ use minidump::MinidumpApi;
 
 pub async fn routes(_app_state: AppState) -> Router<AppState> {
     Router::new()
-        // Minidump upload endpoint
-        .route("/minidump/upload", post(MinidumpApi::upload))
+        // Minidump upload endpoint — token identifies the product
+        .route("/minidump/{token}/upload", post(MinidumpApi::upload))
         // Health check endpoints (also exposed under /minidump/ for ingress reachability)
         .route("/live", get(health::live))
         .route("/ready", get(health::ready))

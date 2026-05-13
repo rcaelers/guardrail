@@ -170,6 +170,7 @@ mod tests {
             description: String::new(),
             public: false,
             accepting_crashes: true,
+            ingestion_token: String::new(),
             metadata: serde_json::json!({}),
             created_at: Utc::now(),
             updated_at: Utc::now(),

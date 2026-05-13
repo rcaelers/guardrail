@@ -3,7 +3,7 @@ use redis::aio::ConnectionManager;
 use std::collections::HashMap;
 use tracing::{error, info};
 
-use common::product_info::{ProductInfo, product_cache_key};
+use common::product_info::{ProductInfo, product_cache_key, product_token_cache_key};
 
 use crate::error::ApiError;
 
@@ -33,6 +33,42 @@ impl ProductCache {
 
         Self {
             backend: Backend::Memory(products),
+        }
+    }
+
+    pub fn from_token_map(products: HashMap<String, ProductInfo>) -> Self {
+        let products = products
+            .into_iter()
+            .map(|(token, product)| (product_token_cache_key(&token), product))
+            .collect();
+
+        Self {
+            backend: Backend::Memory(products),
+        }
+    }
+
+    pub async fn get_product_by_token(&self, token: &str) -> Result<Option<ProductInfo>, ApiError> {
+        match &self.backend {
+            Backend::Redis(conn) => {
+                let key = product_token_cache_key(token);
+                info!(token = %token, key = %key, "Fetching product from Valkey by token");
+                let json: Option<String> = conn.clone().get(&key).await.map_err(|e| {
+                    error!(token = %token, key = %key, error = ?e, "Failed to get product from Valkey");
+                    ApiError::ServiceUnavailable("cache unavailable".to_string())
+                })?;
+
+                match json {
+                    Some(j) => {
+                        let info: ProductInfo = serde_json::from_str(&j).map_err(|e| {
+                            error!(token = %token, key = %key, error = ?e, "Failed to deserialize product info");
+                            ApiError::Failure("failed to deserialize product info".to_string())
+                        })?;
+                        Ok(Some(info))
+                    }
+                    None => Ok(None),
+                }
+            }
+            Backend::Memory(map) => Ok(map.get(&product_token_cache_key(token)).cloned()),
         }
     }
 

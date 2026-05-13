@@ -9,6 +9,7 @@ pub struct Product {
     pub description: String,
     pub public: bool,
     pub accepting_crashes: bool,
+    pub ingestion_token: String,
     pub metadata: serde_json::Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

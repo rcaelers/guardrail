@@ -1,6 +1,6 @@
 use axum::Json;
 use axum::extract::multipart::Field;
-use axum::extract::{Multipart, State};
+use axum::extract::{Multipart, Path as AxumPath, State};
 use object_store::path::Path;
 use object_store::{ObjectStore, ObjectStoreExt, PutPayload};
 use rhai::Engine;
@@ -397,9 +397,36 @@ impl MinidumpApi {
     #[instrument(skip(state, crash_info, multipart), fields(crash_id))]
     async fn handle_upload(
         state: AppState,
+        token: &str,
         mut multipart: Multipart,
         crash_info: &mut CrashInfo,
     ) -> Result<(), ApiError> {
+        let product = state
+            .product_cache
+            .get_product_by_token(token)
+            .await?
+            .ok_or_else(|| {
+                error!(token = %token, "Product not found for ingestion token");
+                ApiError::ProductNotFound(token.to_string())
+            })?;
+
+        if !product.accepting_crashes {
+            return Err(ApiError::ProductNotAcceptingCrashes(product.name.clone()));
+        }
+
+        crash_info.product = Some(product.name.clone());
+        crash_info.product_id = Some(product.id.clone());
+        crash_info.product_metadata = Some(product.metadata.clone());
+        crash_info.annotations.insert(
+            "product".to_string(),
+            AnnotationEntry {
+                value: product.name.clone(),
+                source: "submission".to_string(),
+            },
+        );
+
+        info!(product = %product.name, "Processing crash for product");
+
         while let Some(field) = multipart.next_field().await.map_err(|e| {
             error!(error = ?e, "Failed to get next multipart field");
             ApiError::Failure("failed to read multipart field from upload".to_string())
@@ -416,40 +443,6 @@ impl MinidumpApi {
             .as_deref()
             .unwrap_or_default();
         Self::validate_mandatory_annotations(crash_info, mandatory_annotations)?;
-
-        let product_name = match crash_info.annotations.get("product") {
-            Some(a) => a.value.clone(),
-            None => {
-                error!("Missing required 'product' annotation");
-                return Err(ApiError::Failure("missing required 'product' annotation".to_string()));
-            }
-        };
-
-        let product = state
-            .product_cache
-            .get_product_by_name(&product_name)
-            .await?
-            .ok_or_else(|| {
-                error!(product = %product_name, "Product not found in cache");
-                ApiError::ProductNotFound(product_name.clone())
-            })?;
-
-        crash_info.product = Some(product.name.clone());
-        crash_info.product_id = Some(product.id.clone());
-        crash_info.product_metadata = Some(product.metadata.clone());
-        crash_info.annotations.insert(
-            "product".to_string(),
-            AnnotationEntry {
-                value: product.name.clone(),
-                source: "submission".to_string(),
-            },
-        );
-
-        info!(product = %product.name, "Processing crash for product");
-
-        if !product.accepting_crashes {
-            return Err(ApiError::ProductNotAcceptingCrashes(product.name));
-        }
 
         Self::run_validation_scripts(crash_info, &state)?;
 
@@ -480,6 +473,7 @@ impl MinidumpApi {
     #[instrument(skip(state, multipart), fields(crash_id))]
     pub async fn upload(
         State(state): State<AppState>,
+        AxumPath(token): AxumPath<String>,
         multipart: Multipart,
     ) -> Result<Json<MinidumpResponse>, ApiError> {
         let crash_id = uuid::Uuid::new_v4().to_string();
@@ -496,7 +490,7 @@ impl MinidumpApi {
             ..Default::default()
         };
 
-        let r = Self::handle_upload(state.clone(), multipart, &mut crash_info).await;
+        let r = Self::handle_upload(state.clone(), &token, multipart, &mut crash_info).await;
         if let Err(e) = r {
             error!(error = ?e, "Failed to handle minidump upload");
 
@@ -1133,6 +1127,7 @@ mod tests {
         let mut settings = testware::create_settings();
         settings.minidumps.mandatory_annotations = None;
         settings.minidumps.validation_scripts = None;
+        let token = "worker_failure_test_token_000001";
         let product = ProductInfo {
             id: "product-1".to_string(),
             name: "TestProduct".to_string(),
@@ -1140,8 +1135,8 @@ mod tests {
             metadata: json!({}),
         };
         let state = AppState {
-            product_cache: ProductCache::from_map(HashMap::from([(
-                "TestProduct".to_string(),
+            product_cache: ProductCache::from_token_map(HashMap::from([(
+                token.to_string(),
                 product,
             )])),
             settings: Arc::new(settings),
@@ -1164,7 +1159,7 @@ mod tests {
         let multipart = Multipart::from_request(request, &state).await.unwrap();
 
         assert!(matches!(
-            MinidumpApi::handle_upload(state, multipart, &mut info).await,
+            MinidumpApi::handle_upload(state, token, multipart, &mut info).await,
             Err(ApiError::Failure(message)) if message == "failed to queue minidump job"
         ));
     }

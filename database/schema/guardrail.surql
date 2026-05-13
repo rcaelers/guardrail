@@ -13,12 +13,14 @@ DEFINE FIELD description ON TABLE products TYPE string ASSERT $value != NONE DEF
 DEFINE FIELD color ON TABLE products TYPE string ASSERT $value != NONE DEFAULT "#6b7280";
 DEFINE FIELD public ON TABLE products TYPE bool ASSERT $value != NONE DEFAULT false;
 DEFINE FIELD accepting_crashes ON TABLE products TYPE bool ASSERT $value != NONE DEFAULT true;
+DEFINE FIELD ingestion_token ON TABLE products TYPE string ASSERT $value != NONE;
 DEFINE FIELD metadata ON TABLE products TYPE object FLEXIBLE ASSERT $value != NONE DEFAULT {};
 DEFINE FIELD created_at ON TABLE products TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 DEFINE FIELD updated_at ON TABLE products TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
 DEFINE INDEX idx_products_name ON TABLE products COLUMNS name UNIQUE;
 DEFINE INDEX idx_products_slug ON TABLE products COLUMNS slug UNIQUE;
+DEFINE INDEX idx_products_ingestion_token ON TABLE products COLUMNS ingestion_token UNIQUE;
 
 -- ============================================================
 -- Product settings

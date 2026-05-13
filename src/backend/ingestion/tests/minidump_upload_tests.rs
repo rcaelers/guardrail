@@ -22,11 +22,13 @@ use ingestion::worker::TestWorker;
 
 use testware::create_settings;
 
+const TEST_TOKEN: &str = "test0000000000000000000000000001";
+
 fn create_test_product_cache() -> ProductCache {
     let product_id = uuid::Uuid::new_v4().to_string();
     let mut products = HashMap::new();
     products.insert(
-        "TestProduct".to_string(),
+        TEST_TOKEN.to_string(),
         ProductInfo {
             id: product_id,
             name: "TestProduct".to_string(),
@@ -34,14 +36,14 @@ fn create_test_product_cache() -> ProductCache {
             metadata: serde_json::Value::Object(Default::default()),
         },
     );
-    ProductCache::from_map(products)
+    ProductCache::from_token_map(products)
 }
 
 fn create_test_product_cache_with(entries: Vec<(&str, bool)>) -> ProductCache {
     let mut products = HashMap::new();
     for (name, accepting) in entries {
         products.insert(
-            name.to_string(),
+            TEST_TOKEN.to_string(),
             ProductInfo {
                 id: uuid::Uuid::new_v4().to_string(),
                 name: name.to_string(),
@@ -50,7 +52,7 @@ fn create_test_product_cache_with(entries: Vec<(&str, bool)>) -> ProductCache {
             },
         );
     }
-    ProductCache::from_map(products)
+    ProductCache::from_token_map(products)
 }
 
 async fn setup() -> (Router, Arc<dyn ObjectStore>, String, Arc<TestWorker>, String) {
@@ -279,7 +281,7 @@ async fn test_minidump_upload_ok() {
     let body = create_body_from_config(&config);
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -363,7 +365,7 @@ async fn test_minidump_upload_ok_without_filename() {
     let body = create_body_from_config(&config);
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -409,7 +411,7 @@ async fn test_minidump_upload_with_attachments_ok() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -491,7 +493,7 @@ async fn test_minidump_upload_with_attachments_no_name() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -524,7 +526,7 @@ async fn test_minidump_upload_with_annotations_ok() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -583,7 +585,7 @@ async fn test_minidump_upload_empty_version() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -612,7 +614,7 @@ async fn test_minidump_upload_empty_product() {
     });
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -643,7 +645,7 @@ async fn test_minidump_annotation_no_name() {
     });
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -674,7 +676,7 @@ async fn test_minidump_annotation_no_value() {
     });
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -700,7 +702,7 @@ async fn test_minidump_upload_invalid_content_type() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -733,7 +735,7 @@ async fn test_minidump_upload_invalid_multipart() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -763,7 +765,7 @@ async fn test_minidump_upload_invalid_boundary() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -793,7 +795,7 @@ async fn test_symbol_no_version() {
     });
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload?product=TestProduct")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -823,21 +825,16 @@ async fn test_symbol_no_product() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("general failure: required annotation 'product' is missing"),
-    )
-    .await;
+    assert_response_ok(response).await;
 
-    assert_count_crashes(store.clone(), 0).await;
-    assert_count_minidumps(store.clone(), 0).await;
+    assert_count_crashes(store.clone(), 1).await;
+    assert_count_minidumps(store.clone(), 1).await;
     assert_count_attachments(store.clone(), 0).await;
 }
 
@@ -847,7 +844,7 @@ async fn test_minidump_upload_empty() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(""))
         .unwrap();
@@ -873,7 +870,7 @@ async fn test_minidump_upload_wrong_name() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -903,7 +900,7 @@ async fn test_minidump_upload_product_too_old() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -937,7 +934,7 @@ async fn test_minidump_upload_product_not_accepting() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -962,13 +959,13 @@ async fn test_minidump_upload_unknown_product() {
 
     let body = create_body_from_config(&MinidumpBodyConfig {
         boundary: &boundary,
-        product: Some("UnknownProduct"),
         ..Default::default()
     });
 
+    let unknown_token = "unknown0000000000000000000000001";
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{unknown_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -977,7 +974,7 @@ async fn test_minidump_upload_unknown_product() {
     assert_response_error(
         response,
         StatusCode::BAD_REQUEST,
-        Some("product UnknownProduct not found"),
+        Some(&format!("product {unknown_token} not found")),
     )
     .await;
 
@@ -987,7 +984,9 @@ async fn test_minidump_upload_unknown_product() {
 }
 
 #[tokio::test]
-async fn test_minidump_upload_accepts_case_insensitive_product_identifier() {
+async fn test_minidump_upload_rejects_mismatched_product_annotation() {
+    // Product is resolved from the URL token; a form-body annotation that disagrees
+    // with the token-resolved product name is rejected by product_validation.rhai.
     let (app, store, boundary, _worker, _body) = setup().await;
 
     let body = create_body_from_config(&MinidumpBodyConfig {
@@ -998,16 +997,21 @@ async fn test_minidump_upload_accepts_case_insensitive_product_identifier() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_response_ok(response).await;
+    assert_response_error(
+        response,
+        StatusCode::BAD_REQUEST,
+        Some("validation of product TestProduct failed: access denied for product TestProduct"),
+    )
+    .await;
 
-    assert_count_crashes(store.clone(), 1).await;
-    assert_count_minidumps(store.clone(), 1).await;
+    assert_count_crashes(store.clone(), 0).await;
+    assert_count_minidumps(store.clone(), 0).await;
     assert_count_attachments(store.clone(), 0).await;
 }
 
@@ -1050,7 +1054,7 @@ async fn test_minidump_upload_per_product_validation_script() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -1098,7 +1102,7 @@ async fn test_minidump_upload_per_product_validation_script_missing() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -1156,7 +1160,7 @@ async fn test_minidump_upload_validation_script_regex_patterns() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/minidump/upload")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();

@@ -13,6 +13,10 @@ pub fn product_cache_key(product_identifier: &str) -> String {
     format!("guardrail::product:by-name:{}", product_identifier.trim().to_ascii_lowercase())
 }
 
+pub fn product_token_cache_key(token: &str) -> String {
+    format!("guardrail::product:by-token:{token}")
+}
+
 pub fn product_cache_keys(product_name: &str, product_slug: Option<&str>) -> Vec<String> {
     let mut keys = Vec::new();
 

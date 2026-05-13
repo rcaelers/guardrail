@@ -92,6 +92,7 @@ impl ProductRepo {
     pub async fn create(db: &Surreal<Any>, product: NewProduct) -> Result<String, RepoError> {
         let id = uuid::Uuid::new_v4().to_string();
         let slug = product.name.to_lowercase().replace(' ', "-");
+        let ingestion_token = uuid::Uuid::new_v4().simple().to_string();
         let _: Option<serde_json::Value> = db
             .query(
                 "CREATE type::record('products', $id) CONTENT {
@@ -100,6 +101,7 @@ impl ProductRepo {
                 description: $description,
                 public: $public,
                 accepting_crashes: true,
+                ingestion_token: $ingestion_token,
                 metadata: $metadata,
                 created_at: time::now(),
                 updated_at: time::now(),
@@ -110,6 +112,7 @@ impl ProductRepo {
             .bind(("slug", slug))
             .bind(("description", product.description.clone()))
             .bind(("public", product.public))
+            .bind(("ingestion_token", ingestion_token))
             .bind(("metadata", product.metadata.clone()))
             .await
             .map_err(handle_surreal_error)?
