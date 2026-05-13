@@ -96,6 +96,22 @@ impl crate::provisioner::IdentityProvisioner for MockProvisioner {
         url::Url::parse("https://example.com/setup")
             .map_err(|e| crate::provisioner::ProvisionerError::ApiError(e.to_string()))
     }
+
+    async fn find_user_id(
+        &self,
+        _email: &str,
+        username: &str,
+    ) -> Result<Option<String>, crate::provisioner::ProvisionerError> {
+        Ok(Some(format!("ext-{username}")))
+    }
+
+    async fn create_recovery_url(
+        &self,
+        _external_id: &str,
+    ) -> Result<url::Url, crate::provisioner::ProvisionerError> {
+        url::Url::parse("https://example.com/recovery")
+            .map_err(|e| crate::provisioner::ProvisionerError::ApiError(e.to_string()))
+    }
 }
 
 struct FailingMockProvisioner;
@@ -117,6 +133,25 @@ impl crate::provisioner::IdentityProvisioner for FailingMockProvisioner {
     ) -> Result<url::Url, crate::provisioner::ProvisionerError> {
         Err(crate::provisioner::ProvisionerError::ApiError(
             "simulated setup_url failure".to_string(),
+        ))
+    }
+
+    async fn find_user_id(
+        &self,
+        _email: &str,
+        _username: &str,
+    ) -> Result<Option<String>, crate::provisioner::ProvisionerError> {
+        Err(crate::provisioner::ProvisionerError::ApiError(
+            "simulated find_user_id failure".to_string(),
+        ))
+    }
+
+    async fn create_recovery_url(
+        &self,
+        _external_id: &str,
+    ) -> Result<url::Url, crate::provisioner::ProvisionerError> {
+        Err(crate::provisioner::ProvisionerError::ApiError(
+            "simulated create_recovery_url failure".to_string(),
         ))
     }
 }
