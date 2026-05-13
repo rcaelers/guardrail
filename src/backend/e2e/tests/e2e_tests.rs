@@ -193,7 +193,7 @@ impl TestHarness {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(async move {
             let app = processor::app::GuardrailProcessorApp::from_settings(settings).await;
-            app.run(async move {
+            app.run_workers(async move {
                 let _ = rx.await;
                 Ok(())
             })
@@ -208,7 +208,9 @@ impl TestHarness {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(async move {
             let app = curator::app::GuardrailCuratorApp::from_settings(settings).await;
-            app.run(async move {
+            app.sync_products().await;
+            app.spawn_product_listener();
+            app.run_workers(async move {
                 let _ = rx.await;
                 Ok(())
             })
