@@ -45,24 +45,6 @@ apalis-redis.workspace = true
 bytes.workspace = true
 redis.workspace = true
 
-[features]
-default = []
-auth = ["dep:repos", "dep:data", "dep:surrealdb"]
-
-[dependencies.repos]
-path = "../../common/repos"
-optional = true
-
-[dependencies.data]
-path = "../../common/data"
-default-features = false
-features = ["ssr"]
-optional = true
-
-[dependencies.surrealdb]
-workspace = true
-optional = true
-
 [dev-dependencies]
 testware = { path = "../testware" }
 mockall.workspace = true

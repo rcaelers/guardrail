@@ -1992,7 +1992,7 @@ async fn create_api_token(
     }
     let entitlements = body
         .entitlements
-        .unwrap_or_else(|| vec!["symbol-upload".into(), "minidump-upload".into()]);
+        .unwrap_or_else(|| vec!["symbol-upload".into()]);
 
     let (token_id, token, token_hash) = common::token::generate_api_token()
         .map_err(|e| server_error(format!("token generation failed: {e}")))?;
@@ -2077,7 +2077,6 @@ async fn list_all_api_tokens(
 }
 
 const ENTITLEMENT_DEFS: &[(&str, &str, &str)] = &[
-    ("minidump-upload", "Upload crash reports", "product"),
     ("symbol-upload", "Upload debug symbols", "product"),
     ("invitation-create", "Create user invitations", "general"),
     ("token", "Generate JWT tokens as the bound user", "user"),
@@ -2125,7 +2124,7 @@ async fn create_admin_api_token(
     }
     let entitlements = body
         .entitlements
-        .unwrap_or_else(|| vec!["symbol-upload".into(), "minidump-upload".into()]);
+        .unwrap_or_else(|| vec!["symbol-upload".into()]);
 
     let (token_id, token, token_hash) = common::token::generate_api_token()
         .map_err(|e| server_error(format!("token generation failed: {e}")))?;
