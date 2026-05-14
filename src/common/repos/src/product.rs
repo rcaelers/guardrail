@@ -47,6 +47,21 @@ impl ProductRepo {
         Ok(products.into_iter().next())
     }
 
+    pub async fn get_by_ingestion_token(
+        db: &Surreal<Any>,
+        token: &str,
+    ) -> Result<Option<Product>, RepoError> {
+        let mut result = db
+            .query(
+                "SELECT *, meta::id(id) as id FROM products WHERE ingestion_token = $ingestion_token LIMIT 1",
+            )
+            .bind(("ingestion_token", token.to_owned()))
+            .await
+            .map_err(handle_surreal_error)?;
+        let products: Vec<Product> = crate::take_many(&mut result, 0)?;
+        Ok(products.into_iter().next())
+    }
+
     pub async fn get_all_names(db: &Surreal<Any>) -> Result<HashSet<String>, RepoError> {
         let mut result = db
             .query("SELECT name FROM products")

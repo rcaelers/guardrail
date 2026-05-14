@@ -5,15 +5,14 @@ use object_store::ObjectStoreExt;
 use object_store::path::Path;
 use serde::Deserialize;
 use serde::Serialize;
-use surrealdb::Surreal;
-use surrealdb::engine::any::Any;
 use tracing::{error, info, instrument};
 
 use crate::error::ApiError;
 use crate::state::AppState;
-use crate::utils::{get_product_by_id, get_product_by_name, validate_api_token_for_product};
+use crate::utils::{get_product_by_id, get_product_by_ingestion_token, validate_api_token_for_product};
 use crate::utils::{peek_line, stream_to_s3};
 use data::api_token::ApiToken;
+use data::product::Product;
 
 #[derive(Default, Debug, Serialize)]
 struct SymbolsHeader {
@@ -101,10 +100,10 @@ impl SymbolsApi {
         Ok(())
     }
 
-    #[instrument(skip(db, api_token, symbols_info))]
+    #[instrument(skip(product, api_token, symbols_info))]
     async fn validate_symbols(
-        db: &Surreal<Any>,
-        api_token: &ApiToken,
+        product: &Product,
+        api_token: Option<&ApiToken>,
         symbols_info: &mut SymbolsInfo,
     ) -> Result<SymbolsContext, ApiError> {
         if symbols_info.symbols.is_none() {
@@ -137,7 +136,6 @@ impl SymbolsApi {
                 }
             };
 
-            // Assign to the appropriate variable
             match field_name {
                 "product" => product_name = value,
                 "version" => version = value,
@@ -148,14 +146,27 @@ impl SymbolsApi {
             }
         }
 
-        let product = get_product_by_name(db, &product_name).await?;
-        validate_api_token_for_product(api_token, &product, &product_name)?;
+        let name_matches = product_name.eq_ignore_ascii_case(&product.name)
+            || product_name.eq_ignore_ascii_case(&product.slug);
+        if !name_matches {
+            error!(
+                submitted = %product_name,
+                authenticated = %product.name,
+                "Submitted product name does not match authenticated product"
+            );
+            return Err(ApiError::ProductAccessDenied(product_name));
+        }
+
+        if let Some(token) = api_token {
+            validate_api_token_for_product(token, product, &product_name)?;
+        }
+
         if !product.accepting_crashes {
             return Err(ApiError::ProductNotAcceptingCrashes(product_name));
         }
 
         Ok(SymbolsContext {
-            product_id: product.id,
+            product_id: product.id.clone(),
             version,
             channel,
             commit,
@@ -334,26 +345,14 @@ impl SymbolsApi {
         }
     }
 
-    #[instrument(skip(state, api_token, multipart))]
+    #[instrument(skip(state, api_token, product, multipart))]
     async fn handle_upload(
         state: AppState,
-        api_token: ApiToken,
+        api_token: Option<ApiToken>,
+        product: Product,
         mut multipart: Multipart,
         symbols_info: &mut SymbolsInfo,
     ) -> Result<(), ApiError> {
-        let db = &state.repo.db;
-
-        let product_id = match api_token.product_id.as_deref() {
-            Some(raw) => raw,
-            None => {
-                error!("API token does not have a product ID");
-                return Err(ApiError::ProductAccessDenied(
-                    "API token is not associated with any product".to_string(),
-                ));
-            }
-        };
-
-        let product = get_product_by_id(db, product_id).await?;
         symbols_info.product = Some(product.name.clone());
 
         info!(product = %product.name, "Processing symbol for product");
@@ -365,7 +364,7 @@ impl SymbolsApi {
             Self::process_field(field, symbols_info, state.clone()).await?;
         }
 
-        let symbol_context = Self::validate_symbols(db, &api_token, symbols_info).await?;
+        let symbol_context = Self::validate_symbols(&product, api_token.as_ref(), symbols_info).await?;
 
         let symbol_info_json = Self::build_symbol_info(symbols_info, &symbol_context)?;
 
@@ -388,13 +387,34 @@ impl SymbolsApi {
         api_key_query: Query<ApiKeyQuery>,
         multipart: Multipart,
     ) -> Result<Json<SymbolsResponse>, ApiError> {
-        let api_token = crate::access::require_entitlement(
+        let db = &state.repo.db;
+
+        let (api_token, product) = match crate::access::require_entitlement(
             &headers,
             api_key_query.api_key.as_deref(),
-            &state.repo.db,
+            db,
             "symbol-upload",
         )
-        .await?;
+        .await
+        {
+            Ok(token) => {
+                let product_id = token.product_id.as_deref().ok_or_else(|| {
+                    ApiError::ProductAccessDenied(
+                        "API token is not associated with any product".to_string(),
+                    )
+                })?;
+                let product = get_product_by_id(db, product_id).await?;
+                (Some(token), product)
+            }
+            Err(_) => {
+                let token_str = crate::access::extract_bearer_from_headers(&headers)
+                    .ok_or_else(|| ApiError::InvalidToken("missing token".into()))?;
+                let product = get_product_by_ingestion_token(db, token_str)
+                    .await?
+                    .ok_or_else(|| ApiError::InvalidToken("invalid token".into()))?;
+                (None, product)
+            }
+        };
 
         let mut symbols_info = SymbolsInfo {
             submission_timestamp: chrono::Utc::now().to_rfc3339(),
@@ -403,7 +423,7 @@ impl SymbolsApi {
             ..Default::default()
         };
 
-        let r = Self::handle_upload(state.clone(), api_token, multipart, &mut symbols_info).await;
+        let r = Self::handle_upload(state.clone(), api_token, product, multipart, &mut symbols_info).await;
         if let Err(e) = r {
             error!(error = ?e, "Failed to handle symbols upload");
 
