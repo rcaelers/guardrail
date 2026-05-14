@@ -7,7 +7,8 @@ use data::{
     product::{NewProduct, Product},
 };
 use email::{Email, EmailSender, LogEmailSender, ResendEmailSender};
-use repos::{api_token::ApiTokenRepo, invitation::InvitationRepo, product::ProductRepo};
+use data::user::NewUser;
+use repos::{api_token::ApiTokenRepo, invitation::InvitationRepo, product::ProductRepo, user::UserRepo};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -289,12 +290,22 @@ enum UserSubcommand {
     SetAdmin(UserIdentifierArgs),
     UnsetAdmin(UserIdentifierArgs),
     GenerateLoginCode(UserGenerateLoginCodeArgs),
+    Sync(UserSyncArgs),
 }
 
 #[derive(Args, Debug)]
 struct UserIdentifierArgs {
     /// Pocket ID username, email address, or user ID
     identifier: String,
+}
+
+#[derive(Args, Debug)]
+struct UserSyncArgs {
+    /// Pocket ID username, email address, or user ID
+    identifier: String,
+
+    #[arg(long)]
+    admin: bool,
 }
 
 #[derive(Args, Debug)]
@@ -339,7 +350,7 @@ async fn run() -> Result<(), AnyErr> {
         Command::Invite(command) => run_invite(&cli, &settings, &db, command).await?,
         Command::Token(command) => run_token(&cli, &db, command).await?,
         Command::Product(command) => run_product(&cli, &db, command).await?,
-        Command::User(command) => run_user(&cli, &settings, command).await?,
+        Command::User(command) => run_user(&cli, &settings, &db, command).await?,
     }
 
     Ok(())
@@ -570,7 +581,7 @@ async fn create_token(
     })
 }
 
-async fn run_user(cli: &Cli, settings: &Settings, command: &UserCommand) -> Result<(), AnyErr> {
+async fn run_user(cli: &Cli, settings: &Settings, db: &Surreal<Any>, command: &UserCommand) -> Result<(), AnyErr> {
     let pocket_id = settings
         .provisioner
         .pocket_id
@@ -624,6 +635,35 @@ async fn run_user(cli: &Cli, settings: &Settings, command: &UserCommand) -> Resu
             let url = client.build_login_url(&token)?;
             print_login_code(cli, &user.id, &url.to_string())?;
         }
+        UserSubcommand::Sync(args) => {
+            let users = client.list_users().await?;
+            let pocket_user = client
+                .find_user(&users, &args.identifier)
+                .ok_or_else(|| format!("user not found: {}", args.identifier))?;
+
+            let email = pocket_user.email.as_deref();
+            let existing = UserRepo::get_by_name(db, &pocket_user.username)
+                .await?
+                .or(match email {
+                    Some(e) => UserRepo::get_by_email(db, e).await?,
+                    None => None,
+                });
+
+            if let Some(local) = existing {
+                print_sync(cli, "already-exists", &local.id, &pocket_user.username)?;
+            } else {
+                let id = UserRepo::create(
+                    db,
+                    NewUser {
+                        username: pocket_user.username.clone(),
+                        email: pocket_user.email.clone(),
+                        is_admin: args.admin,
+                    },
+                )
+                .await?;
+                print_sync(cli, "created", &id, &pocket_user.username)?;
+            }
+        }
     }
     Ok(())
 }
@@ -650,6 +690,16 @@ fn print_login_code(cli: &Cli, user_id: &str, url: &str) -> Result<(), AnyErr> {
         return print_json(&serde_json::json!({ "user_id": user_id, "login_url": url }));
     }
     println!("Login URL: {url}");
+    Ok(())
+}
+
+fn print_sync(cli: &Cli, status: &str, local_id: &str, username: &str) -> Result<(), AnyErr> {
+    if cli.json {
+        return print_json(
+            &serde_json::json!({ "status": status, "local_id": local_id, "username": username }),
+        );
+    }
+    println!("{status} user {username} (local id: {local_id})");
     Ok(())
 }
 
