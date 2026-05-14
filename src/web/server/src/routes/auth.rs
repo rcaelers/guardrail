@@ -16,8 +16,8 @@ use crate::{
     oidc,
 };
 
-const DEFAULT_RECOVERY_HTML: &str = include_str!("../../templates/email/recovery.html");
-const DEFAULT_RECOVERY_TEXT: &str = include_str!("../../templates/email/recovery.txt");
+pub(crate) const DEFAULT_RECOVERY_HTML: &str = include_str!("../../templates/email/recovery.html");
+pub(crate) const DEFAULT_RECOVERY_TEXT: &str = include_str!("../../templates/email/recovery.txt");
 
 fn render_recovery_template(template: &str, recovery_url: &str) -> String {
     template.replace("{{recovery_url}}", recovery_url)

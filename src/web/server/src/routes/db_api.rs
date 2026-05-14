@@ -979,6 +979,8 @@ async fn get_product_email_settings(
     Ok(Json(json!({
         "invite_html_template": email.invite_html_template.unwrap_or_default(),
         "invite_text_template": email.invite_text_template.unwrap_or_default(),
+        "default_invite_html_template": crate::routes::invite::DEFAULT_INVITE_HTML,
+        "default_invite_text_template": crate::routes::invite::DEFAULT_INVITE_TEXT,
     })))
 }
 
@@ -1072,6 +1074,8 @@ async fn get_app_email_settings(
     Ok(Json(json!({
         "recovery_html_template": email.recovery_html_template.unwrap_or_default(),
         "recovery_text_template": email.recovery_text_template.unwrap_or_default(),
+        "default_recovery_html_template": crate::routes::auth::DEFAULT_RECOVERY_HTML,
+        "default_recovery_text_template": crate::routes::auth::DEFAULT_RECOVERY_TEXT,
     })))
 }
 

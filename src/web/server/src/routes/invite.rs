@@ -23,8 +23,8 @@ use crate::{
     templates::InviteTemplate,
 };
 
-const DEFAULT_HTML: &str = include_str!("../../templates/email/invite.html");
-const DEFAULT_TEXT: &str = include_str!("../../templates/email/invite.txt");
+pub(crate) const DEFAULT_INVITE_HTML: &str = include_str!("../../templates/email/invite.html");
+pub(crate) const DEFAULT_INVITE_TEXT: &str = include_str!("../../templates/email/invite.txt");
 
 fn render_invite_template(template: &str, app_name: &str, invite_url: &str) -> String {
     template
@@ -145,8 +145,8 @@ async fn create_invitation(
             (None, None)
         };
 
-        let html_template = product_html.unwrap_or_else(|| DEFAULT_HTML.to_string());
-        let text_template = product_text.unwrap_or_else(|| DEFAULT_TEXT.to_string());
+        let html_template = product_html.unwrap_or_else(|| DEFAULT_INVITE_HTML.to_string());
+        let text_template = product_text.unwrap_or_else(|| DEFAULT_INVITE_TEXT.to_string());
         let html = render_invite_template(&html_template, &state.settings.auth.name, &invite_url);
         let text = render_invite_template(&text_template, &state.settings.auth.name, &invite_url);
         let email = Email {

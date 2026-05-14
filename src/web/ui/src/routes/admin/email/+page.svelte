@@ -9,6 +9,9 @@
 
   const hasCustomHtml = $derived(htmlTemplate.trim().length > 0);
   const hasCustomText = $derived(textTemplate.trim().length > 0);
+
+  let showDefaultHtml = $state(false);
+  let showDefaultText = $state(false);
 </script>
 
 <div class="mx-auto max-w-[800px]">
@@ -49,14 +52,27 @@
             {hasCustomHtml ? 'Using custom template' : 'Using default template'}
           </div>
         </div>
-        {#if hasCustomHtml}
+        <div class="flex items-center gap-3">
           <button
             type="button"
-            onclick={() => (htmlTemplate = '')}
-            class="text-[12px] text-ink-muted hover:text-red-600 dark:hover:text-red-400"
-          >Clear</button>
-        {/if}
+            onclick={() => (showDefaultHtml = !showDefaultHtml)}
+            class="text-[12px] text-ink-muted hover:text-ink dark:hover:text-ink-dark"
+          >{showDefaultHtml ? 'Hide default' : 'View default'}</button>
+          {#if hasCustomHtml}
+            <button
+              type="button"
+              onclick={() => (htmlTemplate = '')}
+              class="text-[12px] text-ink-muted hover:text-red-600 dark:hover:text-red-400"
+            >Clear</button>
+          {/if}
+        </div>
       </div>
+      {#if showDefaultHtml}
+        <div class="border-b border-line dark:border-line-dark bg-surface-panel/50 dark:bg-surface-panelDark/50 px-4 py-2">
+          <div class="text-[11px] font-medium uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark mb-2">Default template</div>
+          <pre class="font-mono text-[12px] text-ink-muted dark:text-ink-mutedDark whitespace-pre-wrap break-all">{data.settings.default_recovery_html_template}</pre>
+        </div>
+      {/if}
       <textarea
         name="recovery_html_template"
         bind:value={htmlTemplate}
@@ -75,14 +91,27 @@
             {hasCustomText ? 'Using custom template' : 'Using default template'}
           </div>
         </div>
-        {#if hasCustomText}
+        <div class="flex items-center gap-3">
           <button
             type="button"
-            onclick={() => (textTemplate = '')}
-            class="text-[12px] text-ink-muted hover:text-red-600 dark:hover:text-red-400"
-          >Clear</button>
-        {/if}
+            onclick={() => (showDefaultText = !showDefaultText)}
+            class="text-[12px] text-ink-muted hover:text-ink dark:hover:text-ink-dark"
+          >{showDefaultText ? 'Hide default' : 'View default'}</button>
+          {#if hasCustomText}
+            <button
+              type="button"
+              onclick={() => (textTemplate = '')}
+              class="text-[12px] text-ink-muted hover:text-red-600 dark:hover:text-red-400"
+            >Clear</button>
+          {/if}
+        </div>
       </div>
+      {#if showDefaultText}
+        <div class="border-b border-line dark:border-line-dark bg-surface-panel/50 dark:bg-surface-panelDark/50 px-4 py-2">
+          <div class="text-[11px] font-medium uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark mb-2">Default template</div>
+          <pre class="font-mono text-[12px] text-ink-muted dark:text-ink-mutedDark whitespace-pre-wrap">{data.settings.default_recovery_text_template}</pre>
+        </div>
+      {/if}
       <textarea
         name="recovery_text_template"
         bind:value={textTemplate}
