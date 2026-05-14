@@ -3,6 +3,7 @@
 import type { PageServerLoad, Actions } from './$types';
 import { createAdapter } from '$lib/adapters';
 import { error, fail } from '@sveltejs/kit';
+import type { Role } from '$lib/adapters/types';
 
 function requireAdmin(locals: App.Locals) {
   if (!locals.user) throw error(401);
@@ -11,12 +12,14 @@ function requireAdmin(locals: App.Locals) {
 
 export const load: PageServerLoad = async ({ request }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
-  const products = await adapter.listProducts('all');
-  // Enrich with member counts for the table.
-  const withCounts = await Promise.all(
-    products.map(async (p) => ({ ...p, memberCount: (await adapter.listMembers(p.id)).length }))
+  const [products, users] = await Promise.all([
+    adapter.listProducts('all'),
+    adapter.listUsers()
+  ]);
+  const withMembers = await Promise.all(
+    products.map(async (p) => ({ ...p, members: await adapter.listMembers(p.id) }))
   );
-  return { products: withCounts };
+  return { products: withMembers, users };
 };
 
 export const actions: Actions = {
@@ -61,6 +64,27 @@ export const actions: Actions = {
     const id = String(form.get('id') ?? '');
     if (!id) return fail(400, { error: 'missing id' });
     await adapter.deleteProduct(id);
+    return { ok: true };
+  },
+  setPermission: async ({ request, locals }) => {
+    requireAdmin(locals);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const form = await request.formData();
+    const userId = String(form.get('userId') ?? '');
+    const productId = String(form.get('productId') ?? '');
+    const role = String(form.get('role') ?? '') as Role;
+    if (!userId || !productId || !role) return fail(400, { error: 'missing fields' });
+    await adapter.grantAccess({ userId, productId, role });
+    return { ok: true };
+  },
+  revokePermission: async ({ request, locals }) => {
+    requireAdmin(locals);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const form = await request.formData();
+    const userId = String(form.get('userId') ?? '');
+    const productId = String(form.get('productId') ?? '');
+    if (!userId || !productId) return fail(400, { error: 'missing fields' });
+    await adapter.revokeAccess({ userId, productId });
     return { ok: true };
   }
 };

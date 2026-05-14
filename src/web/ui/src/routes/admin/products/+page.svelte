@@ -28,7 +28,7 @@
       <h1 class="mb-1 text-[20px] font-semibold tracking-[-0.01em]">Products</h1>
       <p class="text-[13px] text-ink-muted dark:text-ink-mutedDark">
         {data.products.length} product{data.products.length === 1 ? '' : 's'}.
-        Edit product metadata here; membership changes still take effect from product settings and user permissions.
+        Edit product metadata and manage member access from the edit panel.
       </p>
     </div>
     <button
@@ -99,7 +99,7 @@
         </div>
         <div class="truncate font-mono text-[12px] text-ink-muted dark:text-ink-mutedDark">{p.slug}</div>
         <div class="truncate text-[12.5px] text-ink-muted dark:text-ink-mutedDark">{p.description}</div>
-        <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">{p.memberCount}</div>
+        <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">{p.members.length}</div>
         <div class="flex justify-end gap-2">
           <button
             type="button"
@@ -118,7 +118,8 @@
       </div>
 
       {#if editingProductId === p.id}
-        <div class="border-t border-line bg-surface-panel/55 px-4 py-4 dark:border-line-dark dark:bg-surface-panelDark/55">
+        {@const unassignedUsers = data.users.filter((u) => !p.members.some((m) => m.userId === u.id))}
+        <div class="border-t border-line bg-surface-panel/55 px-4 py-4 dark:border-line-dark dark:bg-surface-panelDark/55 space-y-4">
           <form
             method="POST"
             action="?/update"
@@ -157,6 +158,83 @@
               <button type="submit" class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white">Save product</button>
             </div>
           </form>
+
+          <!-- Member management -->
+          <div class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-4 py-3">
+            <div class="mb-3 flex items-center justify-between">
+              <h2 class="text-[13px] font-medium">Members</h2>
+              <span class="text-[11px] text-ink-muted dark:text-ink-mutedDark">{p.members.length} assigned</span>
+            </div>
+
+            <div class="space-y-2">
+              {#if p.members.length === 0}
+                <p class="text-[12px] text-ink-muted dark:text-ink-mutedDark">No members yet.</p>
+              {:else}
+                {#each p.members as member (member.userId)}
+                  <div class="grid items-center gap-3 rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-3 py-2 lg:grid-cols-[1.4fr,160px,100px]">
+                    <div class="flex min-w-0 items-center gap-2">
+                      <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent-soft dark:bg-accent-softDark text-[10px] font-semibold text-accent">{member.user.avatar}</span>
+                      <div class="min-w-0">
+                        <div class="truncate text-[12.5px] font-medium">{member.user.name}</div>
+                        <div class="truncate text-[11px] text-ink-muted dark:text-ink-mutedDark">{member.user.email}</div>
+                      </div>
+                    </div>
+                    <form method="POST" action="?/setPermission" use:enhance class="flex">
+                      <input type="hidden" name="userId" value={member.userId} />
+                      <input type="hidden" name="productId" value={p.id} />
+                      <select
+                        name="role"
+                        value={member.role}
+                        onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
+                        class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1 text-[12px]"
+                      >
+                        <option value="readonly">Read-only</option>
+                        <option value="readwrite">Read · write</option>
+                        <option value="maintainer">Maintainer</option>
+                      </select>
+                    </form>
+                    <div class="flex justify-end">
+                      <form method="POST" action="?/revokePermission" use:enhance>
+                        <input type="hidden" name="userId" value={member.userId} />
+                        <input type="hidden" name="productId" value={p.id} />
+                        <button
+                          type="button"
+                          class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark hover:text-red-600"
+                          onclick={(e) => { pendingConfirm = { message: `Revoke ${member.user.name}'s access to ${p.name}?`, confirmLabel: 'Revoke', form: (e.currentTarget as HTMLElement).closest('form')! }; }}
+                        >Revoke</button>
+                      </form>
+                    </div>
+                  </div>
+                {/each}
+              {/if}
+            </div>
+
+            {#if unassignedUsers.length > 0}
+              <form method="POST" action="?/setPermission" use:enhance class="mt-4 grid gap-3 rounded-md border border-dashed border-line dark:border-line-dark px-3 py-3 lg:grid-cols-[1.4fr,160px,120px]">
+                <input type="hidden" name="productId" value={p.id} />
+                <label class="flex flex-col">
+                  <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Add user</span>
+                  <select name="userId" required class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-2 py-1.5 text-[13px]">
+                    <option value="" disabled selected>Pick a user…</option>
+                    {#each unassignedUsers as u}
+                      <option value={u.id}>{u.name} ({u.email})</option>
+                    {/each}
+                  </select>
+                </label>
+                <label class="flex flex-col">
+                  <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Role</span>
+                  <select name="role" class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-2 py-1.5 text-[13px]">
+                    <option value="readonly">Read-only</option>
+                    <option value="readwrite">Read · write</option>
+                    <option value="maintainer">Maintainer</option>
+                  </select>
+                </label>
+                <div class="flex items-end justify-end">
+                  <button type="submit" class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white">Add member</button>
+                </div>
+              </form>
+            {/if}
+          </div>
         </div>
       {/if}
     {/each}
