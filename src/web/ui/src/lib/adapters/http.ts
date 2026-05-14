@@ -164,7 +164,7 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     // --- session ---
     async getMe() {
       const r = await req('/me');
-      if (r.status === 401 || r.status === 404) return null;
+      if (r.status === 401 || r.status === 403 || r.status === 404) return null;
       return json<User>(r, 'getMe');
     },
     async getUser(id) {
