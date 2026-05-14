@@ -253,8 +253,8 @@ async fn test_symbol_upload_no_such_product() {
 
     assert_response_error(
         response,
-        StatusCode::BAD_REQUEST,
-        Some("product TestProductxx not found"),
+        StatusCode::FORBIDDEN,
+        Some("access denied for product TestProductxx"),
     )
     .await;
 
