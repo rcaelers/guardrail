@@ -30,7 +30,9 @@ impl ProductSettingsRepo {
         let mut result = db
             .query(
                 "UPSERT type::record('product_settings', $id) SET \
-                 product_id = type::record('products', $id) \
+                 product_id = type::record('products', $id), \
+                 created_at = created_at OR time::now(), \
+                 updated_at = updated_at OR time::now() \
                  RETURN *, meta::id(id) AS id, meta::id(product_id) AS product_id",
             )
             .bind(("id", key))
@@ -54,6 +56,7 @@ impl ProductSettingsRepo {
                  product_id = type::record('products', $id), \
                  email.invite_html_template = $html, \
                  email.invite_text_template = $text, \
+                 created_at = created_at OR time::now(), \
                  updated_at = time::now() \
                  RETURN *, meta::id(id) AS id, meta::id(product_id) AS product_id",
             )

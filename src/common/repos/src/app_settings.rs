@@ -35,6 +35,7 @@ impl AppSettingsRepo {
                 "UPSERT type::record('app_settings', $id) SET \
                  email.recovery_html_template = $html, \
                  email.recovery_text_template = $text, \
+                 created_at = created_at OR time::now(), \
                  updated_at = time::now() \
                  RETURN *, meta::id(id) AS id",
             )
