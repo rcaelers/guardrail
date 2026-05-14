@@ -1038,10 +1038,10 @@ async fn update_product_token(
 
     let rows = run_value(
         &db,
-        &format!("UPDATE type::record('products', $id) SET product_token = $token RETURN {PRODUCT_PROJ}"),
+        &format!("UPDATE type::record('products', $id) SET product_token = $new_token RETURN {PRODUCT_PROJ}"),
         vec![
             ("id", Value::String(id.clone())),
-            ("token", Value::String(token)),
+            ("new_token", Value::String(token)),
         ],
     )
     .await?;
