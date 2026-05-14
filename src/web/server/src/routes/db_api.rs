@@ -849,7 +849,7 @@ async fn create_product(
                 .trim_matches('-')
                 .to_string()
         });
-    let product_token = uuid::Uuid::new_v4().simple().to_string();
+    let product_token = common::token::generate_product_token();
     let rows = run_value(
         &db,
         &format!(
@@ -1034,7 +1034,7 @@ async fn update_product_token(
         .product_token
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty())
-        .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string());
+        .unwrap_or_else(common::token::generate_product_token);
 
     let rows = run_value(
         &db,
