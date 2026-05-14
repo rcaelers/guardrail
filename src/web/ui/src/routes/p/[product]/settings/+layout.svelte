@@ -16,7 +16,7 @@
     ...(canManage ? [['tokens', 'API tokens']] as Array<[string, string]> : []),
     ...(canManage ? [['invitations', 'Invitations']] as Array<[string, string]> : []),
     ...(canManage ? [['email', 'Email']] as Array<[string, string]> : []),
-    ...(canManage ? [['ingestion', 'Ingestion']] as Array<[string, string]> : []),
+    ...(canManage ? [['ingestion', 'Product token']] as Array<[string, string]> : []),
     ...(canManage ? [['danger', 'Danger zone']] as Array<[string, string]> : []),
   ]);
 </script>
