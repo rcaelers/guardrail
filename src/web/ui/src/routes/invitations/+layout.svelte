@@ -22,6 +22,7 @@
     ['products', 'Products', '/admin/products'],
     ['invitations', 'Invitations', '/invitations'],
     ['tokens', 'API tokens', '/admin/tokens'],
+    ['email', 'Email', '/admin/email'],
   ];
 
   const current = $derived.by(() => {
