@@ -17,7 +17,7 @@ id = "backfill_tokens"
 phase = "start"
 kind = "run_sql"
 idempotent = true
-sql = "UPDATE products SET product_token = string::lowercase(rand::string(24)) WHERE product_token IS NONE OR product_token = ''"
+sql = "UPDATE products SET product_token = rand::uuid::v4() WHERE product_token IS NONE OR product_token = ''"
 
 [[steps]]
 id = "rollback_schema"
