@@ -21,7 +21,7 @@
     "@tailwindcss/vite": "^4.2.4",
     "autoprefixer": "^10.5.0",
     "postcss": "^8.5.14",
-    "svelte": "^5.55.5",
+    "svelte": "^5.55.7",
     "svelte-check": "^4.4.8",
     "tailwindcss": "^4.2.4",
     "typescript": "^6.0.3",
