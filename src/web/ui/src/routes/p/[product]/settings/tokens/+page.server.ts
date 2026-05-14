@@ -25,7 +25,7 @@ export const actions: Actions = {
 
     const entitlements = (form.getAll('entitlement') as string[]).filter(Boolean);
     if (entitlements.length === 0) {
-      entitlements.push('symbol-upload', 'minidump-upload');
+      entitlements.push('symbol-upload');
     }
 
     try {
