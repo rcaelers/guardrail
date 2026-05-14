@@ -6,18 +6,18 @@ compatibility = "backward"
 renames = []
 
 [[steps]]
-id = "backfill_tokens"
-phase = "start"
-kind = "run_sql"
-idempotent = true
-sql = "UPDATE products SET ingestion_token = rand::uuid::v4() WHERE ingestion_token IS NONE OR ingestion_token = ''"
-
-[[steps]]
 id = "apply_schema"
 phase = "start"
 kind = "apply_schema"
 files = ["database/schema/guardrail.surql"]
 entities = []
+
+[[steps]]
+id = "backfill_tokens"
+phase = "start"
+kind = "run_sql"
+idempotent = true
+sql = "UPDATE products SET ingestion_token = rand::uuid::v4() WHERE ingestion_token IS NONE OR ingestion_token = ''"
 
 [[steps]]
 id = "rollback_schema"
