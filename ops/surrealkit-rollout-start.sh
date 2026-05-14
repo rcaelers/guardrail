@@ -70,7 +70,26 @@ case "$STATUS_LINE" in
         echo "Rollout $ROLLOUT_ID is already started or completed; skipping rollout start."
         exit 0
         ;;
-    *"[failed]"*|*"[rolled_back]"*|*"[running_complete]"*|*"[running_rollback]"*)
+    *"[failed]"*)
+        # A previous start attempt failed (e.g. bad SQL in a migration step).
+        # Reset the rollout state via the SurrealDB REST API so we can retry.
+        # Schema changes applied before the failure are preserved; the start
+        # steps are all idempotent (apply_schema) or guarded (backfill WHERE IS NONE).
+        echo "Rollout $ROLLOUT_ID previously failed; resetting state for retry..."
+        REST_HOST="$(echo "$DATABASE_HOST" | sed 's|^ws://|http://|; s|^wss://|https://|')"
+        HTTP_STATUS="$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+            -u "$DATABASE_USER:$DATABASE_PASSWORD" \
+            -H "surreal-ns: $DATABASE_NAMESPACE" \
+            -H "surreal-db: $DATABASE_NAME" \
+            "${REST_HOST}/key/__rollout/${ROLLOUT_ID}")"
+        if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "204" ]; then
+            echo "Failed to delete rollout state record (HTTP $HTTP_STATUS); cannot recover."
+            exit 1
+        fi
+        echo "Rollout state cleared; restarting rollout $ROLLOUT_ID"
+        exec surrealkit rollout start "$ROLLOUT_ID"
+        ;;
+    *"[rolled_back]"*|*"[running_complete]"*|*"[running_rollback]"*)
         echo "Rollout $ROLLOUT_ID is in a non-startable state."
         exit 1
         ;;
