@@ -14,7 +14,8 @@ impl AppSettingsRepo {
         let mut result = db
             .query(
                 "UPSERT type::record('app_settings', $id) SET \
-                 updated_at = updated_at OR time::now() \
+                 created_at = created_at OR time::now(), \
+                 updated_at = time::now() \
                  RETURN *, meta::id(id) AS id",
             )
             .bind(("id", MAIN_ID))
