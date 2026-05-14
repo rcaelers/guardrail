@@ -411,7 +411,7 @@ docker compose -f dev/docker-compose.yml exec web \
 Upload a test minidump to the local ingestion service:
 
 ```sh
-curl -vv -X POST "localhost:8081/api/ljedvhandhqns8ey218x0m65/minidump/" \
+curl -vv -X POST "localhost:8081/api/minidump/ljedvhandhqns8ey218x0m65/upload" \
   --insecure \
   -F"upload_file_minidump=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp;type=application/octet-stream" \
   -F"product=workrave;type=text/plain" \
@@ -424,7 +424,7 @@ curl -vv -X POST "localhost:8081/api/ljedvhandhqns8ey218x0m65/minidump/" \
 Upload test symbols to the local API service:
 
 ```sh
-curl -X POST "localhost:8080/api/ljedvhandhqns8ey218x0m65/symbols/upload" \
+curl -X POST "localhost:8080/api/symbols/ljedvhandhqns8ey218x0m65/upload" \
   --insecure \
   -H "Authorization: Bearer iLKwi56cQuGBp30Z90L2BJgl8avchNqIgm9ZJajwVb_90Kr0cxIMjEfLa1pzqTMrkNofWZN0A8Uv3pSyFwYSHA==" \
   -Fupload_file_symbols=@dev/crash.sym \

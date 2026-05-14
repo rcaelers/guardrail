@@ -27,7 +27,7 @@ use testware::{create_settings, create_test_product_with_details, create_test_to
 
 async fn setup(
     db: &surrealdb::Surreal<surrealdb::engine::any::Any>,
-) -> (Router, Arc<dyn ObjectStore>, String, String, String, String) {
+) -> (Router, Arc<dyn ObjectStore>, String, String, String, String, String) {
     let settings = create_settings();
 
     let repo = Repo::new(db.clone());
@@ -57,11 +57,12 @@ async fn setup(
 
     let product =
         create_test_product_with_details(db, "TestProduct", "Test product description").await;
+    let product_token = product.product_token.clone();
 
-    let (token, _) =
+    let (api_token, _) =
         create_test_token(db, "Test Token", Some(product.id), None, &["symbol-upload"]).await;
 
-    (app, store, boundary.to_owned(), config.content.to_owned(), body, token)
+    (app, store, boundary.to_owned(), config.content.to_owned(), body, product_token, api_token)
 }
 
 #[derive(Debug, Clone)]
@@ -208,13 +209,13 @@ async fn assert_response_error(
 #[tokio::test]
 async fn test_symbol_upload_ok() {
     let db = TestSetup::create_db().await;
-    let (app, store, boundary, content, body, token) = setup(&db).await;
+    let (app, store, boundary, content, body, product_token, api_token) = setup(&db).await;
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -232,7 +233,7 @@ async fn test_symbol_upload_ok() {
 #[tokio::test]
 async fn test_symbol_upload_no_such_product() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let body = create_body_from_config(&SymbolsBodyConfig {
         boundary: &boundary,
@@ -242,9 +243,9 @@ async fn test_symbol_upload_no_such_product() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -267,7 +268,7 @@ async fn test_symbol_upload_no_such_product() {
 #[tokio::test]
 async fn test_symbol_upload_empty_version() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let body = create_body_from_config(&SymbolsBodyConfig {
         boundary: &boundary,
@@ -277,9 +278,9 @@ async fn test_symbol_upload_empty_version() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -300,7 +301,7 @@ async fn test_symbol_upload_empty_version() {
 #[tokio::test]
 async fn test_symbol_upload_empty_product() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let body = create_body_from_config(&SymbolsBodyConfig {
         boundary: &boundary,
@@ -310,9 +311,9 @@ async fn test_symbol_upload_empty_product() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -333,7 +334,7 @@ async fn test_symbol_upload_empty_product() {
 #[tokio::test]
 async fn test_symbol_upload_invalid_content_type() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let body = create_body_from_config(&SymbolsBodyConfig {
         boundary: &boundary,
@@ -343,9 +344,9 @@ async fn test_symbol_upload_invalid_content_type() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -367,7 +368,7 @@ async fn test_symbol_upload_invalid_content_type() {
 #[tokio::test]
 async fn test_symbol_upload_invalid_header() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let content = "MODULE windows EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
                    Hello world\r\n\
@@ -381,9 +382,9 @@ async fn test_symbol_upload_invalid_header() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -405,7 +406,7 @@ async fn test_symbol_upload_invalid_header() {
 #[tokio::test]
 async fn test_symbol_upload_invalid_build_id_1() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1EE9E2672A6863B084C4C44205044422E1EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
                    Hello world\r\n\
@@ -419,9 +420,9 @@ async fn test_symbol_upload_invalid_build_id_1() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -443,7 +444,7 @@ async fn test_symbol_upload_invalid_build_id_1() {
 #[tokio::test]
 async fn test_symbol_upload_invalid_build_id_2() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084@4C44205044422E1 crash.pdb\r\n\
                    Hello world\r\n\
@@ -457,9 +458,9 @@ async fn test_symbol_upload_invalid_build_id_2() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -481,7 +482,7 @@ async fn test_symbol_upload_invalid_build_id_2() {
 #[tokio::test]
 async fn test_symbol_upload_invalid_module_id1() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 crashxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.pdb\r\n\
                    Hello world\r\n\
@@ -495,9 +496,9 @@ async fn test_symbol_upload_invalid_module_id1() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -519,7 +520,7 @@ async fn test_symbol_upload_invalid_module_id1() {
 #[tokio::test]
 async fn test_symbol_upload_invalid_module_id2() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 cr&ash.pdb\r\n\
                    Hello world\r\n\
@@ -533,9 +534,9 @@ async fn test_symbol_upload_invalid_module_id2() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -557,7 +558,7 @@ async fn test_symbol_upload_invalid_module_id2() {
 #[tokio::test]
 async fn test_symbol_upload_invalid_module_id3() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 ../crash.pdb\r\n\
                    Hello world\r\n\
@@ -571,9 +572,9 @@ async fn test_symbol_upload_invalid_module_id3() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -595,7 +596,7 @@ async fn test_symbol_upload_invalid_module_id3() {
 #[tokio::test]
 async fn test_symbol_upload_invalid_multipart() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
                    Hello world\r\n\
@@ -610,9 +611,9 @@ async fn test_symbol_upload_invalid_multipart() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -634,7 +635,7 @@ async fn test_symbol_upload_invalid_multipart() {
 #[tokio::test]
 async fn test_symbol_upload_invalid_boundary() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let content = "MODULE windows x86_64 EE9E2672A6863B084C4C44205044422E1 crash.pdb\r\n\
                    Hello world\r\n\
@@ -649,9 +650,9 @@ async fn test_symbol_upload_invalid_boundary() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -673,13 +674,13 @@ async fn test_symbol_upload_invalid_boundary() {
 #[tokio::test]
 async fn test_symbol_upload_wrong_entitlement() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, body, _token) = setup(&db).await;
+    let (app, _store, boundary, _content, body, product_token, api_token) = setup(&db).await;
 
     let (token, _) = create_test_token(&db, "Wrong", None, None, &["token"]).await;
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -697,7 +698,7 @@ async fn test_symbol_upload_wrong_entitlement() {
 #[tokio::test]
 async fn test_symbol_upload_expired_entitlement() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, body, _token) = setup(&db).await;
+    let (app, _store, boundary, _content, body, product_token, api_token) = setup(&db).await;
 
     let product = ProductRepo::get_by_name(&db, "TestProduct")
         .await
@@ -722,7 +723,7 @@ async fn test_symbol_upload_expired_entitlement() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -745,7 +746,7 @@ async fn test_symbol_upload_expired_entitlement() {
 #[tokio::test]
 async fn test_symbol_upload_inactive_entitlement() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, body, _token) = setup(&db).await;
+    let (app, _store, boundary, _content, body, product_token, api_token) = setup(&db).await;
 
     let product = ProductRepo::get_by_name(&db, "TestProduct")
         .await
@@ -769,7 +770,7 @@ async fn test_symbol_upload_inactive_entitlement() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -792,7 +793,7 @@ async fn test_symbol_upload_inactive_entitlement() {
 #[tokio::test]
 async fn test_symbol_upload_other_product() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, body, _token) = setup(&db).await;
+    let (app, _store, boundary, _content, body, product_token, api_token) = setup(&db).await;
 
     let product = create_test_product_with_details(&db, "AnotherProduct", "description").await;
 
@@ -813,7 +814,7 @@ async fn test_symbol_upload_other_product() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .header("Authorization", format!("Bearer {token}"))
         .body(Body::from(body))
@@ -834,35 +835,13 @@ async fn test_symbol_upload_other_product() {
 }
 
 #[tokio::test]
-async fn test_symbol_upload_unknown_token() {
-    let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, body, _token) = setup(&db).await;
-
-    let request = Request::builder()
-        .method("POST")
-        .uri("/api/symbols/upload")
-        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {}", "test_tokenx"))
-        .body(Body::from(body))
-        .unwrap();
-
-    let response = app.oneshot(request).await.unwrap();
-    assert_response_error(response, StatusCode::UNAUTHORIZED, Some("invalid API token")).await;
-
-    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
-        .await
-        .expect("failed to fetch symbol entry from database");
-    assert_eq!(allsymbols.len(), 0);
-}
-
-#[tokio::test]
 async fn test_symbol_upload_no_token() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, body, _token) = setup(&db).await;
+    let (app, _store, boundary, _content, body, product_token, _api_token) = setup(&db).await;
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -873,14 +852,36 @@ async fn test_symbol_upload_no_token() {
     let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
         .await
         .expect("Failed to fetch symbol entry from database");
-
     assert_eq!(allsymbols.len(), 0);
 }
 
 #[tokio::test]
+async fn test_symbol_upload_unknown_token() {
+    let db = TestSetup::create_db().await;
+    let (app, _store, boundary, _content, body, product_token, api_token) = setup(&db).await;
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/symbols/test_tokenx/upload")
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .header("Authorization", format!("Bearer {api_token}"))
+        .body(Body::from(body))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_response_error(response, StatusCode::UNAUTHORIZED, Some("invalid product token")).await;
+
+    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
+        .await
+        .expect("failed to fetch symbol entry from database");
+    assert_eq!(allsymbols.len(), 0);
+}
+
+
+#[tokio::test]
 async fn test_symbol_no_version() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let body = create_body_from_config(&SymbolsBodyConfig {
         boundary: &boundary,
@@ -890,9 +891,9 @@ async fn test_symbol_no_version() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -913,7 +914,7 @@ async fn test_symbol_no_version() {
 #[tokio::test]
 async fn test_symbol_no_product() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let body = create_body_from_config(&SymbolsBodyConfig {
         boundary: &boundary,
@@ -923,9 +924,9 @@ async fn test_symbol_no_product() {
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload?version=1.0.0")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(body))
         .unwrap();
 
@@ -947,13 +948,13 @@ async fn test_symbol_no_product() {
 #[tokio::test]
 async fn test_symbol_upload_empty() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, _body, token) = setup(&db).await;
+    let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let request = Request::builder()
         .method("POST")
-        .uri("/api/symbols/upload")
+        .uri(format!("/api/symbols/{product_token}/upload"))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {api_token}"))
         .body(Body::from(""))
         .unwrap();
 

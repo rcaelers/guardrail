@@ -12,7 +12,7 @@ use symbols::SymbolsApi;
 
 pub async fn routes(_app_state: AppState) -> Router<AppState> {
     Router::new()
-        .route("/symbols/upload", post(SymbolsApi::upload))
+        .route("/symbols/{token}/upload", post(SymbolsApi::upload))
         .route("/auth/jwt", post(token::generate_jwt_token))
         .route("/auth/token", post(token::generate_token))
         .route("/live", get(health::live))

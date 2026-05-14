@@ -1,19 +1,16 @@
 use axum::extract::multipart::Field;
-use axum::extract::{Multipart, Query, State};
-use axum::{Json, http::HeaderMap};
+use axum::extract::{Multipart, Path as AxumPath, State};
+use axum::http::HeaderMap;
+use axum::Json;
 use object_store::ObjectStoreExt;
 use object_store::path::Path;
-use serde::Deserialize;
 use serde::Serialize;
-use surrealdb::Surreal;
-use surrealdb::engine::any::Any;
 use tracing::{error, info, instrument};
 
 use crate::error::ApiError;
 use crate::state::AppState;
-use crate::utils::{get_product_by_name, get_product_by_product_token, validate_api_token_for_product};
+use crate::utils::{get_product_by_product_token, validate_api_token_for_product};
 use crate::utils::{peek_line, stream_to_s3};
-use data::api_token::ApiToken;
 use data::product::Product;
 
 #[derive(Default, Debug, Serialize)]
@@ -53,19 +50,6 @@ struct SymbolsContext {
 #[derive(Debug, Serialize)]
 pub struct SymbolsResponse {
     pub result: String,
-}
-
-#[derive(Deserialize, Default)]
-pub(crate) struct ApiKeyQuery {
-    pub api_key: Option<String>,
-}
-
-/// Auth context threaded through the symbol upload pipeline.
-enum SymbolUploadAuth {
-    /// Caller presented a valid Guardrail API token with the `symbol-upload` entitlement.
-    ApiToken(ApiToken),
-    /// Caller presented a product token; the matching product is already resolved.
-    ProductToken(Product),
 }
 
 pub struct SymbolsApi;
@@ -110,16 +94,14 @@ impl SymbolsApi {
         Ok(())
     }
 
-    /// Validate annotations and resolve the product, then return upload context.
+    /// Validate annotations against the already-resolved product and return upload context.
     ///
-    /// For API-token auth the product is looked up by the name supplied in the form
-    /// (returning `ProductNotFound` if absent) and then the token is checked for
-    /// authorization against that product.  For product-token auth the product is
-    /// already known; we only verify the form name matches.
-    #[instrument(skip(db, auth, symbols_info))]
+    /// The product is already known from the URL token; we only verify that the
+    /// submitted `product` annotation matches (name or slug) and that the product
+    /// is still accepting uploads.
+    #[instrument(skip(product, symbols_info))]
     async fn validate_symbols(
-        db: &Surreal<Any>,
-        auth: &SymbolUploadAuth,
+        product: &Product,
         symbols_info: &mut SymbolsInfo,
     ) -> Result<SymbolsContext, ApiError> {
         if symbols_info.symbols.is_none() {
@@ -162,29 +144,16 @@ impl SymbolsApi {
             }
         }
 
-        let product = match auth {
-            SymbolUploadAuth::ApiToken(token) => {
-                // Look up by the product name the caller submitted in the form.
-                // This returns ProductNotFound (400) when the product does not exist,
-                // and then validate_api_token_for_product enforces authorization.
-                let p = get_product_by_name(db, &product_name).await?;
-                validate_api_token_for_product(token, &p, &product_name)?;
-                p
-            }
-            SymbolUploadAuth::ProductToken(p) => {
-                let name_matches = product_name.eq_ignore_ascii_case(&p.name)
-                    || product_name.eq_ignore_ascii_case(&p.slug);
-                if !name_matches {
-                    error!(
-                        submitted = %product_name,
-                        authenticated = %p.name,
-                        "Submitted product name does not match product token"
-                    );
-                    return Err(ApiError::ProductAccessDenied(product_name));
-                }
-                p.clone()
-            }
-        };
+        let name_matches = product_name.eq_ignore_ascii_case(&product.name)
+            || product_name.eq_ignore_ascii_case(&product.slug);
+        if !name_matches {
+            error!(
+                submitted = %product_name,
+                authenticated = %product.name,
+                "Submitted product name does not match product token"
+            );
+            return Err(ApiError::ProductAccessDenied(product_name));
+        }
 
         if !product.accepting_crashes {
             return Err(ApiError::ProductNotAcceptingCrashes(product_name));
@@ -370,10 +339,10 @@ impl SymbolsApi {
         }
     }
 
-    #[instrument(skip(state, auth, multipart, symbols_info))]
+    #[instrument(skip(state, product, multipart, symbols_info))]
     async fn handle_upload(
         state: AppState,
-        auth: SymbolUploadAuth,
+        product: &Product,
         mut multipart: Multipart,
         symbols_info: &mut SymbolsInfo,
     ) -> Result<(), ApiError> {
@@ -384,7 +353,7 @@ impl SymbolsApi {
             Self::process_field(field, symbols_info, state.clone()).await?;
         }
 
-        let symbol_context = Self::validate_symbols(&state.repo.db, &auth, symbols_info).await?;
+        let symbol_context = Self::validate_symbols(product, symbols_info).await?;
 
         let symbol_info_json = Self::build_symbol_info(symbols_info, &symbol_context)?;
 
@@ -400,41 +369,23 @@ impl SymbolsApi {
         Ok(())
     }
 
-    #[instrument(skip(state, headers, api_key_query, multipart), fields(crash_id))]
+    #[instrument(skip(state, headers, multipart), fields(crash_id))]
     pub async fn upload(
         State(state): State<AppState>,
+        AxumPath(product_token): AxumPath<String>,
         headers: HeaderMap,
-        api_key_query: Query<ApiKeyQuery>,
         multipart: Multipart,
     ) -> Result<Json<SymbolsResponse>, ApiError> {
         let db = &state.repo.db;
 
-        // Resolve which auth mode to use.  Guardrail API tokens have a specific
-        // base64url format with a colon separator; product tokens are plain UUIDs.
-        // We probe the format first so that API-token-specific errors (expired,
-        // inactive, wrong entitlement) are never swallowed by the product-token
-        // fallback path.
-        let token_str = crate::access::extract_bearer_from_headers(&headers)
-            .or(api_key_query.api_key.as_deref())
-            .ok_or_else(|| ApiError::InvalidToken("missing API token".into()))?;
+        // Resolve the product from the URL product token.
+        let product = get_product_by_product_token(db, &product_token)
+            .await?
+            .ok_or_else(|| ApiError::InvalidToken("invalid product token".into()))?;
 
-        let auth = if common::token::decode_api_token(token_str).is_ok() {
-            // Looks like a Guardrail API token — full verification; errors propagate.
-            let token = crate::access::require_entitlement(
-                &headers,
-                api_key_query.api_key.as_deref(),
-                db,
-                "symbol-upload",
-            )
-            .await?;
-            SymbolUploadAuth::ApiToken(token)
-        } else {
-            // Not an API token format — try as product token.
-            let product = get_product_by_product_token(db, token_str)
-                .await?
-                .ok_or_else(|| ApiError::InvalidToken("invalid API token".into()))?;
-            SymbolUploadAuth::ProductToken(product)
-        };
+        // Require a secret API token with symbol-upload entitlement in the Authorization header.
+        let api_token = crate::access::require_entitlement(&headers, None, db, "symbol-upload").await?;
+        validate_api_token_for_product(&api_token, &product, &product.name)?;
 
         let mut symbols_info = SymbolsInfo {
             submission_timestamp: chrono::Utc::now().to_rfc3339(),
@@ -443,7 +394,7 @@ impl SymbolsApi {
             ..Default::default()
         };
 
-        let r = Self::handle_upload(state.clone(), auth, multipart, &mut symbols_info).await;
+        let r = Self::handle_upload(state.clone(), &product, multipart, &mut symbols_info).await;
         if let Err(e) = r {
             error!(error = ?e, "Failed to handle symbols upload");
 
