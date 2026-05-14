@@ -44,7 +44,7 @@ pub fn router() -> Router<AppState> {
         .route("/products", get(list_products).post(create_product))
         .route("/products/{id}", get(get_product).post(update_product).delete(delete_product))
         .route("/products/{id}/email-settings", get(get_product_email_settings).post(update_product_email_settings))
-        .route("/products/{id}/ingestion-token", post(update_product_ingestion_token))
+        .route("/products/{id}/product-token", post(update_product_token))
         .route("/products/{pid}/api-tokens", get(list_api_tokens).post(create_api_token))
         .route("/products/{pid}/api-tokens/{id}", delete(delete_api_token))
         .route("/products/{pid}/members", get(list_members))
@@ -295,7 +295,7 @@ async fn run_value(
 
 const USER_PROJ: &str =
     "meta::id(id) AS id, email, name, avatar, is_admin AS isAdmin, created_at AS joinedAt";
-const PRODUCT_PROJ: &str = "meta::id(id) AS id, name, slug, description, color, public, ingestion_token AS ingestionToken";
+const PRODUCT_PROJ: &str = "meta::id(id) AS id, name, slug, description, color, public, product_token AS productToken";
 const SYMBOL_PROJ: &str = "meta::id(id) AS id, meta::id(product_id) AS productId, \
     module_id AS name, '' AS version, arch, 'Breakpad' AS format, '' AS size, \
     build_id AS debugId, '' AS codeId, created_at AS uploadedAt, '' AS uploadedBy, 0 AS referencedBy";
@@ -849,14 +849,14 @@ async fn create_product(
                 .trim_matches('-')
                 .to_string()
         });
-    let ingestion_token = uuid::Uuid::new_v4().simple().to_string();
+    let product_token = uuid::Uuid::new_v4().simple().to_string();
     let rows = run_value(
         &db,
         &format!(
             "CREATE type::record('products', $id) CONTENT {{
             name: $name, slug: $slug, description: $description,
             color: '#6b7280', public: false, accepting_crashes: true,
-            ingestion_token: $ingestion_token, metadata: {{}}
+            product_token: $product_token, metadata: {{}}
         }} RETURN {PRODUCT_PROJ}"
         ),
         vec![
@@ -864,7 +864,7 @@ async fn create_product(
             ("name", Value::String(body.name)),
             ("slug", Value::String(slug)),
             ("description", Value::String(body.description.unwrap_or_default())),
-            ("ingestion_token", Value::String(ingestion_token)),
+            ("product_token", Value::String(product_token)),
         ],
     )
     .await?;
@@ -1014,16 +1014,16 @@ async fn update_product_email_settings(
 }
 
 #[derive(Deserialize)]
-struct UpdateIngestionTokenBody {
-    ingestion_token: Option<String>,
+struct UpdateProductTokenBody {
+    product_token: Option<String>,
 }
 
-async fn update_product_ingestion_token(
+async fn update_product_token(
     State(s): State<AppState>,
     session: Session,
     headers: HeaderMap,
     Path(id): Path<String>,
-    Json(body): Json<UpdateIngestionTokenBody>,
+    Json(body): Json<UpdateProductTokenBody>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
         .await
@@ -1031,14 +1031,14 @@ async fn update_product_ingestion_token(
     let db = s.user_db(&session).await;
 
     let token = body
-        .ingestion_token
+        .product_token
         .map(|t| t.trim().to_string())
         .filter(|t| !t.is_empty())
         .unwrap_or_else(|| uuid::Uuid::new_v4().simple().to_string());
 
     let rows = run_value(
         &db,
-        &format!("UPDATE type::record('products', $id) SET ingestion_token = $token RETURN {PRODUCT_PROJ}"),
+        &format!("UPDATE type::record('products', $id) SET product_token = $token RETURN {PRODUCT_PROJ}"),
         vec![
             ("id", Value::String(id.clone())),
             ("token", Value::String(token)),

@@ -4,11 +4,11 @@
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
-  let tokenInput = $state(data.ingestionToken ?? '');
+  let tokenInput = $state(data.productToken ?? '');
 
   $effect(() => {
-    if (form?.ingestionToken !== undefined) {
-      tokenInput = form.ingestionToken ?? '';
+    if (form?.productToken !== undefined) {
+      tokenInput = form.productToken ?? '';
     }
   });
 
@@ -18,9 +18,9 @@
 
 <div class="mx-auto max-w-[700px]">
   <div class="mb-6">
-    <h1 class="mb-1 text-[20px] font-semibold tracking-[-0.01em]">Ingestion token</h1>
+    <h1 class="mb-1 text-[20px] font-semibold tracking-[-0.01em]">Product token</h1>
     <p class="text-[13px] text-ink-muted dark:text-ink-mutedDark">
-      This token is embedded in the crash upload URL and identifies which product a minidump belongs to.
+      This token is embedded in the crash upload URL and identifies which product a minidump or symbol upload belongs to.
     </p>
   </div>
 
@@ -45,7 +45,7 @@
 
   <form method="POST" action="?/save" use:enhance class="space-y-4 mb-4">
     <div>
-      <label for="ingestion_token" class="block text-[13px] font-medium mb-1">
+      <label for="product_token" class="block text-[13px] font-medium mb-1">
         Set token manually
       </label>
       <p class="text-[12px] text-ink-muted dark:text-ink-mutedDark mb-2">
@@ -53,8 +53,8 @@
         Use "Generate new token" below to create a random token.
       </p>
       <input
-        id="ingestion_token"
-        name="ingestion_token"
+        id="product_token"
+        name="product_token"
         type="text"
         bind:value={tokenInput}
         placeholder="Leave empty to keep current token"

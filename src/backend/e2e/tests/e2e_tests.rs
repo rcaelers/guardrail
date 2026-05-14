@@ -39,8 +39,8 @@ struct TestHarness {
     product_id: uuid::Uuid,
     /// Product name created during setup.
     product_name: String,
-    /// Product ingestion token for minidump uploads.
-    ingestion_token: String,
+    /// Product token for minidump/symbol uploads.
+    product_token: String,
     /// API bearer token for authenticated requests.
     api_token: String,
     /// Ingestion router (fully bootstrapped from settings).
@@ -116,7 +116,7 @@ impl TestHarness {
             storage,
             product_id: product.id.parse().expect("product id is not a valid UUID"),
             product_name,
-            ingestion_token: product.ingestion_token,
+            product_token: product.product_token,
             api_token: token,
             ingestion,
             api,
@@ -482,7 +482,7 @@ async fn test_e2e_crash_flow() {
 
     let request = Request::builder()
         .method("POST")
-        .uri(format!("/api/minidump/{}/upload", harness.ingestion_token))
+        .uri(format!("/api/minidump/{}/upload", harness.product_token))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();
@@ -603,7 +603,7 @@ async fn test_e2e_crash_flow_with_attachments() {
 
     let request = Request::builder()
         .method("POST")
-        .uri(format!("/api/minidump/{}/upload", harness.ingestion_token))
+        .uri(format!("/api/minidump/{}/upload", harness.product_token))
         .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
         .body(Body::from(body))
         .unwrap();

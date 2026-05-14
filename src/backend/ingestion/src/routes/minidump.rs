@@ -406,7 +406,7 @@ impl MinidumpApi {
             .get_product_by_token(token)
             .await?
             .ok_or_else(|| {
-                error!(token = %token, "Product not found for ingestion token");
+                error!(token = %token, "Product not found for product token");
                 ApiError::ProductNotFound(token.to_string())
             })?;
 

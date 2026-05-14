@@ -47,15 +47,15 @@ impl ProductRepo {
         Ok(products.into_iter().next())
     }
 
-    pub async fn get_by_ingestion_token(
+    pub async fn get_by_product_token(
         db: &Surreal<Any>,
         token: &str,
     ) -> Result<Option<Product>, RepoError> {
         let mut result = db
             .query(
-                "SELECT *, meta::id(id) as id FROM products WHERE ingestion_token = $ingestion_token LIMIT 1",
+                "SELECT *, meta::id(id) as id FROM products WHERE product_token = $product_token LIMIT 1",
             )
-            .bind(("ingestion_token", token.to_owned()))
+            .bind(("product_token", token.to_owned()))
             .await
             .map_err(handle_surreal_error)?;
         let products: Vec<Product> = crate::take_many(&mut result, 0)?;
@@ -107,7 +107,7 @@ impl ProductRepo {
     pub async fn create(db: &Surreal<Any>, product: NewProduct) -> Result<String, RepoError> {
         let id = uuid::Uuid::new_v4().to_string();
         let slug = product.name.to_lowercase().replace(' ', "-");
-        let ingestion_token = uuid::Uuid::new_v4().simple().to_string();
+        let product_token = uuid::Uuid::new_v4().simple().to_string();
         let _: Option<serde_json::Value> = db
             .query(
                 "CREATE type::record('products', $id) CONTENT {
@@ -116,7 +116,7 @@ impl ProductRepo {
                 description: $description,
                 public: $public,
                 accepting_crashes: true,
-                ingestion_token: $ingestion_token,
+                product_token: $product_token,
                 metadata: $metadata,
                 created_at: time::now(),
                 updated_at: time::now(),
@@ -127,7 +127,7 @@ impl ProductRepo {
             .bind(("slug", slug))
             .bind(("description", product.description.clone()))
             .bind(("public", product.public))
-            .bind(("ingestion_token", ingestion_token))
+            .bind(("product_token", product_token))
             .bind(("metadata", product.metadata.clone()))
             .await
             .map_err(handle_surreal_error)?

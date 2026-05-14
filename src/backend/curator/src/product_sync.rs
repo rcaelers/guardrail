@@ -23,7 +23,7 @@ pub async fn sync_products_to_valkey(
 
         let json = serde_json::to_string(&info)?;
         let mut keys = product_cache_keys(&product.name, Some(&product.slug));
-        keys.push(product_token_cache_key(&product.ingestion_token));
+        keys.push(product_token_cache_key(&product.product_token));
         for key in keys {
             info!(product = %product.name, key = %key, "Syncing product to Valkey");
 

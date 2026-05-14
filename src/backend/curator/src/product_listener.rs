@@ -44,7 +44,7 @@ pub async fn listen_for_product_changes(
                         };
                         let json = serde_json::to_string(&info)?;
                         let mut keys = product_cache_keys(&product.name, Some(&product.slug));
-                        keys.push(product_token_cache_key(&product.ingestion_token));
+                        keys.push(product_token_cache_key(&product.product_token));
                         for key in keys {
                             if let Err(e) = redis.set::<_, _, ()>(&key, &json).await {
                                 error!(product = %product.name, key = %key, error = ?e, "Failed to write product to Valkey");
@@ -53,7 +53,7 @@ pub async fn listen_for_product_changes(
                     }
                     surrealdb::types::Action::Delete => {
                         let mut keys = product_cache_keys(&product.name, Some(&product.slug));
-                        keys.push(product_token_cache_key(&product.ingestion_token));
+                        keys.push(product_token_cache_key(&product.product_token));
                         for key in keys {
                             if let Err(e) = redis.del::<_, ()>(&key).await {
                                 error!(product = %product.name, key = %key, error = ?e, "Failed to remove product from Valkey");

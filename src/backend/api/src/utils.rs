@@ -116,11 +116,11 @@ pub async fn get_product_by_id(db: &Surreal<Any>, product_id: &str) -> Result<Pr
         .ok_or_else(|| ApiError::ProductNotFound(product_id.to_string()))
 }
 
-pub async fn get_product_by_ingestion_token(
+pub async fn get_product_by_product_token(
     db: &Surreal<Any>,
     token: &str,
 ) -> Result<Option<Product>, ApiError> {
-    ProductRepo::get_by_ingestion_token(db, token)
+    ProductRepo::get_by_product_token(db, token)
         .await
         .map_err(|err| {
             error!("Failed to look up product by ingestion token: {}", err);
@@ -182,7 +182,7 @@ mod tests {
             description: String::new(),
             public: false,
             accepting_crashes: true,
-            ingestion_token: String::new(),
+            product_token: String::new(),
             metadata: serde_json::json!({}),
             created_at: Utc::now(),
             updated_at: Utc::now(),

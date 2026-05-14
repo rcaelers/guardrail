@@ -628,7 +628,7 @@
     {
       "kind": "field",
       "scope": "products",
-      "name": "ingestion_token",
+      "name": "product_token",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "109ee4d1a74437f84ed6afa950c5a5a41979f21037f9a4c1aceb4509aceb98c7",
       "file_hash": "9d43ed4d86c185a2268e519f93b878c2d5f6a2baf3a67db55281093d738a1f25"
@@ -1052,7 +1052,7 @@
     {
       "kind": "index",
       "scope": "products",
-      "name": "idx_products_ingestion_token",
+      "name": "idx_products_product_token",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "89138a046dafcebdc93d2ad1ffe340b4976fca4b0d3562ebbca95cbf4e068145",
       "file_hash": "9d43ed4d86c185a2268e519f93b878c2d5f6a2baf3a67db55281093d738a1f25"

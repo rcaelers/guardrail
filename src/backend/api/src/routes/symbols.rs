@@ -9,7 +9,7 @@ use tracing::{error, info, instrument};
 
 use crate::error::ApiError;
 use crate::state::AppState;
-use crate::utils::{get_product_by_id, get_product_by_ingestion_token, validate_api_token_for_product};
+use crate::utils::{get_product_by_id, get_product_by_product_token, validate_api_token_for_product};
 use crate::utils::{peek_line, stream_to_s3};
 use data::api_token::ApiToken;
 use data::product::Product;
@@ -409,7 +409,7 @@ impl SymbolsApi {
             Err(_) => {
                 let token_str = crate::access::extract_bearer_from_headers(&headers)
                     .ok_or_else(|| ApiError::InvalidToken("missing token".into()))?;
-                let product = get_product_by_ingestion_token(db, token_str)
+                let product = get_product_by_product_token(db, token_str)
                     .await?
                     .ok_or_else(|| ApiError::InvalidToken("invalid token".into()))?;
                 (None, product)

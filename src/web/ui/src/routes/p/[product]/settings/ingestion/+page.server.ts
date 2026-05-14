@@ -4,7 +4,7 @@ import { error, fail } from '@sveltejs/kit';
 
 export const load: PageServerLoad = async ({ parent }) => {
   const { product } = await parent();
-  return { ingestionToken: product.ingestionToken ?? null };
+  return { productToken: product.productToken ?? null };
 };
 
 export const actions: Actions = {
@@ -13,11 +13,11 @@ export const actions: Actions = {
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
 
     const form = await request.formData();
-    const token = (form.get('ingestion_token') as string | null) ?? '';
+    const token = (form.get('product_token') as string | null) ?? '';
 
     try {
-      const updated = await adapter.updateProductIngestionToken(params.product, token || undefined);
-      return { ok: true, ingestionToken: updated.ingestionToken ?? null };
+      const updated = await adapter.updateProductToken(params.product, token || undefined);
+      return { ok: true, productToken: updated.productToken ?? null };
     } catch (e) {
       return fail(400, { error: (e as Error).message });
     }
@@ -28,8 +28,8 @@ export const actions: Actions = {
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
 
     try {
-      const updated = await adapter.updateProductIngestionToken(params.product, undefined);
-      return { ok: true, ingestionToken: updated.ingestionToken ?? null };
+      const updated = await adapter.updateProductToken(params.product, undefined);
+      return { ok: true, productToken: updated.productToken ?? null };
     } catch (e) {
       return fail(400, { error: (e as Error).message });
     }
