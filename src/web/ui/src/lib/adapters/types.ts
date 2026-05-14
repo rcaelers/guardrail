@@ -346,15 +346,15 @@ export interface Invitation {
 export interface ProductEmailSettings {
   invite_html_template: string;
   invite_text_template: string;
-  default_invite_html_template: string;
-  default_invite_text_template: string;
+  default_invite_html_template?: string;
+  default_invite_text_template?: string;
 }
 
 export interface AppEmailSettings {
   recovery_html_template: string;
   recovery_text_template: string;
-  default_recovery_html_template: string;
-  default_recovery_text_template: string;
+  default_recovery_html_template?: string;
+  default_recovery_text_template?: string;
 }
 
 export interface CreateInvitationSpec {
