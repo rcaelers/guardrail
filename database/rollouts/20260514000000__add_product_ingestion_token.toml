@@ -1,13 +1,16 @@
 id = "20260514000000__add_product_ingestion_token"
 name = "add_product_ingestion_token"
+source_schema_hash = "cecc8d8dd3c3f47cfd2f1bcf399f4ee1770e0be12a0362d0f6cf8da0e21bea02"
+target_schema_hash = "352d806e20f78a0a1e053cc9a0f278049203abe911512aad5eb29349d5de537f"
 compatibility = "backward"
 renames = []
 
 [[steps]]
 id = "backfill_tokens"
 phase = "start"
-kind = "query"
-query = "UPDATE products SET ingestion_token = rand::uuid::v4() WHERE ingestion_token IS NONE OR ingestion_token = ''"
+kind = "run_sql"
+idempotent = true
+sql = "UPDATE products SET ingestion_token = rand::uuid::v4() WHERE ingestion_token IS NONE OR ingestion_token = ''"
 
 [[steps]]
 id = "apply_schema"
