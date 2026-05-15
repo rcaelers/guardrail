@@ -40,7 +40,7 @@
   <header class="flex h-[52px] shrink-0 items-center gap-4 border-b border-line dark:border-line-dark px-4">
     <div class="flex items-center gap-2.5">
       <a href="/" class="flex items-center gap-2.5">
-        <div class="h-[22px] w-[22px] rounded-md bg-ink dark:bg-ink-dark"></div>
+        <img src="/favicon.svg" alt="Guardrail" class="h-[22px] w-[22px]" />
         <div class="font-sans text-[14px] font-semibold tracking-[-0.01em]">
           Guardrail <span class="font-normal text-ink-muted dark:text-ink-mutedDark">/ Crashdumps</span>
         </div>
