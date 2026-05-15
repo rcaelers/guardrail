@@ -1,7 +1,7 @@
-id = "20260428213129__initial_guardrail_schema"
+id = "20260515102227__initial_guardrail_schema"
 name = "initial_guardrail_schema"
 source_schema_hash = "ad301433f67ec7108b54797ac5d7a61df8c92f62fa52ae631da3f49731576ac3"
-target_schema_hash = "29e25af31ec70b6ecec6bb08ad6dae01a2a9b038fe9235cf5922e812e22c59c7"
+target_schema_hash = "1c675705ff47feae04b190e2b8922884af09109374f39238d2a2440bcbef1ee0"
 compatibility = "phased"
 renames = []
 
@@ -117,6 +117,36 @@ name = "updated_at"
 kind = "field"
 scope = "api_tokens"
 name = "user_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "app_settings"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "app_settings"
+name = "email"
+
+[[steps.entities]]
+kind = "field"
+scope = "app_settings"
+name = "email.recovery_html_template"
+
+[[steps.entities]]
+kind = "field"
+scope = "app_settings"
+name = "email.recovery_subject"
+
+[[steps.entities]]
+kind = "field"
+scope = "app_settings"
+name = "email.recovery_text_template"
+
+[[steps.entities]]
+kind = "field"
+scope = "app_settings"
+name = "updated_at"
 
 [[steps.entities]]
 kind = "field"
@@ -250,36 +280,6 @@ name = "updated_at"
 
 [[steps.entities]]
 kind = "field"
-scope = "credentials"
-name = "created_at"
-
-[[steps.entities]]
-kind = "field"
-scope = "credentials"
-name = "data"
-
-[[steps.entities]]
-kind = "field"
-scope = "credentials"
-name = "last_used"
-
-[[steps.entities]]
-kind = "field"
-scope = "credentials"
-name = "name"
-
-[[steps.entities]]
-kind = "field"
-scope = "credentials"
-name = "updated_at"
-
-[[steps.entities]]
-kind = "field"
-scope = "credentials"
-name = "user_id"
-
-[[steps.entities]]
-kind = "field"
 scope = "invitations"
 name = "code"
 
@@ -302,6 +302,11 @@ name = "expires_at"
 kind = "field"
 scope = "invitations"
 name = "grants"
+
+[[steps.entities]]
+kind = "field"
+scope = "invitations"
+name = "grants[*]"
 
 [[steps.entities]]
 kind = "field"
@@ -341,6 +346,11 @@ name = "grants"
 [[steps.entities]]
 kind = "field"
 scope = "pending_access"
+name = "grants[*]"
+
+[[steps.entities]]
+kind = "field"
+scope = "pending_access"
 name = "invitation_id"
 
 [[steps.entities]]
@@ -352,6 +362,41 @@ name = "is_admin"
 kind = "field"
 scope = "pending_access"
 name = "sub"
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "email"
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "email.invite_html_template"
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "email.invite_subject"
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "email.invite_text_template"
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "product_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "updated_at"
 
 [[steps.entities]]
 kind = "field"
@@ -382,6 +427,11 @@ name = "metadata"
 kind = "field"
 scope = "products"
 name = "name"
+
+[[steps.entities]]
+kind = "field"
+scope = "products"
+name = "product_token"
 
 [[steps.entities]]
 kind = "field"
@@ -421,6 +471,21 @@ name = "build_id"
 [[steps.entities]]
 kind = "field"
 scope = "symbols"
+name = "build_tag"
+
+[[steps.entities]]
+kind = "field"
+scope = "symbols"
+name = "channel"
+
+[[steps.entities]]
+kind = "field"
+scope = "symbols"
+name = "commit"
+
+[[steps.entities]]
+kind = "field"
+scope = "symbols"
 name = "created_at"
 
 [[steps.entities]]
@@ -447,6 +512,11 @@ name = "storage_path"
 kind = "field"
 scope = "symbols"
 name = "updated_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "symbols"
+name = "version"
 
 [[steps.entities]]
 kind = "field"
@@ -635,6 +705,11 @@ name = "idx_products_name"
 [[steps.entities]]
 kind = "index"
 scope = "products"
+name = "idx_products_product_token"
+
+[[steps.entities]]
+kind = "index"
+scope = "products"
 name = "idx_products_slug"
 
 [[steps.entities]]
@@ -672,6 +747,10 @@ name = "api_tokens"
 
 [[steps.entities]]
 kind = "table"
+name = "app_settings"
+
+[[steps.entities]]
+kind = "table"
 name = "attachments"
 
 [[steps.entities]]
@@ -684,15 +763,15 @@ name = "crashes"
 
 [[steps.entities]]
 kind = "table"
-name = "credentials"
-
-[[steps.entities]]
-kind = "table"
 name = "invitations"
 
 [[steps.entities]]
 kind = "table"
 name = "pending_access"
+
+[[steps.entities]]
+kind = "table"
+name = "product_settings"
 
 [[steps.entities]]
 kind = "table"
