@@ -9,7 +9,7 @@ use apalis::layers::retry::{RetryPolicy, backoff::ExponentialBackoffMaker};
 use apalis::prelude::*;
 use apalis_redis::{ConnectionManager, RedisConfig, RedisStorage};
 use surrealdb::opt::auth::Root;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 use common::jobs::queue;
 use common::retry_startup;
@@ -172,6 +172,31 @@ impl GuardrailCuratorApp {
             error!("Failed to run startup maintenance tasks: {}", e);
         }
 
+        // apalis_redis register_worker.lua rejects re-registration if the previous worker's
+        // heartbeat score is less than keep_alive seconds old. After a quick pod restart the
+        // previous score can be newer than the new pod's clock (clock skew), causing the check
+        // `now - last_seen < threshold` to fire and immediately kill both workers. Clear the
+        // stale entries so the initial poll_compact registration always succeeds.
+        let worker_queue_names = [
+            (queue::IMPORT_CRASH_JOBS, "import-crash"),
+            (queue::IMPORT_SYMBOL_JOBS, "import-symbol"),
+        ];
+        let mut redis_cleanup = self.redis_manager.clone();
+        for (queue_name, worker_name) in worker_queue_names {
+            let workers_key = format!("{}:workers", queue_name);
+            let inflight_key = format!("{}:inflight:{}", queue_name, worker_name);
+            match redis::cmd("ZREM")
+                .arg(&workers_key)
+                .arg(&inflight_key)
+                .query_async::<i64>(&mut redis_cleanup)
+                .await
+            {
+                Ok(0) => debug!("No stale registration to clear for {}", worker_name),
+                Ok(_) => warn!("Cleared stale worker registration for {}", worker_name),
+                Err(e) => error!("Failed to clear stale worker registration for {}: {}", worker_name, e),
+            }
+        }
+
         let maintenance_schedule = cron::Schedule::from_str("0 0 * * * * *")
             .expect("Invalid cron schedule for maintenance");
 
@@ -227,7 +252,12 @@ impl GuardrailCuratorApp {
                     .enable_tracing()
                     .build(handle_maintenance_tick)
             })
-            .on_event(|_worker, e| debug!("Apalis event: {e}"))
+            .on_event(|worker, e| match e {
+                Event::Error(err) => error!(worker = %worker.name(), error = %err, "Worker error"),
+                Event::Start => info!(worker = %worker.name(), "Worker started"),
+                Event::Stop => info!(worker = %worker.name(), "Worker stopped"),
+                e => debug!(worker = %worker.name(), event = %e, "Worker event"),
+            })
             .run_with_signal(shutdown)
             .await
             .expect("Failed to run the monitor");
