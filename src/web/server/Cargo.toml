@@ -13,8 +13,8 @@ path = "src/bin/tool.rs"
 
 [dependencies]
 repos = { path = "../../common/repos" }
-data = { path = "../../common/data", default-features = false, features = ["ssr"] }
-common = { path = "../../common/common", default-features = false, features = ["ssr"] }
+data = { path = "../../common/data" }
+common = { path = "../../common/common" }
 email = { path = "../../common/email" }
 
 askama.workspace = true

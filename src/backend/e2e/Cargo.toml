@@ -10,7 +10,7 @@ processor = { path = "../processor" }
 curator = { path = "../curator" }
 api = { path = "../api" }
 repos = { path = "../../common/repos" }
-common = { path = "../../common/common", default-features = false, features = ["ssr"] }
+common = { path = "../../common/common" }
 testware = { path = "../testware" }
 
 # Serde / json

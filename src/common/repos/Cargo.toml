@@ -5,8 +5,8 @@ edition.workspace = true
 
 [dependencies]
 
-data = { path = "../data", features = ["ssr"] }
-common = { path = "../common", features = ["ssr"] }
+data = { path = "../data" }
+common = { path = "../common" }
 
 # Serde / json
 serde.workspace = true

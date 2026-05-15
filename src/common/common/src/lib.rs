@@ -1,11 +1,8 @@
 pub mod jobs;
 pub mod product_info;
 pub mod settings;
-
-#[cfg(feature = "ssr")]
 pub mod token;
 
-#[cfg(feature = "ssr")]
 use object_store::{ObjectStore, aws::AmazonS3Builder};
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt};
@@ -118,7 +115,6 @@ where
     }
 }
 
-#[cfg(feature = "ssr")]
 pub fn spawn_health_server(
     port: u16,
     ready_check: impl Fn() -> std::pin::Pin<Box<dyn Future<Output = bool> + Send>>
@@ -165,7 +161,7 @@ pub fn spawn_health_server(
     });
 }
 
-#[cfg(feature = "ssr")]
+
 pub async fn init_s3_object_store(settings: Arc<Settings>) -> Arc<dyn ObjectStore> {
     let storage_config = &settings.object_storage;
 
