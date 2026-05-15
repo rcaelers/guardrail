@@ -1,6 +1,7 @@
 import type { PageServerLoad, Actions } from './$types';
 import { createAdapter } from '$lib/adapters';
 import { error, fail, redirect } from '@sveltejs/kit';
+import { requireProductAccess } from '$lib/server/product-access';
 
 export const load: PageServerLoad = async ({ locals, url, request, params }) => {
   if (!locals.user) throw redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);
@@ -15,6 +16,9 @@ export const actions: Actions = {
   save: async ({ request, locals, params }) => {
     if (!locals.user) throw error(401);
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { role } = await requireProductAccess(locals.user, params.product!, adapter);
+    if (role !== 'maintainer' && !locals.user.isAdmin)
+      throw error(403, 'Maintainer required');
 
     const form = await request.formData();
     const invite_subject = (form.get('invite_subject') as string) ?? '';
@@ -36,6 +40,9 @@ export const actions: Actions = {
   reset: async ({ locals, params, request }) => {
     if (!locals.user) throw error(401);
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { role } = await requireProductAccess(locals.user, params.product!, adapter);
+    if (role !== 'maintainer' && !locals.user.isAdmin)
+      throw error(403, 'Maintainer required');
 
     try {
       await adapter.updateProductEmailSettings(params.product, {
