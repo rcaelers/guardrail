@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct EmailSettings {
+    pub invite_subject: Option<String>,
     pub invite_html_template: Option<String>,
     pub invite_text_template: Option<String>,
 }

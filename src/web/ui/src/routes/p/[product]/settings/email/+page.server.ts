@@ -17,11 +17,13 @@ export const actions: Actions = {
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
 
     const form = await request.formData();
+    const invite_subject = (form.get('invite_subject') as string) ?? '';
     const invite_html_template = (form.get('invite_html_template') as string) ?? '';
     const invite_text_template = (form.get('invite_text_template') as string) ?? '';
 
     try {
       await adapter.updateProductEmailSettings(params.product, {
+        invite_subject,
         invite_html_template,
         invite_text_template,
       });
@@ -37,6 +39,7 @@ export const actions: Actions = {
 
     try {
       await adapter.updateProductEmailSettings(params.product, {
+        invite_subject: '',
         invite_html_template: '',
         invite_text_template: '',
       });

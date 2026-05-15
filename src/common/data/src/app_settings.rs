@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct AppEmailSettings {
+    pub recovery_subject: Option<String>,
     pub recovery_html_template: Option<String>,
     pub recovery_text_template: Option<String>,
 }

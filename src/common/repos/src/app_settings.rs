@@ -33,6 +33,7 @@ impl AppSettingsRepo {
         let mut result = db
             .query(
                 "UPSERT type::record('app_settings', $id) SET \
+                 email.recovery_subject = $subject, \
                  email.recovery_html_template = $html, \
                  email.recovery_text_template = $text, \
                  created_at = created_at OR time::now(), \
@@ -40,6 +41,7 @@ impl AppSettingsRepo {
                  RETURN *, meta::id(id) AS id",
             )
             .bind(("id", MAIN_ID))
+            .bind(("subject", email.recovery_subject))
             .bind(("html", email.recovery_html_template))
             .bind(("text", email.recovery_text_template))
             .await

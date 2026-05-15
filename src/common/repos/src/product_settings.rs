@@ -54,6 +54,7 @@ impl ProductSettingsRepo {
             .query(
                 "UPSERT type::record('product_settings', $id) SET \
                  product_id = type::record('products', $id), \
+                 email.invite_subject = $subject, \
                  email.invite_html_template = $html, \
                  email.invite_text_template = $text, \
                  created_at = created_at OR time::now(), \
@@ -61,6 +62,7 @@ impl ProductSettingsRepo {
                  RETURN *, meta::id(id) AS id, meta::id(product_id) AS product_id",
             )
             .bind(("id", key))
+            .bind(("subject", email.invite_subject))
             .bind(("html", email.invite_html_template))
             .bind(("text", email.invite_text_template))
             .await

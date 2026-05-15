@@ -25,6 +25,7 @@ use crate::{
 
 pub(crate) const DEFAULT_INVITE_HTML: &str = include_str!("../../templates/email/invite.html");
 pub(crate) const DEFAULT_INVITE_TEXT: &str = include_str!("../../templates/email/invite.txt");
+pub(crate) const DEFAULT_INVITE_SUBJECT: &str = "You've been invited to {{app_name}}";
 
 fn render_invite_template(template: &str, app_name: &str, invite_url: &str) -> String {
     template
@@ -139,20 +140,22 @@ async fn create_invitation(
         let origin = state.settings.auth.origin.trim_end_matches('/');
         let invite_url = format!("{origin}/invite/{}", invitation.code);
 
-        let (product_html, product_text) = if invitation.grants.len() == 1 {
+        let (product_subject, product_html, product_text) = if invitation.grants.len() == 1 {
             product_email_templates(&state.repo.db, &invitation.grants[0].product_id).await
         } else {
-            (None, None)
+            (None, None, None)
         };
 
+        let subject_template = product_subject.unwrap_or_else(|| DEFAULT_INVITE_SUBJECT.to_string());
         let html_template = product_html.unwrap_or_else(|| DEFAULT_INVITE_HTML.to_string());
         let text_template = product_text.unwrap_or_else(|| DEFAULT_INVITE_TEXT.to_string());
+        let subject = render_invite_template(&subject_template, &state.settings.auth.name, &invite_url);
         let html = render_invite_template(&html_template, &state.settings.auth.name, &invite_url);
         let text = render_invite_template(&text_template, &state.settings.auth.name, &invite_url);
         let email = Email {
             from: state.settings.email.from.clone(),
             to: to.to_string(),
-            subject: format!("You've been invited to {}", state.settings.auth.name),
+            subject,
             html,
             text: Some(text),
         };
@@ -501,16 +504,16 @@ fn non_empty(s: String) -> Option<String> {
     if s.is_empty() { None } else { Some(s) }
 }
 
-/// Returns per-product HTML and text invite email templates from `product_settings`.
-/// Returns `(None, None)` if no custom templates are configured for the product.
+/// Returns per-product subject, HTML, and text invite email templates from `product_settings`.
+/// Returns `(None, None, None)` if no custom templates are configured for the product.
 async fn product_email_templates(
     db: &surrealdb::Surreal<surrealdb::engine::any::Any>,
     product_id: &str,
-) -> (Option<String>, Option<String>) {
+) -> (Option<String>, Option<String>, Option<String>) {
     let Ok(Some(settings)) = repos::product_settings::ProductSettingsRepo::get(db, product_id).await else {
-        return (None, None);
+        return (None, None, None);
     };
-    (settings.email.invite_html_template, settings.email.invite_text_template)
+    (settings.email.invite_subject, settings.email.invite_html_template, settings.email.invite_text_template)
 }
 
 /// Validates that a product-scoped token is not used to create grants

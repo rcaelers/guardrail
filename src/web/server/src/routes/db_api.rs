@@ -978,6 +978,7 @@ async fn get_product_email_settings(
         .map_err(server_error)?;
     let email = settings.email;
     Ok(Json(json!({
+        "invite_subject": email.invite_subject.unwrap_or_default(),
         "invite_html_template": email.invite_html_template.unwrap_or_default(),
         "invite_text_template": email.invite_text_template.unwrap_or_default(),
         "default_invite_html_template": crate::routes::invite::DEFAULT_INVITE_HTML,
@@ -987,6 +988,7 @@ async fn get_product_email_settings(
 
 #[derive(Deserialize)]
 struct UpdateEmailSettingsBody {
+    invite_subject: Option<String>,
     invite_html_template: Option<String>,
     invite_text_template: Option<String>,
 }
@@ -1004,6 +1006,7 @@ async fn update_product_email_settings(
     let db = s.user_db(&session).await;
 
     let email = data::product_settings::EmailSettings {
+        invite_subject: body.invite_subject.filter(|s| !s.is_empty()),
         invite_html_template: body.invite_html_template.filter(|s| !s.is_empty()),
         invite_text_template: body.invite_text_template.filter(|s| !s.is_empty()),
     };
@@ -1011,6 +1014,7 @@ async fn update_product_email_settings(
         .await
         .map_err(server_error)?;
     Ok(Json(json!({
+        "invite_subject": saved.email.invite_subject.unwrap_or_default(),
         "invite_html_template": saved.email.invite_html_template.unwrap_or_default(),
         "invite_text_template": saved.email.invite_text_template.unwrap_or_default(),
     })))
@@ -1073,6 +1077,7 @@ async fn get_app_email_settings(
         .map_err(server_error)?;
     let email = settings.email;
     Ok(Json(json!({
+        "recovery_subject": email.recovery_subject.unwrap_or_default(),
         "recovery_html_template": email.recovery_html_template.unwrap_or_default(),
         "recovery_text_template": email.recovery_text_template.unwrap_or_default(),
         "default_recovery_html_template": crate::routes::auth::DEFAULT_RECOVERY_HTML,
@@ -1082,6 +1087,7 @@ async fn get_app_email_settings(
 
 #[derive(Deserialize)]
 struct UpdateAppEmailSettingsBody {
+    recovery_subject: Option<String>,
     recovery_html_template: Option<String>,
     recovery_text_template: Option<String>,
 }
@@ -1097,6 +1103,7 @@ async fn update_app_email_settings(
         .map_err(access_err)?;
 
     let email = data::app_settings::AppEmailSettings {
+        recovery_subject: body.recovery_subject.filter(|s| !s.is_empty()),
         recovery_html_template: body.recovery_html_template.filter(|s| !s.is_empty()),
         recovery_text_template: body.recovery_text_template.filter(|s| !s.is_empty()),
     };
@@ -1104,6 +1111,7 @@ async fn update_app_email_settings(
         .await
         .map_err(server_error)?;
     Ok(Json(json!({
+        "recovery_subject": saved.email.recovery_subject.unwrap_or_default(),
         "recovery_html_template": saved.email.recovery_html_template.unwrap_or_default(),
         "recovery_text_template": saved.email.recovery_text_template.unwrap_or_default(),
     })))

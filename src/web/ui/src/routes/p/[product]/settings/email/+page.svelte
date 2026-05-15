@@ -4,9 +4,11 @@
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
+  let subjectTemplate = $state(data.settings.invite_subject);
   let htmlTemplate = $state(data.settings.invite_html_template);
   let textTemplate = $state(data.settings.invite_text_template);
 
+  const hasCustomSubject = $derived(subjectTemplate.trim().length > 0);
   const hasCustomHtml = $derived(htmlTemplate.trim().length > 0);
   const hasCustomText = $derived(textTemplate.trim().length > 0);
 
@@ -41,8 +43,37 @@
         <code class="rounded bg-surface dark:bg-surface-dark px-1 py-0.5 font-mono text-[11px]">&#123;&#123;app_name&#125;&#125;</code>
         — the application name, and
         <code class="rounded bg-surface dark:bg-surface-dark px-1 py-0.5 font-mono text-[11px]">&#123;&#123;invite_url&#125;&#125;</code>
-        — the unique invitation link.
+        — the unique invitation link. Both work in the subject and body fields.
       </p>
+    </div>
+
+    <div class="rounded-md border border-line dark:border-line-dark overflow-hidden">
+      <div class="flex items-center justify-between bg-surface-panel dark:bg-surface-panelDark px-4 py-3 border-b border-line dark:border-line-dark">
+        <div>
+          <div class="text-[13px] font-medium">Subject</div>
+          <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
+            {hasCustomSubject ? 'Using custom subject' : 'Using default subject'}
+          </div>
+        </div>
+        {#if hasCustomSubject}
+          <button
+            type="button"
+            onclick={() => (subjectTemplate = '')}
+            class="text-[12px] text-ink-muted hover:text-red-600 dark:hover:text-red-400"
+          >Clear</button>
+        {/if}
+      </div>
+      <div class="px-4 py-3 bg-surface dark:bg-surface-dark">
+        <input
+          type="text"
+          name="invite_subject"
+          bind:value={subjectTemplate}
+          placeholder="You've been invited to &#123;&#123;app_name&#125;&#125;"
+          spellcheck="false"
+          autocomplete="off"
+          class="w-full rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px] outline-none focus:ring-1 focus:ring-accent"
+        />
+      </div>
     </div>
 
     <div class="rounded-md border border-line dark:border-line-dark overflow-hidden">
@@ -127,9 +158,9 @@
       <button
         type="submit"
         formaction="?/reset"
-        onclick={() => { htmlTemplate = ''; textTemplate = ''; }}
+        onclick={() => { subjectTemplate = ''; htmlTemplate = ''; textTemplate = ''; }}
         class="text-[12.5px] text-ink-muted hover:text-ink dark:hover:text-ink-dark"
-      >Reset both to defaults</button>
+      >Reset all to defaults</button>
       <button
         type="submit"
         class="rounded-md bg-accent px-4 py-1.5 text-[13px] font-medium text-white"

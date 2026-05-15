@@ -17,11 +17,12 @@ export const actions: Actions = {
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
 
     const form = await request.formData();
+    const recovery_subject = (form.get('recovery_subject') as string) ?? '';
     const recovery_html_template = (form.get('recovery_html_template') as string) ?? '';
     const recovery_text_template = (form.get('recovery_text_template') as string) ?? '';
 
     try {
-      await adapter.updateAppEmailSettings({ recovery_html_template, recovery_text_template });
+      await adapter.updateAppEmailSettings({ recovery_subject, recovery_html_template, recovery_text_template });
       return { ok: true };
     } catch (e) {
       return fail(400, { error: (e as Error).message });
@@ -33,7 +34,7 @@ export const actions: Actions = {
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
 
     try {
-      await adapter.updateAppEmailSettings({ recovery_html_template: '', recovery_text_template: '' });
+      await adapter.updateAppEmailSettings({ recovery_subject: '', recovery_html_template: '', recovery_text_template: '' });
       return { ok: true };
     } catch (e) {
       return fail(400, { error: (e as Error).message });

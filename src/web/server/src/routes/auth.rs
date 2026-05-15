@@ -18,6 +18,7 @@ use crate::{
 
 pub(crate) const DEFAULT_RECOVERY_HTML: &str = include_str!("../../templates/email/recovery.html");
 pub(crate) const DEFAULT_RECOVERY_TEXT: &str = include_str!("../../templates/email/recovery.txt");
+pub(crate) const DEFAULT_RECOVERY_SUBJECT: &str = "Your one-time login link";
 
 fn render_recovery_template(template: &str, recovery_url: &str) -> String {
     template.replace("{{recovery_url}}", recovery_url)
@@ -75,6 +76,8 @@ async fn request_recovery(
             let app_settings = repos::app_settings::AppSettingsRepo::get_or_create(&state.repo.db)
                 .await
                 .unwrap_or_default();
+            let subject = app_settings.email.recovery_subject
+                .unwrap_or_else(|| DEFAULT_RECOVERY_SUBJECT.to_string());
             let html_template = app_settings.email.recovery_html_template
                 .unwrap_or_else(|| DEFAULT_RECOVERY_HTML.to_string());
             let text_template = app_settings.email.recovery_text_template
@@ -83,7 +86,7 @@ async fn request_recovery(
             let email = Email {
                 from: state.settings.email.from.clone(),
                 to: body.email.clone(),
-                subject: "Your one-time login link".to_string(),
+                subject,
                 html: render_recovery_template(&html_template, url_str),
                 text: Some(render_recovery_template(&text_template, url_str)),
             };

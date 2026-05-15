@@ -344,6 +344,7 @@ export interface Invitation {
 }
 
 export interface ProductEmailSettings {
+  invite_subject: string;
   invite_html_template: string;
   invite_text_template: string;
   default_invite_html_template?: string;
@@ -351,6 +352,7 @@ export interface ProductEmailSettings {
 }
 
 export interface AppEmailSettings {
+  recovery_subject: string;
   recovery_html_template: string;
   recovery_text_template: string;
   default_recovery_html_template?: string;

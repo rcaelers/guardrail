@@ -34,6 +34,7 @@ DEFINE FIELD product_id ON TABLE product_settings TYPE record<products> ASSERT $
 
 -- Email settings
 DEFINE FIELD email ON TABLE product_settings TYPE object DEFAULT {};
+DEFINE FIELD email.invite_subject ON TABLE product_settings TYPE option<string>;
 DEFINE FIELD email.invite_html_template ON TABLE product_settings TYPE option<string>;
 DEFINE FIELD email.invite_text_template ON TABLE product_settings TYPE option<string>;
 
@@ -49,6 +50,7 @@ DEFINE TABLE app_settings SCHEMAFULL;
 
 -- Email settings
 DEFINE FIELD email ON TABLE app_settings TYPE object DEFAULT {};
+DEFINE FIELD email.recovery_subject ON TABLE app_settings TYPE option<string>;
 DEFINE FIELD email.recovery_html_template ON TABLE app_settings TYPE option<string>;
 DEFINE FIELD email.recovery_text_template ON TABLE app_settings TYPE option<string>;
 
