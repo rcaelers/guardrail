@@ -64,6 +64,7 @@ impl GuardrailProcessorApp {
     }
 
     pub async fn run(&self, shutdown: impl Future<Output = std::io::Result<()>> + Send) {
+        info!("Starting health server on port 9090");
         let redis_health = self.redis_manager.clone();
         common::spawn_health_server(9090, move || {
             let mut conn = redis_health.clone();
@@ -74,7 +75,9 @@ impl GuardrailProcessorApp {
                     .is_ok()
             })
         });
+        info!("Starting workers");
         self.run_workers(shutdown).await;
+        info!("Workers have stopped");
     }
 
     pub async fn run_workers(&self, shutdown: impl Future<Output = std::io::Result<()>> + Send) {
@@ -127,10 +130,7 @@ impl GuardrailProcessorApp {
                 Ok(0) => debug!("No stale registration to clear for {}", worker_name),
                 Ok(_) => warn!("Cleared stale worker registration for {}", worker_name),
                 Err(e) => {
-                    error!(
-                        "Failed to clear stale worker registration for {}: {}",
-                        worker_name, e
-                    )
+                    error!("Failed to clear stale worker registration for {}: {}", worker_name, e)
                 }
             }
         }

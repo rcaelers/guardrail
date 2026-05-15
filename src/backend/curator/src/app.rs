@@ -107,6 +107,7 @@ impl GuardrailCuratorApp {
     }
 
     pub async fn run(&self, shutdown: impl Future<Output = std::io::Result<()>> + Send) {
+        info!("Starting health server on port 9090");
         let db_health = self.state.repo.db.clone();
         let redis_health = self.redis_manager.clone();
         common::spawn_health_server(9090, move || {
@@ -120,9 +121,12 @@ impl GuardrailCuratorApp {
                         .is_ok()
             })
         });
+        info!("Starting initial product sync");
         self.sync_products().await;
         self.spawn_product_listener();
+        info!("Starting workers");
         self.run_workers(shutdown).await;
+        info!("Workers have stopped");
     }
 
     pub async fn sync_products(&self) {
@@ -135,6 +139,7 @@ impl GuardrailCuratorApp {
     }
 
     pub fn spawn_product_listener(&self) {
+        info!("Starting product change listener");
         let listener_db = self.state.repo.db.clone();
         let listener_redis = self.redis_manager.clone();
         tokio::spawn(async move {
@@ -193,7 +198,9 @@ impl GuardrailCuratorApp {
             {
                 Ok(0) => debug!("No stale registration to clear for {}", worker_name),
                 Ok(_) => warn!("Cleared stale worker registration for {}", worker_name),
-                Err(e) => error!("Failed to clear stale worker registration for {}: {}", worker_name, e),
+                Err(e) => {
+                    error!("Failed to clear stale worker registration for {}: {}", worker_name, e)
+                }
             }
         }
 

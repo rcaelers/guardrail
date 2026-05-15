@@ -22,6 +22,7 @@ async fn main() {
     info!("Starting maintenance worker");
     let app = curator::app::GuardrailCuratorApp::from_settings(settings).await;
     app.run(async {
+        info!("Shutdown called");
         tokio::signal::ctrl_c().await?;
         info!("Shutting down the system");
         Ok(())

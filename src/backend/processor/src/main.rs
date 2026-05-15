@@ -22,6 +22,7 @@ async fn main() {
     info!("Starting minidump processor");
     let app = processor::app::GuardrailProcessorApp::from_settings(settings).await;
     app.run(async {
+        info!("Shutdown called");
         tokio::signal::ctrl_c().await?;
         info!("Shutting down the system");
         Ok(())
