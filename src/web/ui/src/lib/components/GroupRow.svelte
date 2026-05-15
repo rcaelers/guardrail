@@ -28,7 +28,7 @@
     onSelectCrash
   }: Props = $props();
 
-  const COLS = '28px 1fr 260px 72px 80px 110px 90px';
+  const COLS = '28px 1fr 260px 130px 80px 110px 90px';
 
   const groupName = $derived(g.fingerprint || g.title || g.id);
   const exception = $derived(g.exceptionType || g.exceptionTypeShort || g.signal);
