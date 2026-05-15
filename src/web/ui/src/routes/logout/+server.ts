@@ -1,5 +1,4 @@
 import type { RequestHandler } from './$types';
-import { redirect } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
@@ -12,11 +11,15 @@ export const POST: RequestHandler = async ({ request, cookies }) => {
       headers: { cookie: cookieHeader }
     });
   } catch {
-    // best-effort: session will expire naturally if the call fails
+    // best-effort: server-side session is flushed even if the call fails
   }
 
-  cookies.delete('gr_uid', { path: '/' });
-  cookies.delete('gr_real_uid', { path: '/' });
+  // Clear all session-related cookies so the browser is fully signed out.
+  // 'guardrail' is the tower-sessions session cookie; gr_uid/gr_real_uid are
+  // set by the Rust auth handlers.
+  for (const name of ['guardrail', 'gr_uid', 'gr_real_uid']) {
+    cookies.delete(name, { path: '/' });
+  }
 
-  throw redirect(303, '/login');
+  return new Response(null, { status: 204 });
 };

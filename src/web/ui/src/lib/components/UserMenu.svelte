@@ -38,12 +38,14 @@
         {#if isAdmin}
           <a href="/admin" class="block px-3 py-1.5 hover:bg-surface-panel dark:hover:bg-surface-panelDark">Admin console</a>
         {/if}
-        <form method="POST" action="/logout">
-          <button
-            type="submit"
-            class="block w-full cursor-pointer px-3 py-1.5 text-left hover:bg-surface-panel dark:hover:bg-surface-panelDark"
-          >Sign out</button>
-        </form>
+        <button
+          type="button"
+          onclick={async () => {
+            try { await fetch('/logout', { method: 'POST' }); } catch {}
+            window.location.href = '/login';
+          }}
+          class="block w-full cursor-pointer px-3 py-1.5 text-left hover:bg-surface-panel dark:hover:bg-surface-panelDark"
+        >Sign out</button>
       </div>
     </div>
   {/if}
