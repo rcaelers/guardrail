@@ -28,6 +28,17 @@
     onSelectCrash
   }: Props = $props();
 
+  const INITIAL_VISIBLE = 5;
+  let visibleCount = $state(INITIAL_VISIBLE);
+
+  function loadMore() {
+    if (crashes.length === 0) {
+      onSelect(g.id);
+    } else {
+      visibleCount = crashes.length;
+    }
+  }
+
   const COLS = '28px 1fr 260px 130px 80px 110px 90px';
 
   const groupName = $derived(g.fingerprint || g.title || g.id);
@@ -76,7 +87,7 @@
 </div>
 
 {#if expanded}
-  {#each crashes.slice(0, 6) as c (c.id)}
+  {#each crashes.slice(0, visibleCount) as c (c.id)}
     {@const isActive = selectedCrashId === c.id}
     <div
       role="button"
@@ -101,10 +112,16 @@
       <span>{(c.similarity * 100).toFixed(1)}%</span>
     </div>
   {/each}
-  {@const shown = Math.min(crashes.length, 6)}
+  {@const shown = Math.min(crashes.length, visibleCount)}
   {#if g.count > shown}
-    <div class="border-b border-line dark:border-line-dark bg-[#fbfbfc] dark:bg-[#18181a] py-2 pl-12 pr-5 text-[11px] text-ink-muted dark:text-ink-mutedDark">
-      + {fmtInt(g.count - shown)} more crashes
+    <div
+      role="button"
+      tabindex="0"
+      onclick={(e) => { e.stopPropagation(); loadMore(); }}
+      onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); loadMore(); } }}
+      class="border-b border-line dark:border-line-dark bg-[#fbfbfc] dark:bg-[#18181a] py-2 pl-12 pr-5 text-[11px] text-ink-muted dark:text-ink-mutedDark cursor-pointer hover:bg-[#f2f2f4] dark:hover:bg-[#212124] transition-colors"
+    >
+      + {fmtInt(g.count - shown)} more · <span class="text-accent underline">Load more</span>
     </div>
   {/if}
 {/if}
