@@ -2,6 +2,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { createAdapter } from '$lib/adapters';
 import { error, fail } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
+import { requireProductAccess } from '$lib/server/product-access';
 
 export const load: PageServerLoad = async ({ parent }) => {
   const { product } = await parent();
@@ -15,6 +16,9 @@ export const actions: Actions = {
   save: async ({ request, locals, params }) => {
     if (!locals.user) throw error(401);
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { role } = await requireProductAccess(locals.user, params.product!, adapter);
+    if (role !== 'maintainer' && !locals.user.isAdmin)
+      throw error(403, 'Maintainer required');
 
     const form = await request.formData();
     const token = (form.get('product_token') as string | null) ?? '';
