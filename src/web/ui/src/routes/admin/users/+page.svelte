@@ -1,11 +1,13 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import type { PageData, ActionData } from './$types';
+  import type { Product } from '$lib/adapters/types';
   import { fmtDate } from '$lib/utils/format';
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
+  // --- New user form ---
   let newEmail = $state('');
   let newName = $state('');
   let newIsAdmin = $state(false);
@@ -13,12 +15,24 @@
   let addProductId = $state('');
   let addRole = $state('readonly');
   let showCreate = $state(false);
+
+  // --- Edit user staged state (nothing persists until Save) ---
   let editingUserId = $state<string | null>(null);
-  let editFormRef = $state<HTMLFormElement | null>(null);
+  let editName = $state('');
+  let editEmail = $state('');
+  let editIsAdmin = $state(false);
+  let editPermissions = $state<Array<{ productId: string; role: string; product: Product }>>([]);
+  let editAddProductId = $state('');
+  let editAddRole = $state('readonly');
+
   let pendingConfirm = $state<{ message: string; confirmLabel: string; form: HTMLFormElement } | null>(null);
 
   const availableForNew = $derived(
     data.products.filter((p) => !newPermissions.some((np) => np.productId === p.id))
+  );
+
+  const editAvailableProducts = $derived(
+    data.products.filter((p) => !editPermissions.some((ep) => ep.productId === p.id))
   );
 
   function addNewPermission() {
@@ -26,6 +40,29 @@
     newPermissions = [...newPermissions, { productId: addProductId, role: addRole }];
     addProductId = '';
     addRole = 'readonly';
+  }
+
+  function openEditUser(u: typeof data.users[0]) {
+    editingUserId = u.id;
+    editName = u.name;
+    editEmail = u.email;
+    editIsAdmin = u.isAdmin;
+    editPermissions = u.permissions.map((p) => ({
+      productId: p.productId,
+      role: p.role,
+      product: p.product,
+    }));
+    editAddProductId = '';
+    editAddRole = 'readonly';
+  }
+
+  function addEditPermission() {
+    if (!editAddProductId) return;
+    const product = data.products.find((p) => p.id === editAddProductId);
+    if (!product) return;
+    editPermissions = [...editPermissions, { productId: editAddProductId, role: editAddRole, product }];
+    editAddProductId = '';
+    editAddRole = 'readonly';
   }
 </script>
 
@@ -220,8 +257,14 @@
           <button
             type="button"
             class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink dark:text-ink-dark"
-            onclick={() => (editingUserId = editingUserId === u.id ? null : u.id)}
-          >{editingUserId === u.id ? 'Close' : 'Edit'}</button>
+            onclick={() => {
+              if (editingUserId === u.id) {
+                editingUserId = null;
+              } else {
+                openEditUser(u);
+              }
+            }}
+          >{editingUserId === u.id ? 'Cancel' : 'Edit'}</button>
           {#if !(data.user && u.id === data.user.id)}
             <form method="POST" action="/auth/impersonate/{u.id}">
               <button
@@ -242,150 +285,147 @@
       </div>
 
       {#if editingUserId === u.id}
-        {@const availableProducts = data.products.filter((product) => !u.permissions.some((permission) => permission.productId === product.id))}
+        {@const isSelf = !!(data.user && u.id === data.user.id)}
         <div class="border-t border-line bg-surface-panel/55 px-4 py-4 dark:border-line-dark dark:bg-surface-panelDark/55">
-          <div class="grid gap-4 lg:grid-cols-[1.1fr,1fr]">
-            <form
-              bind:this={editFormRef}
-              method="POST"
-              action="?/update"
-              use:enhance={() => async ({ update, result }) => {
-                await update();
-                if (result.type === 'success') editingUserId = null;
-              }}
-              class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-4 py-3"
-            >
-              <input type="hidden" name="id" value={u.id} />
-              <div class="mb-3 flex items-center justify-between">
-                <h2 class="text-[13px] font-medium">Account</h2>
-                <span class="text-[11px] text-ink-muted dark:text-ink-mutedDark">User id: {u.id}</span>
-              </div>
-              <div class="grid gap-3">
-                <label class="flex flex-col">
-                  <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Name</span>
-                  <input name="name" value={u.name} required class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-3 py-1.5 text-[13px]" />
-                </label>
-                <label class="flex flex-col">
-                  <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Email</span>
-                  <input name="email" type="email" value={u.email} required class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-3 py-1.5 text-[13px]" />
-                </label>
-              </div>
-            </form>
+          <form
+            method="POST"
+            action="?/update"
+            use:enhance={() => async ({ update, result }) => {
+              await update();
+              if (result.type === 'success') editingUserId = null;
+            }}
+          >
+            <input type="hidden" name="id" value={u.id} />
+            <input type="hidden" name="isAdmin" value={String(editIsAdmin)} />
+            <input type="hidden" name="permissions" value={JSON.stringify(editPermissions.map((p) => ({ productId: p.productId, role: p.role })))} />
 
-            <div class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-4 py-3">
-              <div class="mb-3 flex items-center justify-between">
-                <h2 class="text-[13px] font-medium">Global access</h2>
-                <span class="text-[11px] text-ink-muted dark:text-ink-mutedDark">Admin applies across all products</span>
+            <div class="grid gap-4 lg:grid-cols-[1.1fr,1fr]">
+              <div class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-4 py-3">
+                <div class="mb-3 flex items-center justify-between">
+                  <h2 class="text-[13px] font-medium">Account</h2>
+                  <span class="text-[11px] text-ink-muted dark:text-ink-mutedDark">User id: {u.id}</span>
+                </div>
+                <div class="grid gap-3">
+                  <label class="flex flex-col">
+                    <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Name</span>
+                    <input name="name" bind:value={editName} required class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-3 py-1.5 text-[13px]" />
+                  </label>
+                  <label class="flex flex-col">
+                    <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Email</span>
+                    <input name="email" type="email" bind:value={editEmail} required class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-3 py-1.5 text-[13px]" />
+                  </label>
+                </div>
               </div>
-              {#if data.user && u.id === data.user.id}
-                <p class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
-                  You can edit your own name and email, but self-demotion is blocked to avoid locking yourself out of the admin console.
-                </p>
-              {:else}
-                <form method="POST" action="?/toggleAdmin" use:enhance class="flex items-end gap-3">
-                  <input type="hidden" name="id" value={u.id} />
+
+              <div class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-4 py-3">
+                <div class="mb-3 flex items-center justify-between">
+                  <h2 class="text-[13px] font-medium">Global access</h2>
+                  <span class="text-[11px] text-ink-muted dark:text-ink-mutedDark">Admin applies across all products</span>
+                </div>
+                {#if isSelf}
+                  <p class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
+                    You can edit your own name and email, but self-demotion is blocked to avoid locking yourself out of the admin console.
+                  </p>
+                {:else}
                   <label class="flex flex-col">
                     <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Admin access</span>
                     <select
-                      name="isAdmin"
-                      value={u.isAdmin ? 'true' : 'false'}
-                      onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
+                      bind:value={editIsAdmin}
                       class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-2 py-1.5 text-[13px]"
                     >
-                      <option value="false">Member</option>
-                      <option value="true">Administrator</option>
+                      <option value={false}>Member</option>
+                      <option value={true}>Administrator</option>
                     </select>
                   </label>
-                </form>
-              {/if}
-            </div>
-          </div>
-
-          <div class="mt-4 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-4 py-3">
-            <div class="mb-3 flex items-center justify-between">
-              <h2 class="text-[13px] font-medium">Product permissions</h2>
-              <span class="text-[11px] text-ink-muted dark:text-ink-mutedDark">{u.permissions.length} assigned</span>
+                {/if}
+              </div>
             </div>
 
-            <div class="space-y-2">
-              {#if u.permissions.length === 0}
-                <p class="text-[12px] text-ink-muted dark:text-ink-mutedDark">No product access yet.</p>
-              {:else}
-                {#each u.permissions as permission (permission.productId)}
-                  <div class="grid items-center gap-3 rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-3 py-2 lg:grid-cols-[1.2fr,160px,100px]">
-                    <div class="flex min-w-0 items-center gap-2">
-                      <span class="inline-block h-[10px] w-[10px] shrink-0 rounded-[3px]" style:background={permission.product.color}></span>
-                      <span class="truncate text-[12.5px] font-medium">{permission.product.name}</span>
-                    </div>
-                    {#if data.user && u.id === data.user.id}
-                      <span class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
-                        {permission.role === 'maintainer' ? 'Maintainer' : permission.role === 'readwrite' ? 'Read · write' : 'Read-only'}
-                      </span>
-                    {:else}
-                      <form method="POST" action="?/setPermission" use:enhance class="flex">
-                        <input type="hidden" name="userId" value={u.id} />
-                        <input type="hidden" name="productId" value={permission.productId} />
+            <div class="mt-4 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-4 py-3">
+              <div class="mb-3 flex items-center justify-between">
+                <h2 class="text-[13px] font-medium">Product permissions</h2>
+                <span class="text-[11px] text-ink-muted dark:text-ink-mutedDark">{editPermissions.length} assigned</span>
+              </div>
+
+              <div class="space-y-2">
+                {#if editPermissions.length === 0}
+                  <p class="text-[12px] text-ink-muted dark:text-ink-mutedDark">No product access yet.</p>
+                {:else}
+                  {#each editPermissions as perm (perm.productId)}
+                    <div class="grid items-center gap-3 rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-3 py-2 lg:grid-cols-[1.2fr,160px,100px]">
+                      <div class="flex min-w-0 items-center gap-2">
+                        <span class="inline-block h-[10px] w-[10px] shrink-0 rounded-[3px]" style:background={perm.product.color}></span>
+                        <span class="truncate text-[12.5px] font-medium">{perm.product.name}</span>
+                      </div>
+                      {#if isSelf}
+                        <span class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
+                          {perm.role === 'maintainer' ? 'Maintainer' : perm.role === 'readwrite' ? 'Read · write' : 'Read-only'}
+                        </span>
+                      {:else}
                         <select
-                          name="role"
-                          value={permission.role}
-                          onchange={(e) => (e.currentTarget.form as HTMLFormElement).requestSubmit()}
+                          value={perm.role}
+                          onchange={(e) => {
+                            const newRole = e.currentTarget.value;
+                            editPermissions = editPermissions.map((ep) =>
+                              ep.productId === perm.productId ? { ...ep, role: newRole } : ep
+                            );
+                          }}
                           class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1 text-[12px]"
                         >
                           <option value="readonly">Read-only</option>
                           <option value="readwrite">Read · write</option>
                           <option value="maintainer">Maintainer</option>
                         </select>
-                      </form>
-                    {/if}
-                    <div class="flex justify-end">
-                      {#if !(data.user && u.id === data.user.id)}
-                        <form method="POST" action="?/revokePermission" use:enhance>
-                          <input type="hidden" name="userId" value={u.id} />
-                          <input type="hidden" name="productId" value={permission.productId} />
+                      {/if}
+                      <div class="flex justify-end">
+                        {#if !isSelf}
                           <button
                             type="button"
+                            onclick={() => { editPermissions = editPermissions.filter((ep) => ep.productId !== perm.productId); }}
                             class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark hover:text-red-600"
-                            onclick={(e) => { pendingConfirm = { message: `Revoke ${permission.product.name} access for ${u.name}?`, confirmLabel: 'Revoke', form: (e.currentTarget as HTMLElement).closest('form')! }; }}
-                          >Revoke</button>
-                        </form>
-                      {/if}
+                          >Remove</button>
+                        {/if}
+                      </div>
                     </div>
+                  {/each}
+                {/if}
+              </div>
+
+              {#if !isSelf && editAvailableProducts.length > 0}
+                <div class="mt-4 grid gap-3 rounded-md border border-dashed border-line dark:border-line-dark px-3 py-3 lg:grid-cols-[1.4fr,160px,120px]">
+                  <label class="flex flex-col">
+                    <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Add product</span>
+                    <select bind:value={editAddProductId} class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-2 py-1.5 text-[13px]">
+                      <option value="" disabled>Pick a product…</option>
+                      {#each editAvailableProducts as product}
+                        <option value={product.id}>{product.name}</option>
+                      {/each}
+                    </select>
+                  </label>
+                  <label class="flex flex-col">
+                    <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Role</span>
+                    <select bind:value={editAddRole} class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-2 py-1.5 text-[13px]">
+                      <option value="readonly">Read-only</option>
+                      <option value="readwrite">Read · write</option>
+                      <option value="maintainer">Maintainer</option>
+                    </select>
+                  </label>
+                  <div class="flex items-end justify-end">
+                    <button
+                      type="button"
+                      onclick={addEditPermission}
+                      class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white"
+                    >Add</button>
                   </div>
-                {/each}
+                </div>
               {/if}
             </div>
 
-            {#if !(data.user && u.id === data.user.id) && availableProducts.length > 0}
-              <form method="POST" action="?/setPermission" use:enhance class="mt-4 grid gap-3 rounded-md border border-dashed border-line dark:border-line-dark px-3 py-3 lg:grid-cols-[1.4fr,160px,120px]">
-                <input type="hidden" name="userId" value={u.id} />
-                <label class="flex flex-col">
-                  <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Add product</span>
-                  <select name="productId" required class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-2 py-1.5 text-[13px]">
-                    <option value="" disabled selected>Pick a product…</option>
-                    {#each availableProducts as product}
-                      <option value={product.id}>{product.name}</option>
-                    {/each}
-                  </select>
-                </label>
-                <label class="flex flex-col">
-                  <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Role</span>
-                  <select name="role" class="rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-2 py-1.5 text-[13px]">
-                    <option value="readonly">Read-only</option>
-                    <option value="readwrite">Read · write</option>
-                    <option value="maintainer">Maintainer</option>
-                  </select>
-                </label>
-                <div class="flex items-end justify-end">
-                  <button type="submit" class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white">Grant access</button>
-                </div>
-              </form>
-            {/if}
-          </div>
-
-          <div class="mt-4 flex justify-end gap-2">
-            <button type="button" onclick={() => (editingUserId = null)} class="rounded-md border border-line dark:border-line-dark bg-transparent px-3 py-1.5 text-[13px]">Close</button>
-            <button type="button" onclick={() => editFormRef?.requestSubmit()} class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white">Save user</button>
-          </div>
+            <div class="mt-4 flex justify-end gap-2">
+              <button type="button" onclick={() => (editingUserId = null)} class="rounded-md border border-line dark:border-line-dark bg-transparent px-3 py-1.5 text-[13px]">Cancel</button>
+              <button type="submit" class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white">Save user</button>
+            </div>
+          </form>
         </div>
       {/if}
     {/each}

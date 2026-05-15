@@ -53,23 +53,43 @@ export const actions: Actions = {
       return fail(400, { error: (e as Error).message });
     }
   },
+
   update: async ({ request, locals }) => {
-    requireAdmin(locals);
+    const currentUser = requireAdmin(locals);
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
     const email = String(form.get('email') ?? '').trim();
     const name = String(form.get('name') ?? '').trim();
+    const isAdmin = form.get('isAdmin') === 'true';
+    const permissions: Array<{ productId: string; role: Role }> = JSON.parse(
+      String(form.get('permissions') ?? '[]')
+    );
     if (!id) return fail(400, { error: 'missing id' });
     if (!email) return fail(400, { error: 'Email required.' });
     if (!name) return fail(400, { error: 'Name required.' });
+    const isSelf = id === currentUser.id;
     try {
       await adapter.updateUser(id, { email, name });
+      if (!isSelf) {
+        await adapter.setAdmin(id, isAdmin);
+        const current = await adapter.membershipsFor(id);
+        const newIds = new Set(permissions.map((p) => p.productId));
+        for (const p of permissions) {
+          await adapter.grantAccess({ userId: id, productId: p.productId, role: p.role });
+        }
+        for (const p of current) {
+          if (!newIds.has(p.productId)) {
+            await adapter.revokeAccess({ userId: id, productId: p.productId });
+          }
+        }
+      }
       return { ok: true };
     } catch (e) {
       return fail(400, { error: (e as Error).message });
     }
   },
+
   delete: async ({ request, locals }) => {
     const user = requireAdmin(locals);
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
@@ -80,39 +100,4 @@ export const actions: Actions = {
     await adapter.deleteUser(id);
     return { ok: true };
   },
-  toggleAdmin: async ({ request, locals }) => {
-    const user = requireAdmin(locals);
-    const adapter = createAdapter(request.headers.get('cookie') ?? '');
-    const form = await request.formData();
-    const id = String(form.get('id') ?? '');
-    const isAdmin = form.get('isAdmin') === 'true';
-    if (!id) return fail(400, { error: 'missing id' });
-    if (id === user.id && !isAdmin)
-      return fail(400, { error: "You can't remove your own admin status." });
-    await adapter.setAdmin(id, isAdmin);
-    return { ok: true };
-  },
-  setPermission: async ({ request, locals }) => {
-    const user = requireAdmin(locals);
-    const adapter = createAdapter(request.headers.get('cookie') ?? '');
-    const form = await request.formData();
-    const userId = String(form.get('userId') ?? '');
-    const productId = String(form.get('productId') ?? '');
-    const role = String(form.get('role') ?? '') as Role;
-    if (!userId || !productId || !role) return fail(400, { error: 'missing fields' });
-    if (userId === user.id) return fail(400, { error: "You can't change your own product access from the admin console." });
-    await adapter.grantAccess({ userId, productId, role });
-    return { ok: true };
-  },
-  revokePermission: async ({ request, locals }) => {
-    const user = requireAdmin(locals);
-    const adapter = createAdapter(request.headers.get('cookie') ?? '');
-    const form = await request.formData();
-    const userId = String(form.get('userId') ?? '');
-    const productId = String(form.get('productId') ?? '');
-    if (!userId || !productId) return fail(400, { error: 'missing fields' });
-    if (userId === user.id) return fail(400, { error: "You can't revoke your own product access from the admin console." });
-    await adapter.revokeAccess({ userId, productId });
-    return { ok: true };
-  }
 };
