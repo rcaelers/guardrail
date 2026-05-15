@@ -362,6 +362,7 @@ export interface CreateInvitationSpec {
   grants: InvitationGrant[];
   expires_at?: string | null;
   max_uses?: number | null;
+  to?: string;
 }
 
 export interface UpdateInvitationSpec {

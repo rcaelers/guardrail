@@ -48,9 +48,9 @@ export const actions: Actions = {
     const form = await request.formData();
     const is_admin = form.get('is_admin') === 'true';
     const expires_at_raw = (form.get('expires_at') as string) || null;
-    const expires_at = expires_at_raw ? `${expires_at_raw}:00Z` : null;
-    const max_uses_raw = form.get('max_uses') as string;
-    const max_uses = max_uses_raw ? parseInt(max_uses_raw, 10) : null;
+    const expires_at = expires_at_raw ? `${expires_at_raw}T23:59:59Z` : null;
+    const send_email = form.get('send_email') === 'on';
+    const email_to = send_email ? ((form.get('email_to') as string) || null) : null;
 
     const product_ids = (form.getAll('grant_product') as string[]).filter(Boolean);
     const roles = form.getAll('grant_role') as string[];
@@ -60,7 +60,7 @@ export const actions: Actions = {
     }));
 
     try {
-      await adapter.createInvitation({ is_admin, grants, expires_at: expires_at || null, max_uses });
+      await adapter.createInvitation({ is_admin, grants, expires_at: expires_at || null, max_uses: 1, to: email_to || undefined });
       return { ok: true };
     } catch (e) {
       return fail(400, { error: (e as Error).message });
@@ -77,9 +77,7 @@ export const actions: Actions = {
 
     const is_admin = form.get('is_admin') === 'true';
     const expires_at_raw = (form.get('expires_at') as string) || null;
-    const expires_at = expires_at_raw ? `${expires_at_raw}:00Z` : null;
-    const max_uses_raw = form.get('max_uses') as string;
-    const max_uses = max_uses_raw ? parseInt(max_uses_raw, 10) : null;
+    const expires_at = expires_at_raw ? `${expires_at_raw}T23:59:59Z` : null;
 
     const product_ids = (form.getAll('grant_product') as string[]).filter(Boolean);
     const roles = form.getAll('grant_role') as string[];
@@ -89,7 +87,7 @@ export const actions: Actions = {
     }));
 
     try {
-      await adapter.updateInvitation(id, { is_admin, grants, expires_at, max_uses });
+      await adapter.updateInvitation(id, { is_admin, grants, expires_at, max_uses: 1 });
       return { ok: true };
     } catch (e) {
       return fail(400, { error: (e as Error).message });

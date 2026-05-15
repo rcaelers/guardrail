@@ -13,7 +13,8 @@
   let createGrants = $state<InvitationGrant[]>([]);
   let createIsAdmin = $state(false);
   let createExpiresAt = $state('');
-  let createMaxUses = $state('');
+  let createSendEmail = $state(false);
+  let createEmailTo = $state('');
   // Pre-select the current product if the user maintains it
   let createProductPick = $state(
     data.assignableProducts.some((p) => p.id === data.currentProductId) ? data.currentProductId : ''
@@ -37,7 +38,8 @@
     createGrants = [];
     createIsAdmin = false;
     createExpiresAt = '';
-    createMaxUses = '';
+    createSendEmail = false;
+    createEmailTo = '';
   }
 
   // --- Edit state ---
@@ -45,7 +47,6 @@
   let editGrants = $state<InvitationGrant[]>([]);
   let editIsAdmin = $state(false);
   let editExpiresAt = $state('');
-  let editMaxUses = $state('');
   let editProductPick = $state('');
   let editRolePick = $state<Role>('readonly');
 
@@ -54,8 +55,7 @@
     editingId = inv.id;
     editGrants = inv.grants.map((g) => ({ ...g }));
     editIsAdmin = inv.is_admin;
-    editExpiresAt = inv.expires_at ? inv.expires_at.slice(0, 16) : '';
-    editMaxUses = inv.max_uses != null ? String(inv.max_uses) : '';
+    editExpiresAt = inv.expires_at ? inv.expires_at.slice(0, 10) : '';
     editProductPick = '';
     editRolePick = 'readonly';
   }
@@ -136,22 +136,11 @@
 
       <div class="grid gap-4 lg:grid-cols-3">
         <label class="flex flex-col">
-          <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Expires at</span>
+          <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Expires on</span>
           <input
             name="expires_at"
-            type="datetime-local"
+            type="date"
             bind:value={createExpiresAt}
-            class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]"
-          />
-        </label>
-        <label class="flex flex-col">
-          <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Max uses</span>
-          <input
-            name="max_uses"
-            type="number"
-            min="1"
-            placeholder="Unlimited"
-            bind:value={createMaxUses}
             class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]"
           />
         </label>
@@ -170,6 +159,27 @@
         {:else}
           <input type="hidden" name="is_admin" value="false" />
         {/if}
+        <div class="flex flex-col justify-end gap-2">
+          <label class="flex items-center gap-2 text-[13px]">
+            <input
+              type="checkbox"
+              name="send_email"
+              bind:checked={createSendEmail}
+              class="h-4 w-4 rounded border border-line dark:border-line-dark"
+            />
+            Send email invitation
+          </label>
+          {#if createSendEmail}
+            <input
+              name="email_to"
+              type="email"
+              placeholder="recipient@example.com"
+              bind:value={createEmailTo}
+              required
+              class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]"
+            />
+          {/if}
+        </div>
       </div>
 
       <!-- Grants editor -->
@@ -339,22 +349,11 @@
 
             <div class="grid gap-4 lg:grid-cols-3">
               <label class="flex flex-col">
-                <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Expires at</span>
+                <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Expires on</span>
                 <input
                   name="expires_at"
-                  type="datetime-local"
+                  type="date"
                   bind:value={editExpiresAt}
-                  class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]"
-                />
-              </label>
-              <label class="flex flex-col">
-                <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Max uses</span>
-                <input
-                  name="max_uses"
-                  type="number"
-                  min="1"
-                  placeholder="Unlimited"
-                  bind:value={editMaxUses}
                   class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]"
                 />
               </label>
