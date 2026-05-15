@@ -155,10 +155,9 @@ impl ImportCrashProcessor {
 
     /// Find an existing crash group for this (product, fingerprint) pair, or create one.
     ///
-    /// The unique index on `crash_groups (product_id, fingerprint)` means two concurrent
-    /// workers can race on the first crash for a given fingerprint. If the CREATE is
-    /// rejected by a uniqueness violation we fall back to a second find, which will
-    /// succeed because the winning worker just created the row.
+    /// Uses INSERT IGNORE so concurrent workers silently skip the duplicate without
+    /// raising a DB-level constraint error. The losing worker gets None from create
+    /// and falls back to a find.
     #[instrument(skip(db))]
     async fn find_or_create_crash_group(
         db: &Surreal<Any>,
@@ -176,7 +175,7 @@ impl ImportCrashProcessor {
             return Ok(group.id);
         }
 
-        match CrashGroupRepo::create(
+        let created = CrashGroupRepo::create(
             db,
             NewCrashGroup {
                 product_id: product_id.to_string(),
@@ -185,10 +184,12 @@ impl ImportCrashProcessor {
             },
         )
         .await
-        {
-            Ok(id) => Ok(id),
-            Err(_) => {
-                // Likely lost a race with another worker. Retry the find.
+        .map_err(|e| JobError::Failure(format!("failed to create crash group: {e}")))?;
+
+        match created {
+            Some(id) => Ok(id),
+            None => {
+                // INSERT was silently ignored — another worker won the race.
                 let group = CrashGroupRepo::find_by_fingerprint(db, product_id, fingerprint)
                     .await
                     .map_err(|e| JobError::Failure(format!("failed to re-query crash group: {e}")))?

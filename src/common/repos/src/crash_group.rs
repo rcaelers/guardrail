@@ -45,12 +45,14 @@ impl CrashGroupRepo {
         crate::take_one(&mut result, 0)
     }
 
-    /// Create a new crash group. Returns the generated id.
-    pub async fn create(db: &Surreal<Any>, group: NewCrashGroup) -> Result<String, RepoError> {
+    /// Create a new crash group. Returns `Some(id)` if created, `None` if a group with the
+    /// same (product_id, fingerprint) already exists (silent duplicate — no DB error raised).
+    pub async fn create(db: &Surreal<Any>, group: NewCrashGroup) -> Result<Option<String>, RepoError> {
         let id = uuid::Uuid::new_v4().to_string();
-        let _: Option<serde_json::Value> = db
+        let rows: Vec<serde_json::Value> = db
             .query(
-                "CREATE type::record('crash_groups', $id) CONTENT {
+                "INSERT IGNORE INTO crash_groups {
+                    id: type::record('crash_groups', $id),
                     product_id: type::record('products', $product_id),
                     fingerprint: $fingerprint,
                     signal: $signal,
@@ -59,7 +61,7 @@ impl CrashGroupRepo {
                     last_seen: time::now(),
                     status: 'new',
                     created_at: time::now(),
-                    updated_at: time::now(),
+                    updated_at: time::now()
                 }",
             )
             .bind(("id", id.clone()))
@@ -70,7 +72,7 @@ impl CrashGroupRepo {
             .map_err(handle_surreal_error)?
             .take(0)
             .map_err(handle_surreal_error)?;
-        Ok(id)
+        Ok(if rows.is_empty() { None } else { Some(id) })
     }
 
     /// Increment the crash count and push `last_seen` forward.
