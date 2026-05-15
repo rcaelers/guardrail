@@ -7,7 +7,7 @@ use apalis::layers::retry::backoff::MakeBackoff;
 use apalis::layers::retry::{RetryPolicy, backoff::ExponentialBackoffMaker};
 use apalis::prelude::*;
 use apalis_redis::{ConnectionManager, RedisConfig, RedisStorage};
-use tracing::debug;
+use tracing::{debug, error, warn};
 
 use common::jobs::queue;
 use common::retry_startup;
@@ -106,6 +106,35 @@ impl GuardrailProcessorApp {
         let redis_symbol1 = redis_symbol.clone();
         let redis_import_symbol1 = redis_import_symbol.clone();
 
+        // apalis_redis register_worker.lua rejects re-registration if the previous worker's
+        // heartbeat score is less than keep_alive seconds old. After a rolling update the old pod
+        // sends a final heartbeat after the new pod starts, so `now - last_seen` can be negative
+        // (clock skew), which satisfies `< threshold` and kills the new workers immediately.
+        let worker_queue_names = [
+            (queue::MINIDUMP_JOBS, "minidump-processor"),
+            (queue::SYMBOL_JOBS, "symbol-processor"),
+        ];
+        let mut redis_cleanup = self.redis_manager.clone();
+        for (queue_name, worker_name) in worker_queue_names {
+            let workers_key = format!("{}:workers", queue_name);
+            let inflight_key = format!("{}:inflight:{}", queue_name, worker_name);
+            match redis::cmd("ZREM")
+                .arg(&workers_key)
+                .arg(&inflight_key)
+                .query_async::<i64>(&mut redis_cleanup)
+                .await
+            {
+                Ok(0) => debug!("No stale registration to clear for {}", worker_name),
+                Ok(_) => warn!("Cleared stale worker registration for {}", worker_name),
+                Err(e) => {
+                    error!(
+                        "Failed to clear stale worker registration for {}: {}",
+                        worker_name, e
+                    )
+                }
+            }
+        }
+
         Monitor::new()
             .register(move |_idx| {
                 let backoff = ExponentialBackoffMaker::new(
@@ -145,7 +174,12 @@ impl GuardrailProcessorApp {
                     .concurrency(2)
                     .build(SymbolProcessor::process)
             })
-            .on_event(|_worker, e| debug!("Apalis event: {e}"))
+            .on_event(|worker, e| match e {
+                Event::Error(err) => error!(worker = %worker.name(), error = %err, "Worker error"),
+                Event::Start => (),
+                Event::Stop => (),
+                e => debug!(worker = %worker.name(), event = %e, "Worker event"),
+            })
             .run_with_signal(shutdown)
             .await
             .expect("Failed to run the monitor");
