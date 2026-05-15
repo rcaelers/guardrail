@@ -4,10 +4,11 @@
 // they are not subject to row-level security.  Handlers may still call
 // `user_db()` for data queries that should be RLS-scoped.
 //
-// Three auth paths exist:
-//   1. Session — a browser user logged in via OIDC.
-//   2. Bearer token — an API token in the Authorization header.
-//   3. Either — session or Bearer depending on what the endpoint accepts.
+// The web server is session-only: every browser-facing endpoint requires a
+// valid tower session.  Bearer/API tokens are accepted only on the separate
+// ingestion/API server (`src/backend/api`).  The token helpers below
+// (`require_entitlement`, `require_session_or_entitlement`) are kept for
+// potential future use but are not wired into any web-server route.
 
 use axum::http::{HeaderMap, header};
 use common::token::{decode_api_token, verify_api_secret};
@@ -111,24 +112,15 @@ pub async fn require_entitlement(
 // Mixed guards (session OR token)
 // --------------------------------------------------------------------
 
-/// Require an admin principal.
+/// Require an admin session user (`is_admin = true`).
 ///
-/// * Browser users must have `is_admin = true` in the trusted tower session.
-/// * Bearer token callers must present a *global* token (no product
-///   restriction).
+/// Session-only: Bearer tokens are rejected.  Use for web-server endpoints
+/// that must only be called from an authenticated browser session.
 pub async fn require_admin(
     session: &Session,
-    headers: &HeaderMap,
+    _headers: &HeaderMap,
     db: &Surreal<Any>,
 ) -> AppResult<Principal> {
-    if has_bearer_token(headers) {
-        let token_str = extract_bearer_token(headers).ok_or_else(AppError::forbidden)?;
-        let token = verify_and_touch_token(db, token_str, None).await?;
-        if token.product_id.is_some() {
-            return Err(AppError::forbidden());
-        }
-        return Ok(Principal::Token(token));
-    }
     let user = require_current_session_user(session, db).await?;
     if !user.is_admin() {
         return Err(AppError::forbidden());
@@ -138,27 +130,14 @@ pub async fn require_admin(
 
 /// Require maintainer-level access for a specific product.
 ///
-/// * Browser users must have the maintainer role for `product_id` (admins
-///   are always allowed).
-/// * Bearer token callers must present a token scoped to `product_id` *or* a
-///   global token (no product restriction).
+/// Session-only: Bearer tokens are rejected.  Browser users must have the
+/// maintainer role for `product_id`; global admins are always allowed.
 pub async fn require_product_maintainer(
     session: &Session,
-    headers: &HeaderMap,
+    _headers: &HeaderMap,
     db: &Surreal<Any>,
     product_id: &str,
 ) -> AppResult<Principal> {
-    if has_bearer_token(headers) {
-        let token_str = extract_bearer_token(headers).ok_or_else(AppError::forbidden)?;
-        let token = verify_and_touch_token(db, token_str, None).await?;
-        // Global tokens are accepted; product-scoped tokens must match.
-        if let Some(pid) = &token.product_id
-            && pid != product_id
-        {
-            return Err(AppError::forbidden());
-        }
-        return Ok(Principal::Token(token));
-    }
     let user = require_current_session_user(session, db).await?;
     if user.is_admin() {
         return Ok(Principal::User(user));
@@ -211,21 +190,14 @@ pub async fn require_session_product_role(
 
 /// Require a browser user to be reading their own user-scoped data, or an
 /// admin browser user to be reading any user's data.
+///
+/// Session-only: Bearer tokens are rejected.
 pub async fn require_user_or_admin(
     session: &Session,
-    headers: &HeaderMap,
+    _headers: &HeaderMap,
     db: &Surreal<Any>,
     user_id: &str,
 ) -> AppResult<Principal> {
-    if has_bearer_token(headers) {
-        let token_str = extract_bearer_token(headers).ok_or_else(AppError::forbidden)?;
-        let token = verify_and_touch_token(db, token_str, None).await?;
-        if token.product_id.is_some() {
-            return Err(AppError::forbidden());
-        }
-        return Ok(Principal::Token(token));
-    }
-
     let user = require_current_session_user(session, db).await?;
     if user.is_admin() || repos::record_key(&user.active().id) == repos::record_key(user_id) {
         return Ok(Principal::User(user));
