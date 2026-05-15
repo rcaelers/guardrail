@@ -382,48 +382,10 @@ async fn load_attachment_rows(
     .await
 }
 
-async fn load_user_text(
-    storage: &dyn ObjectStore,
-    attachment: &Value,
-) -> Result<Option<Value>, (StatusCode, String)> {
-    let Some(storage_path) = attachment.get("storagePath").and_then(|v| v.as_str()) else {
-        return Ok(None);
-    };
-    let Some(object) = load_user_text_object(storage, storage_path).await? else {
-        return Ok(None);
-    };
-    let bytes = object.bytes().await.map_err(storage_error)?;
-    let body = String::from_utf8_lossy(&bytes).into_owned();
-    Ok(Some(json!({
-        "attachmentId": attachment.get("id").and_then(|v| v.as_str()).map(extract_short_id).unwrap_or_default(),
-        "filename": attachment_filename(
-            attachment.get("name").and_then(|v| v.as_str()),
-            attachment.get("filename").and_then(|v| v.as_str())
-        ),
-        "createdAt": attachment.get("createdAt").cloned().unwrap_or(Value::Null),
-        "body": body,
-    })))
-}
-
-async fn load_user_text_object(
-    storage: &dyn ObjectStore,
-    storage_path: &str,
-) -> Result<Option<object_store::GetResult>, (StatusCode, String)> {
-    match storage.get(&ObjectPath::from(storage_path)).await {
-        Ok(obj) => Ok(Some(obj)),
-        Err(object_store::Error::NotFound { .. }) => Ok(None),
-        Err(e) => unexpected_storage_read_error(e),
-    }
-}
-
-fn unexpected_storage_read_error<T>(err: object_store::Error) -> Result<T, (StatusCode, String)> {
-    Err(storage_error(err))
-}
-
-async fn split_crash_attachments(
-    storage: &dyn ObjectStore,
-    rows: Vec<Value>,
-) -> Result<(Vec<Value>, Option<Value>), (StatusCode, String)> {
+// Returns attachment metadata for the crash. "user-text" attachments are split
+// out and returned as the second element (metadata only, no S3 fetch). Their
+// content is served on-demand via the download-attachment endpoint.
+fn split_crash_attachments(rows: Vec<Value>) -> (Vec<Value>, Option<Value>) {
     let mut attachments = Vec::new();
     let mut user_text = None;
 
@@ -431,7 +393,14 @@ async fn split_crash_attachments(
         let name = row.get("name").and_then(|v| v.as_str()).unwrap_or_default();
         if name == "user-text" {
             if user_text.is_none() {
-                user_text = load_user_text(storage, &row).await?;
+                user_text = Some(json!({
+                    "attachmentId": row.get("id").and_then(|v| v.as_str()).map(extract_short_id).unwrap_or_default(),
+                    "filename": attachment_filename(
+                        row.get("name").and_then(|v| v.as_str()),
+                        row.get("filename").and_then(|v| v.as_str())
+                    ),
+                    "createdAt": row.get("createdAt").cloned().unwrap_or(Value::Null),
+                }));
             }
             continue;
         }
@@ -449,7 +418,7 @@ async fn split_crash_attachments(
         }));
     }
 
-    Ok((attachments, user_text))
+    (attachments, user_text)
 }
 
 // --------------------------------------------------------------------
@@ -1421,8 +1390,7 @@ async fn get_crash(
         ),
     );
 
-    let (attachments, user_text) =
-        split_crash_attachments(s.storage.as_ref(), attachment_rows?).await?;
+    let (attachments, user_text) = split_crash_attachments(attachment_rows?);
     let annotations = build_annotations_map(annotation_rows?);
 
     let mut crash_value = hydrate_crash(&row, attachments, user_text);
@@ -2324,30 +2292,8 @@ mod tests {
         assert_eq!(avatar_initials("   "), "U");
     }
 
-    #[tokio::test]
-    async fn load_user_text_returns_none_without_storage_path() {
-        let storage = InMemory::new();
-        let attachment = json!({
-            "id": "attachments:test",
-            "name": "user-text",
-            "filename": "note.txt",
-        });
-
-        assert_eq!(load_user_text(&storage, &attachment).await.unwrap(), None);
-    }
-
-    #[tokio::test]
-    async fn split_crash_attachments_keeps_first_user_text_and_regular_files() {
-        let storage = InMemory::new();
-        storage
-            .put_opts(
-                &ObjectPath::from("user-text/one.txt"),
-                object_store::PutPayload::from_static(b"first note"),
-                Default::default(),
-            )
-            .await
-            .expect("put should work");
-
+    #[test]
+    fn split_crash_attachments_keeps_first_user_text_metadata_and_regular_files() {
         let rows = vec![
             json!({
                 "id": "attachments:usertext1",
@@ -2373,12 +2319,12 @@ mod tests {
             }),
         ];
 
-        let (attachments, user_text) = split_crash_attachments(&storage, rows).await.unwrap();
+        let (attachments, user_text) = split_crash_attachments(rows);
 
         assert_eq!(attachments.len(), 1);
         assert_eq!(attachments[0]["id"], "minidump");
-        let user_text = user_text.expect("first user-text attachment should load");
+        let user_text = user_text.expect("first user-text attachment should be present");
         assert_eq!(user_text["attachmentId"], "usertext1");
-        assert_eq!(user_text["body"], "first note");
+        assert!(user_text.get("body").is_none(), "body must not be eagerly fetched");
     }
 }

@@ -647,9 +647,9 @@ async fn test_get_crash_with_annotations_and_user_text() {
 // | ------ | ---------------------------- |
 // | GET    | /crashes/by-crash/{crash_id} |
 // Cases:
-// | Case                                | Expected               |
-// | ----------------------------------- | ---------------------- |
-// | admin with missing user-text object | 200 with null userText |
+// | Case                                       | Expected                              |
+// | ------------------------------------------ | ------------------------------------- |
+// | admin with missing user-text object in S3  | 200 with userText metadata (no body)  |
 #[tokio::test]
 async fn test_get_crash_user_text_not_in_store() {
     let app = TestApp::new().await;
@@ -659,8 +659,9 @@ async fn test_get_crash_user_text_not_in_store() {
     let gid = create_test_crash_group(&app.db, pid).await;
     let cid = create_test_crash_in_group(&app.db, pid, &gid).await;
 
-    // "user-text" attachment in DB but NOT uploaded to object store →
-    // load_user_text gets NotFound → returns Ok(None) → userText absent from response
+    // "user-text" attachment in DB but NOT uploaded to object store.
+    // get_crash no longer fetches S3 eagerly — userText metadata is always returned;
+    // the body is loaded on-demand by the client via the attachment endpoint.
     create_test_attachment(
         &app.db,
         "user-text",
@@ -676,62 +677,20 @@ async fn test_get_crash_user_text_not_in_store() {
     let (status, body) = app.call_json("GET", &uri, None, Some(&f.admin)).await;
     assert_eq!(status, StatusCode::OK, "expected OK; body={body}");
     assert!(
-        body["crash"]["userText"].is_null(),
-        "userText should be absent when file is missing from store; body={body}",
+        !body["crash"]["userText"].is_null(),
+        "userText metadata should be present even when S3 file is absent; body={body}",
     );
-}
-
-// ---------------------------------------------------------------------------
-// Tests: db_api – load_user_text without storagePath (line 302)
-// ---------------------------------------------------------------------------
-
-// API calls:
-// | Method | Route                        |
-// | ------ | ---------------------------- |
-// | GET    | /crashes/by-crash/{crash_id} |
-// Cases:
-// | Case                                                | Expected               |
-// | --------------------------------------------------- | ---------------------- |
-// | admin with user-text attachment missing storagePath | 200 with null userText |
-#[tokio::test]
-async fn test_load_user_text_no_storage_path() {
-    // Covers line 302: user-text attachment exists in DB but has no storagePath field.
-    // load_user_text returns Ok(None) immediately (before touching the object store).
-    let app = TestApp::new().await;
-    let f = Fixture::setup(&app).await;
-    let pid = &f.products[0].id;
-
-    let gid = create_test_crash_group(&app.db, pid).await;
-    let cid = create_test_crash_in_group(&app.db, pid, &gid).await;
-
-    // Insert a "user-text" attachment WITHOUT storagePath.
-    app.db
-        .query(
-            "CREATE attachments CONTENT {
-                name: 'user-text',
-                mimeType: 'text/plain',
-                size: 0,
-                filename: 'note.txt',
-                crash_id: type::record('crashes', $cid),
-                product_id: type::record('products', $pid),
-                created_at: time::now(),
-                updated_at: time::now()
-            }",
-        )
-        .bind(("cid", cid.clone()))
-        .bind(("pid", pid.to_string()))
-        .await
-        .unwrap();
-
-    let (status, body) = app
-        .call_json("GET", &format!("/crashes/by-crash/{cid}"), None, Some(&f.admin))
-        .await;
-    assert_eq!(status, StatusCode::OK, "expected OK; body={body}");
+    assert_eq!(
+        body["crash"]["userText"]["filename"].as_str(),
+        Some("missing.txt"),
+        "expected filename=missing.txt; body={body}",
+    );
     assert!(
-        body["crash"]["userText"].is_null(),
-        "userText should be absent when storagePath missing; body={body}",
+        body["crash"]["userText"].get("body").map_or(true, |b| b.is_null()),
+        "body must not be eagerly fetched from S3; body={body}",
     );
 }
+
 
 // ---------------------------------------------------------------------------
 // Tests: db_api – list_groups edge cases (lines 1046, 1061)

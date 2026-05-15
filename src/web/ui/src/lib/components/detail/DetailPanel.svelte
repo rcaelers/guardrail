@@ -69,9 +69,34 @@
       ['annotations', 'Annotations'],
       ['attachments', 'Attachments'],
     ];
-    if (crash.userText?.body ?? crash.annotations?.['user-text']) tabs.push(['usertext', 'User Text']);
+    if (crash.userText || crash.annotations?.['user-text']) tabs.push(['usertext', 'User Text']);
     tabs.push(['related', 'Related'], ['notes', 'Notes']);
     return tabs;
+  });
+
+  // Lazy-fetch user text body when the tab is first opened for this crash.
+  let userTextFetchedForId = $state<string | null>(null);
+  let userTextFetchedBody = $state<string | null>(null);
+  let userTextLoading = $state(false);
+  let userTextError = $state(false);
+
+  $effect(() => {
+    if (tab !== 'usertext') return;
+    const inlineBody = crash.userText?.body ?? crash.annotations?.['user-text'];
+    if (inlineBody) return;
+    const attachmentId = crash.userText?.attachmentId;
+    if (!attachmentId) return;
+    if (userTextFetchedForId === crash.id) return;
+
+    userTextLoading = true;
+    userTextError = false;
+    userTextFetchedBody = null;
+    userTextFetchedForId = null;
+    fetch(`/p/${crash.productId}/crashes/attachments/${attachmentId}`)
+      .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`${r.status}`))))
+      .then((text) => { userTextFetchedBody = text; userTextFetchedForId = crash.id; })
+      .catch(() => { userTextError = true; })
+      .finally(() => { userTextLoading = false; });
   });
 </script>
 
@@ -174,12 +199,16 @@
     {#if tab === 'annotations'}<AnnotationsTab annotations={crash.annotations} />{/if}
     {#if tab === 'attachments'}<AttachmentsTab attachments={crash.attachments ?? []} productId={crash.productId} />{/if}
     {#if tab === 'usertext'}
-      {@const userTextBody = crash.userText?.body ?? crash.annotations?.['user-text']}
-      {#if userTextBody}
+      {@const displayBody = crash.userText?.body ?? crash.annotations?.['user-text'] ?? userTextFetchedBody}
+      {#if userTextLoading}
+        <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">Loading…</div>
+      {:else if userTextError}
+        <div class="rounded border border-dashed border-line px-3 py-3 text-[12px] text-red-600 dark:border-line-dark dark:text-red-400">Failed to load user text.</div>
+      {:else if displayBody}
         {#if crash.userText?.createdAt}
           <div class="mb-1.5 text-[11px] text-ink-muted dark:text-ink-mutedDark">Submitted {fmtDate(crash.userText.createdAt)}</div>
         {/if}
-        <pre class="whitespace-pre-wrap break-words font-sans text-[13px] leading-[1.55] text-ink dark:text-ink-dark">{userTextBody}</pre>
+        <pre class="whitespace-pre-wrap break-words font-sans text-[13px] leading-[1.55] text-ink dark:text-ink-dark">{displayBody}</pre>
       {:else}
         <div class="rounded border border-dashed border-line px-3 py-3 text-[12px] text-ink-muted dark:border-line-dark dark:text-ink-mutedDark">No user text for this crash.</div>
       {/if}

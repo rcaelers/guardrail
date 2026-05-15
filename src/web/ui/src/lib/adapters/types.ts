@@ -86,7 +86,7 @@ export interface CrashAttachment {
 
 export interface CrashUserText {
   attachmentId: string;
-  body: string;
+  body?: string; // not present in list view; fetched lazily via the attachment endpoint
   filename: string;
   createdAt: string;
 }
