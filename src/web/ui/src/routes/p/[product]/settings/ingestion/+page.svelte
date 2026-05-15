@@ -14,6 +14,18 @@
 
   const displayToken = $derived(tokenInput || '(not set)');
   const hasToken = $derived(tokenInput.trim().length > 0);
+
+  const base = data.ingestionUrl;
+  const minidumpUrl = $derived(
+    hasToken && base ? `${base}/api/minidump/${tokenInput}/upload` : null
+  );
+  const symbolsUrl = $derived(
+    hasToken && base ? `${base}/api/symbols/${tokenInput}/upload` : null
+  );
+
+  function generateToken() {
+    tokenInput = crypto.randomUUID();
+  }
 </script>
 
 <div class="mx-auto max-w-[700px]">
@@ -31,60 +43,74 @@
     <p class="mb-4 text-[12px] text-red-600 dark:text-red-400">{form.error}</p>
   {/if}
 
-  <div class="rounded-md border border-line dark:border-line-dark overflow-hidden mb-6">
-    <div class="bg-surface-panel dark:bg-surface-panelDark px-4 py-3 border-b border-line dark:border-line-dark">
-      <div class="text-[13px] font-medium">Current token</div>
-      <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
-        {hasToken ? 'Token is set' : 'No token configured — upload URL will not work'}
-      </div>
-    </div>
-    <div class="px-4 py-3 bg-surface dark:bg-surface-dark">
-      <code class="font-mono text-[12px] break-all select-all">{displayToken}</code>
-    </div>
-  </div>
-
-  <form method="POST" action="?/save" use:enhance class="space-y-4 mb-4">
+  <form method="POST" action="?/save" use:enhance class="space-y-4 mb-6">
     <div>
-      <label for="product_token" class="block text-[13px] font-medium mb-1">
-        Set token manually
-      </label>
+      <label for="product_token" class="block text-[13px] font-medium mb-1">Token</label>
       <p class="text-[12px] text-ink-muted dark:text-ink-mutedDark mb-2">
-        Enter a custom token value, or leave blank and click Save to keep the current token unchanged.
-        Use "Generate new token" below to create a random token.
+        Set a custom token value, or use Generate to create a random one. Click Save to apply.
       </p>
-      <input
-        id="product_token"
-        name="product_token"
-        type="text"
-        bind:value={tokenInput}
-        placeholder="Leave empty to keep current token"
-        spellcheck="false"
-        autocomplete="off"
-        class="w-full rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 font-mono text-[12px] outline-none focus:ring-1 focus:ring-accent"
-      />
-    </div>
-    <div class="flex justify-end">
-      <button
-        type="submit"
-        class="rounded-md bg-accent px-4 py-1.5 text-[13px] font-medium text-white"
-      >Save</button>
+      <div class="flex gap-2">
+        <input
+          id="product_token"
+          name="product_token"
+          type="text"
+          bind:value={tokenInput}
+          placeholder="(not set)"
+          spellcheck="false"
+          autocomplete="off"
+          class="flex-1 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 font-mono text-[12px] outline-none focus:ring-1 focus:ring-accent"
+        />
+        <button
+          type="button"
+          onclick={generateToken}
+          class="rounded-md border border-line dark:border-line-dark px-3 py-1.5 text-[13px] font-medium hover:bg-surface-panel dark:hover:bg-surface-panelDark"
+        >Generate</button>
+        <button
+          type="submit"
+          class="rounded-md bg-accent px-4 py-1.5 text-[13px] font-medium text-white"
+        >Save</button>
+      </div>
     </div>
   </form>
 
-  <div class="rounded-md border border-line dark:border-line-dark overflow-hidden">
-    <div class="bg-surface-panel dark:bg-surface-panelDark px-4 py-3 border-b border-line dark:border-line-dark">
-      <div class="text-[13px] font-medium">Generate new token</div>
-      <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
-        Replaces the current token with a new random value. You will need to update the upload URL in your application.
+  {#if hasToken}
+    <div class="rounded-md border border-line dark:border-line-dark overflow-hidden">
+      <div class="bg-surface-panel dark:bg-surface-panelDark px-4 py-3 border-b border-line dark:border-line-dark">
+        <div class="text-[13px] font-medium">Upload URLs</div>
+        <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
+          Use these endpoints in your application to upload crash reports and debug symbols.
+        </div>
+      </div>
+      <div class="px-4 py-3 bg-surface dark:bg-surface-dark space-y-3">
+        <div>
+          <div class="text-[12px] font-medium mb-1">Minidump upload</div>
+          {#if minidumpUrl}
+            <code class="font-mono text-[11px] break-all select-all text-ink-muted dark:text-ink-mutedDark">{minidumpUrl}</code>
+          {:else}
+            <code class="font-mono text-[11px] break-all text-ink-muted dark:text-ink-mutedDark">/api/minidump/{tokenInput}/upload</code>
+            {#if !base}
+              <p class="text-[11px] text-ink-muted dark:text-ink-mutedDark mt-1">Set <code class="font-mono">GUARDRAIL_INGESTION_URL</code> to see the full URL.</p>
+            {/if}
+          {/if}
+        </div>
+        <div>
+          <div class="text-[12px] font-medium mb-1">Symbol upload</div>
+          {#if symbolsUrl}
+            <code class="font-mono text-[11px] break-all select-all text-ink-muted dark:text-ink-mutedDark">{symbolsUrl}</code>
+          {:else}
+            <code class="font-mono text-[11px] break-all text-ink-muted dark:text-ink-mutedDark">/api/symbols/{tokenInput}/upload</code>
+            {#if !base}
+              <p class="text-[11px] text-ink-muted dark:text-ink-mutedDark mt-1">Set <code class="font-mono">GUARDRAIL_INGESTION_URL</code> to see the full URL.</p>
+            {/if}
+          {/if}
+        </div>
       </div>
     </div>
-    <div class="px-4 py-3 bg-surface dark:bg-surface-dark flex justify-end">
-      <form method="POST" action="?/regenerate" use:enhance>
-        <button
-          type="submit"
-          class="rounded-md border border-red-500 px-4 py-1.5 text-[13px] font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950"
-        >Generate new token</button>
-      </form>
+  {:else}
+    <div class="rounded-md border border-line dark:border-line-dark px-4 py-3 bg-surface dark:bg-surface-dark">
+      <p class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
+        No token set — upload URLs will be shown here once a token is saved.
+      </p>
     </div>
-  </div>
+  {/if}
 </div>
