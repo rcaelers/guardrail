@@ -123,14 +123,14 @@
   <!-- Header -->
   <div
     class="grid shrink-0 items-center gap-4 border-b border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-5 py-2 text-[10.5px] font-medium uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark"
-    style:grid-template-columns="1.3fr 80px 90px 80px 100px 1fr 1.2fr 180px 1fr 100px"
+    style:grid-template-columns="1.3fr 80px 100px 1fr 90px 80px 1.2fr 180px 1fr 100px"
   >
     <span>Module</span>
     <span>Version</span>
-    <span>Arch</span>
-    <span>Format</span>
     <span>Channel</span>
     <span>Build</span>
+    <span>Arch</span>
+    <span>Format</span>
     <span>Debug ID</span>
     <span>Uploaded</span>
     <span>Refs</span>
@@ -142,20 +142,20 @@
     {#each data.symbols as s (s.id)}
       <div
         class="grid items-center gap-4 border-b border-line dark:border-line-dark px-5 py-2.5 text-[13px] hover:bg-surface-panel dark:hover:bg-surface-panelDark"
-        style:grid-template-columns="1.3fr 80px 90px 80px 100px 1fr 1.2fr 180px 1fr 100px"
+        style:grid-template-columns="1.3fr 80px 100px 1fr 90px 80px 1.2fr 180px 1fr 100px"
       >
         <div class="min-w-0 truncate">
           <div class="truncate font-mono text-[12.5px] text-ink dark:text-ink-dark">{s.name}</div>
           <div class="truncate text-[10.5px] text-ink-muted dark:text-ink-mutedDark">{s.size}</div>
         </div>
         <div class="truncate">{s.version}</div>
-        <div class="truncate font-mono text-[12px]">{s.arch}</div>
-        <div class="truncate">{s.format}</div>
         <div class="truncate text-[12px]">{s.channel}</div>
         <div class="min-w-0 truncate text-[12px]">
           <div class="truncate font-mono text-[11px]" title={s.commit}>{s.buildTag || '—'}</div>
           {#if s.commit}<div class="truncate font-mono text-[10px] text-ink-muted dark:text-ink-mutedDark" title={s.commit}>{s.commit.slice(0, 8)}</div>{/if}
         </div>
+        <div class="truncate font-mono text-[12px]">{s.arch}</div>
+        <div class="truncate">{s.format}</div>
         <div class="truncate font-mono text-[11px] text-ink-muted dark:text-ink-mutedDark">{s.debugId}</div>
         <div class="truncate text-[12px] text-ink-muted dark:text-ink-mutedDark">
           {fmtDate(s.uploadedAt)} · {uploaderName(s.uploadedBy)}
