@@ -8,7 +8,13 @@ export const GET: RequestHandler = async ({ params, locals, request }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
   await requireProductAccess(locals.user, params.product, adapter);
 
-  const response = await adapter.downloadAttachment(params.id);
+  let response: Response | null;
+  try {
+    response = await adapter.downloadAttachment(params.id);
+  } catch (e) {
+    console.error('downloadAttachment failed:', e instanceof Error ? e.message : e);
+    throw error(502, 'Failed to reach storage backend');
+  }
   if (!response) throw error(404, `Attachment ${params.id} not found`);
 
   const headers = new Headers(response.headers);

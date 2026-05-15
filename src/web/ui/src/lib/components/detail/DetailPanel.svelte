@@ -78,7 +78,23 @@
   let userTextFetchedForId = $state<string | null>(null);
   let userTextFetchedBody = $state<string | null>(null);
   let userTextLoading = $state(false);
-  let userTextError = $state(false);
+  let userTextErrorStatus = $state<number | null>(null);
+
+  function fetchUserText(productId: string, attachmentId: string, crashId: string) {
+    userTextLoading = true;
+    userTextErrorStatus = null;
+    userTextFetchedBody = null;
+    userTextFetchedForId = null;
+    fetch(`/p/${encodeURIComponent(productId)}/crashes/attachments/${encodeURIComponent(attachmentId)}`)
+      .then((r) => {
+        if (r.ok) return r.text();
+        userTextErrorStatus = r.status;
+        return Promise.reject(new Error(`user-text fetch ${r.status}`));
+      })
+      .then((text) => { userTextFetchedBody = text; userTextFetchedForId = crashId; })
+      .catch((e) => { console.error('user-text load failed:', e); })
+      .finally(() => { userTextLoading = false; });
+  }
 
   $effect(() => {
     if (tab !== 'usertext') return;
@@ -87,16 +103,8 @@
     const attachmentId = crash.userText?.attachmentId;
     if (!attachmentId) return;
     if (userTextFetchedForId === crash.id) return;
-
-    userTextLoading = true;
-    userTextError = false;
-    userTextFetchedBody = null;
-    userTextFetchedForId = null;
-    fetch(`/p/${crash.productId}/crashes/attachments/${attachmentId}`)
-      .then((r) => (r.ok ? r.text() : Promise.reject(new Error(`${r.status}`))))
-      .then((text) => { userTextFetchedBody = text; userTextFetchedForId = crash.id; })
-      .catch(() => { userTextError = true; })
-      .finally(() => { userTextLoading = false; });
+    if (userTextLoading) return;
+    fetchUserText(crash.productId, attachmentId, crash.id);
   });
 </script>
 
@@ -202,8 +210,25 @@
       {@const displayBody = crash.userText?.body ?? crash.annotations?.['user-text'] ?? userTextFetchedBody}
       {#if userTextLoading}
         <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">Loading…</div>
-      {:else if userTextError}
-        <div class="rounded border border-dashed border-line px-3 py-3 text-[12px] text-red-600 dark:border-line-dark dark:text-red-400">Failed to load user text.</div>
+      {:else if userTextErrorStatus !== null}
+        {@const attachmentId = crash.userText?.attachmentId}
+        <div class="rounded border border-dashed border-line px-3 py-3 text-[12px] text-red-600 dark:border-line-dark dark:text-red-400">
+          Failed to load user text
+          {#if userTextErrorStatus === 404}
+            — file not found in storage.
+          {:else if userTextErrorStatus >= 500}
+            — storage service error ({userTextErrorStatus}).
+          {:else}
+            ({userTextErrorStatus}).
+          {/if}
+          {#if attachmentId}
+            <button
+              type="button"
+              class="ml-2 cursor-pointer underline"
+              onclick={() => fetchUserText(crash.productId, attachmentId, crash.id)}
+            >Retry</button>
+          {/if}
+        </div>
       {:else if displayBody}
         {#if crash.userText?.createdAt}
           <div class="mb-1.5 text-[11px] text-ink-muted dark:text-ink-mutedDark">Submitted {fmtDate(crash.userText.createdAt)}</div>
