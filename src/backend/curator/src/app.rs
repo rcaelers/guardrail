@@ -11,7 +11,7 @@ use apalis_redis::{ConnectionManager, RedisConfig, RedisStorage};
 use surrealdb::opt::auth::Root;
 use tracing::{debug, error, info, warn};
 
-use common::jobs::queue;
+use common::jobs::{ImportSymbolJob, queue};
 use common::retry_startup;
 use common::settings::Settings;
 use repos::Repo;
@@ -160,7 +160,7 @@ impl GuardrailCuratorApp {
             conn.clone(),
             RedisConfig::new(queue::IMPORT_CRASH_JOBS),
         );
-        let redis_import_symbol = RedisStorage::new_with_config(
+        let redis_import_symbol = RedisStorage::<ImportSymbolJob>::new_with_config(
             conn.clone(),
             RedisConfig::new(queue::IMPORT_SYMBOL_JOBS),
         );

@@ -7,7 +7,7 @@ use apalis::layers::retry::backoff::MakeBackoff;
 use apalis::layers::retry::{RetryPolicy, backoff::ExponentialBackoffMaker};
 use apalis::prelude::*;
 use apalis_redis::{ConnectionManager, RedisConfig, RedisStorage};
-use tracing::{debug, error, warn};
+use tracing::{debug, error, info, warn};
 
 use common::jobs::queue;
 use common::retry_startup;
@@ -176,8 +176,8 @@ impl GuardrailProcessorApp {
             })
             .on_event(|worker, e| match e {
                 Event::Error(err) => error!(worker = %worker.name(), error = %err, "Worker error"),
-                Event::Start => (),
-                Event::Stop => (),
+                Event::Start => info!(worker = %worker.name(), "Worker started"),
+                Event::Stop => info!(worker = %worker.name(), "Worker stopped"),
                 e => debug!(worker = %worker.name(), event = %e, "Worker event"),
             })
             .run_with_signal(shutdown)
