@@ -172,7 +172,7 @@ impl GuardrailCuratorApp {
             error!("Failed to run startup maintenance tasks: {}", e);
         }
 
-        let maintenance_schedule = cron::Schedule::from_str("0 0 2 * * * *")
+        let maintenance_schedule = cron::Schedule::from_str("0 0 * * * * *")
             .expect("Invalid cron schedule for maintenance");
 
         let state_import_crash = state.clone();
