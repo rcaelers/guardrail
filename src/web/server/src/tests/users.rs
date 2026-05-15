@@ -318,8 +318,11 @@ async fn test_memberships_self_or_admin() {
 // Cases:
 // | Bearer token         | Expected |
 // | -------------------- | -------- |
-// | global token         | 200      |
+// | global token         | 403      |
 // | product-scoped token | 403      |
+//
+// The web server is session-only; bearer tokens are rejected regardless of
+// scope or validity.
 #[tokio::test]
 async fn test_memberships_with_bearer_tokens() {
     let app = TestApp::new().await;
@@ -333,7 +336,7 @@ async fn test_memberships_with_bearer_tokens() {
             .await;
 
     let uri = format!("/users/{}/memberships", f.non_admin_id);
-    assert_eq!(app.call_bearer("GET", &uri, None, &global_token).await, StatusCode::OK);
+    assert_eq!(app.call_bearer("GET", &uri, None, &global_token).await, StatusCode::FORBIDDEN);
     assert_eq!(app.call_bearer("GET", &uri, None, &scoped_token).await, StatusCode::FORBIDDEN);
 }
 
