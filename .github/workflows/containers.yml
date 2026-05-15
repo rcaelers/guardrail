@@ -144,14 +144,10 @@ jobs:
           IMAGE=${{ env.GHCR }}-${{ matrix.name }}
           SHA_TAG="${GITHUB_SHA::7}"
 
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            cosign sign --yes ${IMAGE}:${GITHUB_REF_NAME}
-            cosign sign --yes ${IMAGE}:${SHA_TAG}
-            cosign sign --yes ${IMAGE}:latest
-          else
-            cosign sign --yes ${IMAGE}:${SHA_TAG}
-            cosign sign --yes ${IMAGE}:latest
-          fi
+          # Resolve the manifest digest — all tags for this build point to the same manifest,
+          # so signing once by digest covers SHA_TAG, latest, and the version tag (if any).
+          DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${SHA_TAG}" | grep '^Digest:' | awk '{print $2}')
+          cosign sign --yes "${IMAGE}@${DIGEST}"
 
       - name: Verify the images
         run: |
@@ -159,11 +155,9 @@ jobs:
           IMAGE=${{ env.GHCR }}-${{ matrix.name }}
           SHA_TAG="${GITHUB_SHA::7}"
 
-          cosign verify ${IMAGE}:${SHA_TAG} \
-              --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/(heads/(main|dev)|tags/v.*)$" \
-              --certificate-oidc-issuer https://token.actions.githubusercontent.com | jq
+          DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${SHA_TAG}" | grep '^Digest:' | awk '{print $2}')
 
-          cosign verify ${IMAGE}:latest \
+          cosign verify "${IMAGE}@${DIGEST}" \
               --certificate-identity-regexp "^https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/(heads/(main|dev)|tags/v.*)$" \
               --certificate-oidc-issuer https://token.actions.githubusercontent.com | jq
 
@@ -172,22 +166,13 @@ jobs:
           IMAGE=${{ env.GHCR }}-${{ matrix.name }}
           SHA_TAG="${GITHUB_SHA::7}"
 
-          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
-            cosign attest \
-              --yes \
-              --predicate <(echo '{"buildType":"github-actions","builder":{"id":"https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/tags/${{ github.ref_name }}"}}') \
-              ${IMAGE}:${GITHUB_REF_NAME}
-          fi
+          DIGEST=$(docker buildx imagetools inspect "${IMAGE}:${SHA_TAG}" | grep '^Digest:' | awk '{print $2}')
+          REF="${GITHUB_REF_NAME}"
 
           cosign attest \
             --yes \
-            --predicate <(echo '{"buildType":"github-actions","builder":{"id":"https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/heads/${{ github.ref_name || github.ref_name }}"}}') \
-            ${IMAGE}:${SHA_TAG}
-
-          cosign attest \
-            --yes \
-            --predicate <(echo '{"buildType":"github-actions","builder":{"id":"https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/heads/${{ github.ref_name || github.ref_name }}"}}') \
-            ${IMAGE}:latest
+            --predicate <(echo '{"buildType":"github-actions","builder":{"id":"https://github.com/${{ github.repository }}/.github/workflows/containers.yml@refs/heads/'"${REF}"'"}}') \
+            "${IMAGE}@${DIGEST}"
 
   update-dev-infra:
     name: Update development images in workrave-infra
