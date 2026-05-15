@@ -10,6 +10,7 @@
   let description = $state('');
   let justCreated = $state<CreatedApiToken | null>(null);
   let copied = $state(false);
+  let confirmDeleteId = $state<string | null>(null);
 
   $effect(() => {
     if (form?.created) {
@@ -134,15 +135,35 @@
           </div>
 
           {#if canManage}
-            <form method="POST" action="?/delete" use:enhance>
-              <input type="hidden" name="id" value={token.id} />
+            {#if confirmDeleteId === token.id}
+              <div class="flex items-center gap-2">
+                <span class="text-[12px] text-ink-muted dark:text-ink-mutedDark">Delete this token?</span>
+                <form method="POST" action="?/delete" use:enhance={() => async ({ update }) => { confirmDeleteId = null; await update(); }}>
+                  <input type="hidden" name="id" value={token.id} />
+                  <button
+                    type="submit"
+                    class="rounded-md bg-red-600 px-2.5 py-1 text-[12px] font-medium text-white hover:bg-red-700"
+                  >
+                    Confirm
+                  </button>
+                </form>
+                <button
+                  type="button"
+                  onclick={() => (confirmDeleteId = null)}
+                  class="rounded-md border border-line dark:border-line-dark px-2.5 py-1 text-[12px]"
+                >
+                  Cancel
+                </button>
+              </div>
+            {:else}
               <button
-                type="submit"
+                type="button"
+                onclick={() => (confirmDeleteId = token.id)}
                 class="rounded-md border border-line dark:border-line-dark px-2.5 py-1 text-[12px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
               >
                 Delete
               </button>
-            </form>
+            {/if}
           {/if}
         </div>
       {/each}
