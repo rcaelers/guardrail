@@ -231,13 +231,15 @@ async fn test_symbol_upload_ok() {
 }
 
 #[tokio::test]
-async fn test_symbol_upload_no_such_product() {
+async fn test_symbol_upload_product_annotation_is_ignored() {
+    // The `product` annotation is no longer validated against the token-resolved product.
+    // Uploading with a mismatched product annotation should succeed.
     let db = TestSetup::create_db().await;
     let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
     let body = create_body_from_config(&SymbolsBodyConfig {
         boundary: &boundary,
-        product: Some("TestProductxx"),
+        product: Some("SomeOtherProduct"),
         ..Default::default()
     });
 
@@ -250,19 +252,7 @@ async fn test_symbol_upload_no_such_product() {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-
-    assert_response_error(
-        response,
-        StatusCode::FORBIDDEN,
-        Some("access denied for product TestProductxx"),
-    )
-    .await;
-
-    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
-        .await
-        .expect("Failed to fetch symbol entry from database");
-
-    assert_eq!(allsymbols.len(), 0);
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test]
@@ -299,7 +289,8 @@ async fn test_symbol_upload_empty_version() {
 }
 
 #[tokio::test]
-async fn test_symbol_upload_empty_product() {
+async fn test_symbol_upload_empty_product_annotation_is_ignored() {
+    // The `product` annotation is no longer required; an empty value is just stored as-is.
     let db = TestSetup::create_db().await;
     let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
@@ -318,17 +309,7 @@ async fn test_symbol_upload_empty_product() {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("general failure: required annotation 'product' cannot be empty"),
-    )
-    .await;
-
-    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
-        .await
-        .expect("Failed to fetch symbol entry from database");
-    assert_eq!(allsymbols.len(), 0);
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test]
@@ -912,7 +893,8 @@ async fn test_symbol_no_version() {
 }
 
 #[tokio::test]
-async fn test_symbol_no_product() {
+async fn test_symbol_upload_without_product_annotation_succeeds() {
+    // The `product` annotation is no longer required; omitting it entirely should succeed.
     let db = TestSetup::create_db().await;
     let (app, _store, boundary, _content, _body, product_token, api_token) = setup(&db).await;
 
@@ -931,18 +913,7 @@ async fn test_symbol_no_product() {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_response_error(
-        response,
-        StatusCode::BAD_REQUEST,
-        Some("general failure: required annotation 'product' is missing"),
-    )
-    .await;
-
-    let allsymbols = SymbolsRepo::get_all(&db, QueryParams::default())
-        .await
-        .expect("Failed to fetch symbol entry from database");
-
-    assert_eq!(allsymbols.len(), 0);
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test]

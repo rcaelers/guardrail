@@ -195,6 +195,10 @@ pub async fn create_test_symbols(
         module_id: module_id.to_string(),
         storage_path: storage_path.to_string(),
         product_id,
+        version: String::new(),
+        channel: String::new(),
+        commit: String::new(),
+        build_tag: String::new(),
     };
 
     let symbols_id = SymbolsRepo::create(db, new_symbols)

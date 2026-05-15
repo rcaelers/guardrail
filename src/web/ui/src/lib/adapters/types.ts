@@ -388,6 +388,9 @@ export interface Symbol {
   size: string;
   debugId: string;
   codeId: string;
+  channel: string;
+  commit: string;
+  buildTag: string;
   uploadedAt: string;
   uploadedBy: string; // userId
   referencedBy: number;

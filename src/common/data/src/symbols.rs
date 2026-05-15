@@ -10,6 +10,10 @@ pub struct Symbols {
     pub module_id: String,
     pub storage_path: String,
     pub product_id: String,
+    pub version: String,
+    pub channel: String,
+    pub commit: String,
+    pub build_tag: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -22,4 +26,8 @@ pub struct NewSymbols {
     pub module_id: String,
     pub storage_path: String,
     pub product_id: String,
+    pub version: String,
+    pub channel: String,
+    pub commit: String,
+    pub build_tag: String,
 }

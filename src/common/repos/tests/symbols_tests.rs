@@ -109,6 +109,10 @@ async fn test_create() {
         module_id: "module_apple".to_string(),
         storage_path: "/path/to/apple_symbols".to_string(),
         product_id: product.id.to_string(),
+        version: "1.2.3".to_string(),
+        channel: "stable".to_string(),
+        commit: "deadbeef".to_string(),
+        build_tag: "ci-100".to_string(),
     };
 
     let symbols_id = SymbolsRepo::create(&db, new_symbols.clone())
@@ -126,6 +130,10 @@ async fn test_create() {
     assert_eq!(created_symbols.module_id, new_symbols.module_id);
     assert_eq!(created_symbols.storage_path, new_symbols.storage_path);
     assert_eq!(created_symbols.product_id, new_symbols.product_id);
+    assert_eq!(created_symbols.version, new_symbols.version);
+    assert_eq!(created_symbols.channel, new_symbols.channel);
+    assert_eq!(created_symbols.commit, new_symbols.commit);
+    assert_eq!(created_symbols.build_tag, new_symbols.build_tag);
 }
 
 #[tokio::test]

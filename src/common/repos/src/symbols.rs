@@ -73,6 +73,10 @@ impl SymbolsRepo {
                 module_id: $module_id,
                 storage_path: $storage_path,
                 product_id: type::record('products', $product_id),
+                version: $version,
+                channel: $channel,
+                commit: $commit,
+                build_tag: $build_tag,
                 created_at: time::now(),
                 updated_at: time::now(),
             }",
@@ -84,6 +88,10 @@ impl SymbolsRepo {
             .bind(("module_id", symbols.module_id.clone()))
             .bind(("storage_path", symbols.storage_path.clone()))
             .bind(("product_id", record_key(&symbols.product_id)))
+            .bind(("version", symbols.version.clone()))
+            .bind(("channel", symbols.channel.clone()))
+            .bind(("commit", symbols.commit.clone()))
+            .bind(("build_tag", symbols.build_tag.clone()))
             .await
             .map_err(handle_surreal_error)?
             .take(0)

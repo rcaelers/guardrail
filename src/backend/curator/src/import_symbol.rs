@@ -93,6 +93,11 @@ impl ImportSymbolProcessor {
             .ok_or_else(|| JobError::Failure("storage_path is missing".to_string()))?
             .to_string();
 
+        let version = symbol_info["version"].as_str().unwrap_or("").to_string();
+        let channel = symbol_info["channel"].as_str().unwrap_or("").to_string();
+        let commit = symbol_info["commit"].as_str().unwrap_or("").to_string();
+        let build_tag = symbol_info["build_tag"].as_str().unwrap_or("").to_string();
+
         let new_symbols = NewSymbols {
             os,
             arch,
@@ -100,6 +105,10 @@ impl ImportSymbolProcessor {
             module_id,
             storage_path,
             product_id,
+            version,
+            channel,
+            commit,
+            build_tag,
         };
 
         let id = SymbolsRepo::create(db, new_symbols).await.map_err(|e| {

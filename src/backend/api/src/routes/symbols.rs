@@ -33,7 +33,6 @@ struct Symbols {
 #[derive(Default, Debug, Serialize)]
 struct SymbolsInfo {
     submission_timestamp: String,
-    product: Option<String>,
     annotations: std::collections::HashMap<String, String>,
     symbols: Option<Symbols>,
 }
@@ -56,7 +55,7 @@ pub struct SymbolsApi;
 
 impl SymbolsApi {
     const REQUIRED_FIELDS: &'static [&'static str] =
-        &["product", "version", "channel", "commit", "build_id"];
+        &["version", "channel", "commit", "build_id"];
 
     fn validate_build_id(build_id: &str) -> Result<(), ApiError> {
         if build_id.is_empty() || build_id.len() > 64 {
@@ -95,10 +94,6 @@ impl SymbolsApi {
     }
 
     /// Validate annotations against the already-resolved product and return upload context.
-    ///
-    /// The product is already known from the URL token; we only verify that the
-    /// submitted `product` annotation matches (name or slug) and that the product
-    /// is still accepting uploads.
     #[instrument(skip(product, symbols_info))]
     async fn validate_symbols(
         product: &Product,
@@ -109,7 +104,6 @@ impl SymbolsApi {
             return Err(ApiError::Failure("no symbols found in submission".to_string()));
         }
 
-        let mut product_name = String::new();
         let mut version = String::new();
         let mut channel = String::new();
         let mut commit = String::new();
@@ -135,7 +129,6 @@ impl SymbolsApi {
             };
 
             match field_name {
-                "product" => product_name = value,
                 "version" => version = value,
                 "channel" => channel = value,
                 "commit" => commit = value,
@@ -144,19 +137,8 @@ impl SymbolsApi {
             }
         }
 
-        let name_matches = product_name.eq_ignore_ascii_case(&product.name)
-            || product_name.eq_ignore_ascii_case(&product.slug);
-        if !name_matches {
-            error!(
-                submitted = %product_name,
-                authenticated = %product.name,
-                "Submitted product name does not match product token"
-            );
-            return Err(ApiError::ProductAccessDenied(product_name));
-        }
-
         if !product.accepting_crashes {
-            return Err(ApiError::ProductNotAcceptingCrashes(product_name));
+            return Err(ApiError::ProductNotAcceptingCrashes(product.name.clone()));
         }
 
         Ok(SymbolsContext {
@@ -246,6 +228,10 @@ impl SymbolsApi {
             "storage_path": symbols.storage_path,
             "filename": symbols.filename,
             "submission_timestamp": symbols_info.submission_timestamp,
+            "version": symbols_context.version,
+            "channel": symbols_context.channel,
+            "commit": symbols_context.commit,
+            "build_tag": symbols_context.build_id,
         }))
     }
 
@@ -389,7 +375,6 @@ impl SymbolsApi {
 
         let mut symbols_info = SymbolsInfo {
             submission_timestamp: chrono::Utc::now().to_rfc3339(),
-            product: None,
             annotations: std::collections::HashMap::new(),
             ..Default::default()
         };
@@ -429,7 +414,6 @@ mod tests {
     fn symbols_info_with_symbols() -> SymbolsInfo {
         SymbolsInfo {
             submission_timestamp: "2024-01-01T00:00:00Z".to_string(),
-            product: Some("TestProduct".to_string()),
             annotations: std::collections::HashMap::new(),
             symbols: Some(Symbols {
                 filename: "app.sym".to_string(),
@@ -545,8 +529,8 @@ mod tests {
             product_id: "products:one".to_string(),
             version: "1.0".to_string(),
             channel: "stable".to_string(),
-            commit: "abc".to_string(),
-            build_id: "AABBCC".to_string(),
+            commit: "abc123".to_string(),
+            build_id: "ci-build-42".to_string(),
         };
 
         assert!(matches!(
@@ -565,6 +549,10 @@ mod tests {
         assert_eq!(value["storage_path"], "symbols/app.pdb-BUILD");
         assert_eq!(value["filename"], "app.sym");
         assert_eq!(value["submission_timestamp"], "2024-01-01T00:00:00Z");
+        assert_eq!(value["version"], "1.0");
+        assert_eq!(value["channel"], "stable");
+        assert_eq!(value["commit"], "abc123");
+        assert_eq!(value["build_tag"], "ci-build-42");
     }
 
     #[tokio::test]

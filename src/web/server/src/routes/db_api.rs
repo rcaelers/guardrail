@@ -297,8 +297,9 @@ const USER_PROJ: &str =
     "meta::id(id) AS id, email, name, avatar, is_admin AS isAdmin, created_at AS joinedAt";
 const PRODUCT_PROJ: &str = "meta::id(id) AS id, name, slug, description, color, public, product_token AS productToken";
 const SYMBOL_PROJ: &str = "meta::id(id) AS id, meta::id(product_id) AS productId, \
-    module_id AS name, '' AS version, arch, 'Breakpad' AS format, '' AS size, \
-    build_id AS debugId, '' AS codeId, created_at AS uploadedAt, '' AS uploadedBy, 0 AS referencedBy";
+    module_id AS name, version, arch, 'Breakpad' AS format, '' AS size, \
+    build_id AS debugId, '' AS codeId, channel, commit, build_tag AS buildTag, \
+    created_at AS uploadedAt, '' AS uploadedBy, 0 AS referencedBy";
 
 const GROUP_BASE_SELECT: &str = "
     SELECT
@@ -1945,6 +1946,10 @@ async fn upload_symbol(
             build_id: $build_id,
             module_id: $module_id,
             storage_path: $storage_path,
+            version: '',
+            channel: '',
+            commit: '',
+            build_tag: '',
             created_at: time::now(),
             updated_at: time::now()
         }} RETURN {SYMBOL_PROJ}"

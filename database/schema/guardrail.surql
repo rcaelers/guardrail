@@ -228,6 +228,10 @@ DEFINE FIELD arch ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
 DEFINE FIELD build_id ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
 DEFINE FIELD module_id ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
 DEFINE FIELD storage_path ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
+DEFINE FIELD version ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
+DEFINE FIELD channel ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
+DEFINE FIELD commit ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
+DEFINE FIELD build_tag ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
 DEFINE FIELD created_at ON TABLE symbols TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 DEFINE FIELD updated_at ON TABLE symbols TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
