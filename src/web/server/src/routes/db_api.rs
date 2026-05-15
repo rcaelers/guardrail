@@ -67,13 +67,12 @@ pub fn router() -> Router<AppState> {
 impl AppState {
     /// Returns a SurrealDB handle authenticated as the current tower session
     /// user. Falls back to an anonymous JWT (public data only) when no session
-    /// user exists or the user cannot be found.
-    ///
-    /// Authenticated handles are cached per user for `DB_HANDLE_CACHE_TTL` to
-    /// avoid per-request clone()+authenticate() churn on the WebSocket
-    /// connection.  Concurrent requests for the same user safely share the
-    /// same handle via Arc.
-    pub async fn user_db(&self, session: &Session) -> Arc<Surreal<Any>> {
+    /// user exists or the user cannot be found. Returns 503 if the anonymous
+    /// JWT itself cannot be issued or authenticated — never falls back to root.
+    pub async fn user_db(
+        &self,
+        session: &Session,
+    ) -> Result<Arc<Surreal<Any>>, (StatusCode, String)> {
         let session_user = session
             .get::<AuthenticatedUser>(crate::access::SESSION_KEY)
             .await
@@ -87,7 +86,7 @@ impl AppState {
         };
         let uid = repos::record_key(&active.id);
         if let Some(cached) = self.auth_cache.get(&uid).await {
-            return cached;
+            return Ok(cached);
         }
 
         let user_row = self
@@ -116,72 +115,54 @@ impl AppState {
             .unwrap_or(false);
         let user_id = row.get("uid").and_then(|v| v.as_str()).map(String::from);
 
-        let Ok(jwt) = crate::jwt::make_jwt(username, user_id.as_deref(), is_admin, &self.settings)
-        else {
-            return self.user_jwt_failure_fallback(&uid).await;
+        let jwt = match crate::jwt::make_jwt(username, user_id.as_deref(), is_admin, &self.settings) {
+            Ok(jwt) => jwt,
+            Err(_) => {
+                tracing::error!("JWT generation failed for user {uid}, falling back to anon");
+                return self.anon_db().await;
+            }
         };
 
-        self.authenticate_user_db_handle(&uid, &jwt).await
-    }
-
-    async fn anon_db(&self) -> Arc<Surreal<Any>> {
-        if let Some(cached) = self.auth_cache.get(ANON_CACHE_KEY).await {
-            return cached;
-        }
-
-        let Ok(jwt) = crate::jwt::make_anon_jwt(&self.settings) else {
-            return self.root_db_fallback();
-        };
-        self.authenticate_anon_db_handle(&jwt).await
-    }
-
-    async fn authenticate_user_db_handle(&self, uid: &str, jwt: &str) -> Arc<Surreal<Any>> {
-        match self.repo.authenticated(jwt).await {
+        match self.repo.authenticated(&jwt).await {
             Ok(db) => {
                 let handle = Arc::new(db);
                 self.auth_cache
                     .insert(uid.to_string(), Arc::clone(&handle))
                     .await;
-                handle
+                Ok(handle)
             }
-            Err(e) => self.user_db_auth_failure_fallback(uid, e).await,
+            Err(e) => {
+                tracing::error!("DB authentication failed for user {uid}: {e}, falling back to anon");
+                self.anon_db().await
+            }
         }
     }
 
-    async fn authenticate_anon_db_handle(&self, jwt: &str) -> Arc<Surreal<Any>> {
-        match self.repo.authenticated(jwt).await {
+    /// Returns an anonymous (public-only) SurrealDB handle. Returns 503 if the
+    /// anonymous JWT cannot be created or authenticated — never falls back to root.
+    async fn anon_db(&self) -> Result<Arc<Surreal<Any>>, (StatusCode, String)> {
+        if let Some(cached) = self.auth_cache.get(ANON_CACHE_KEY).await {
+            return Ok(cached);
+        }
+
+        let jwt = crate::jwt::make_anon_jwt(&self.settings).map_err(|e| {
+            tracing::error!("Anonymous JWT generation failed: {e}");
+            (StatusCode::SERVICE_UNAVAILABLE, "database authentication unavailable".to_string())
+        })?;
+
+        match self.repo.authenticated(&jwt).await {
             Ok(db) => {
                 let handle = Arc::new(db);
                 self.auth_cache
                     .insert(ANON_CACHE_KEY.to_string(), Arc::clone(&handle))
                     .await;
-                handle
+                Ok(handle)
             }
-            Err(e) => self.anon_db_auth_failure_fallback(e),
+            Err(e) => {
+                tracing::error!("Anonymous JWT authentication failed: {e}");
+                Err((StatusCode::SERVICE_UNAVAILABLE, "database authentication unavailable".to_string()))
+            }
         }
-    }
-
-    async fn user_jwt_failure_fallback(&self, uid: &str) -> Arc<Surreal<Any>> {
-        tracing::error!("JWT generation failed for user {uid}");
-        self.anon_db().await
-    }
-
-    async fn user_db_auth_failure_fallback(
-        &self,
-        uid: &str,
-        err: impl std::fmt::Display,
-    ) -> Arc<Surreal<Any>> {
-        tracing::error!("DB authentication failed for user {uid}: {err}");
-        self.anon_db().await
-    }
-
-    fn anon_db_auth_failure_fallback(&self, err: impl std::fmt::Display) -> Arc<Surreal<Any>> {
-        tracing::warn!("Anonymous JWT auth failed, falling back to root session: {err}");
-        self.root_db_fallback()
-    }
-
-    fn root_db_fallback(&self) -> Arc<Surreal<Any>> {
-        Arc::new(self.repo.db.clone())
     }
 }
 
@@ -452,7 +433,7 @@ async fn list_users(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let rows =
         run_value(&db, &format!("SELECT {USER_PROJ} FROM users ORDER BY created_at"), vec![])
             .await?;
@@ -468,7 +449,7 @@ async fn get_user(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let rows = run_value(
         &db,
         &format!("SELECT {USER_PROJ} FROM ONLY type::record('users', $id)"),
@@ -533,7 +514,7 @@ async fn create_user(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let email = body.email.trim().to_lowercase();
     if email.is_empty() {
         return Err(bad("Email required."));
@@ -586,7 +567,7 @@ async fn update_user(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let email = body
         .email
         .as_deref()
@@ -638,7 +619,7 @@ async fn delete_user(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     run_value(
         &db,
         "DELETE user_access WHERE user_id = type::record('users', $id)",
@@ -665,7 +646,7 @@ async fn set_admin(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     run_value(
         &db,
         "UPDATE type::record('users', $id) SET is_admin = $v, updated_at = time::now()",
@@ -684,7 +665,7 @@ async fn memberships_for(
     crate::access::require_user_or_admin(&session, &headers, &s.repo.db, &user_id)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let rows = run_value(
         &db,
         "SELECT
@@ -722,7 +703,7 @@ async fn list_products(
 ) -> Result<Json<Value>, (StatusCode, String)> {
     match q.scope.as_deref() {
         Some("mine") => {
-            let db = s.user_db(&session).await;
+            let db = s.user_db(&session).await?;
             let Some(uid) = q.user.as_deref() else {
                 return Ok(Json(Value::Array(vec![])));
             };
@@ -748,7 +729,7 @@ async fn list_products(
             Ok(Json(Value::Array(rows)))
         }
         _ => {
-            let db = s.user_db(&session).await;
+            let db = s.user_db(&session).await?;
             let rows = run_value(
                 &db,
                 &format!("SELECT {PRODUCT_PROJ} FROM products ORDER BY name"),
@@ -765,7 +746,7 @@ async fn get_product(
     session: Session,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let rows = run_value(
         &db,
         &format!("SELECT {PRODUCT_PROJ} FROM ONLY type::record('products', $id)"),
@@ -803,7 +784,7 @@ async fn create_product(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let slug = body
         .slug
         .as_deref()
@@ -854,7 +835,7 @@ async fn update_product(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let name = body
         .name
         .as_deref()
@@ -916,7 +897,7 @@ async fn delete_product(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let args = vec![("id", Value::String(id))];
     for sql in [
         "DELETE annotations WHERE product_id = type::record('products', $id)",
@@ -940,7 +921,7 @@ async fn get_product_email_settings(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
 
     let settings = repos::product_settings::ProductSettingsRepo::get_or_create(&db, &id)
         .await
@@ -972,7 +953,7 @@ async fn update_product_email_settings(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
 
     let email = data::product_settings::EmailSettings {
         invite_subject: body.invite_subject.filter(|s| !s.is_empty()),
@@ -1004,7 +985,7 @@ async fn update_product_token(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
 
     let token = body
         .product_token
@@ -1095,7 +1076,7 @@ async fn list_members(
     session: Session,
     Path(pid): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let rows = run_value(
         &db,
         "SELECT
@@ -1132,7 +1113,7 @@ async fn grant_access(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     run_value(
         &db,
         "DELETE user_access WHERE user_id = type::record('users', $uid)
@@ -1171,7 +1152,7 @@ async fn revoke_access(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     run_value(
         &db,
         "DELETE user_access WHERE user_id = type::record('users', $uid)
@@ -1203,7 +1184,7 @@ async fn list_groups(
     session: Session,
     Query(q): Query<ListGroupsQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let base_sql = format!(
         "{GROUP_BASE_SELECT}
         WHERE product_id = type::record('products', $pid)
@@ -1354,7 +1335,7 @@ async fn get_group(
     session: Session,
     Path(id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let g = compose_group(&db, &id).await?;
     match g {
         Some(v) => Ok(Json(v)),
@@ -1367,7 +1348,7 @@ async fn get_crash(
     session: Session,
     Path(crash_id): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let crashes = run_value(
         &db,
         "SELECT * FROM ONLY type::record('crashes', $cid)",
@@ -1596,7 +1577,7 @@ async fn download_attachment(
     session: Session,
     Path(id): Path<String>,
 ) -> Result<Response, (StatusCode, String)> {
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let rows = run_value(
         &db,
         "SELECT
@@ -1671,7 +1652,7 @@ async fn set_status(
     crate::access::require_session_product_role(&session, &s.repo.db, &product_id, "readwrite")
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     run_value(
         &db,
         "UPDATE type::record('crash_groups', $id) SET status = $st, updated_at = time::now()",
@@ -1703,7 +1684,7 @@ async fn add_note(
     crate::access::require_session_product_role(&session, &s.repo.db, &product_id, "readwrite")
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let prod_rows = run_value(
         &db,
         "SELECT meta::id(product_id) AS pid FROM ONLY type::record('crash_groups', $id)",
@@ -1773,7 +1754,7 @@ async fn merge_groups(
     )
     .await
     .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let pid = Value::String(primary_id.clone());
     let mid = Value::String(body.merged_id);
     run_value(
@@ -1826,7 +1807,7 @@ async fn list_symbols(
     Path(pid): Path<String>,
     Query(q): Query<SymbolsQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let mut rows = run_value(
         &db,
         &format!(
@@ -1906,7 +1887,7 @@ async fn upload_symbol(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let id = uuid::Uuid::new_v4().to_string();
     let module_id = body.name;
     let build_id = uuid::Uuid::new_v4().to_string();
@@ -1959,7 +1940,7 @@ async fn delete_symbol(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &product_id)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     run_value(&db, "DELETE type::record('symbols', $id)", vec![("id", Value::String(id))]).await?;
     Ok(StatusCode::NO_CONTENT)
 }
@@ -1979,7 +1960,7 @@ async fn list_api_tokens(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let rows = run_value(
         &db,
         &format!(
@@ -2009,7 +1990,7 @@ async fn create_api_token(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
 
     let description = body.description.trim().to_string();
     if description.is_empty() {
@@ -2064,7 +2045,7 @@ async fn delete_api_token(
     crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let _ = pid;
     run_value(&db, "DELETE type::record('api_tokens', $id)", vec![("id", Value::String(id))])
         .await?;
@@ -2083,7 +2064,7 @@ async fn list_all_api_tokens(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     let rows = run_value(
         &db,
         &format!(
@@ -2141,7 +2122,7 @@ async fn create_admin_api_token(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
 
     let description = body.description.trim().to_string();
     if description.is_empty() {
@@ -2211,7 +2192,7 @@ async fn update_admin_api_token(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
 
     let description = body.description.trim().to_string();
     if description.is_empty() {
@@ -2252,7 +2233,7 @@ async fn delete_admin_api_token(
     crate::access::require_admin(&session, &headers, &s.repo.db)
         .await
         .map_err(access_err)?;
-    let db = s.user_db(&session).await;
+    let db = s.user_db(&session).await?;
     run_value(&db, "DELETE type::record('api_tokens', $id)", vec![("id", Value::String(id))])
         .await?;
     Ok(StatusCode::NO_CONTENT)

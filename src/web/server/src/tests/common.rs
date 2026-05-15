@@ -222,6 +222,20 @@ impl TestApp {
         .await
     }
 
+    /// A valid Ed25519 key that is NOT the one trusted by the test SurrealDB instance.
+    /// JWT generation succeeds, but SurrealDB rejects the JWT on authenticate().
+    /// Simulates the production failure mode: "There was a problem with authentication".
+    pub(super) async fn new_with_mismatched_jwt_key() -> Self {
+        Self::with_options(None, |settings| {
+            // Throwaway key generated for this test — never used anywhere else.
+            settings.auth.jwk.private_key = "-----BEGIN PRIVATE KEY-----\
+                MC4CAQAwBQYDK2VwBCIEID5zKZ0YKMIEwKSsTpAKwrhLSd9U9+8NdB4JFgx89hSQ\
+                -----END PRIVATE KEY-----"
+                .to_string();
+        })
+        .await
+    }
+
     pub(super) async fn send(&self, req: Request<Body>) -> (StatusCode, Bytes, Option<String>) {
         let resp = self.router.clone().oneshot(req).await.unwrap();
         let status = resp.status();
