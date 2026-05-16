@@ -50,7 +50,7 @@ impl MinidumpProcessor {
                 .unwrap_or_else(|| "|".to_string()),
             maximum_frame_count: product_settings
                 .and_then(|p| p.maximum_frame_count)
-                .or_else(|| global.maximum_frame_count)
+                .or(global.maximum_frame_count)
                 .unwrap_or(20),
         };
 
@@ -199,7 +199,8 @@ impl MinidumpProcessor {
             .get("processor_settings")
             .and_then(|v| serde_json::from_value(v.clone()).ok());
 
-        let processor = MinidumpProcessor::new_with_override(state.clone(), product_settings.as_ref());
+        let processor =
+            MinidumpProcessor::new_with_override(state.clone(), product_settings.as_ref());
         processor
             .handle_job(crash_id.clone(), job.crash.clone(), &redis_storage)
             .await?;
