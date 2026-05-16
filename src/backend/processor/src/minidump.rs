@@ -34,23 +34,18 @@ impl MinidumpProcessor {
     ) -> MinidumpProcessor {
         let storage = s.storage.clone();
 
-        let global = &s.settings.processor;
         let config = SignatureGeneratorConfig {
             skip_patterns: product_settings
                 .and_then(|p| p.skip_patterns.clone())
-                .or_else(|| global.skip_patterns.clone())
                 .unwrap_or_default(),
             end_patterns: product_settings
                 .and_then(|p| p.end_patterns.clone())
-                .or_else(|| global.end_patterns.clone())
                 .unwrap_or_default(),
             delimiter: product_settings
                 .and_then(|p| p.delimiter.clone())
-                .or_else(|| global.delimiter.clone())
                 .unwrap_or_else(|| "|".to_string()),
             maximum_frame_count: product_settings
                 .and_then(|p| p.maximum_frame_count)
-                .or(global.maximum_frame_count)
                 .unwrap_or(20),
         };
 
@@ -368,28 +363,6 @@ mod tests {
 
         assert!(submission_annotations.is_empty());
         assert!(script_annotations.is_empty());
-    }
-
-    #[tokio::test]
-    async fn new_uses_processor_settings() {
-        let mut settings = crate::settings::Settings::default();
-        settings.processor.delimiter = Some(" -> ".to_string());
-        settings.processor.maximum_frame_count = Some(1);
-        let state =
-            AppState::new(Arc::new(settings), Arc::new(object_store::memory::InMemory::new()));
-
-        let processor = MinidumpProcessor::new(Data::new(state));
-        let report = json!({
-            "crashing_thread": {
-                "frames": [
-                    {"module": "app.exe", "function": "first()"},
-                    {"module": "app.exe", "function": "second()"}
-                ]
-            }
-        });
-
-        let signature = processor.generate_signature(&report).await.unwrap();
-        assert_eq!(signature, "app.exe!first");
     }
 
     #[tokio::test]

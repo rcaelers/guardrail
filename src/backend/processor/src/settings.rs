@@ -4,17 +4,7 @@ use serde::Deserialize;
 use common::settings::{ObjectStorage, Valkey};
 
 #[derive(Debug, Deserialize, Default)]
-#[serde(default)]
-pub struct ProcessorServer {
-    pub skip_patterns: Option<Vec<String>>,
-    pub end_patterns: Option<Vec<String>>,
-    pub delimiter: Option<String>,
-    pub maximum_frame_count: Option<usize>,
-}
-
-#[derive(Debug, Deserialize, Default)]
 pub struct Settings {
-    pub processor: ProcessorServer,
     pub valkey: Valkey,
     pub object_storage: ObjectStorage,
 }
