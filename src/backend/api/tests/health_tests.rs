@@ -21,7 +21,6 @@ use repos::Repo;
 
 fn test_settings() -> api::settings::Settings {
     let mut s = api::settings::Settings::default();
-    s.auth.name = "TestApp".to_string();
     s.auth.jwk.public_key = testware::setup::TEST_PUBLIC_KEY.to_string();
     s.auth.jwk.private_key = testware::setup::TEST_PRIVATE_KEY.to_string();
     s.config_dir = testware::workspace_config_dir();

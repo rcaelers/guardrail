@@ -111,7 +111,6 @@ impl Settings {
 impl Settings {
     pub fn test_default() -> Self {
         let mut s = Self::default();
-        s.auth.name = "TestApp".to_string();
         s.auth.jwk.public_key = testware::setup::TEST_PUBLIC_KEY.to_string();
         s.auth.jwk.private_key = testware::setup::TEST_PRIVATE_KEY.to_string();
         s.database.namespace = "test".to_string();

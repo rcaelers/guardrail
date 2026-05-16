@@ -45,7 +45,6 @@ async fn home(
         .unwrap_or_default();
     render(HomeTemplate {
         title: "Guardrail",
-        app_name: state.settings.auth.name.as_str(),
         auth,
         error,
         has_error,

@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>You've been invited to {{app_name}}</title>
+  <title>You've been invited to Guardrail</title>
 </head>
+
 <body style="font-family: sans-serif; background: #f5f5f5; margin: 0; padding: 0;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background: #f5f5f5; padding: 32px 0;">
     <tr>
@@ -12,14 +14,19 @@
         <table width="560" cellpadding="0" cellspacing="0" style="background: #ffffff; border-radius: 8px; padding: 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
           <tr>
             <td>
-              <h1 style="font-size: 22px; color: #111; margin: 0 0 16px;">You've been invited to {{app_name}}</h1>
+              <h1 style="font-size: 22px; color: #111; margin: 0 0 16px;">You've been invited to Guardrail</h1>
+              <p style="font-size: 15px; color: #444; line-height: 1.6; margin: 0 0 16px;">
+                You have been invited to join <strong>Guardrail</strong>, a crash reporting
+                and analysis platform. Guardrail collects crash reports from your applications,
+                helps identify patterns across versions and platforms, and gives developers
+                the information they need to fix issues quickly.
+              </p>
               <p style="font-size: 15px; color: #444; line-height: 1.6; margin: 0 0 24px;">
-                You have been invited to join <strong>{{app_name}}</strong>.
                 Click the button below to accept your invitation and create your account.
               </p>
               <p style="margin: 0 0 24px;">
                 <a href="{{invite_url}}"
-                   style="display: inline-block; background: #3b82f6; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-size: 15px; font-weight: 600;">
+                  style="display: inline-block; background: #3b82f6; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-size: 15px; font-weight: 600;">
                   Accept invitation
                 </a>
               </p>
@@ -34,4 +41,5 @@
     </tr>
   </table>
 </body>
+
 </html>

@@ -438,17 +438,15 @@ async fn run_invite(
                 let email = Email {
                     from: settings.email.from.clone(),
                     to: to.to_string(),
-                    subject: format!("You've been invited to {}", settings.auth.name),
+                    subject: "You've been invited to Guardrail".to_string(),
                     html: format!(
-                        "<p>You have been invited to join <strong>{name}</strong>.</p>\
+                        "<p>You have been invited to join <strong>Guardrail</strong>.</p>\
                          <p><a href=\"{url}\">Accept invitation</a></p>\
                          <p>Or copy this link: {url}</p>",
-                        name = settings.auth.name,
                         url = invite_url,
                     ),
                     text: Some(format!(
-                        "You have been invited to join {name}. Accept here: {url}",
-                        name = settings.auth.name,
+                        "You have been invited to join Guardrail. Accept here: {url}",
                         url = invite_url,
                     )),
                 };

@@ -12,7 +12,6 @@ pub struct Valkey {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct Auth {
-    pub name: String,
     pub jwk: Jwk,
     pub oidc: Option<Oidc>,
 }

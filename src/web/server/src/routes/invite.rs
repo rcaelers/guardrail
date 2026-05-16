@@ -25,12 +25,10 @@ use crate::{
 
 pub(crate) const DEFAULT_INVITE_HTML: &str = include_str!("../../templates/email/invite.html");
 pub(crate) const DEFAULT_INVITE_TEXT: &str = include_str!("../../templates/email/invite.txt");
-pub(crate) const DEFAULT_INVITE_SUBJECT: &str = "You've been invited to {{app_name}}";
+pub(crate) const DEFAULT_INVITE_SUBJECT: &str = "You've been invited to Guardrail";
 
-fn render_invite_template(template: &str, app_name: &str, invite_url: &str) -> String {
-    template
-        .replace("{{app_name}}", app_name)
-        .replace("{{invite_url}}", invite_url)
+fn render_invite_template(template: &str, invite_url: &str) -> String {
+    template.replace("{{invite_url}}", invite_url)
 }
 
 /// Invitation API routes, to be nested under /api/v1 in main.rs.
@@ -151,9 +149,9 @@ async fn create_invitation(
         let html_template = product_html.unwrap_or_else(|| DEFAULT_INVITE_HTML.to_string());
         let text_template = product_text.unwrap_or_else(|| DEFAULT_INVITE_TEXT.to_string());
         let subject =
-            render_invite_template(&subject_template, &state.settings.auth.name, &invite_url);
-        let html = render_invite_template(&html_template, &state.settings.auth.name, &invite_url);
-        let text = render_invite_template(&text_template, &state.settings.auth.name, &invite_url);
+            render_invite_template(&subject_template, &invite_url);
+        let html = render_invite_template(&html_template, &invite_url);
+        let text = render_invite_template(&text_template, &invite_url);
         let email = Email {
             from: state.settings.email.from.clone(),
             to: to.to_string(),
@@ -428,7 +426,6 @@ async fn show_invite_form(
     let error = query.error.unwrap_or_default();
     render(InviteTemplate {
         title: "Create account",
-        app_name: &state.settings.auth.name,
         auth: AuthenticatedUser::default(),
         self_service_url: String::new(),
         code,

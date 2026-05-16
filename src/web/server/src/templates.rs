@@ -6,7 +6,6 @@ use crate::auth_user::AuthenticatedUser;
 #[template(path = "home.html")]
 pub struct HomeTemplate<'a> {
     pub title: &'a str,
-    pub app_name: &'a str,
     pub auth: AuthenticatedUser,
     pub error: String,
     pub has_error: bool,
@@ -18,7 +17,6 @@ pub struct HomeTemplate<'a> {
 #[template(path = "invite.html")]
 pub struct InviteTemplate<'a> {
     pub title: &'a str,
-    pub app_name: &'a str,
     pub auth: AuthenticatedUser,
     pub self_service_url: String,
     pub code: String,

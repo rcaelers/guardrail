@@ -29,8 +29,6 @@ object_storage:
   secret_access_key: "guardrail"
 base_url: https://guardrail.home.krandor.org:4433
 auth:
-  id: guardrail.home.krandor.org
-  name: Guardrail
   jwk:
     token_validity_in_minutes: 30
     public_key: |
