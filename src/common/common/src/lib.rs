@@ -7,7 +7,6 @@ use object_store::{ObjectStore, aws::AmazonS3Builder};
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt};
 
-use settings::Settings;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthenticatedUser {
@@ -26,9 +25,7 @@ impl AuthenticatedUser {
     }
 }
 
-use std::{
-    collections::VecDeque, future::Future, ops::Range, sync::Arc, time::Duration,
-};
+use std::{collections::VecDeque, future::Future, ops::Range, sync::Arc, time::Duration};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum SortOrder {
@@ -67,9 +64,7 @@ pub async fn init_logging() {
         .with_thread_names(true)
         .with_current_span(false);
 
-    let subscriber = tracing_subscriber::registry()
-        .with(filter)
-        .with(layer);
+    let subscriber = tracing_subscriber::registry().with(filter).with(layer);
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
@@ -118,9 +113,9 @@ where
 pub fn spawn_health_server(
     port: u16,
     ready_check: impl Fn() -> std::pin::Pin<Box<dyn Future<Output = bool> + Send>>
-        + Send
-        + Sync
-        + 'static,
+    + Send
+    + Sync
+    + 'static,
 ) {
     use axum::{Router, extract::State, http::StatusCode, routing::get};
 
@@ -161,10 +156,7 @@ pub fn spawn_health_server(
     });
 }
 
-
-pub async fn init_s3_object_store(settings: Arc<Settings>) -> Arc<dyn ObjectStore> {
-    let storage_config = &settings.object_storage;
-
+pub async fn init_s3_object_store(storage_config: &settings::ObjectStorage) -> Arc<dyn ObjectStore> {
     let mut builder = AmazonS3Builder::from_env();
 
     if let Some(region) = &storage_config.region {

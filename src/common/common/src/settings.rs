@@ -1,42 +1,9 @@
-use config::{Config, ConfigError, File};
+pub use config::ConfigError;
+use config::{Config, File};
 use glob::glob;
 use natord::compare as natord_compare;
 use serde::Deserialize;
 use std::fmt;
-
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-pub enum ValidationScript {
-    Global(String),
-    ProductSpecific { product: String, script: String },
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct ApiServer {
-    pub port: u16,
-    pub public_key: Option<String>,
-    pub private_key: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct Minidumps {
-    pub mandatory_annotations: Option<Vec<String>>,
-    pub validation_scripts: Option<Vec<ValidationScript>>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct IngestionServer {
-    pub port: u16,
-    pub public_key: Option<String>,
-    pub private_key: Option<String>,
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct WebServer {
-    pub port: u16,
-    pub public_key: Option<String>,
-    pub private_key: Option<String>,
-}
 
 #[derive(Debug, Deserialize, Default)]
 pub struct Valkey {
@@ -44,18 +11,7 @@ pub struct Valkey {
 }
 
 #[derive(Debug, Deserialize, Default)]
-#[serde(default)]
-pub struct ProcessorServer {
-    pub skip_patterns: Option<Vec<String>>,
-    pub end_patterns: Option<Vec<String>>,
-    pub delimiter: Option<String>,
-    pub maximum_frame_count: Option<usize>,
-}
-
-#[derive(Debug, Deserialize, Default)]
 pub struct Auth {
-    pub id: String,
-    pub origin: String,
     pub name: String,
     pub jwk: Jwk,
     pub oidc: Option<Oidc>,
@@ -167,123 +123,29 @@ impl fmt::Debug for ObjectStorage {
     }
 }
 
-#[derive(Deserialize, Default)]
-pub struct PocketIdSettings {
-    pub api_url: String,
-    pub api_key: String,
-    /// Public-facing base URL of the Pocket ID server (what the user's browser reaches).
-    /// If omitted, falls back to api_url — only works when the API is publicly reachable.
-    pub public_url: Option<String>,
-    /// Path prefix on the Pocket ID server for the one-time passkey setup page.
-    /// The token is appended with a `/` separator: `{public_url}{setup_path}/{token}`.
-    /// Defaults to "/lc/" (Pocket ID v2+).
-    pub setup_path: Option<String>,
-    /// URL to redirect the user to after they complete passkey setup on Pocket ID.
-    /// Passed as `?redirect=<url>` on the setup page URL.
-    /// Defaults to `{oidc.launch_url}/auth/login/start` so the user is walked straight
-    /// into the Guardrail OIDC login flow after registration.
-    /// Set to an empty string to disable the redirect parameter entirely.
-    pub post_setup_redirect: Option<String>,
-}
+pub fn load_settings<T: serde::de::DeserializeOwned + Default>(
+    config_dir: &str,
+) -> Result<T, ConfigError> {
+    let pattern = format!("{config_dir}/*.yaml");
+    let mut files: Vec<_> = glob(&pattern)
+        .expect("Failed to read config files")
+        .filter_map(|entry| entry.ok())
+        .collect();
 
-impl fmt::Debug for PocketIdSettings {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PocketIdSettings")
-            .field("api_url", &self.api_url)
-            .field("api_key", &"[REDACTED]")
-            .field("public_url", &self.public_url)
-            .field("setup_path", &self.setup_path)
-            .finish()
-    }
-}
+    files.sort_by(|a, b| {
+        natord_compare(
+            a.file_name().and_then(|n| n.to_str()).unwrap_or(""),
+            b.file_name().and_then(|n| n.to_str()).unwrap_or(""),
+        )
+    });
 
-#[derive(Debug, Deserialize, Default)]
-pub struct ProvisionerSettings {
-    pub pocket_id: Option<PocketIdSettings>,
-}
+    let builder = Config::builder()
+        .add_source(files.into_iter().map(File::from).collect::<Vec<_>>())
+        .add_source(
+            config::Environment::with_prefix("GUARDRAIL")
+                .separator("_")
+                .ignore_empty(true),
+        );
 
-#[derive(Deserialize, Default)]
-#[serde(default)]
-pub struct ResendSettings {
-    /// Resend API key (`re_...`). Env var: `GUARDRAIL_EMAIL_RESEND_KEY`.
-    pub key: String,
-}
-
-impl fmt::Debug for ResendSettings {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ResendSettings")
-            .field("key", &if self.key.is_empty() { "[not set]" } else { "[REDACTED]" })
-            .finish()
-    }
-}
-
-#[derive(Deserialize, Default)]
-#[serde(default)]
-pub struct EmailSettings {
-    /// Sender address, e.g. `"Guardrail <noreply@example.com>"`.
-    /// When empty, email sending is disabled. Env var: `GUARDRAIL_EMAIL_FROM`.
-    pub from: String,
-    /// Resend provider settings. When absent, emails are logged instead of sent.
-    pub resend: Option<ResendSettings>,
-}
-
-impl fmt::Debug for EmailSettings {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("EmailSettings")
-            .field("from", &self.from)
-            .field("resend", &self.resend)
-            .finish()
-    }
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct Settings {
-    pub api_server: ApiServer,
-    pub ingestion_server: IngestionServer,
-    pub web_server: WebServer,
-    pub valkey: Valkey,
-    pub processor: ProcessorServer,
-    pub database: Database,
-    pub object_storage: ObjectStorage,
-    pub auth: Auth,
-    pub minidumps: Minidumps,
-    #[serde(default)]
-    pub provisioner: ProvisionerSettings,
-    #[serde(default)]
-    pub email: EmailSettings,
-    #[serde(skip)]
-    pub config_dir: String,
-}
-
-impl Settings {
-    pub fn new() -> Result<Self, ConfigError> {
-        Self::with_config_dir("config")
-    }
-
-    pub fn with_config_dir(config_dir: &str) -> Result<Self, ConfigError> {
-        let pattern = format!("{config_dir}/*.yaml");
-        let mut files: Vec<_> = glob(&pattern)
-            .expect("Failed to read config files")
-            .filter_map(|entry| entry.ok())
-            .collect();
-
-        files.sort_by(|a, b| {
-            natord_compare(
-                a.file_name().and_then(|n| n.to_str()).unwrap_or(""),
-                b.file_name().and_then(|n| n.to_str()).unwrap_or(""),
-            )
-        });
-
-        let builder = Config::builder()
-            .add_source(files.into_iter().map(File::from).collect::<Vec<_>>())
-            .add_source(
-                config::Environment::with_prefix("GUARDRAIL")
-                    .separator("_")
-                    .ignore_empty(true),
-            );
-
-        let mut settings: Self = builder.build()?.try_deserialize()?;
-        settings.config_dir = config_dir.to_string();
-        Ok(settings)
-    }
+    builder.build()?.try_deserialize()
 }

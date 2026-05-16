@@ -20,7 +20,7 @@ use tracing::info;
 
 use common::jobs::queue;
 use common::retry_startup;
-use common::settings::Settings;
+use crate::settings::Settings;
 use repos::Repo;
 
 use crate::routes;
@@ -88,7 +88,7 @@ impl GuardrailApiApp {
         })
         .await;
 
-        let store = common::init_s3_object_store(settings.clone()).await;
+        let store = common::init_s3_object_store(&settings.object_storage).await;
 
         let repo = Repo::new(db);
 
@@ -278,7 +278,7 @@ mod tests {
         db.use_ns("test").use_db("test").await.unwrap();
         AppState {
             repo: Repo::new(db),
-            settings: Arc::new(common::settings::Settings::default()),
+            settings: Arc::new(crate::settings::Settings::default()),
             storage: Arc::new(InMemory::new()),
             worker: Arc::new(TestWorker::new()),
         }
@@ -286,7 +286,7 @@ mod tests {
 
     #[test]
     fn tls_configured_requires_both_non_empty_keys() {
-        let mut settings = common::settings::Settings::default();
+        let mut settings = crate::settings::Settings::default();
         settings.api_server.public_key = None;
         settings.api_server.private_key = None;
         assert!(!GuardrailApiApp::tls_configured(&settings));

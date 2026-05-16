@@ -6,4 +6,5 @@ pub mod jobs;
 pub mod maintenance;
 pub mod product_listener;
 pub mod product_sync;
+pub mod settings;
 pub mod state;

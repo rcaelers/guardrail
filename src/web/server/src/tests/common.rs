@@ -13,7 +13,6 @@ use tower_sessions::cookie::SameSite;
 use tower_sessions::{Expiry, MemoryStore, Session, SessionManagerLayer};
 
 use object_store::memory::InMemory;
-use testware::create_settings;
 use testware::setup::TestSetup;
 pub(super) use testware::{
     create_test_attachment, create_test_product, create_test_token, create_test_user,
@@ -159,12 +158,12 @@ impl crate::provisioner::IdentityProvisioner for FailingMockProvisioner {
 impl TestApp {
     async fn with_options(
         provisioner: Option<Arc<dyn crate::provisioner::IdentityProvisioner>>,
-        mutate_settings: impl FnOnce(&mut common::settings::Settings),
+        mutate_settings: impl FnOnce(&mut crate::settings::Settings),
     ) -> Self {
         TestSetup::init();
         let db = TestSetup::create_db().await;
         // Match the ns/db in JWTs to the in-memory test DB (ns=test, db=test).
-        let mut settings = create_settings();
+        let mut settings = crate::settings::Settings::test_default();
         settings.database.namespace = "test".to_string();
         settings.database.database = "test".to_string();
         mutate_settings(&mut settings);

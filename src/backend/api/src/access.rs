@@ -7,11 +7,9 @@
 //
 // No session support — backend/api is machine-to-machine only.
 
+use crate::settings::Settings;
 use axum::http::{HeaderMap, header};
-use common::{
-    settings::Settings,
-    token::{decode_api_token, verify_api_secret},
-};
+use common::token::{decode_api_token, verify_api_secret};
 use data::api_token::ApiToken;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use repos::api_token::ApiTokenRepo;
@@ -208,8 +206,7 @@ mod tests {
     use jsonwebtoken::{EncodingKey, Header, encode};
 
     fn settings() -> Settings {
-        let mut settings = testware::create_settings();
-        settings.auth.id = "issuer".to_string();
+        let mut settings = crate::settings::Settings::test_default();
         settings.database.namespace = "testns".to_string();
         settings.database.database = "testdb".to_string();
         settings
@@ -221,7 +218,7 @@ mod tests {
             user_id: Some("users:alice".to_string()),
             is_admin,
             sub: "alice".to_string(),
-            iss: settings.auth.id.clone(),
+            iss: "guardrail".to_string(),
             aud: "guardrail".to_string(),
             exp: (Utc::now() + Duration::minutes(10)).timestamp(),
             iat: Utc::now().timestamp(),

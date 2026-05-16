@@ -3,7 +3,8 @@ use std::sync::Arc;
 use tracing::info;
 
 use api::app::GuardrailApiApp;
-use common::{init_logging, settings::Settings};
+use api::settings::Settings;
+use common::init_logging;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -16,7 +17,7 @@ struct CliArgs {
 async fn main() {
     let args = CliArgs::parse();
     let settings =
-        Arc::new(Settings::with_config_dir(&args.config_dir).expect("Failed to load settings"));
+        Arc::new(Settings::load(&args.config_dir).expect("Failed to load settings"));
 
     init_logging().await;
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();

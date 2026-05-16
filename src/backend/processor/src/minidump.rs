@@ -359,7 +359,7 @@ mod tests {
 
     #[tokio::test]
     async fn new_uses_processor_settings() {
-        let mut settings = common::settings::Settings::default();
+        let mut settings = crate::settings::Settings::default();
         settings.processor.delimiter = Some(" -> ".to_string());
         settings.processor.maximum_frame_count = Some(1);
         let state =

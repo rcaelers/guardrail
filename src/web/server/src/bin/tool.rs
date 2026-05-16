@@ -1,18 +1,21 @@
 use chrono::{DateTime, Utc};
 use clap::{Args, Parser, Subcommand};
-use common::{QueryParams, settings::Settings, token::generate_api_token};
+use common::{QueryParams, token::generate_api_token};
+use data::user::NewUser;
 use data::{
     api_token::{ApiToken, ENTITLEMENT_INVITATION_CREATE, NewApiToken},
     invitation::{Invitation, InvitationGrant, NewInvitation},
     product::{NewProduct, Product},
 };
 use email::{Email, EmailSender, LogEmailSender, ResendEmailSender};
-use data::user::NewUser;
-use repos::{api_token::ApiTokenRepo, invitation::InvitationRepo, product::ProductRepo, user::UserRepo};
+use repos::{
+    api_token::ApiTokenRepo, invitation::InvitationRepo, product::ProductRepo, user::UserRepo,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
 use surrealdb::{Surreal, engine::any::Any, opt::auth::Root};
+use web::settings::Settings;
 
 type AnyErr = Box<dyn std::error::Error + Send + Sync>;
 
@@ -58,7 +61,12 @@ struct PocketIdClient {
 }
 
 impl PocketIdClient {
-    fn new(api_url: &str, public_url: &str, setup_path: &str, api_key: &str) -> Result<Self, AnyErr> {
+    fn new(
+        api_url: &str,
+        public_url: &str,
+        setup_path: &str,
+        api_key: &str,
+    ) -> Result<Self, AnyErr> {
         Ok(Self {
             api_url: api_url.parse()?,
             public_url: public_url.parse()?,
@@ -134,7 +142,9 @@ impl PocketIdClient {
             return Err(format!("one-time-access-token failed: {status}: {text}").into());
         }
         #[derive(Deserialize)]
-        struct TokenResponse { token: String }
+        struct TokenResponse {
+            token: String,
+        }
         let data: TokenResponse = response.json().await?;
         Ok(data.token)
     }
@@ -343,7 +353,7 @@ async fn main() {
 
 async fn run() -> Result<(), AnyErr> {
     let cli = Cli::parse();
-    let settings = Settings::with_config_dir(&cli.config_dir)?;
+    let settings = Settings::load(&cli.config_dir)?;
     let db = connect_db(&settings).await?;
 
     match &cli.command {
@@ -416,7 +426,7 @@ async fn run_invite(
 
             let invite_url = format!(
                 "{}/invite/{}",
-                settings.auth.origin.trim_end_matches('/'),
+                settings.base_url.trim_end_matches('/'),
                 invitation.code
             );
 
@@ -465,7 +475,13 @@ async fn run_invite(
 }
 
 fn build_email_sender(settings: &Settings) -> Arc<dyn EmailSender> {
-    if let Some(key) = settings.email.resend.as_ref().map(|r| r.key.as_str()).filter(|k| !k.is_empty()) {
+    if let Some(key) = settings
+        .email
+        .resend
+        .as_ref()
+        .map(|r| r.key.as_str())
+        .filter(|k| !k.is_empty())
+    {
         Arc::new(ResendEmailSender::new(key.to_string()))
     } else {
         Arc::new(LogEmailSender)
@@ -581,7 +597,12 @@ async fn create_token(
     })
 }
 
-async fn run_user(cli: &Cli, settings: &Settings, db: &Surreal<Any>, command: &UserCommand) -> Result<(), AnyErr> {
+async fn run_user(
+    cli: &Cli,
+    settings: &Settings,
+    db: &Surreal<Any>,
+    command: &UserCommand,
+) -> Result<(), AnyErr> {
     let pocket_id = settings
         .provisioner
         .pocket_id
@@ -591,11 +612,9 @@ async fn run_user(cli: &Cli, settings: &Settings, db: &Surreal<Any>, command: &U
         .public_url
         .as_deref()
         .unwrap_or(&pocket_id.api_url);
-    let setup_path = pocket_id
-        .setup_path
-        .as_deref()
-        .unwrap_or("/lc/");
-    let client = PocketIdClient::new(&pocket_id.api_url, public_url, setup_path, &pocket_id.api_key)?;
+    let setup_path = pocket_id.setup_path.as_deref().unwrap_or("/lc/");
+    let client =
+        PocketIdClient::new(&pocket_id.api_url, public_url, setup_path, &pocket_id.api_key)?;
 
     match &command.command {
         UserSubcommand::List => {
@@ -642,12 +661,13 @@ async fn run_user(cli: &Cli, settings: &Settings, db: &Surreal<Any>, command: &U
                 .ok_or_else(|| format!("user not found: {}", args.identifier))?;
 
             let email = pocket_user.email.as_deref();
-            let existing = UserRepo::get_by_name(db, &pocket_user.username)
-                .await?
-                .or(match email {
-                    Some(e) => UserRepo::get_by_email(db, e).await?,
-                    None => None,
-                });
+            let existing =
+                UserRepo::get_by_name(db, &pocket_user.username)
+                    .await?
+                    .or(match email {
+                        Some(e) => UserRepo::get_by_email(db, e).await?,
+                        None => None,
+                    });
 
             if let Some(local) = existing {
                 print_sync(cli, "already-exists", &local.id, &pocket_user.username)?;

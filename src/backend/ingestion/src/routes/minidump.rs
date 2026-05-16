@@ -363,10 +363,10 @@ impl MinidumpApi {
 
         for validation_script in validation_scripts {
             match validation_script {
-                common::settings::ValidationScript::Global(script_file) => {
+                crate::settings::ValidationScript::Global(script_file) => {
                     Self::run_global_validation_script(crash_info, state, script_file)?;
                 }
-                common::settings::ValidationScript::ProductSpecific { product, script } => {
+                crate::settings::ValidationScript::ProductSpecific { product, script } => {
                     Self::run_product_specific_validation_script(
                         crash_info, state, product, script,
                     )?;
@@ -801,7 +801,7 @@ mod tests {
         }
     }
 
-    fn state_with_settings(settings: common::settings::Settings) -> AppState {
+    fn state_with_settings(settings: crate::settings::Settings) -> AppState {
         let product = ProductInfo {
             id: "product-1".to_string(),
             name: "TestProduct".to_string(),
@@ -1000,7 +1000,7 @@ mod tests {
                 validation_success()
             "#,
         );
-        let mut settings = testware::create_settings();
+        let mut settings = crate::settings::Settings::test_default();
         settings.config_dir = config_dir.clone();
         let state = state_with_settings(settings);
         let mut info = crash_info();
@@ -1048,7 +1048,7 @@ mod tests {
     #[test]
     fn run_validation_scripts_handles_none_and_script_errors() {
         let mut info = crash_info();
-        let mut settings = testware::create_settings();
+        let mut settings = crate::settings::Settings::test_default();
         settings.minidumps.validation_scripts = None;
         let state = state_with_settings(settings);
         MinidumpApi::run_validation_scripts(&mut info, &state).unwrap();
@@ -1060,10 +1060,10 @@ mod tests {
                 validation_success()
             "#,
         );
-        let mut settings = testware::create_settings();
+        let mut settings = crate::settings::Settings::test_default();
         settings.config_dir = config_dir;
         settings.minidumps.validation_scripts =
-            Some(vec![common::settings::ValidationScript::ProductSpecific {
+            Some(vec![crate::settings::ValidationScript::ProductSpecific {
                 product: "^TestProduct$".to_string(),
                 script: script_file,
             }]);
@@ -1071,10 +1071,10 @@ mod tests {
         MinidumpApi::run_validation_scripts(&mut info, &state).unwrap();
         assert_eq!(info.annotations["product_specific"].value, "yes");
 
-        let mut settings = testware::create_settings();
+        let mut settings = crate::settings::Settings::test_default();
         settings.config_dir = std::env::temp_dir().to_string_lossy().to_string();
         settings.minidumps.validation_scripts =
-            Some(vec![common::settings::ValidationScript::Global(
+            Some(vec![crate::settings::ValidationScript::Global(
                 "missing-file.rhai".to_string(),
             )]);
         let state = state_with_settings(settings);
@@ -1124,7 +1124,7 @@ mod tests {
     async fn process_crash_reports_worker_failures() {
         let worker = Arc::new(TestWorker::new());
         worker.failure();
-        let mut settings = testware::create_settings();
+        let mut settings = crate::settings::Settings::test_default();
         settings.minidumps.mandatory_annotations = None;
         settings.minidumps.validation_scripts = None;
         let token = "worker_failure_test_token_000001";

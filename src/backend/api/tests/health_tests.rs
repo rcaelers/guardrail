@@ -18,10 +18,18 @@ use tower_http::trace::TraceLayer;
 use api::state::AppState;
 use api::{routes::routes, worker::TestWorker};
 use repos::Repo;
-use testware::create_settings;
+
+fn test_settings() -> api::settings::Settings {
+    let mut s = api::settings::Settings::default();
+    s.auth.name = "TestApp".to_string();
+    s.auth.jwk.public_key = testware::setup::TEST_PUBLIC_KEY.to_string();
+    s.auth.jwk.private_key = testware::setup::TEST_PRIVATE_KEY.to_string();
+    s.config_dir = testware::workspace_config_dir();
+    s
+}
 
 async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> Router {
-    let settings = create_settings();
+    let settings = test_settings();
     let repo = Repo::new(db.clone());
     let store = Arc::new(object_store::memory::InMemory::new());
     let worker = Arc::new(TestWorker::new());

@@ -137,7 +137,7 @@ async fn create_invitation(
     .map_err(AppError::internal)?;
 
     if let (Some(to), Some(sender)) = (body.to.as_deref(), state.email_sender.as_deref()) {
-        let origin = state.settings.auth.origin.trim_end_matches('/');
+        let origin = state.settings.base_url.trim_end_matches('/');
         let invite_url = format!("{origin}/invite/{}", invitation.code);
 
         let (product_subject, product_html, product_text) = if invitation.grants.len() == 1 {
@@ -146,10 +146,12 @@ async fn create_invitation(
             (None, None, None)
         };
 
-        let subject_template = product_subject.unwrap_or_else(|| DEFAULT_INVITE_SUBJECT.to_string());
+        let subject_template =
+            product_subject.unwrap_or_else(|| DEFAULT_INVITE_SUBJECT.to_string());
         let html_template = product_html.unwrap_or_else(|| DEFAULT_INVITE_HTML.to_string());
         let text_template = product_text.unwrap_or_else(|| DEFAULT_INVITE_TEXT.to_string());
-        let subject = render_invite_template(&subject_template, &state.settings.auth.name, &invite_url);
+        let subject =
+            render_invite_template(&subject_template, &state.settings.auth.name, &invite_url);
         let html = render_invite_template(&html_template, &state.settings.auth.name, &invite_url);
         let text = render_invite_template(&text_template, &state.settings.auth.name, &invite_url);
         let email = Email {
@@ -510,10 +512,16 @@ async fn product_email_templates(
     db: &surrealdb::Surreal<surrealdb::engine::any::Any>,
     product_id: &str,
 ) -> (Option<String>, Option<String>, Option<String>) {
-    let Ok(Some(settings)) = repos::product_settings::ProductSettingsRepo::get(db, product_id).await else {
+    let Ok(Some(settings)) =
+        repos::product_settings::ProductSettingsRepo::get(db, product_id).await
+    else {
         return (None, None, None);
     };
-    (settings.email.invite_subject, settings.email.invite_html_template, settings.email.invite_text_template)
+    (
+        settings.email.invite_subject,
+        settings.email.invite_html_template,
+        settings.email.invite_text_template,
+    )
 }
 
 /// Validates that a product-scoped token is not used to create grants

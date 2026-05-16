@@ -3,8 +3,8 @@ use object_store::ObjectStore;
 use std::sync::Arc;
 
 use crate::product_cache::ProductCache;
+use crate::settings::Settings;
 use crate::worker::Worker;
-use common::settings::Settings;
 
 #[derive(FromRef, Debug, Clone)]
 pub struct AppState {

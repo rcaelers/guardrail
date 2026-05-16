@@ -1,7 +1,7 @@
 use object_store::ObjectStore;
 use std::sync::Arc;
 
-use common::settings::Settings;
+use crate::settings::Settings;
 
 #[derive(Debug, Clone)]
 pub struct AppState {

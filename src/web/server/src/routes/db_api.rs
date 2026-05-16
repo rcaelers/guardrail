@@ -18,7 +18,7 @@ use axum::{
     routing::{delete, get, patch, post},
 };
 use chrono::Utc;
-use object_store::{ObjectStore, ObjectStoreExt, path::Path as ObjectPath};
+use object_store::{ObjectStoreExt, path::Path as ObjectPath};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use surrealdb::Surreal;
@@ -43,7 +43,10 @@ pub fn router() -> Router<AppState> {
         .route("/crashes/by-crash/{crash_id}", get(get_crash))
         .route("/products", get(list_products).post(create_product))
         .route("/products/{id}", get(get_product).post(update_product).delete(delete_product))
-        .route("/products/{id}/email-settings", get(get_product_email_settings).post(update_product_email_settings))
+        .route(
+            "/products/{id}/email-settings",
+            get(get_product_email_settings).post(update_product_email_settings),
+        )
         .route("/products/{id}/product-token", post(update_product_token))
         .route("/products/{pid}/api-tokens", get(list_api_tokens).post(create_api_token))
         .route("/products/{pid}/api-tokens/{id}", delete(delete_api_token))
@@ -115,7 +118,8 @@ impl AppState {
             .unwrap_or(false);
         let user_id = row.get("uid").and_then(|v| v.as_str()).map(String::from);
 
-        let jwt = match crate::jwt::make_jwt(username, user_id.as_deref(), is_admin, &self.settings) {
+        let jwt = match crate::jwt::make_jwt(username, user_id.as_deref(), is_admin, &self.settings)
+        {
             Ok(jwt) => jwt,
             Err(_) => {
                 tracing::error!("JWT generation failed for user {uid}, falling back to anon");
@@ -132,7 +136,9 @@ impl AppState {
                 Ok(handle)
             }
             Err(e) => {
-                tracing::error!("DB authentication failed for user {uid}: {e}, falling back to anon");
+                tracing::error!(
+                    "DB authentication failed for user {uid}: {e}, falling back to anon"
+                );
                 self.anon_db().await
             }
         }
@@ -160,7 +166,10 @@ impl AppState {
             }
             Err(e) => {
                 tracing::error!("Anonymous JWT authentication failed: {e}");
-                Err((StatusCode::SERVICE_UNAVAILABLE, "database authentication unavailable".to_string()))
+                Err((
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    "database authentication unavailable".to_string(),
+                ))
             }
         }
     }
@@ -276,7 +285,8 @@ async fn run_value(
 
 const USER_PROJ: &str =
     "meta::id(id) AS id, email, name, avatar, is_admin AS isAdmin, created_at AS joinedAt";
-const PRODUCT_PROJ: &str = "meta::id(id) AS id, name, slug, description, color, public, product_token AS productToken";
+const PRODUCT_PROJ: &str =
+    "meta::id(id) AS id, name, slug, description, color, public, product_token AS productToken";
 const SYMBOL_PROJ: &str = "meta::id(id) AS id, meta::id(product_id) AS productId, \
     module_id AS name, version, arch, 'Breakpad' AS format, '' AS size, \
     build_id AS debugId, '' AS codeId, channel, commit, build_tag AS buildTag, \
@@ -2242,7 +2252,6 @@ async fn delete_admin_api_token(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use object_store::memory::InMemory;
 
     #[test]
     fn local_error_helpers_return_expected_statuses() {

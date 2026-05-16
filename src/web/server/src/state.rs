@@ -6,7 +6,7 @@ use repos::Repo;
 
 use crate::auth_cache::AuthCache;
 use crate::provisioner::IdentityProvisioner;
-use common::settings::Settings;
+use crate::settings::Settings;
 
 #[derive(Clone)]
 pub struct AppState {

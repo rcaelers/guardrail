@@ -2,7 +2,7 @@ use chrono::{Duration, Utc};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 
-use common::settings::Settings;
+use crate::settings::Settings;
 
 pub const SURREAL_ACCESS_METHOD: &str = "guardrail_api";
 
@@ -46,7 +46,7 @@ pub fn make_jwt(
         user_id: user_id.map(String::from),
         is_admin,
         sub: username.to_string(),
-        iss: settings.auth.id.clone(),
+        iss: "guardrail".to_string(),
         aud: "guardrail".to_string(),
         exp: (now + Duration::minutes(validity)).timestamp(),
         iat: now.timestamp(),
@@ -66,7 +66,6 @@ pub fn make_anon_jwt(settings: &Settings) -> Result<String, jsonwebtoken::errors
 #[cfg(test)]
 mod tests {
     use super::*;
-    use testware::create_settings;
 
     #[test]
     fn user_record_id_preserves_full_record_ids() {
@@ -77,7 +76,7 @@ mod tests {
 
     #[test]
     fn jwt_uses_default_validity_when_config_is_zero() {
-        let mut settings = create_settings();
+        let mut settings = crate::settings::Settings::test_default();
         settings.auth.jwk.token_validity_in_minutes = 0;
 
         let token = make_anon_jwt(&settings).expect("jwt should be created");

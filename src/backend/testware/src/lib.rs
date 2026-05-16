@@ -10,7 +10,6 @@ pub mod mockall_object_store;
 pub mod setup;
 
 // Data models
-use common::settings::Settings;
 use common::token::generate_api_token;
 use data::api_token::NewApiToken;
 use data::attachment::NewAttachment;
@@ -267,6 +266,19 @@ pub fn init_logging() {
         .init();
 }
 
+/// Returns the workspace root config directory path, suitable for use in test settings.
+pub fn workspace_config_dir() -> String {
+    std::env::var("CARGO_MANIFEST_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| std::env::current_dir().expect("Failed to get current directory"))
+        .ancestors()
+        .nth(3)
+        .expect("Failed to find workspace root")
+        .join("config")
+        .to_string_lossy()
+        .to_string()
+}
+
 pub async fn create_test_token(
     db: &Surreal<Any>,
     description: &str,
@@ -298,73 +310,4 @@ pub async fn create_test_token(
         .expect("Created API token not found");
 
     (token, api_token)
-}
-
-pub fn create_settings() -> Settings {
-    tracing::info!("Logging initialized");
-
-    let workspace_dir = std::env::var("CARGO_MANIFEST_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| std::env::current_dir().expect("Failed to get current directory"))
-        .ancestors()
-        .nth(3)
-        .expect("Failed to find workspace root")
-        .to_string_lossy()
-        .to_string();
-
-    let mut settings = Settings {
-        config_dir: format!("{workspace_dir}/config"),
-        ..Settings::default()
-    };
-
-    settings.auth.id = "localhost".to_string();
-    settings.auth.origin = "http://localhost:3000".to_string();
-    settings.auth.name = "TestApp".to_string();
-
-    settings.auth.jwk.public_key = "-----BEGIN PUBLIC KEY-----\
-                                    MCowBQYDK2VwAyEAJuN0TiFkCg0HnTjpisG1gfVY7XjKsFGuRm1JVmqkt74=\
-                                    -----END PUBLIC KEY-----"
-        .to_string();
-    settings.auth.jwk.private_key = "-----BEGIN PRIVATE KEY-----\
-                                    MC4CAQAwBQYDK2VwBCIEILRksnzl63UUib+nmLsATtXc/EjOHMaMgJu+nbpiX068\
-                                    -----END PRIVATE KEY-----"
-        .to_string();
-
-    settings.minidumps.mandatory_annotations =
-        Some(vec!["product".to_string(), "version".to_string()]);
-    settings.minidumps.validation_scripts = Some(vec![
-        common::settings::ValidationScript::Global("scripts/product_validation.rhai".to_string()),
-        common::settings::ValidationScript::Global("scripts/build_age_validation.rhai".to_string()),
-    ]);
-    settings
-}
-
-/// Create settings that point to real Docker infrastructure (SurrealDB, Valkey, MinIO).
-/// Uses a unique SurrealDB database per call for test isolation.
-pub fn create_e2e_settings() -> Settings {
-    let mut settings = create_settings();
-
-    // Use a unique database name per test for isolation
-    let db_name = format!("e2e_{}", Uuid::new_v4().to_string().replace('-', ""));
-
-    settings.database.endpoint =
-        std::env::var("SURREALDB_ENDPOINT").unwrap_or_else(|_| "ws://localhost:8000".to_string());
-    settings.database.namespace = "guardrail".to_string();
-    settings.database.database = db_name;
-    settings.database.username = "root".to_string();
-    settings.database.password = "root".to_string();
-
-    settings.valkey.uri =
-        std::env::var("VALKEY_URI").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
-
-    settings.object_storage.endpoint = Some(
-        std::env::var("MINIO_ENDPOINT").unwrap_or_else(|_| "http://localhost:9000".to_string()),
-    );
-    settings.object_storage.bucket = "guardrail".to_string();
-    settings.object_storage.region = Some("us-east-1".to_string());
-    settings.object_storage.access_key_id = Some("admin".to_string());
-    settings.object_storage.secret_access_key = Some("minioadmin".to_string());
-    settings.object_storage.allow_http = Some(true);
-
-    settings
 }

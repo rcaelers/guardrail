@@ -492,7 +492,7 @@ mod tests {
     async fn state_with_oidc(oidc: Option<Oidc>) -> AppState {
         testware::setup::TestSetup::init();
         let db = testware::setup::TestSetup::create_db().await;
-        let mut settings = testware::create_settings();
+        let mut settings = crate::settings::Settings::test_default();
         settings.auth.oidc = oidc;
         let storage: Arc<dyn object_store::ObjectStore> = Arc::new(InMemory::new());
         AppState {

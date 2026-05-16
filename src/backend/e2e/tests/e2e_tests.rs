@@ -16,9 +16,7 @@ use surrealdb::engine::any::Any;
 use tower::ServiceExt;
 
 use testware::setup::TestSetup;
-use testware::{
-    create_e2e_settings, create_test_product_with_details, create_test_token, create_test_user,
-};
+use testware::{create_test_product_with_details, create_test_token, create_test_user};
 
 use common::QueryParams;
 use repos::annotation::AnnotationsRepo;
@@ -62,25 +60,37 @@ impl TestHarness {
     async fn try_new() -> Option<Self> {
         TestSetup::init();
 
-        let mut settings = create_e2e_settings();
+        let config_dir = testware::workspace_config_dir();
+
+        let mut api_s: api::settings::Settings =
+            common::settings::load_settings(&config_dir).expect("failed to load api settings");
+        let mut ingestion_s: ingestion::settings::Settings =
+            common::settings::load_settings(&config_dir)
+                .expect("failed to load ingestion settings");
+        let mut processor_s: processor::settings::Settings =
+            common::settings::load_settings(&config_dir)
+                .expect("failed to load processor settings");
+        let mut curator_s: curator::settings::Settings =
+            common::settings::load_settings(&config_dir).expect("failed to load curator settings");
+
         let valkey_db = NEXT_VALKEY_DB.fetch_add(1, Ordering::Relaxed);
-        settings.valkey.uri =
-            format!("{}/{}", settings.valkey.uri.trim_end_matches('/'), valkey_db);
-        let settings = Arc::new(settings);
+        let valkey_base = curator_s.valkey.uri.trim_end_matches('/').to_string();
+        let new_valkey_uri = format!("{}/{}", valkey_base, valkey_db);
+        api_s.valkey.uri = new_valkey_uri.clone();
+        ingestion_s.valkey.uri = new_valkey_uri.clone();
+        processor_s.valkey.uri = new_valkey_uri.clone();
+        curator_s.valkey.uri = new_valkey_uri.clone();
 
         // Verify Docker services are reachable
-        if apalis_redis::connect(settings.valkey.uri.clone())
-            .await
-            .is_err()
-        {
+        if apalis_redis::connect(new_valkey_uri.clone()).await.is_err() {
             eprintln!("SKIP: Valkey not available");
             return None;
         }
 
-        Self::flush_valkey(&settings).await;
+        Self::flush_valkey(&new_valkey_uri).await;
 
         // ── 1. Init SurrealDB schema and test data ──────────────────────
-        let db = Self::init_db(&settings).await;
+        let db = Self::init_db(&curator_s, &api_s.auth.jwk.public_key).await;
 
         let product_name = format!("TestProduct_{}", uuid::Uuid::new_v4().simple());
         let product =
@@ -95,21 +105,26 @@ impl TestHarness {
         )
         .await;
 
+        let api_s = Arc::new(api_s);
+        let ingestion_s = Arc::new(ingestion_s);
+        let processor_s = Arc::new(processor_s);
+        let curator_s = Arc::new(curator_s);
+
         // ── 2. Start curator (syncs products → Valkey, runs import workers)
-        let (cur_shutdown, cur_handle) = Self::spawn_curator(settings.clone());
+        let (cur_shutdown, cur_handle) = Self::spawn_curator(curator_s.clone());
 
         // Give curator time to sync products to Valkey
         tokio::time::sleep(Duration::from_millis(500)).await;
 
         // ── 3. Start processor workers ──────────────────────────────────
-        let (proc_shutdown, proc_handle) = Self::spawn_processor(settings.clone());
+        let (proc_shutdown, proc_handle) = Self::spawn_processor(processor_s.clone());
 
         // ── 4. Build service routers from settings (black-box) ──────────
         let ingestion =
-            ingestion::app::GuardrailIngestionApp::from_settings(settings.clone()).await;
-        let api = api::app::GuardrailApiApp::from_settings(settings.clone()).await;
+            ingestion::app::GuardrailIngestionApp::from_settings(ingestion_s.clone()).await;
+        let api = api::app::GuardrailApiApp::from_settings(api_s.clone()).await;
 
-        let storage = common::init_s3_object_store(settings.clone()).await;
+        let storage = common::init_s3_object_store(&api_s.object_storage).await;
 
         Some(Self {
             db,
@@ -127,8 +142,8 @@ impl TestHarness {
         })
     }
 
-    async fn flush_valkey(settings: &common::settings::Settings) {
-        let client = redis::Client::open(settings.valkey.uri.as_str())
+    async fn flush_valkey(valkey_uri: &str) {
+        let client = redis::Client::open(valkey_uri)
             .expect("Failed to create Redis client for test isolation");
         let mut conn = client
             .get_multiplexed_async_connection()
@@ -141,7 +156,7 @@ impl TestHarness {
     }
 
     /// Connect to real SurrealDB, apply schema, define JWT access.
-    async fn init_db(settings: &common::settings::Settings) -> Surreal<Any> {
+    async fn init_db(settings: &curator::settings::Settings, public_key: &str) -> Surreal<Any> {
         use surrealdb::opt::auth::Root;
 
         let db = surrealdb::engine::any::connect(&settings.database.endpoint)
@@ -167,7 +182,6 @@ impl TestHarness {
             .expect("Failed to apply SurrealDB schema");
 
         // Define JWT access method
-        let public_key = &settings.auth.jwk.public_key;
         db.query(format!(
             r#"DEFINE ACCESS OVERWRITE guardrail_api ON DATABASE TYPE RECORD
                 WITH JWT ALGORITHM EDDSA KEY '{public_key}'
@@ -191,7 +205,7 @@ impl TestHarness {
     }
 
     fn spawn_processor(
-        settings: Arc<common::settings::Settings>,
+        settings: Arc<processor::settings::Settings>,
     ) -> (tokio::sync::oneshot::Sender<()>, tokio::task::JoinHandle<()>) {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(async move {
@@ -206,7 +220,7 @@ impl TestHarness {
     }
 
     fn spawn_curator(
-        settings: Arc<common::settings::Settings>,
+        settings: Arc<curator::settings::Settings>,
     ) -> (tokio::sync::oneshot::Sender<()>, tokio::task::JoinHandle<()>) {
         let (tx, rx) = tokio::sync::oneshot::channel();
         let handle = tokio::spawn(async move {

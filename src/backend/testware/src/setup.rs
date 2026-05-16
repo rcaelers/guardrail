@@ -3,10 +3,15 @@ use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
 use tracing_subscriber::EnvFilter;
 
-/// The Ed25519 public key used in tests (matches create_settings() in lib.rs).
-const TEST_PUBLIC_KEY: &str = "-----BEGIN PUBLIC KEY-----\
+/// The Ed25519 public key used in tests (matches TEST_PRIVATE_KEY below).
+pub const TEST_PUBLIC_KEY: &str = "-----BEGIN PUBLIC KEY-----\
                                MCowBQYDK2VwAyEAJuN0TiFkCg0HnTjpisG1gfVY7XjKsFGuRm1JVmqkt74=\
                                -----END PUBLIC KEY-----";
+
+/// The Ed25519 private key used in tests (matches TEST_PUBLIC_KEY above).
+pub const TEST_PRIVATE_KEY: &str = "-----BEGIN PRIVATE KEY-----\
+                                    MC4CAQAwBQYDK2VwBCIEILRksnzl63UUib+nmLsATtXc/EjOHMaMgJu+nbpiX068\
+                                    -----END PRIVATE KEY-----";
 
 pub struct TestSetup;
 

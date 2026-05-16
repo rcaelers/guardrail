@@ -19,7 +19,7 @@ use tracing::info;
 
 use common::jobs::queue;
 use common::retry_startup;
-use common::settings::Settings;
+use crate::settings::Settings;
 
 use crate::product_cache::ProductCache;
 use crate::routes;
@@ -45,7 +45,7 @@ impl GuardrailIngestionApp {
         })
         .await;
 
-        let store = common::init_s3_object_store(settings.clone()).await;
+        let store = common::init_s3_object_store(&settings.object_storage).await;
 
         let redis_client = redis::Client::open(settings.valkey.uri.as_str())
             .expect("Failed to create Redis client");
@@ -159,7 +159,7 @@ mod tests {
     fn state() -> AppState {
         AppState {
             product_cache: ProductCache::from_map(HashMap::new()),
-            settings: Arc::new(testware::create_settings()),
+            settings: Arc::new(crate::settings::Settings::test_default()),
             storage: Arc::new(InMemory::new()),
             worker: Arc::new(TestWorker::new()),
         }
@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn tls_configured_requires_both_non_empty_keys() {
-        let mut settings = testware::create_settings();
+        let mut settings = crate::settings::Settings::test_default();
         settings.ingestion_server.public_key = None;
         settings.ingestion_server.private_key = None;
         assert!(!GuardrailIngestionApp::tls_configured(&settings));

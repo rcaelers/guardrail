@@ -28,7 +28,7 @@ mod tests {
     fn state() -> AppState {
         AppState {
             product_cache: ProductCache::from_map(HashMap::new()),
-            settings: Arc::new(testware::create_settings()),
+            settings: Arc::new(crate::settings::Settings::test_default()),
             storage: Arc::new(InMemory::new()),
             worker: Arc::new(TestWorker::new()),
         }

@@ -20,7 +20,20 @@ use ingestion::routes::routes;
 use ingestion::state::AppState;
 use ingestion::worker::TestWorker;
 
-use testware::create_settings;
+fn test_settings() -> ingestion::settings::Settings {
+    let mut s = ingestion::settings::Settings::default();
+    s.minidumps.mandatory_annotations = Some(vec!["product".to_string(), "version".to_string()]);
+    s.minidumps.validation_scripts = Some(vec![
+        ingestion::settings::ValidationScript::Global(
+            "scripts/product_validation.rhai".to_string(),
+        ),
+        ingestion::settings::ValidationScript::Global(
+            "scripts/build_age_validation.rhai".to_string(),
+        ),
+    ]);
+    s.config_dir = testware::workspace_config_dir();
+    s
+}
 
 const TEST_TOKEN: &str = "test0000000000000000000000000001";
 
@@ -69,7 +82,7 @@ async fn setup_with_storage_and_cache(
     store: Arc<dyn ObjectStore>,
     product_cache: ProductCache,
 ) -> (Router, Arc<dyn ObjectStore>, String, Arc<TestWorker>, String) {
-    let settings = create_settings();
+    let settings = test_settings();
 
     let worker = Arc::new(TestWorker::new());
 
@@ -1017,13 +1030,13 @@ async fn test_minidump_upload_rejects_mismatched_product_annotation() {
 
 #[tokio::test]
 async fn test_minidump_upload_per_product_validation_script() {
-    let mut settings = create_settings();
+    let mut settings = test_settings();
     settings.minidumps.validation_scripts = Some(vec![
-        common::settings::ValidationScript::ProductSpecific {
+        ingestion::settings::ValidationScript::ProductSpecific {
             product: "^TestProduct$".to_string(),
             script: "scripts/test_product_specific.rhai".to_string(),
         },
-        common::settings::ValidationScript::ProductSpecific {
+        ingestion::settings::ValidationScript::ProductSpecific {
             product: "^OtherProduct$".to_string(),
             script: "scripts/other_product_specific.rhai".to_string(),
         },
@@ -1069,9 +1082,9 @@ async fn test_minidump_upload_per_product_validation_script() {
 
 #[tokio::test]
 async fn test_minidump_upload_per_product_validation_script_missing() {
-    let mut settings = create_settings();
+    let mut settings = test_settings();
     settings.minidumps.validation_scripts =
-        Some(vec![common::settings::ValidationScript::ProductSpecific {
+        Some(vec![ingestion::settings::ValidationScript::ProductSpecific {
             product: "^SomeOtherProduct$".to_string(),
             script: "scripts/other_product_specific.rhai".to_string(),
         }]);
@@ -1117,18 +1130,18 @@ async fn test_minidump_upload_per_product_validation_script_missing() {
 
 #[tokio::test]
 async fn test_minidump_upload_validation_script_regex_patterns() {
-    let mut settings = create_settings();
+    let mut settings = test_settings();
     settings.minidumps.validation_scripts = Some(vec![
-        common::settings::ValidationScript::Global("scripts/product_validation.rhai".to_string()),
-        common::settings::ValidationScript::ProductSpecific {
+        ingestion::settings::ValidationScript::Global("scripts/product_validation.rhai".to_string()),
+        ingestion::settings::ValidationScript::ProductSpecific {
             product: "^TestProduct$".to_string(),
             script: "scripts/test_product_specific.rhai".to_string(),
         },
-        common::settings::ValidationScript::ProductSpecific {
+        ingestion::settings::ValidationScript::ProductSpecific {
             product: "^Test.*".to_string(),
             script: "scripts/test_product_specific.rhai".to_string(),
         },
-        common::settings::ValidationScript::ProductSpecific {
+        ingestion::settings::ValidationScript::ProductSpecific {
             product: ".*workrave.*".to_string(),
             script: "scripts/workrave_validation.rhai".to_string(),
         },

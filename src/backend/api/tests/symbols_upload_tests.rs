@@ -23,12 +23,21 @@ use repos::api_token::ApiTokenRepo;
 use repos::product::ProductRepo;
 use repos::symbols::SymbolsRepo;
 
-use testware::{create_settings, create_test_product_with_details, create_test_token};
+use testware::{create_test_product_with_details, create_test_token};
+
+fn test_settings() -> api::settings::Settings {
+    let mut s = api::settings::Settings::default();
+    s.auth.name = "TestApp".to_string();
+    s.auth.jwk.public_key = testware::setup::TEST_PUBLIC_KEY.to_string();
+    s.auth.jwk.private_key = testware::setup::TEST_PRIVATE_KEY.to_string();
+    s.config_dir = testware::workspace_config_dir();
+    s
+}
 
 async fn setup(
     db: &surrealdb::Surreal<surrealdb::engine::any::Any>,
 ) -> (Router, Arc<dyn ObjectStore>, String, String, String, String, String) {
-    let settings = create_settings();
+    let settings = test_settings();
 
     let repo = Repo::new(db.clone());
     let store = Arc::new(object_store::memory::InMemory::new());
@@ -857,7 +866,6 @@ async fn test_symbol_upload_unknown_token() {
         .expect("failed to fetch symbol entry from database");
     assert_eq!(allsymbols.len(), 0);
 }
-
 
 #[tokio::test]
 async fn test_symbol_no_version() {

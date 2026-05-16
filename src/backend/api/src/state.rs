@@ -2,8 +2,8 @@ use axum::extract::FromRef;
 use object_store::ObjectStore;
 use std::sync::Arc;
 
+use crate::settings::Settings;
 use crate::worker::Worker;
-use common::settings::Settings;
 use repos::Repo;
 
 #[derive(FromRef, Debug, Clone)]

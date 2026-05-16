@@ -11,7 +11,7 @@ use tracing::{debug, error, info, warn};
 
 use common::jobs::queue;
 use common::retry_startup;
-use common::settings::Settings;
+use crate::settings::Settings;
 
 use crate::jobs::{ImportCrashJob, ImportSymbolJob, MinidumpJob, SymbolJob};
 use crate::minidump::MinidumpProcessor;
@@ -53,7 +53,7 @@ impl GuardrailProcessorApp {
         })
         .await;
 
-        let store = common::init_s3_object_store(settings.clone()).await;
+        let store = common::init_s3_object_store(&settings.object_storage).await;
         let state = AppState::new(settings, store);
 
         Self {

@@ -1,18 +1,16 @@
 {
   "folders": [
     {
-      "path": "../../workrave/guardrail"
+      "path": "../../workrave/guardrail",
     },
     {
-      "path": "../leptos-struct-table"
+      "path": "../workrave-infra",
     },
-    {
-      "path": "../workrave-infra"
-    }
   ],
   "settings": {
     "cSpell.words": ["guardrail"],
     "rust-analyzer.linkedProjects": ["./Cargo.toml"],
-    "rust-analyzer.showUnlinkedFileNotification": false
-  }
+    "rust-analyzer.showUnlinkedFileNotification": false,
+    "tailwindCSS.lint.suggestCanonicalClasses": false,
+  },
 }

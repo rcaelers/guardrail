@@ -7,7 +7,8 @@ use axum::{
     routing::get,
 };
 use axum_server::tls_rustls::RustlsConfig;
-use common::{init_s3_object_store, retry_startup, settings::Settings};
+use common::init_s3_object_store;
+use common::retry_startup;
 use repos::Repo;
 use tower_http::{
     services::ServeDir,
@@ -21,6 +22,7 @@ use crate::auth_cache::AuthCache;
 use crate::pocket_id;
 use crate::provisioner::IdentityProvisioner;
 use crate::routes::{auth, db_api, home, impersonation, invite};
+use crate::settings::Settings;
 use crate::state::AppState;
 use email::EmailSender;
 
@@ -123,7 +125,7 @@ impl GuardrailWebApp {
                 }) as Arc<dyn IdentityProvisioner>
             });
 
-        let storage = init_s3_object_store(settings.clone()).await;
+        let storage = init_s3_object_store(&settings.object_storage).await;
 
         let email_sender: Option<Arc<dyn EmailSender>> = if settings.email.from.is_empty() {
             None

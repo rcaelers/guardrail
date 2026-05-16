@@ -1,7 +1,7 @@
+use axum::Json;
 use axum::extract::multipart::Field;
 use axum::extract::{Multipart, Path as AxumPath, State};
 use axum::http::HeaderMap;
-use axum::Json;
 use object_store::ObjectStoreExt;
 use object_store::path::Path;
 use serde::Serialize;
@@ -54,8 +54,7 @@ pub struct SymbolsResponse {
 pub struct SymbolsApi;
 
 impl SymbolsApi {
-    const REQUIRED_FIELDS: &'static [&'static str] =
-        &["version", "channel", "commit", "build_id"];
+    const REQUIRED_FIELDS: &'static [&'static str] = &["version", "channel", "commit", "build_id"];
 
     fn validate_build_id(build_id: &str) -> Result<(), ApiError> {
         if build_id.is_empty() || build_id.len() > 64 {
@@ -370,7 +369,8 @@ impl SymbolsApi {
             .ok_or_else(|| ApiError::InvalidToken("invalid product token".into()))?;
 
         // Require a secret API token with symbol-upload entitlement in the Authorization header.
-        let api_token = crate::access::require_entitlement(&headers, None, db, "symbol-upload").await?;
+        let api_token =
+            crate::access::require_entitlement(&headers, None, db, "symbol-upload").await?;
         validate_api_token_for_product(&api_token, &product, &product.name)?;
 
         let mut symbols_info = SymbolsInfo {
@@ -435,7 +435,7 @@ mod tests {
         db.use_ns("test").use_db("test").await.unwrap();
         AppState {
             repo: Repo::new(db),
-            settings: Arc::new(common::settings::Settings::default()),
+            settings: Arc::new(crate::settings::Settings::default()),
             storage: Arc::new(InMemory::new()),
             worker: Arc::new(TestWorker::new()),
         }
