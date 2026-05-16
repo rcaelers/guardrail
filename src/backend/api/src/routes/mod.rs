@@ -1,6 +1,5 @@
 mod health;
 mod symbols;
-// mod token;
 
 use axum::{
     Router,
@@ -13,9 +12,6 @@ use symbols::SymbolsApi;
 pub async fn routes(_app_state: AppState) -> Router<AppState> {
     Router::new()
         .route("/symbols/{token}/upload", post(SymbolsApi::upload))
-        // TODO: check if still needed.
-        // .route("/auth/jwt", post(token::generate_jwt_token))
-        // .route("/auth/token", post(token::generate_token))
         .route("/live", get(health::live))
         .route("/ready", get(health::ready))
 }
