@@ -107,14 +107,11 @@ pub struct Settings {
     pub email: EmailSettings,
     #[serde(default)]
     pub processor: ProcessorDefaults,
-    #[serde(skip)]
-    pub config_dir: String,
 }
 
 impl Settings {
     pub fn load(config_dir: &str) -> Result<Self, ConfigError> {
-        let mut s: Self = common::settings::load_settings(config_dir)?;
-        s.config_dir = config_dir.to_string();
+        let s: Self = common::settings::load_settings(config_dir)?;
         Ok(s)
     }
 }
@@ -127,7 +124,6 @@ impl Settings {
         s.jwk.private_key = testware::setup::TEST_PRIVATE_KEY.to_string();
         s.database.namespace = "test".to_string();
         s.database.database = "test".to_string();
-        s.config_dir = testware::workspace_config_dir();
         s
     }
 }

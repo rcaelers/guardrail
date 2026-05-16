@@ -4,19 +4,6 @@ use std::fmt;
 
 use common::settings::{ObjectStorage, Valkey};
 
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-pub enum ValidationScript {
-    Global(String),
-    ProductSpecific { product: String, script: String },
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct Minidumps {
-    pub mandatory_annotations: Option<Vec<String>>,
-    pub validation_scripts: Option<Vec<ValidationScript>>,
-}
-
 #[derive(Deserialize, Default)]
 pub struct IngestionServer {
     pub port: u16,
@@ -37,17 +24,13 @@ impl fmt::Debug for IngestionServer {
 #[derive(Debug, Deserialize, Default)]
 pub struct Settings {
     pub ingestion_server: IngestionServer,
-    pub minidumps: Minidumps,
     pub valkey: Valkey,
     pub object_storage: ObjectStorage,
-    #[serde(skip)]
-    pub config_dir: String,
 }
 
 impl Settings {
     pub fn load(config_dir: &str) -> Result<Self, ConfigError> {
-        let mut s: Self = common::settings::load_settings(config_dir)?;
-        s.config_dir = config_dir.to_string();
+        let s: Self = common::settings::load_settings(config_dir)?;
         Ok(s)
     }
 }
@@ -55,8 +38,6 @@ impl Settings {
 #[cfg(test)]
 impl Settings {
     pub fn test_default() -> Self {
-        let mut s = Self::default();
-        s.config_dir = testware::workspace_config_dir();
-        s
+        Self::default()
     }
 }

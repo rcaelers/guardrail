@@ -28,14 +28,11 @@ pub struct Settings {
     pub database: Database,
     pub valkey: Valkey,
     pub object_storage: ObjectStorage,
-    #[serde(skip)]
-    pub config_dir: String,
 }
 
 impl Settings {
     pub fn load(config_dir: &str) -> Result<Self, ConfigError> {
-        let mut s: Self = common::settings::load_settings(config_dir)?;
-        s.config_dir = config_dir.to_string();
+        let s: Self = common::settings::load_settings(config_dir)?;
         Ok(s)
     }
 }
@@ -46,7 +43,6 @@ impl Settings {
         let mut s = Self::default();
         s.jwk.public_key = testware::setup::TEST_PUBLIC_KEY.to_string();
         s.jwk.private_key = testware::setup::TEST_PRIVATE_KEY.to_string();
-        s.config_dir = testware::workspace_config_dir();
         s
     }
 }

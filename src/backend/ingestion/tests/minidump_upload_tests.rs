@@ -21,9 +21,7 @@ use ingestion::state::AppState;
 use ingestion::worker::TestWorker;
 
 fn test_settings() -> ingestion::settings::Settings {
-    let mut s = ingestion::settings::Settings::default();
-    s.config_dir = testware::workspace_config_dir();
-    s
+    ingestion::settings::Settings::default()
 }
 
 const TEST_TOKEN: &str = "test0000000000000000000000000001";

@@ -29,7 +29,6 @@ fn test_settings() -> api::settings::Settings {
     let mut s = api::settings::Settings::default();
     s.jwk.public_key = testware::setup::TEST_PUBLIC_KEY.to_string();
     s.jwk.private_key = testware::setup::TEST_PRIVATE_KEY.to_string();
-    s.config_dir = testware::workspace_config_dir();
     s
 }
 
@@ -663,7 +662,7 @@ async fn test_symbol_upload_invalid_boundary() {
 #[tokio::test]
 async fn test_symbol_upload_wrong_entitlement() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, body, product_token, api_token) = setup(&db).await;
+    let (app, _store, boundary, _content, body, product_token, _api_token) = setup(&db).await;
 
     let (token, _) = create_test_token(&db, "Wrong", None, None, &["token"]).await;
 
@@ -687,7 +686,7 @@ async fn test_symbol_upload_wrong_entitlement() {
 #[tokio::test]
 async fn test_symbol_upload_expired_entitlement() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, body, product_token, api_token) = setup(&db).await;
+    let (app, _store, boundary, _content, body, product_token, _api_token) = setup(&db).await;
 
     let product = ProductRepo::get_by_name(&db, "TestProduct")
         .await
@@ -735,7 +734,7 @@ async fn test_symbol_upload_expired_entitlement() {
 #[tokio::test]
 async fn test_symbol_upload_inactive_entitlement() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, body, product_token, api_token) = setup(&db).await;
+    let (app, _store, boundary, _content, body, product_token, _api_token) = setup(&db).await;
 
     let product = ProductRepo::get_by_name(&db, "TestProduct")
         .await
@@ -782,7 +781,7 @@ async fn test_symbol_upload_inactive_entitlement() {
 #[tokio::test]
 async fn test_symbol_upload_other_product() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, body, product_token, api_token) = setup(&db).await;
+    let (app, _store, boundary, _content, body, product_token, _api_token) = setup(&db).await;
 
     let product = create_test_product_with_details(&db, "AnotherProduct", "description").await;
 
@@ -847,7 +846,7 @@ async fn test_symbol_upload_no_token() {
 #[tokio::test]
 async fn test_symbol_upload_unknown_token() {
     let db = TestSetup::create_db().await;
-    let (app, _store, boundary, _content, body, product_token, api_token) = setup(&db).await;
+    let (app, _store, boundary, _content, body, _product_token, api_token) = setup(&db).await;
 
     let request = Request::builder()
         .method("POST")
