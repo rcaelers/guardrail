@@ -58,7 +58,7 @@ impl GuardrailWebApp {
         // Register the JWT access method so RLS $auth variables are populated.
         // OVERWRITE makes this idempotent on restart.
         {
-            let public_key = &settings.auth.jwk.public_key;
+            let public_key = &settings.jwk.public_key;
             db.query(format!(
                 r#"DEFINE ACCESS OVERWRITE guardrail_api ON DATABASE TYPE RECORD
                     WITH JWT ALGORITHM EDDSA KEY '{public_key}'
@@ -83,7 +83,6 @@ impl GuardrailWebApp {
             let mut builder =
                 reqwest::Client::builder().timeout(std::time::Duration::from_secs(10));
             if settings
-                .auth
                 .oidc
                 .as_ref()
                 .and_then(|oidc| oidc.allow_insecure_tls)
@@ -106,7 +105,6 @@ impl GuardrailWebApp {
                 let setup_path = cfg.setup_path.clone().unwrap_or_else(|| "/lc/".to_string());
                 let post_setup_redirect = cfg.post_setup_redirect.clone().or_else(|| {
                     settings
-                        .auth
                         .oidc
                         .as_ref()
                         .and_then(|o| o.launch_url.as_deref())

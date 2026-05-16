@@ -158,7 +158,7 @@ fn is_jwt(s: &str) -> bool {
 }
 
 fn verify_jwt(token_str: &str, settings: &Settings) -> Result<JwtClaims, ApiError> {
-    let public_key = &settings.auth.jwk.public_key;
+    let public_key = &settings.jwk.public_key;
     let key =
         DecodingKey::from_ed_pem(public_key.as_bytes()).map_err(|_| ApiError::InternalFailure())?;
     let mut validation = Validation::new(Algorithm::EdDSA);
@@ -227,7 +227,7 @@ mod tests {
             db: settings.database.database.clone(),
             id: Some("users:alice".to_string()),
         };
-        let key = EncodingKey::from_ed_pem(settings.auth.jwk.private_key.as_bytes()).unwrap();
+        let key = EncodingKey::from_ed_pem(settings.jwk.private_key.as_bytes()).unwrap();
         encode(&Header::new(Algorithm::EdDSA), &claims, &key).unwrap()
     }
 

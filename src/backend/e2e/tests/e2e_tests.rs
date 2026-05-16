@@ -90,7 +90,7 @@ impl TestHarness {
         Self::flush_valkey(&new_valkey_uri).await;
 
         // ── 1. Init SurrealDB schema and test data ──────────────────────
-        let db = Self::init_db(&curator_s, &api_s.auth.jwk.public_key).await;
+        let db = Self::init_db(&curator_s, &api_s.jwk.public_key).await;
 
         let product_name = format!("TestProduct_{}", uuid::Uuid::new_v4().simple());
         let product =

@@ -216,7 +216,7 @@ impl TestApp {
 
     pub(super) async fn new_with_invalid_jwt_key() -> Self {
         Self::with_options(None, |settings| {
-            settings.auth.jwk.private_key = "not a pem key".to_string();
+            settings.jwk.private_key = "not a pem key".to_string();
         })
         .await
     }
@@ -227,7 +227,7 @@ impl TestApp {
     pub(super) async fn new_with_mismatched_jwt_key() -> Self {
         Self::with_options(None, |settings| {
             // Throwaway key generated for this test — never used anywhere else.
-            settings.auth.jwk.private_key = "-----BEGIN PRIVATE KEY-----\
+            settings.jwk.private_key = "-----BEGIN PRIVATE KEY-----\
                 MC4CAQAwBQYDK2VwBCIEID5zKZ0YKMIEwKSsTpAKwrhLSd9U9+8NdB4JFgx89hSQ\
                 -----END PRIVATE KEY-----"
                 .to_string();

@@ -25,7 +25,7 @@ pub async fn generate_jwt_token(
 ) -> Result<impl IntoResponse, ApiError> {
     let api_token = access::require_entitlement(&headers, None, &state.repo.db, "token").await?;
     let settings = state.settings.clone();
-    let expiration = Utc::now() + Duration::minutes(settings.auth.jwk.token_validity_in_minutes);
+    let expiration = Utc::now() + Duration::minutes(settings.jwk.token_validity_in_minutes);
     let expiration_timestamp = expiration.timestamp();
 
     let (username, user_id, is_admin) = if let Some(user_id_raw) = api_token.user_id.as_deref() {
@@ -60,7 +60,7 @@ pub async fn generate_jwt_token(
         id: Some(user_record_id(&username, user_id.as_deref())),
     };
 
-    let private_key = &settings.auth.jwk.private_key;
+    let private_key = &settings.jwk.private_key;
 
     let encoding_key = match EncodingKey::from_ed_pem(private_key.as_bytes()) {
         Ok(key) => key,

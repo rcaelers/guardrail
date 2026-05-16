@@ -190,7 +190,7 @@ pub async fn callback(
 }
 
 fn oidc_settings(state: &AppState) -> AppResult<&Oidc> {
-    let oidc = state.settings.auth.oidc.as_ref().ok_or_else(|| {
+    let oidc = state.settings.oidc.as_ref().ok_or_else(|| {
         AppError::failure(
             "OIDC settings are missing. Set the GUARDRAIL_AUTH_OIDC_* environment variables first.",
         )
@@ -493,7 +493,7 @@ mod tests {
         testware::setup::TestSetup::init();
         let db = testware::setup::TestSetup::create_db().await;
         let mut settings = crate::settings::Settings::test_default();
-        settings.auth.oidc = oidc;
+        settings.oidc = oidc;
         let storage: Arc<dyn object_store::ObjectStore> = Arc::new(InMemory::new());
         AppState {
             repo: Arc::new(Repo::new(db)),

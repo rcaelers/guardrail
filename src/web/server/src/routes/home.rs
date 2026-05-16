@@ -38,7 +38,6 @@ async fn home(
     let has_error = !error.is_empty();
     let self_service_url = state
         .settings
-        .auth
         .oidc
         .as_ref()
         .and_then(|o| o.self_service_url.clone())

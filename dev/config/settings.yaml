@@ -28,28 +28,27 @@ object_storage:
   access_key_id: "guardrail"
   secret_access_key: "guardrail"
 base_url: https://guardrail.home.krandor.org:4433
-auth:
-  jwk:
-    token_validity_in_minutes: 30
-    public_key: |
-      -----BEGIN PUBLIC KEY-----
-      MCowBQYDK2VwAyEAJuN0TiFkCg0HnTjpisG1gfVY7XjKsFGuRm1JVmqkt74=
-      -----END PUBLIC KEY-----
-    private_key: |
-      -----BEGIN PRIVATE KEY-----
-      MC4CAQAwBQYDK2VwBCIEILRksnzl63UUib+nmLsATtXc/EjOHMaMgJu+nbpiX068
-      -----END PRIVATE KEY-----
-  oidc:
-    issuer_url: https://guardrail.home.krandor.org:1443
-    internal_issuer_url: http://pocket-id:1411
-    client_id: guardrail
-    client_secret: gNrzQUOszwg9ej2RRqCRCh5cw8HPUP25
-    callback_url: https://guardrail.home.krandor.org:4433/auth/oidc/callback
-    logout_callback_url: https://guardrail.home.krandor.org:4433
-    launch_url: https://guardrail.home.krandor.org:4433
-    self_service_url: https://guardrail.home.krandor.org:1443
-    pkce: true
-    allow_insecure_tls: true
+jwk:
+  token_validity_in_minutes: 30
+  public_key: |
+    -----BEGIN PUBLIC KEY-----
+    MCowBQYDK2VwAyEAJuN0TiFkCg0HnTjpisG1gfVY7XjKsFGuRm1JVmqkt74=
+    -----END PUBLIC KEY-----
+  private_key: |
+    -----BEGIN PRIVATE KEY-----
+    MC4CAQAwBQYDK2VwBCIEILRksnzl63UUib+nmLsATtXc/EjOHMaMgJu+nbpiX068
+    -----END PRIVATE KEY-----
+oidc:
+  issuer_url: https://guardrail.home.krandor.org:1443
+  internal_issuer_url: http://pocket-id:1411
+  client_id: guardrail
+  client_secret: gNrzQUOszwg9ej2RRqCRCh5cw8HPUP25
+  callback_url: https://guardrail.home.krandor.org:4433/auth/oidc/callback
+  logout_callback_url: https://guardrail.home.krandor.org:4433
+  launch_url: https://guardrail.home.krandor.org:4433
+  self_service_url: https://guardrail.home.krandor.org:1443
+  pkce: true
+  allow_insecure_tls: true
 minidumps:
   mandatory_annotations:
     - "product"

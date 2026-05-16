@@ -10,12 +10,6 @@ pub struct Valkey {
     pub uri: String,
 }
 
-#[derive(Debug, Deserialize, Default)]
-pub struct Auth {
-    pub jwk: Jwk,
-    pub oidc: Option<Oidc>,
-}
-
 #[derive(Deserialize, Default)]
 #[serde(default)]
 pub struct Oidc {

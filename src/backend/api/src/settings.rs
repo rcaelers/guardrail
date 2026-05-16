@@ -2,7 +2,7 @@ use common::settings::ConfigError;
 use serde::Deserialize;
 use std::fmt;
 
-use common::settings::{Auth, Database, ObjectStorage, Valkey};
+use common::settings::{Database, Jwk, ObjectStorage, Valkey};
 
 #[derive(Deserialize, Default)]
 pub struct ApiServer {
@@ -24,7 +24,7 @@ impl fmt::Debug for ApiServer {
 #[derive(Debug, Deserialize, Default)]
 pub struct Settings {
     pub api_server: ApiServer,
-    pub auth: Auth,
+    pub jwk: Jwk,
     pub database: Database,
     pub valkey: Valkey,
     pub object_storage: ObjectStorage,
@@ -44,8 +44,8 @@ impl Settings {
 impl Settings {
     pub fn test_default() -> Self {
         let mut s = Self::default();
-        s.auth.jwk.public_key = testware::setup::TEST_PUBLIC_KEY.to_string();
-        s.auth.jwk.private_key = testware::setup::TEST_PRIVATE_KEY.to_string();
+        s.jwk.public_key = testware::setup::TEST_PUBLIC_KEY.to_string();
+        s.jwk.private_key = testware::setup::TEST_PRIVATE_KEY.to_string();
         s.config_dir = testware::workspace_config_dir();
         s
     }

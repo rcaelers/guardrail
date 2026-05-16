@@ -60,7 +60,7 @@ impl GuardrailApiApp {
         })
         .await;
 
-        let public_key = &settings.auth.jwk.public_key;
+        let public_key = &settings.jwk.public_key;
         db.query(format!(
             r#"DEFINE ACCESS OVERWRITE guardrail_api ON DATABASE TYPE RECORD
                 WITH JWT ALGORITHM EDDSA KEY '{public_key}'
