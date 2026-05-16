@@ -233,7 +233,6 @@ impl MinidumpProcessor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use apalis::prelude::Data;
     use object_store::{ObjectStore, ObjectStoreExt, PutPayload, path::Path};
     use serde_json::json;
     use std::sync::Arc;

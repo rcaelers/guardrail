@@ -650,7 +650,7 @@ async fn run_user(
                 .ok_or_else(|| format!("user not found: {}", args.identifier))?;
             let token = client.create_one_time_token(&user.id, &args.ttl).await?;
             let url = client.build_login_url(&token)?;
-            print_login_code(cli, &user.id, &url.to_string())?;
+            print_login_code(cli, &user.id, url.as_ref())?;
         }
         UserSubcommand::Sync(args) => {
             let users = client.list_users().await?;

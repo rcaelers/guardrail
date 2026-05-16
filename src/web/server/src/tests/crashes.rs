@@ -578,7 +578,7 @@ async fn test_get_crash_with_annotations_and_user_text() {
     .await;
     {
         use object_store::ObjectStore as _;
-        (&*app.storage)
+        (*app.storage)
             .put_opts(
                 &object_store::path::Path::from(user_text_att.storage_path.as_str()),
                 object_store::PutPayload::from_static(b"hello from user"),
@@ -693,7 +693,7 @@ async fn test_get_crash_user_text_not_in_store() {
     assert!(
         body["crash"]["userText"]
             .get("body")
-            .map_or(true, |b| b.is_null()),
+            .is_none_or(|b| b.is_null()),
         "body must not be eagerly fetched from S3; body={body}",
     );
 }

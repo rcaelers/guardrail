@@ -45,7 +45,7 @@ async fn test_download_attachment() {
     let content = b"hello";
     {
         use object_store::ObjectStore as _;
-        (&*app.storage)
+        (*app.storage)
             .put_opts(
                 &object_store::path::Path::from(att.storage_path.as_str()),
                 object_store::PutPayload::from_static(content),
