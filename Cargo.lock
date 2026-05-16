@@ -261,7 +261,6 @@ dependencies = [
  "data",
  "data-encoding",
  "futures",
- "jsonwebtoken",
  "k8s-openapi",
  "kube",
  "log",

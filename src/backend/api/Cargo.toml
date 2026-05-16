@@ -50,7 +50,6 @@ rand.workspace = true
 thiserror.workspace = true
 time.workspace = true
 uuid.workspace = true
-jsonwebtoken.workspace = true
 log.workspace = true
 object_store.workspace = true
 apalis.workspace = true
