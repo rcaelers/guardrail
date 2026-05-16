@@ -4,12 +4,19 @@
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
-  const s = data.settings;
+  const s = $derived(data.settings);
 
-  let skipPatterns = $state((s.skip_patterns ?? []).join('\n'));
-  let endPatterns = $state((s.end_patterns ?? []).join('\n'));
-  let delimiter = $state(s.delimiter ?? '');
-  let maximumFrameCount = $state(s.maximum_frame_count?.toString() ?? '');
+  let skipPatterns = $state('');
+  let endPatterns = $state('');
+  let delimiter = $state('');
+  let maximumFrameCount = $state('');
+
+  $effect(() => {
+    skipPatterns = (s.skip_patterns ?? []).join('\n');
+    endPatterns = (s.end_patterns ?? []).join('\n');
+    delimiter = s.delimiter ?? '';
+    maximumFrameCount = s.maximum_frame_count?.toString() ?? '';
+  });
 </script>
 
 <div class="mx-auto max-w-[800px]">

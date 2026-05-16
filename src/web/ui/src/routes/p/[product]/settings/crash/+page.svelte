@@ -5,7 +5,11 @@
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
-  let annotations = $state(data.minidump.mandatory_annotations.join('\n'));
+  let annotations = $state('');
+
+  $effect(() => {
+    annotations = data.minidump.mandatory_annotations.join('\n');
+  });
   let scriptName = $state('');
   let scriptFile: FileList | undefined = $state(undefined);
 
