@@ -351,6 +351,27 @@ export interface ProductEmailSettings {
   default_invite_text_template?: string;
 }
 
+export interface ProcessorSettings {
+  skip_patterns: string[] | null;
+  end_patterns: string[] | null;
+  delimiter: string | null;
+  maximum_frame_count: number | null;
+  default_skip_patterns: string[];
+  default_end_patterns: string[];
+  default_delimiter: string;
+  default_maximum_frame_count: number;
+}
+
+export interface MinidumpSettings {
+  mandatory_annotations: string[];
+}
+
+export interface ValidationScript {
+  id: string;
+  name: string;
+  created_at: string;
+}
+
 export interface AppEmailSettings {
   recovery_subject: string;
   recovery_html_template: string;
@@ -492,6 +513,13 @@ export interface GuardrailAdapter {
   getProductEmailSettings(id: string): Promise<ProductEmailSettings>;
   updateProductEmailSettings(id: string, settings: ProductEmailSettings): Promise<ProductEmailSettings>;
   updateProductToken(id: string, token?: string): Promise<Product>;
+  getProcessorSettings(id: string): Promise<ProcessorSettings>;
+  updateProcessorSettings(id: string, settings: Pick<ProcessorSettings, 'skip_patterns' | 'end_patterns' | 'delimiter' | 'maximum_frame_count'>): Promise<ProcessorSettings>;
+  getMinidumpSettings(id: string): Promise<MinidumpSettings>;
+  updateMinidumpSettings(id: string, settings: MinidumpSettings): Promise<MinidumpSettings>;
+  listValidationScripts(id: string): Promise<ValidationScript[]>;
+  uploadValidationScript(id: string, name: string, content: string): Promise<ValidationScript>;
+  deleteValidationScript(id: string, scriptId: string): Promise<void>;
 
   // --- users ---
   listUsers(): Promise<User[]>;

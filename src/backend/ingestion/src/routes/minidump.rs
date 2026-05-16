@@ -283,98 +283,43 @@ impl MinidumpApi {
         Ok(())
     }
 
-    #[instrument(skip(crash_info, state), fields(crash_id = %crash_info.crash_id))]
-    fn run_global_validation_script(
-        crash_info: &mut CrashInfo,
-        state: &AppState,
-        script_file: &str,
-    ) -> Result<(), ApiError> {
-        let script_path = format!("{}/{}", state.settings.config_dir, script_file);
-        debug!(script_file = %script_path, "Running global validation script");
-        Self::validate_with_rhai_script(&script_path, crash_info)
-    }
-
-    #[instrument(skip(crash_info, state), fields(crash_id = %crash_info.crash_id))]
-    fn run_product_specific_validation_script(
-        crash_info: &mut CrashInfo,
-        state: &AppState,
-        product_pattern: &str,
-        script_file: &str,
-    ) -> Result<(), ApiError> {
-        let Some(product) = &crash_info.product else {
-            debug!(
-                product_pattern = %product_pattern,
-                "No authorized product found, skipping product-specific validation script"
-            );
-            return Ok(());
-        };
-
-        let product_regex = fancy_regex::Regex::new(product_pattern).map_err(|e| {
-            error!(
-                product_pattern = %product_pattern,
-                error = %e,
-                "Invalid regex pattern in product validation script configuration"
-            );
-            ApiError::Failure(format!(
-                "Invalid regex pattern '{product_pattern}' in validation script configuration: {e}"
-            ))
-        })?;
-
-        let matches = product_regex.is_match(product).map_err(|e| {
-            error!(
-                error = %e,
-                product_pattern = %product_pattern,
-                "Failed to execute regex match for product pattern"
-            );
-            ApiError::Failure(format!(
-                "Invalid regex execution for product pattern '{product_pattern}': {e}"
-            ))
-        })?;
-
-        if matches {
-            let script_path = format!("{}/{}", state.settings.config_dir, script_file);
-            debug!(
-                script_file = %script_path,
-                product_pattern = %product_pattern,
-                product = %product,
-                "Running product-specific validation script"
-            );
-            Self::validate_with_rhai_script(&script_path, crash_info)
-        } else {
-            debug!(
-                product_pattern = %product_pattern,
-                product = %product,
-                "Product pattern does not match authorized product, skipping script"
-            );
-            Ok(())
-        }
-    }
-
-    #[instrument(skip(crash_info, state), fields(crash_id = %crash_info.crash_id))]
+    #[instrument(skip(crash_info, scripts), fields(crash_id = %crash_info.crash_id))]
     fn run_validation_scripts(
         crash_info: &mut CrashInfo,
-        state: &AppState,
+        scripts: &[common::product_info::CachedValidationScript],
     ) -> Result<(), ApiError> {
-        debug!(crash_id = %crash_info.crash_id, "Running validation scripts");
+        debug!(crash_id = %crash_info.crash_id, count = scripts.len(), "Running validation scripts");
 
-        let Some(validation_scripts) = &state.settings.minidumps.validation_scripts else {
-            return Ok(());
-        };
-
-        for validation_script in validation_scripts {
-            match validation_script {
-                crate::settings::ValidationScript::Global(script_file) => {
-                    Self::run_global_validation_script(crash_info, state, script_file)?;
-                }
-                crate::settings::ValidationScript::ProductSpecific { product, script } => {
-                    Self::run_product_specific_validation_script(
-                        crash_info, state, product, script,
-                    )?;
-                }
-            }
+        for script in scripts {
+            debug!(crash_id = %crash_info.crash_id, script_name = %script.name, "Running validation script");
+            Self::validate_with_rhai_script_content(&script.content, crash_info)?;
         }
 
         Ok(())
+    }
+
+    #[instrument(skip(script_content, crash_info), fields(crash_id = %crash_info.crash_id))]
+    fn validate_with_rhai_script_content(
+        script_content: &str,
+        crash_info: &mut CrashInfo,
+    ) -> Result<(), ApiError> {
+        debug!(crash_id = %crash_info.crash_id, "Running Rhai validation script from content");
+
+        let engine = Self::create_rhai_engine(crash_info.crash_id.as_str());
+        let crash_info_map = Self::convert_crash_info_to_rhai_map(crash_info);
+        let mut scope = rhai::Scope::new();
+        scope.push("crash_info", crash_info_map);
+
+        match engine.eval_with_scope::<rhai::Dynamic>(&mut scope, script_content) {
+            Ok(result) => Self::handle_validation_result(result, &mut scope, crash_info),
+            Err(e) => {
+                error!(crash_id = %crash_info.crash_id, error = %e, "Rhai validation script execution failed");
+                Err(ApiError::ValidationError(
+                    crash_info.product.clone().unwrap_or_default(),
+                    "Validation script failed".to_string(),
+                ))
+            }
+        }
     }
 
     #[instrument(skip(storage, crash_info), fields(crash_id = %crash_id))]
@@ -435,21 +380,18 @@ impl MinidumpApi {
         }
 
         Self::validate_minidump_presence(crash_info)?;
+        Self::validate_mandatory_annotations(crash_info, &product.mandatory_annotations)?;
+        Self::run_validation_scripts(crash_info, &product.validation_scripts)?;
 
-        let mandatory_annotations = state
-            .settings
-            .minidumps
-            .mandatory_annotations
-            .as_deref()
-            .unwrap_or_default();
-        Self::validate_mandatory_annotations(crash_info, mandatory_annotations)?;
-
-        Self::run_validation_scripts(crash_info, &state)?;
-
-        let crash_info_json = serde_json::to_value(&crash_info).map_err(|e| {
+        let mut crash_info_json = serde_json::to_value(&crash_info).map_err(|e| {
             error!(error = ?e, "Failed to serialize crash info");
             ApiError::Failure("failed to serialize crash info".to_string())
         })?;
+
+        if let Some(ref ps) = product.processor_settings {
+            crash_info_json["processor_settings"] =
+                serde_json::to_value(ps).unwrap_or(serde_json::Value::Null);
+        }
 
         Self::upload_crash(
             state.storage.clone(),
@@ -714,34 +656,6 @@ impl MinidumpApi {
         engine
     }
 
-    #[instrument(skip(script_path, crash_info), fields(crash_id = %crash_info.crash_id))]
-    fn validate_with_rhai_script(
-        script_path: &str,
-        crash_info: &mut CrashInfo,
-    ) -> Result<(), ApiError> {
-        debug!(crash_id = %crash_info.crash_id, script_path = %script_path, "Running Rhai validation script");
-
-        let script = std::fs::read_to_string(script_path).map_err(|e| {
-            error!(script_path = %script_path, error = ?e, "Failed to load validation script");
-            ApiError::Failure(format!("Failed to load validation script '{script_path}': {e}"))
-        })?;
-
-        let engine = Self::create_rhai_engine(crash_info.crash_id.as_str());
-        let crash_info_map = Self::convert_crash_info_to_rhai_map(crash_info);
-        let mut scope = rhai::Scope::new();
-        scope.push("crash_info", crash_info_map);
-
-        match engine.eval_with_scope::<rhai::Dynamic>(&mut scope, &script) {
-            Ok(result) => Self::handle_validation_result(result, &mut scope, crash_info),
-            Err(e) => {
-                error!(crash_id = %crash_info.crash_id, error = %e, "Rhai validation script execution failed");
-                Err(ApiError::ValidationError(
-                    crash_info.product.clone().unwrap_or_default(),
-                    "Validation script failed".to_string(),
-                ))
-            }
-        }
-    }
 }
 
 #[cfg(test)]
@@ -799,36 +713,6 @@ mod tests {
                 },
             )]),
         }
-    }
-
-    fn state_with_settings(settings: crate::settings::Settings) -> AppState {
-        let product = ProductInfo {
-            id: "product-1".to_string(),
-            name: "TestProduct".to_string(),
-            accepting_crashes: true,
-            metadata: json!({"release": "stable"}),
-        };
-        AppState {
-            product_cache: ProductCache::from_map(HashMap::from([(
-                "TestProduct".to_string(),
-                product,
-            )])),
-            settings: Arc::new(settings),
-            storage: Arc::new(InMemory::new()),
-            worker: Arc::new(TestWorker::new()),
-        }
-    }
-
-    fn write_script(name: &str, body: &str) -> (String, String) {
-        let dir = std::env::temp_dir().join(format!(
-            "guardrail-ingestion-test-{}-{}",
-            name,
-            uuid::Uuid::new_v4()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        let file_name = format!("{name}.rhai");
-        std::fs::write(dir.join(&file_name), body).unwrap();
-        (dir.to_string_lossy().to_string(), file_name)
     }
 
     #[test]
@@ -992,113 +876,41 @@ mod tests {
     }
 
     #[test]
-    fn validation_scripts_handle_global_product_and_error_cases() {
-        let (config_dir, script_file) = write_script(
-            "success",
-            r#"
-                crash_info.annotations["validated"] = "yes";
-                validation_success()
-            "#,
-        );
-        let mut settings = crate::settings::Settings::test_default();
-        settings.config_dir = config_dir.clone();
-        let state = state_with_settings(settings);
+    fn run_validation_scripts_executes_all_scripts_in_order() {
+        let script_content = r#"
+            crash_info.annotations["validated"] = "yes";
+            validation_success()
+        "#;
+        let script = common::product_info::CachedValidationScript {
+            id: "s1".to_string(),
+            name: "test.rhai".to_string(),
+            content: script_content.to_string(),
+        };
         let mut info = crash_info();
 
-        MinidumpApi::run_global_validation_script(&mut info, &state, &script_file).unwrap();
+        MinidumpApi::run_validation_scripts(&mut info, &[script]).unwrap();
         assert_eq!(info.annotations["validated"].value, "yes");
-
-        MinidumpApi::run_product_specific_validation_script(
-            &mut info,
-            &state,
-            "^TestProduct$",
-            &script_file,
-        )
-        .unwrap();
-
-        MinidumpApi::run_product_specific_validation_script(
-            &mut info,
-            &state,
-            "^OtherProduct$",
-            &script_file,
-        )
-        .unwrap();
-
-        assert!(matches!(
-            MinidumpApi::run_product_specific_validation_script(
-                &mut info,
-                &state,
-                "(",
-                &script_file,
-            ),
-            Err(ApiError::Failure(message)) if message.contains("Invalid regex pattern")
-        ));
-
-        let mut no_product = info;
-        no_product.product = None;
-        MinidumpApi::run_product_specific_validation_script(
-            &mut no_product,
-            &state,
-            "^TestProduct$",
-            &script_file,
-        )
-        .unwrap();
     }
 
     #[test]
-    fn run_validation_scripts_handles_none_and_script_errors() {
+    fn run_validation_scripts_empty_slice_is_noop() {
         let mut info = crash_info();
-        let mut settings = crate::settings::Settings::test_default();
-        settings.minidumps.validation_scripts = None;
-        let state = state_with_settings(settings);
-        MinidumpApi::run_validation_scripts(&mut info, &state).unwrap();
-
-        let (config_dir, script_file) = write_script(
-            "product_specific_success",
-            r#"
-                crash_info.annotations["product_specific"] = "yes";
-                validation_success()
-            "#,
-        );
-        let mut settings = crate::settings::Settings::test_default();
-        settings.config_dir = config_dir;
-        settings.minidumps.validation_scripts =
-            Some(vec![crate::settings::ValidationScript::ProductSpecific {
-                product: "^TestProduct$".to_string(),
-                script: script_file,
-            }]);
-        let state = state_with_settings(settings);
-        MinidumpApi::run_validation_scripts(&mut info, &state).unwrap();
-        assert_eq!(info.annotations["product_specific"].value, "yes");
-
-        let mut settings = crate::settings::Settings::test_default();
-        settings.config_dir = std::env::temp_dir().to_string_lossy().to_string();
-        settings.minidumps.validation_scripts =
-            Some(vec![crate::settings::ValidationScript::Global(
-                "missing-file.rhai".to_string(),
-            )]);
-        let state = state_with_settings(settings);
-        assert!(matches!(
-            MinidumpApi::run_validation_scripts(&mut info, &state),
-            Err(ApiError::Failure(message)) if message.contains("Failed to load validation script")
-        ));
+        MinidumpApi::run_validation_scripts(&mut info, &[]).unwrap();
     }
 
     #[test]
-    fn validate_with_rhai_script_reports_invalid_results_and_runtime_errors() {
-        let (config_dir, non_map) = write_script("non_map", "42");
+    fn validate_with_rhai_script_content_reports_invalid_results_and_runtime_errors() {
         let mut info = crash_info();
-        let path = format!("{config_dir}/{non_map}");
         assert!(matches!(
-            MinidumpApi::validate_with_rhai_script(&path, &mut info),
+            MinidumpApi::validate_with_rhai_script_content("42", &mut info),
             Err(ApiError::ValidationError(_, message)) if message == "Validation script failed"
         ));
 
-        let (config_dir, runtime_error) =
-            write_script("runtime_error", "let x = 1 / 0; validation_success()");
-        let path = format!("{config_dir}/{runtime_error}");
         assert!(matches!(
-            MinidumpApi::validate_with_rhai_script(&path, &mut info),
+            MinidumpApi::validate_with_rhai_script_content(
+                "let x = 1 / 0; validation_success()",
+                &mut info
+            ),
             Err(ApiError::ValidationError(_, message)) if message == "Validation script failed"
         ));
     }
@@ -1124,15 +936,16 @@ mod tests {
     async fn process_crash_reports_worker_failures() {
         let worker = Arc::new(TestWorker::new());
         worker.failure();
-        let mut settings = crate::settings::Settings::test_default();
-        settings.minidumps.mandatory_annotations = None;
-        settings.minidumps.validation_scripts = None;
+        let settings = crate::settings::Settings::test_default();
         let token = "worker_failure_test_token_000001";
         let product = ProductInfo {
             id: "product-1".to_string(),
             name: "TestProduct".to_string(),
             accepting_crashes: true,
             metadata: json!({}),
+            mandatory_annotations: vec![],
+            validation_scripts: vec![],
+            processor_settings: None,
         };
         let state = AppState {
             product_cache: ProductCache::from_token_map(HashMap::from([(

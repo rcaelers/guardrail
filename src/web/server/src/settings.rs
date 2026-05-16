@@ -84,6 +84,15 @@ pub struct ProvisionerSettings {
 }
 
 #[derive(Debug, Deserialize, Default)]
+#[serde(default)]
+pub struct ProcessorDefaults {
+    pub skip_patterns: Vec<String>,
+    pub end_patterns: Vec<String>,
+    pub delimiter: Option<String>,
+    pub maximum_frame_count: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Default)]
 pub struct Settings {
     pub web_server: WebServer,
     pub base_url: String,
@@ -96,6 +105,8 @@ pub struct Settings {
     pub provisioner: ProvisionerSettings,
     #[serde(default)]
     pub email: EmailSettings,
+    #[serde(default)]
+    pub processor: ProcessorDefaults,
     #[serde(skip)]
     pub config_dir: String,
 }

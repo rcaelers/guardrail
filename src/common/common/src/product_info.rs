@@ -1,5 +1,20 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CachedProcessorSettings {
+    pub skip_patterns: Option<Vec<String>>,
+    pub end_patterns: Option<Vec<String>>,
+    pub delimiter: Option<String>,
+    pub maximum_frame_count: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CachedValidationScript {
+    pub id: String,
+    pub name: String,
+    pub content: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProductInfo {
     pub id: String,
@@ -7,6 +22,12 @@ pub struct ProductInfo {
     pub accepting_crashes: bool,
     #[serde(default)]
     pub metadata: serde_json::Value,
+    #[serde(default)]
+    pub mandatory_annotations: Vec<String>,
+    #[serde(default)]
+    pub validation_scripts: Vec<CachedValidationScript>,
+    #[serde(default)]
+    pub processor_settings: Option<CachedProcessorSettings>,
 }
 
 pub fn product_cache_key(product_identifier: &str) -> String {

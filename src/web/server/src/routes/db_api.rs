@@ -47,6 +47,22 @@ pub fn router() -> Router<AppState> {
             "/products/{id}/email-settings",
             get(get_product_email_settings).post(update_product_email_settings),
         )
+        .route(
+            "/products/{id}/processor-settings",
+            get(get_product_processor_settings).post(update_product_processor_settings),
+        )
+        .route(
+            "/products/{id}/minidump-settings",
+            get(get_product_minidump_settings).post(update_product_minidump_settings),
+        )
+        .route(
+            "/products/{id}/validation-scripts",
+            get(list_validation_scripts).post(upload_validation_script),
+        )
+        .route(
+            "/products/{id}/validation-scripts/{sid}",
+            delete(delete_validation_script),
+        )
         .route("/products/{id}/product-token", post(update_product_token))
         .route("/products/{pid}/api-tokens", get(list_api_tokens).post(create_api_token))
         .route("/products/{pid}/api-tokens/{id}", delete(delete_api_token))
@@ -978,6 +994,210 @@ async fn update_product_email_settings(
         "invite_html_template": saved.email.invite_html_template.unwrap_or_default(),
         "invite_text_template": saved.email.invite_text_template.unwrap_or_default(),
     })))
+}
+
+// --------------------------------------------------------------------
+// Product processor settings
+// --------------------------------------------------------------------
+
+async fn get_product_processor_settings(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
+        .await
+        .map_err(access_err)?;
+    let db = s.user_db(&session).await?;
+
+    let settings = repos::product_settings::ProductSettingsRepo::get_or_create(&db, &id)
+        .await
+        .map_err(server_error)?;
+    let p = settings.processor;
+    let d = &s.settings.processor;
+    Ok(Json(json!({
+        "skip_patterns": p.skip_patterns,
+        "end_patterns": p.end_patterns,
+        "delimiter": p.delimiter,
+        "maximum_frame_count": p.maximum_frame_count,
+        "default_skip_patterns": d.skip_patterns,
+        "default_end_patterns": d.end_patterns,
+        "default_delimiter": d.delimiter.clone().unwrap_or_else(|| "|".to_string()),
+        "default_maximum_frame_count": d.maximum_frame_count.unwrap_or(20),
+    })))
+}
+
+#[derive(Deserialize)]
+struct UpdateProcessorSettingsBody {
+    skip_patterns: Option<Vec<String>>,
+    end_patterns: Option<Vec<String>>,
+    delimiter: Option<String>,
+    maximum_frame_count: Option<u64>,
+}
+
+async fn update_product_processor_settings(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateProcessorSettingsBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
+        .await
+        .map_err(access_err)?;
+    let db = s.user_db(&session).await?;
+
+    let processor = data::product_settings::ProcessorSettings {
+        skip_patterns: body.skip_patterns,
+        end_patterns: body.end_patterns,
+        delimiter: body.delimiter.filter(|s| !s.is_empty()),
+        maximum_frame_count: body.maximum_frame_count,
+    };
+    let saved = repos::product_settings::ProductSettingsRepo::upsert_processor(&db, &id, processor)
+        .await
+        .map_err(server_error)?;
+    let p = saved.processor;
+    Ok(Json(json!({
+        "skip_patterns": p.skip_patterns,
+        "end_patterns": p.end_patterns,
+        "delimiter": p.delimiter,
+        "maximum_frame_count": p.maximum_frame_count,
+    })))
+}
+
+// --------------------------------------------------------------------
+// Product minidump settings
+// --------------------------------------------------------------------
+
+async fn get_product_minidump_settings(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
+        .await
+        .map_err(access_err)?;
+    let db = s.user_db(&session).await?;
+
+    let settings = repos::product_settings::ProductSettingsRepo::get_or_create(&db, &id)
+        .await
+        .map_err(server_error)?;
+    Ok(Json(json!({
+        "mandatory_annotations": settings.minidump.mandatory_annotations.unwrap_or_default(),
+    })))
+}
+
+#[derive(Deserialize)]
+struct UpdateMinidumpSettingsBody {
+    mandatory_annotations: Vec<String>,
+}
+
+async fn update_product_minidump_settings(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(body): Json<UpdateMinidumpSettingsBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
+        .await
+        .map_err(access_err)?;
+    let db = s.user_db(&session).await?;
+
+    let annotations: Vec<String> = body
+        .mandatory_annotations
+        .into_iter()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let minidump = data::product_settings::MinidumpSettings {
+        mandatory_annotations: if annotations.is_empty() { None } else { Some(annotations) },
+    };
+    let saved = repos::product_settings::ProductSettingsRepo::upsert_minidump(&db, &id, minidump)
+        .await
+        .map_err(server_error)?;
+    Ok(Json(json!({
+        "mandatory_annotations": saved.minidump.mandatory_annotations.unwrap_or_default(),
+    })))
+}
+
+// --------------------------------------------------------------------
+// Validation scripts
+// --------------------------------------------------------------------
+
+async fn list_validation_scripts(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
+        .await
+        .map_err(access_err)?;
+    let db = s.user_db(&session).await?;
+
+    let scripts = repos::validation_scripts::ValidationScriptsRepo::list(&db, &id)
+        .await
+        .map_err(server_error)?;
+
+    let result: Vec<Value> = scripts
+        .into_iter()
+        .map(|s| json!({ "id": s.id, "name": s.name, "created_at": s.created_at }))
+        .collect();
+    Ok(Json(Value::Array(result)))
+}
+
+#[derive(Deserialize)]
+struct UploadValidationScriptBody {
+    name: String,
+    content: String,
+}
+
+async fn upload_validation_script(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path(id): Path<String>,
+    Json(body): Json<UploadValidationScriptBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
+        .await
+        .map_err(access_err)?;
+    let db = s.user_db(&session).await?;
+
+    let name = body.name.trim().to_string();
+    if name.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "name is required".to_string()));
+    }
+    if body.content.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "content is required".to_string()));
+    }
+
+    let script =
+        repos::validation_scripts::ValidationScriptsRepo::create(&db, &id, &name, &body.content)
+            .await
+            .map_err(server_error)?;
+    Ok(Json(json!({ "id": script.id, "name": script.name, "created_at": script.created_at })))
+}
+
+async fn delete_validation_script(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path((id, sid)): Path<(String, String)>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
+        .await
+        .map_err(access_err)?;
+    let db = s.user_db(&session).await?;
+
+    repos::validation_scripts::ValidationScriptsRepo::delete(&db, &sid, &id)
+        .await
+        .map_err(server_error)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Deserialize)]

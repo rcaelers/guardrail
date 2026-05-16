@@ -56,12 +56,6 @@ impl Settings {
 impl Settings {
     pub fn test_default() -> Self {
         let mut s = Self::default();
-        s.minidumps.mandatory_annotations =
-            Some(vec!["product".to_string(), "version".to_string()]);
-        s.minidumps.validation_scripts = Some(vec![
-            ValidationScript::Global("scripts/product_validation.rhai".to_string()),
-            ValidationScript::Global("scripts/build_age_validation.rhai".to_string()),
-        ]);
         s.config_dir = testware::workspace_config_dir();
         s
     }

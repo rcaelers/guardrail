@@ -5,7 +5,7 @@ use crate::{
     error::{RepoError, handle_surreal_error},
     record_key,
 };
-use data::product_settings::{EmailSettings, ProductSettings};
+use data::product_settings::{EmailSettings, MinidumpSettings, ProcessorSettings, ProductSettings};
 
 pub struct ProductSettingsRepo {}
 
@@ -36,6 +36,60 @@ impl ProductSettingsRepo {
                  RETURN *, meta::id(id) AS id, meta::id(product_id) AS product_id",
             )
             .bind(("id", key))
+            .await
+            .map_err(handle_surreal_error)?;
+        crate::take_one::<ProductSettings>(&mut result, 0)?
+            .ok_or_else(|| RepoError::DatabaseError("upsert returned no row".into()))
+    }
+
+    /// Upsert the processor section of a product's settings.
+    pub async fn upsert_processor(
+        db: &Surreal<Any>,
+        product_id: &str,
+        processor: ProcessorSettings,
+    ) -> Result<ProductSettings, RepoError> {
+        let key = record_key(product_id);
+        let mut result = db
+            .query(
+                "UPSERT type::record('product_settings', $id) SET \
+                 product_id = type::record('products', $id), \
+                 processor.skip_patterns = $skip_patterns, \
+                 processor.end_patterns = $end_patterns, \
+                 processor.delimiter = $delimiter, \
+                 processor.maximum_frame_count = $maximum_frame_count, \
+                 created_at = created_at OR time::now(), \
+                 updated_at = time::now() \
+                 RETURN *, meta::id(id) AS id, meta::id(product_id) AS product_id",
+            )
+            .bind(("id", key))
+            .bind(("skip_patterns", processor.skip_patterns))
+            .bind(("end_patterns", processor.end_patterns))
+            .bind(("delimiter", processor.delimiter))
+            .bind(("maximum_frame_count", processor.maximum_frame_count))
+            .await
+            .map_err(handle_surreal_error)?;
+        crate::take_one::<ProductSettings>(&mut result, 0)?
+            .ok_or_else(|| RepoError::DatabaseError("upsert returned no row".into()))
+    }
+
+    /// Upsert the minidump section of a product's settings.
+    pub async fn upsert_minidump(
+        db: &Surreal<Any>,
+        product_id: &str,
+        minidump: MinidumpSettings,
+    ) -> Result<ProductSettings, RepoError> {
+        let key = record_key(product_id);
+        let mut result = db
+            .query(
+                "UPSERT type::record('product_settings', $id) SET \
+                 product_id = type::record('products', $id), \
+                 minidump.mandatory_annotations = $mandatory_annotations, \
+                 created_at = created_at OR time::now(), \
+                 updated_at = time::now() \
+                 RETURN *, meta::id(id) AS id, meta::id(product_id) AS product_id",
+            )
+            .bind(("id", key))
+            .bind(("mandatory_annotations", minidump.mandatory_annotations))
             .await
             .map_err(handle_surreal_error)?;
         crate::take_one::<ProductSettings>(&mut result, 0)?

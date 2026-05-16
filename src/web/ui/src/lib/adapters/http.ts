@@ -32,7 +32,8 @@ import type {
   Symbol as SymbolRow, SymbolQuery,
   Invitation, CreateInvitationSpec, UpdateInvitationSpec,
   ApiToken, CreatedApiToken, CreateApiTokenSpec, CreateAdminApiTokenSpec, UpdateAdminApiTokenSpec, EntitlementDef,
-  ProductEmailSettings, AppEmailSettings
+  ProductEmailSettings, AppEmailSettings,
+  ProcessorSettings, MinidumpSettings, ValidationScript
 } from './types';
 
 type ResponseMeta = {
@@ -206,6 +207,34 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     async updateProductToken(id, token) {
       const r = await jpost(`/products/${encodeURIComponent(id)}/product-token`, { product_token: token ?? null });
       return json<Product>(r, 'updateProductToken');
+    },
+    async getProcessorSettings(id) {
+      const r = await req(`/products/${encodeURIComponent(id)}/processor-settings`);
+      return json<ProcessorSettings>(r, 'getProcessorSettings');
+    },
+    async updateProcessorSettings(id, settings) {
+      const r = await jpost(`/products/${encodeURIComponent(id)}/processor-settings`, settings);
+      return json<ProcessorSettings>(r, 'updateProcessorSettings');
+    },
+    async getMinidumpSettings(id) {
+      const r = await req(`/products/${encodeURIComponent(id)}/minidump-settings`);
+      return json<MinidumpSettings>(r, 'getMinidumpSettings');
+    },
+    async updateMinidumpSettings(id, settings) {
+      const r = await jpost(`/products/${encodeURIComponent(id)}/minidump-settings`, settings);
+      return json<MinidumpSettings>(r, 'updateMinidumpSettings');
+    },
+    async listValidationScripts(id) {
+      const r = await req(`/products/${encodeURIComponent(id)}/validation-scripts`);
+      return json<ValidationScript[]>(r, 'listValidationScripts');
+    },
+    async uploadValidationScript(id, name, content) {
+      const r = await jpost(`/products/${encodeURIComponent(id)}/validation-scripts`, { name, content });
+      return json<ValidationScript>(r, 'uploadValidationScript');
+    },
+    async deleteValidationScript(id, scriptId) {
+      const r = await jdel(`/products/${encodeURIComponent(id)}/validation-scripts/${encodeURIComponent(scriptId)}`);
+      await assertOk(r, 'deleteValidationScript');
     },
 
     // --- users ---

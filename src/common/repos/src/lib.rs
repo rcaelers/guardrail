@@ -11,6 +11,7 @@ pub mod product;
 pub mod product_settings;
 pub mod symbols;
 pub mod user;
+pub mod validation_scripts;
 
 use serde::de::DeserializeOwned;
 use surrealdb::IndexedResults;

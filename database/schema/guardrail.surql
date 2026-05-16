@@ -38,6 +38,17 @@ DEFINE FIELD email.invite_subject ON TABLE product_settings TYPE option<string>;
 DEFINE FIELD email.invite_html_template ON TABLE product_settings TYPE option<string>;
 DEFINE FIELD email.invite_text_template ON TABLE product_settings TYPE option<string>;
 
+-- Processor settings (signature generation, overrides global config per product)
+DEFINE FIELD processor ON TABLE product_settings TYPE object DEFAULT {};
+DEFINE FIELD processor.skip_patterns ON TABLE product_settings TYPE option<array<string>>;
+DEFINE FIELD processor.end_patterns ON TABLE product_settings TYPE option<array<string>>;
+DEFINE FIELD processor.delimiter ON TABLE product_settings TYPE option<string>;
+DEFINE FIELD processor.maximum_frame_count ON TABLE product_settings TYPE option<int>;
+
+-- Minidump ingestion settings (overrides global config per product)
+DEFINE FIELD minidump ON TABLE product_settings TYPE object DEFAULT {};
+DEFINE FIELD minidump.mandatory_annotations ON TABLE product_settings TYPE option<array<string>>;
+
 DEFINE FIELD created_at ON TABLE product_settings TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 DEFINE FIELD updated_at ON TABLE product_settings TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
@@ -241,6 +252,19 @@ DEFINE INDEX idx_symbols_product ON TABLE symbols COLUMNS product_id;
 DEFINE INDEX idx_symbols_module_build ON TABLE symbols COLUMNS module_id, build_id;
 
 -- ============================================================
+-- Validation scripts (per-product Rhai scripts run during crash ingestion)
+-- ============================================================
+DEFINE TABLE validation_scripts SCHEMAFULL;
+
+DEFINE FIELD product_id ON TABLE validation_scripts TYPE record<products> ASSERT $value != NONE;
+DEFINE FIELD name ON TABLE validation_scripts TYPE string ASSERT $value != NONE AND $value != "";
+DEFINE FIELD content ON TABLE validation_scripts TYPE string ASSERT $value != NONE;
+DEFINE FIELD created_at ON TABLE validation_scripts TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+DEFINE FIELD updated_at ON TABLE validation_scripts TYPE datetime ASSERT $value != NONE DEFAULT time::now();
+
+DEFINE INDEX idx_validation_scripts_product ON TABLE validation_scripts COLUMNS product_id;
+
+-- ============================================================
 -- API Tokens
 -- ============================================================
 DEFINE TABLE api_tokens SCHEMAFULL;
@@ -439,6 +463,11 @@ DEFINE TABLE OVERWRITE symbols SCHEMAFULL
 	PERMISSIONS
 		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
 		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
+
+DEFINE TABLE OVERWRITE validation_scripts SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE fn::auth::is_product_admin(product_id)
+		FOR create, update, delete WHERE fn::auth::is_product_admin(product_id);
 
 DEFINE TABLE OVERWRITE api_tokens SCHEMAFULL
 	PERMISSIONS

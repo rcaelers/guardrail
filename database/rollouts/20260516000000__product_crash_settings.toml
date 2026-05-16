@@ -1,0 +1,32 @@
+id = "20260516000000__product_crash_settings"
+name = "product_crash_settings"
+compatibility = "phased"
+renames = []
+
+[[steps]]
+id = "apply_expand_schema"
+phase = "start"
+kind = "apply_schema"
+files = ["database/schema/guardrail.surql"]
+entities = []
+
+[[steps]]
+id = "rollback_expand_schema"
+phase = "rollback"
+kind = "remove_entities"
+files = []
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "processor"
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "minidump"
+
+[[steps.entities]]
+kind = "table"
+scope = ""
+name = "validation_scripts"

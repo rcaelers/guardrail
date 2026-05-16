@@ -1,6 +1,7 @@
 use apalis::prelude::*;
 use apalis_redis::RedisStorage;
 use bytes::Bytes;
+use common::product_info::CachedProcessorSettings;
 use minidump::Minidump;
 use minidump_processor::ProcessorOptions;
 use minidump_unwind::Symbolizer;
@@ -24,28 +25,33 @@ pub struct MinidumpProcessor {
 
 impl MinidumpProcessor {
     pub fn new(s: Data<AppState>) -> MinidumpProcessor {
+        Self::new_with_override(s, None)
+    }
+
+    pub fn new_with_override(
+        s: Data<AppState>,
+        product_settings: Option<&CachedProcessorSettings>,
+    ) -> MinidumpProcessor {
         let storage = s.storage.clone();
 
+        let global = &s.settings.processor;
         let config = SignatureGeneratorConfig {
-            end_patterns: s
-                .settings
-                .processor
-                .end_patterns
-                .clone()
+            skip_patterns: product_settings
+                .and_then(|p| p.skip_patterns.clone())
+                .or_else(|| global.skip_patterns.clone())
                 .unwrap_or_default(),
-            skip_patterns: s
-                .settings
-                .processor
-                .skip_patterns
-                .clone()
+            end_patterns: product_settings
+                .and_then(|p| p.end_patterns.clone())
+                .or_else(|| global.end_patterns.clone())
                 .unwrap_or_default(),
-            delimiter: s
-                .settings
-                .processor
-                .delimiter
-                .clone()
-                .unwrap_or("|".to_string()),
-            maximum_frame_count: s.settings.processor.maximum_frame_count.unwrap_or(20),
+            delimiter: product_settings
+                .and_then(|p| p.delimiter.clone())
+                .or_else(|| global.delimiter.clone())
+                .unwrap_or_else(|| "|".to_string()),
+            maximum_frame_count: product_settings
+                .and_then(|p| p.maximum_frame_count)
+                .or_else(|| global.maximum_frame_count)
+                .unwrap_or(20),
         };
 
         let signature_generator = SignatureGenerator::new(config).unwrap();
@@ -187,7 +193,13 @@ impl MinidumpProcessor {
             })?
             .to_string();
         info!("Process minidump: {}", crash_id);
-        let processor = MinidumpProcessor::new(state.clone());
+
+        let product_settings: Option<CachedProcessorSettings> = job
+            .crash
+            .get("processor_settings")
+            .and_then(|v| serde_json::from_value(v.clone()).ok());
+
+        let processor = MinidumpProcessor::new_with_override(state.clone(), product_settings.as_ref());
         processor
             .handle_job(crash_id.clone(), job.crash.clone(), &redis_storage)
             .await?;

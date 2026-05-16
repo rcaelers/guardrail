@@ -5,7 +5,7 @@ use axum::http::{Request, StatusCode};
 use axum::{Router, body::Body};
 use bytes::Bytes;
 use chrono::Utc;
-use common::product_info::ProductInfo;
+use common::product_info::{CachedValidationScript, ProductInfo};
 use futures::TryStreamExt;
 use object_store::path::Path;
 use object_store::{ObjectStore, ObjectStoreExt};
@@ -22,23 +22,25 @@ use ingestion::worker::TestWorker;
 
 fn test_settings() -> ingestion::settings::Settings {
     let mut s = ingestion::settings::Settings::default();
-    s.minidumps.mandatory_annotations = Some(vec!["product".to_string(), "version".to_string()]);
-    s.minidumps.validation_scripts = Some(vec![
-        ingestion::settings::ValidationScript::Global(
-            "scripts/product_validation.rhai".to_string(),
-        ),
-        ingestion::settings::ValidationScript::Global(
-            "scripts/build_age_validation.rhai".to_string(),
-        ),
-    ]);
     s.config_dir = testware::workspace_config_dir();
     s
 }
 
 const TEST_TOKEN: &str = "test0000000000000000000000000001";
 
+fn load_script(config_dir: &str, name: &str) -> CachedValidationScript {
+    let path = format!("{config_dir}/scripts/{name}");
+    CachedValidationScript {
+        id: uuid::Uuid::new_v4().to_string(),
+        name: name.to_string(),
+        content: std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("failed to read {path}: {e}")),
+    }
+}
+
 fn create_test_product_cache() -> ProductCache {
     let product_id = uuid::Uuid::new_v4().to_string();
+    let config_dir = testware::workspace_config_dir();
     let mut products = HashMap::new();
     products.insert(
         TEST_TOKEN.to_string(),
@@ -47,6 +49,12 @@ fn create_test_product_cache() -> ProductCache {
             name: "TestProduct".to_string(),
             accepting_crashes: true,
             metadata: serde_json::Value::Object(Default::default()),
+            mandatory_annotations: vec!["product".to_string(), "version".to_string()],
+            validation_scripts: vec![
+                load_script(&config_dir, "product_validation.rhai"),
+                load_script(&config_dir, "build_age_validation.rhai"),
+            ],
+            processor_settings: None,
         },
     );
     ProductCache::from_token_map(products)
@@ -62,6 +70,9 @@ fn create_test_product_cache_with(entries: Vec<(&str, bool)>) -> ProductCache {
                 name: name.to_string(),
                 accepting_crashes: accepting,
                 metadata: serde_json::Value::Object(Default::default()),
+                mandatory_annotations: vec![],
+                validation_scripts: vec![],
+                processor_settings: None,
             },
         );
     }
@@ -1030,34 +1041,32 @@ async fn test_minidump_upload_rejects_mismatched_product_annotation() {
 
 #[tokio::test]
 async fn test_minidump_upload_per_product_validation_script() {
-    let mut settings = test_settings();
-    settings.minidumps.validation_scripts = Some(vec![
-        ingestion::settings::ValidationScript::ProductSpecific {
-            product: "^TestProduct$".to_string(),
-            script: "scripts/test_product_specific.rhai".to_string(),
+    // Script in the product cache runs and its annotation side-effect is observable.
+    let script_content = r#"
+        crash_info.annotations["validated_by_script"] = "yes";
+        validation_success()
+    "#;
+    let product_id = uuid::Uuid::new_v4().to_string();
+    let mut products = HashMap::new();
+    products.insert(
+        TEST_TOKEN.to_string(),
+        ProductInfo {
+            id: product_id,
+            name: "TestProduct".to_string(),
+            accepting_crashes: true,
+            metadata: serde_json::Value::Object(Default::default()),
+            mandatory_annotations: vec![],
+            validation_scripts: vec![CachedValidationScript {
+                id: "1".to_string(),
+                name: "custom.rhai".to_string(),
+                content: script_content.to_string(),
+            }],
+            processor_settings: None,
         },
-        ingestion::settings::ValidationScript::ProductSpecific {
-            product: "^OtherProduct$".to_string(),
-            script: "scripts/other_product_specific.rhai".to_string(),
-        },
-    ]);
-
-    let product_cache = create_test_product_cache();
+    );
+    let product_cache = ProductCache::from_token_map(products);
     let store: Arc<dyn ObjectStore> = Arc::new(object_store::memory::InMemory::new());
-
-    let worker = Arc::new(TestWorker::new());
-    let settings = Arc::new(settings);
-    let state = AppState {
-        product_cache,
-        settings: settings.clone(),
-        storage: store.clone(),
-        worker: worker.clone(),
-    };
-    let app: Router = Router::new()
-        .nest("/api", routes(state.clone()).await)
-        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
-        .layer(TraceLayer::new_for_http())
-        .with_state(state.clone());
+    let (app, store, _, _, _) = setup_with_storage_and_cache(store, product_cache).await;
 
     let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
     let body = create_body_from_config(&MinidumpBodyConfig {
@@ -1073,7 +1082,24 @@ async fn test_minidump_upload_per_product_validation_script() {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_response_ok(response).await;
+    let result = assert_response_ok(response).await;
+
+    let crash_id = result["crash_id"].as_str().unwrap();
+    let crash_info = store
+        .get(&Path::from(format!("crashes/{crash_id}.json")))
+        .await
+        .unwrap()
+        .bytes()
+        .await
+        .unwrap();
+    let crash_info: serde_json::Value = serde_json::from_slice(&crash_info).unwrap();
+
+    assert_eq!(
+        crash_info["annotations"]["validated_by_script"]["value"]
+            .as_str()
+            .unwrap(),
+        "yes"
+    );
 
     assert_count_crashes(store.clone(), 1).await;
     assert_count_minidumps(store.clone(), 1).await;
@@ -1082,34 +1108,14 @@ async fn test_minidump_upload_per_product_validation_script() {
 
 #[tokio::test]
 async fn test_minidump_upload_per_product_validation_script_missing() {
-    let mut settings = test_settings();
-    settings.minidumps.validation_scripts =
-        Some(vec![ingestion::settings::ValidationScript::ProductSpecific {
-            product: "^SomeOtherProduct$".to_string(),
-            script: "scripts/other_product_specific.rhai".to_string(),
-        }]);
-
-    let product_cache = create_test_product_cache_with(vec![("UnknownProduct", true)]);
+    // A product with no validation scripts and no mandatory annotations accepts all crashes.
+    let product_cache = create_test_product_cache_with(vec![("TestProduct", true)]);
     let store: Arc<dyn ObjectStore> = Arc::new(object_store::memory::InMemory::new());
-
-    let worker = Arc::new(TestWorker::new());
-    let settings = Arc::new(settings);
-    let state = AppState {
-        product_cache,
-        settings: settings.clone(),
-        storage: store.clone(),
-        worker: worker.clone(),
-    };
-    let app: Router = Router::new()
-        .nest("/api", routes(state.clone()).await)
-        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
-        .layer(TraceLayer::new_for_http())
-        .with_state(state.clone());
+    let (app, store, _, _, _) = setup_with_storage_and_cache(store, product_cache).await;
 
     let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
     let body = create_body_from_config(&MinidumpBodyConfig {
         boundary,
-        product: Some("UnknownProduct"),
         ..Default::default()
     });
 
@@ -1129,45 +1135,48 @@ async fn test_minidump_upload_per_product_validation_script_missing() {
 }
 
 #[tokio::test]
-async fn test_minidump_upload_validation_script_regex_patterns() {
-    let mut settings = test_settings();
-    settings.minidumps.validation_scripts = Some(vec![
-        ingestion::settings::ValidationScript::Global("scripts/product_validation.rhai".to_string()),
-        ingestion::settings::ValidationScript::ProductSpecific {
-            product: "^TestProduct$".to_string(),
-            script: "scripts/test_product_specific.rhai".to_string(),
+async fn test_minidump_upload_multiple_validation_scripts_run_in_order() {
+    // Multiple scripts in the product cache all run, each adding their own annotation.
+    let script1 = r#"
+        crash_info.annotations["step1"] = "done";
+        validation_success()
+    "#;
+    let script2 = r#"
+        crash_info.annotations["step2"] = "done";
+        validation_success()
+    "#;
+    let product_id = uuid::Uuid::new_v4().to_string();
+    let mut products = HashMap::new();
+    products.insert(
+        TEST_TOKEN.to_string(),
+        ProductInfo {
+            id: product_id,
+            name: "TestProduct".to_string(),
+            accepting_crashes: true,
+            metadata: serde_json::Value::Object(Default::default()),
+            mandatory_annotations: vec![],
+            validation_scripts: vec![
+                CachedValidationScript {
+                    id: "1".to_string(),
+                    name: "step1.rhai".to_string(),
+                    content: script1.to_string(),
+                },
+                CachedValidationScript {
+                    id: "2".to_string(),
+                    name: "step2.rhai".to_string(),
+                    content: script2.to_string(),
+                },
+            ],
+            processor_settings: None,
         },
-        ingestion::settings::ValidationScript::ProductSpecific {
-            product: "^Test.*".to_string(),
-            script: "scripts/test_product_specific.rhai".to_string(),
-        },
-        ingestion::settings::ValidationScript::ProductSpecific {
-            product: ".*workrave.*".to_string(),
-            script: "scripts/workrave_validation.rhai".to_string(),
-        },
-    ]);
-
-    let product_cache = create_test_product_cache_with(vec![("TestSomething", true)]);
+    );
+    let product_cache = ProductCache::from_token_map(products);
     let store: Arc<dyn ObjectStore> = Arc::new(object_store::memory::InMemory::new());
-
-    let worker = Arc::new(TestWorker::new());
-    let settings = Arc::new(settings);
-    let state = AppState {
-        product_cache,
-        settings: settings.clone(),
-        storage: store.clone(),
-        worker: worker.clone(),
-    };
-    let app: Router = Router::new()
-        .nest("/api", routes(state.clone()).await)
-        .layer(DefaultBodyLimit::max(100 * 1024 * 1024))
-        .layer(TraceLayer::new_for_http())
-        .with_state(state.clone());
+    let (app, store, _, _, _) = setup_with_storage_and_cache(store, product_cache).await;
 
     let boundary = "----WebKitFormBoundary7MA4YWxkTrZu0gW";
     let body = create_body_from_config(&MinidumpBodyConfig {
         boundary,
-        product: Some("TestSomething"),
         ..Default::default()
     });
 
@@ -1179,7 +1188,20 @@ async fn test_minidump_upload_validation_script_regex_patterns() {
         .unwrap();
 
     let response = app.oneshot(request).await.unwrap();
-    assert_response_ok(response).await;
+    let result = assert_response_ok(response).await;
+
+    let crash_id = result["crash_id"].as_str().unwrap();
+    let crash_info = store
+        .get(&Path::from(format!("crashes/{crash_id}.json")))
+        .await
+        .unwrap()
+        .bytes()
+        .await
+        .unwrap();
+    let crash_info: serde_json::Value = serde_json::from_slice(&crash_info).unwrap();
+
+    assert_eq!(crash_info["annotations"]["step1"]["value"].as_str().unwrap(), "done");
+    assert_eq!(crash_info["annotations"]["step2"]["value"].as_str().unwrap(), "done");
 
     assert_count_crashes(store.clone(), 1).await;
     assert_count_minidumps(store.clone(), 1).await;

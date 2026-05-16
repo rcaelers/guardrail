@@ -49,11 +49,3 @@ oidc:
   self_service_url: https://guardrail.home.krandor.org:1443
   pkce: true
   allow_insecure_tls: true
-minidumps:
-  mandatory_annotations:
-    - "product"
-    - "version"
-  validation_scripts:
-    - "scripts/product_validation.rhai"
-    - product: "^Workrave$"
-      script: "scripts/build_age_validation.rhai"

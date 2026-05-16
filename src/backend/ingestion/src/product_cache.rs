@@ -121,6 +121,9 @@ mod tests {
             name: name.to_string(),
             accepting_crashes,
             metadata: json!({"kind": name}),
+            mandatory_annotations: vec![],
+            validation_scripts: vec![],
+            processor_settings: None,
         }
     }
 
