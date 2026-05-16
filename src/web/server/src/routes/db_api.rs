@@ -102,6 +102,7 @@ impl AppState {
         };
         let uid = repos::record_key(&active.id);
         if let Some(cached) = self.auth_cache.get(&uid).await {
+            tracing::trace!(user_id = %uid, "db_auth: using cached connection");
             return Ok(cached);
         }
 
@@ -118,6 +119,7 @@ impl AppState {
             .and_then(|mut r| r.take::<Option<Value>>(0).ok().flatten());
 
         let Some(row) = user_row else {
+            tracing::debug!(user_id = %uid, "db_auth: user not found in DB, falling back to anon");
             return self.anon_db().await;
         };
 
@@ -135,10 +137,12 @@ impl AppState {
         {
             Ok(jwt) => jwt,
             Err(_) => {
-                tracing::error!("JWT generation failed for user {uid}, falling back to anon");
+                tracing::error!(user_id = %uid, "db_auth: JWT generation failed, falling back to anon");
                 return self.anon_db().await;
             }
         };
+
+        tracing::debug!(user_id = %uid, username, is_admin, "db_auth: issuing new JWT for SurrealDB");
 
         match self.repo.authenticated(&jwt).await {
             Ok(db) => {
@@ -149,9 +153,7 @@ impl AppState {
                 Ok(handle)
             }
             Err(e) => {
-                tracing::error!(
-                    "DB authentication failed for user {uid}: {e}, falling back to anon"
-                );
+                tracing::error!(user_id = %uid, "db_auth: SurrealDB authentication failed: {e}, falling back to anon");
                 self.anon_db().await
             }
         }
@@ -161,11 +163,14 @@ impl AppState {
     /// anonymous JWT cannot be created or authenticated — never falls back to root.
     async fn anon_db(&self) -> Result<Arc<Surreal<Any>>, (StatusCode, String)> {
         if let Some(cached) = self.auth_cache.get(ANON_CACHE_KEY).await {
+            tracing::trace!("db_auth: using cached anonymous connection");
             return Ok(cached);
         }
 
+        tracing::debug!("db_auth: issuing new anonymous JWT for SurrealDB");
+
         let jwt = crate::jwt::make_anon_jwt(&self.settings).map_err(|e| {
-            tracing::error!("Anonymous JWT generation failed: {e}");
+            tracing::error!("db_auth: anonymous JWT generation failed: {e}");
             (
                 StatusCode::SERVICE_UNAVAILABLE,
                 "database authentication unavailable".to_string(),
@@ -181,7 +186,7 @@ impl AppState {
                 Ok(handle)
             }
             Err(e) => {
-                tracing::error!("Anonymous JWT authentication failed: {e}");
+                tracing::error!("db_auth: anonymous SurrealDB authentication failed: {e}");
                 Err((
                     StatusCode::SERVICE_UNAVAILABLE,
                     "database authentication unavailable".to_string(),
