@@ -90,7 +90,7 @@ impl TestHarness {
         Self::flush_valkey(&new_valkey_uri).await;
 
         // ── 1. Init SurrealDB schema and test data ──────────────────────
-        let db = Self::init_db(&curator_s, &api_s.jwk.public_key).await;
+        let db = Self::init_db(&curator_s).await;
 
         let product_name = format!("TestProduct_{}", uuid::Uuid::new_v4().simple());
         let product =
@@ -156,7 +156,7 @@ impl TestHarness {
     }
 
     /// Connect to real SurrealDB, apply schema, define JWT access.
-    async fn init_db(settings: &curator::settings::Settings, public_key: &str) -> Surreal<Any> {
+    async fn init_db(settings: &curator::settings::Settings) -> Surreal<Any> {
         use surrealdb::opt::auth::Root;
 
         let db = surrealdb::engine::any::connect(&settings.database.endpoint)
@@ -180,26 +180,6 @@ impl TestHarness {
         db.query(schema)
             .await
             .expect("Failed to apply SurrealDB schema");
-
-        // Define JWT access method
-        db.query(format!(
-            r#"DEFINE ACCESS OVERWRITE guardrail_api ON DATABASE TYPE RECORD
-                WITH JWT ALGORITHM EDDSA KEY '{public_key}'
-                AUTHENTICATE {{
-                    IF $auth.id {{
-                        RETURN $auth.id;
-                    }};
-                    IF $token.user_id {{
-                        RETURN type::record('users', $token.user_id);
-                    }};
-                    IF $token.username {{
-                        RETURN type::record('users', $token.username);
-                    }};
-                }}
-                DURATION FOR SESSION 1h"#
-        ))
-        .await
-        .expect("Failed to define JWT access method");
 
         db
     }

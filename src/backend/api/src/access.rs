@@ -95,8 +95,6 @@ async fn load_and_verify(
 mod tests {
     use super::*;
     use axum::http::HeaderValue;
-    use chrono::Utc;
-    use uuid::Uuid;
 
     #[test]
     fn extracts_bearer_and_token_authorization_headers() {

@@ -26,10 +26,7 @@ use repos::symbols::SymbolsRepo;
 use testware::{create_test_product_with_details, create_test_token};
 
 fn test_settings() -> api::settings::Settings {
-    let mut s = api::settings::Settings::default();
-    s.jwk.public_key = testware::setup::TEST_PUBLIC_KEY.to_string();
-    s.jwk.private_key = testware::setup::TEST_PRIVATE_KEY.to_string();
-    s
+    api::settings::Settings::default()
 }
 
 async fn setup(

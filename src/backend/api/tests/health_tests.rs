@@ -20,10 +20,7 @@ use api::{routes::routes, worker::TestWorker};
 use repos::Repo;
 
 fn test_settings() -> api::settings::Settings {
-    let mut s = api::settings::Settings::default();
-    s.jwk.public_key = testware::setup::TEST_PUBLIC_KEY.to_string();
-    s.jwk.private_key = testware::setup::TEST_PRIVATE_KEY.to_string();
-    s
+    api::settings::Settings::default()
 }
 
 async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> Router {
