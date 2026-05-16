@@ -1,5 +1,7 @@
 id = "20260516000000__product_crash_settings"
 name = "product_crash_settings"
+source_schema_hash = "1c675705ff47feae04b190e2b8922884af09109374f39238d2a2440bcbef1ee0"
+target_schema_hash = "a56c4d16ca883491e568b0f46a1b0af0e8fd01d82017aa4f1cbfef9a01de94e8"
 compatibility = "phased"
 renames = []
 
@@ -19,14 +21,68 @@ files = []
 [[steps.entities]]
 kind = "field"
 scope = "product_settings"
+name = "minidump"
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "minidump.mandatory_annotations"
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
 name = "processor"
 
 [[steps.entities]]
 kind = "field"
 scope = "product_settings"
-name = "minidump"
+name = "processor.delimiter"
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "processor.end_patterns"
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "processor.maximum_frame_count"
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "processor.skip_patterns"
+
+[[steps.entities]]
+kind = "field"
+scope = "validation_scripts"
+name = "content"
+
+[[steps.entities]]
+kind = "field"
+scope = "validation_scripts"
+name = "created_at"
+
+[[steps.entities]]
+kind = "field"
+scope = "validation_scripts"
+name = "name"
+
+[[steps.entities]]
+kind = "field"
+scope = "validation_scripts"
+name = "product_id"
+
+[[steps.entities]]
+kind = "field"
+scope = "validation_scripts"
+name = "updated_at"
+
+[[steps.entities]]
+kind = "index"
+scope = "validation_scripts"
+name = "idx_validation_scripts_product"
 
 [[steps.entities]]
 kind = "table"
-scope = ""
 name = "validation_scripts"
