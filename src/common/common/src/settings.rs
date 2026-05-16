@@ -5,6 +5,25 @@ use natord::compare as natord_compare;
 use serde::Deserialize;
 use std::fmt;
 
+#[derive(Deserialize, Default)]
+pub struct Ingress {
+    pub port: u16,
+    pub base_url: String,
+    pub public_key: Option<String>,
+    pub private_key: Option<String>,
+}
+
+impl fmt::Debug for Ingress {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Ingress")
+            .field("port", &self.port)
+            .field("base_url", &self.base_url)
+            .field("public_key", &self.public_key)
+            .field("private_key", &self.private_key.as_deref().map(|_| "[REDACTED]"))
+            .finish()
+    }
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub struct Valkey {
     pub uri: String,

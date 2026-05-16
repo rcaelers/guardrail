@@ -1,5 +1,6 @@
 web_server:
   port: 8082
+  base_url: https://guardrail.home.krandor.org:4433
 api_server:
   port: 80
 ingestion_server:
@@ -27,7 +28,6 @@ object_storage:
   allow_http: true
   access_key_id: "guardrail"
   secret_access_key: "guardrail"
-base_url: https://guardrail.home.krandor.org:4433
 jwk:
   token_validity_in_minutes: 30
   public_key: |

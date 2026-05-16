@@ -133,12 +133,12 @@ impl GuardrailApiApp {
 
     fn tls_configured(settings: &Settings) -> bool {
         settings
-            .api_server
+            .ingress
             .public_key
             .as_deref()
             .is_some_and(|key| !key.is_empty())
             && settings
-                .api_server
+                .ingress
                 .private_key
                 .as_deref()
                 .is_some_and(|key| !key.is_empty())
@@ -150,17 +150,17 @@ impl GuardrailApiApp {
 
         if Self::tls_configured(settings) {
             info!("Starting server with TLS");
-            info!("Public key: {}", settings.api_server.public_key.clone().unwrap_or_default());
-            info!("Private key: {}", settings.api_server.private_key.clone().unwrap_or_default());
+            info!("Public key: {}", settings.ingress.public_key.clone().unwrap_or_default());
+            info!("Private key: {}", settings.ingress.private_key.clone().unwrap_or_default());
             let config = RustlsConfig::from_pem(
                 settings
-                    .api_server
+                    .ingress
                     .public_key
                     .clone()
                     .unwrap_or_default()
                     .into_bytes(),
                 settings
-                    .api_server
+                    .ingress
                     .private_key
                     .clone()
                     .unwrap_or_default()
@@ -169,14 +169,14 @@ impl GuardrailApiApp {
             .await
             .unwrap();
 
-            let port = settings.api_server.port;
+            let port = settings.ingress.port;
             let addr = SocketAddr::from(([0, 0, 0, 0], port));
             axum_server::bind_rustls(addr, config)
                 .serve(router.into_make_service())
                 .await
                 .unwrap();
         } else {
-            let port = settings.api_server.port;
+            let port = settings.ingress.port;
             let addr = SocketAddr::from(([0, 0, 0, 0], port));
             axum_server::bind(addr)
                 .serve(router.into_make_service())
@@ -287,17 +287,17 @@ mod tests {
     #[test]
     fn tls_configured_requires_both_non_empty_keys() {
         let mut settings = crate::settings::Settings::default();
-        settings.api_server.public_key = None;
-        settings.api_server.private_key = None;
+        settings.ingress.public_key = None;
+        settings.ingress.private_key = None;
         assert!(!GuardrailApiApp::tls_configured(&settings));
 
-        settings.api_server.public_key = Some("public".to_string());
+        settings.ingress.public_key = Some("public".to_string());
         assert!(!GuardrailApiApp::tls_configured(&settings));
 
-        settings.api_server.private_key = Some(String::new());
+        settings.ingress.private_key = Some(String::new());
         assert!(!GuardrailApiApp::tls_configured(&settings));
 
-        settings.api_server.private_key = Some("private".to_string());
+        settings.ingress.private_key = Some("private".to_string());
         assert!(GuardrailApiApp::tls_configured(&settings));
     }
 

@@ -135,7 +135,7 @@ async fn create_invitation(
     .map_err(AppError::internal)?;
 
     if let (Some(to), Some(sender)) = (body.to.as_deref(), state.email_sender.as_deref()) {
-        let origin = state.settings.base_url.trim_end_matches('/');
+        let origin = state.settings.ingress.base_url.trim_end_matches('/');
         let invite_url = format!("{origin}/invite/{}", invitation.code);
 
         let (product_subject, product_html, product_text) = if invitation.grants.len() == 1 {

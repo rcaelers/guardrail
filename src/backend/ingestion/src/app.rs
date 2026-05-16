@@ -94,12 +94,12 @@ impl GuardrailIngestionApp {
 
     fn tls_configured(settings: &Settings) -> bool {
         settings
-            .ingestion_server
+            .ingress
             .public_key
             .as_deref()
             .is_some_and(|key| !key.is_empty())
             && settings
-                .ingestion_server
+                .ingress
                 .private_key
                 .as_deref()
                 .is_some_and(|key| !key.is_empty())
@@ -113,13 +113,13 @@ impl GuardrailIngestionApp {
             info!("Starting ingestion server with TLS");
             let config = RustlsConfig::from_pem(
                 settings
-                    .ingestion_server
+                    .ingress
                     .public_key
                     .clone()
                     .unwrap_or_default()
                     .into_bytes(),
                 settings
-                    .ingestion_server
+                    .ingress
                     .private_key
                     .clone()
                     .unwrap_or_default()
@@ -128,14 +128,14 @@ impl GuardrailIngestionApp {
             .await
             .unwrap();
 
-            let port = settings.ingestion_server.port;
+            let port = settings.ingress.port;
             let addr = SocketAddr::from(([0, 0, 0, 0], port));
             axum_server::bind_rustls(addr, config)
                 .serve(router.into_make_service())
                 .await
                 .unwrap();
         } else {
-            let port = settings.ingestion_server.port;
+            let port = settings.ingress.port;
             let addr = SocketAddr::from(([0, 0, 0, 0], port));
             axum_server::bind(addr)
                 .serve(router.into_make_service())
@@ -197,17 +197,17 @@ mod tests {
     #[test]
     fn tls_configured_requires_both_non_empty_keys() {
         let mut settings = crate::settings::Settings::test_default();
-        settings.ingestion_server.public_key = None;
-        settings.ingestion_server.private_key = None;
+        settings.ingress.public_key = None;
+        settings.ingress.private_key = None;
         assert!(!GuardrailIngestionApp::tls_configured(&settings));
 
-        settings.ingestion_server.public_key = Some("public".to_string());
+        settings.ingress.public_key = Some("public".to_string());
         assert!(!GuardrailIngestionApp::tls_configured(&settings));
 
-        settings.ingestion_server.private_key = Some(String::new());
+        settings.ingress.private_key = Some(String::new());
         assert!(!GuardrailIngestionApp::tls_configured(&settings));
 
-        settings.ingestion_server.private_key = Some("private".to_string());
+        settings.ingress.private_key = Some("private".to_string());
         assert!(GuardrailIngestionApp::tls_configured(&settings));
     }
 }

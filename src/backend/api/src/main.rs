@@ -22,7 +22,7 @@ async fn main() {
     init_logging().await;
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-    info!("Starting server on port {}", settings.api_server.port);
+    info!("Starting server on port {}", settings.ingress.port);
 
     let app = GuardrailApiApp::from_settings(settings).await;
 

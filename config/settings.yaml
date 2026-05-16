@@ -1,5 +1,6 @@
-web_server:
+ingress:
   port: 4433
+  base_url: https://guardrail.home.krandor.org:4433
   public_key: |
     -----BEGIN CERTIFICATE-----
     MIIEVTCCAj2gAwIBAgIBAjANBgkqhkiG9w0BAQsFADAbMRkwFwYDVQQDExBHdWFy
@@ -55,9 +56,9 @@ web_server:
     joy3l/GjSYckpTX4o17pr4GGlQiir4ppc8fPowzOlI2tjSCQv7aHr0sLKtjHjpmV
     Ty8f1c8nGOHJLE250Gu8QmN7LuAErFzlyRuOVg1F9QHMEevubg43ZQ==
     -----END RSA PRIVATE KEY-----
-api_server:
+api_ingress:
   port: 80
-ingestion_server:
+ingestion_ingress:
   port: 81
   public_keyx: |
     -----BEGIN CERTIFICATE-----
@@ -167,7 +168,6 @@ object_storage:
   allow_http: true
   access_key_id: "guardrail"
   secret_access_key: "guardrail"
-base_url: https://guardrail.home.krandor.org:4433
 jwk:
   token_validity_in_minutes: 30
   public_key: |

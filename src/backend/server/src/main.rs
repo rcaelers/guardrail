@@ -50,7 +50,7 @@ async fn run_api(config_dir: String) {
     let settings = std::sync::Arc::new(
         api::settings::Settings::load(&config_dir).expect("Failed to load API settings"),
     );
-    info!("Starting API server on port {}", settings.api_server.port);
+    info!("Starting API server on port {}", settings.ingress.port);
     let app = api::app::GuardrailApiApp::from_settings(settings).await;
     if let Err(err) = app.ensure_default_api_token().await {
         tracing::warn!("Failed to ensure default API token: {}", err);
@@ -63,7 +63,7 @@ async fn run_ingestion(config_dir: String) {
         ingestion::settings::Settings::load(&config_dir)
             .expect("Failed to load ingestion settings"),
     );
-    info!("Starting ingestion server on port {}", settings.ingestion_server.port);
+    info!("Starting ingestion server on port {}", settings.ingress.port);
     let app = ingestion::app::GuardrailIngestionApp::from_settings(settings).await;
     app.serve().await;
 }
@@ -101,7 +101,7 @@ async fn run_web(config_dir: String) {
     let settings = std::sync::Arc::new(
         web::settings::Settings::load(&config_dir).expect("Failed to load web settings"),
     );
-    info!("Starting web server on port {}", settings.web_server.port);
+    info!("Starting web server on port {}", settings.ingress.port);
     web::app::GuardrailWebApp::from_settings(settings)
         .await
         .serve()

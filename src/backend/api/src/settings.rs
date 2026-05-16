@@ -1,29 +1,11 @@
 use common::settings::ConfigError;
 use serde::Deserialize;
-use std::fmt;
 
-use common::settings::{Database, Jwk, ObjectStorage, Valkey};
-
-#[derive(Deserialize, Default)]
-pub struct ApiServer {
-    pub port: u16,
-    pub public_key: Option<String>,
-    pub private_key: Option<String>,
-}
-
-impl fmt::Debug for ApiServer {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ApiServer")
-            .field("port", &self.port)
-            .field("public_key", &self.public_key)
-            .field("private_key", &self.private_key.as_deref().map(|_| "[REDACTED]"))
-            .finish()
-    }
-}
+use common::settings::{Database, Ingress, Jwk, ObjectStorage, Valkey};
 
 #[derive(Debug, Deserialize, Default)]
 pub struct Settings {
-    pub api_server: ApiServer,
+    pub ingress: Ingress,
     pub jwk: Jwk,
     pub database: Database,
     pub valkey: Valkey,

@@ -152,7 +152,7 @@ impl GuardrailWebApp {
         let settings = &state.settings;
 
         let use_secure_cookies = settings
-            .web_server
+            .ingress
             .public_key
             .as_deref()
             .is_some_and(|pem| !pem.is_empty());
@@ -201,11 +201,11 @@ impl GuardrailWebApp {
             .layer(session_layer)
             .with_state(state.clone());
 
-        info!("Starting web server on port {}", settings.web_server.port);
+        info!("Starting web server on port {}", settings.ingress.port);
 
-        let addr = SocketAddr::from(([0, 0, 0, 0], settings.web_server.port));
+        let addr = SocketAddr::from(([0, 0, 0, 0], settings.ingress.port));
         if let (Some(public_key), Some(private_key)) =
-            (settings.web_server.public_key.clone(), settings.web_server.private_key.clone())
+            (settings.ingress.public_key.clone(), settings.ingress.private_key.clone())
             && !public_key.is_empty()
             && !private_key.is_empty()
         {

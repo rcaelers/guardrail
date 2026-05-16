@@ -426,7 +426,7 @@ async fn run_invite(
 
             let invite_url = format!(
                 "{}/invite/{}",
-                settings.base_url.trim_end_matches('/'),
+                settings.ingress.base_url.trim_end_matches('/'),
                 invitation.code
             );
 

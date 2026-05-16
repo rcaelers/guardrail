@@ -21,7 +21,7 @@ async fn main() {
     init_logging().await;
     let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
 
-    info!("Starting ingestion server on port {}", settings.ingestion_server.port);
+    info!("Starting ingestion server on port {}", settings.ingress.port);
 
     let app = GuardrailIngestionApp::from_settings(settings).await;
     app.serve().await;
