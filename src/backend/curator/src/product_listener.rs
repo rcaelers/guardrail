@@ -73,10 +73,7 @@ pub async fn listen_for_product_changes(
     Ok(())
 }
 
-async fn listen_for_product_settings_changes(
-    db: Surreal<Any>,
-    mut redis: ConnectionManager,
-) {
+async fn listen_for_product_settings_changes(db: Surreal<Any>, mut redis: ConnectionManager) {
     loop {
         match run_product_settings_listener(&db, &mut redis).await {
             Ok(()) => warn!("product_settings LIVE SELECT stream ended unexpectedly, restarting"),
@@ -100,7 +97,11 @@ async fn run_product_settings_listener(
     while let Some(notification) = stream.next().await {
         match notification {
             Ok(n) => {
-                let product_id = n.data.get("product_id").and_then(|v| v.as_str()).map(str::to_string);
+                let product_id = n
+                    .data
+                    .get("product_id")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
                 if let Some(pid) = product_id {
                     info!(product_id = %pid, "product_settings changed, re-syncing");
                     sync_product_by_id(db, &pid, redis).await;
@@ -115,10 +116,7 @@ async fn run_product_settings_listener(
     Ok(())
 }
 
-async fn listen_for_validation_script_changes(
-    db: Surreal<Any>,
-    mut redis: ConnectionManager,
-) {
+async fn listen_for_validation_script_changes(db: Surreal<Any>, mut redis: ConnectionManager) {
     loop {
         match run_validation_scripts_listener(&db, &mut redis).await {
             Ok(()) => warn!("validation_scripts LIVE SELECT stream ended unexpectedly, restarting"),
@@ -142,7 +140,11 @@ async fn run_validation_scripts_listener(
     while let Some(notification) = stream.next().await {
         match notification {
             Ok(n) => {
-                let product_id = n.data.get("product_id").and_then(|v| v.as_str()).map(str::to_string);
+                let product_id = n
+                    .data
+                    .get("product_id")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
                 if let Some(pid) = product_id {
                     info!(product_id = %pid, "validation_scripts changed, re-syncing");
                     sync_product_by_id(db, &pid, redis).await;

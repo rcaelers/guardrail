@@ -153,7 +153,10 @@ async fn test_stop_impersonation() {
     let f = Fixture::setup(&app).await;
 
     // no session → 403
-    assert_eq!(app.call("POST", "/auth/impersonate/stop", None, None).await, StatusCode::FORBIDDEN);
+    assert_eq!(
+        app.call("POST", "/auth/impersonate/stop", None, None).await,
+        StatusCode::FORBIDDEN
+    );
     // not impersonating → 400 (AppError::failure)
     assert_eq!(
         app.call("POST", "/auth/impersonate/stop", None, Some(&f.admin))

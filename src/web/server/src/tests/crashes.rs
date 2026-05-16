@@ -487,8 +487,13 @@ async fn test_add_note_on_group() {
 
     // Admin with session → 200
     assert_eq!(
-        app.call("POST", &format!("/crashes/{gid}/notes"), Some(note_body.clone()), Some(&f.admin))
-            .await,
+        app.call(
+            "POST",
+            &format!("/crashes/{gid}/notes"),
+            Some(note_body.clone()),
+            Some(&f.admin)
+        )
+        .await,
         StatusCode::OK,
     );
     // Non-admin with readwrite/maintainer role also succeeds
@@ -686,11 +691,12 @@ async fn test_get_crash_user_text_not_in_store() {
         "expected filename=missing.txt; body={body}",
     );
     assert!(
-        body["crash"]["userText"].get("body").map_or(true, |b| b.is_null()),
+        body["crash"]["userText"]
+            .get("body")
+            .map_or(true, |b| b.is_null()),
         "body must not be eagerly fetched from S3; body={body}",
     );
 }
-
 
 // ---------------------------------------------------------------------------
 // Tests: db_api – list_groups edge cases (lines 1046, 1061)

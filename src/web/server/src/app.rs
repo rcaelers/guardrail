@@ -127,7 +127,13 @@ impl GuardrailWebApp {
 
         let email_sender: Option<Arc<dyn EmailSender>> = if settings.email.from.is_empty() {
             None
-        } else if let Some(key) = settings.email.resend.as_ref().map(|r| r.key.as_str()).filter(|k| !k.is_empty()) {
+        } else if let Some(key) = settings
+            .email
+            .resend
+            .as_ref()
+            .map(|r| r.key.as_str())
+            .filter(|k| !k.is_empty())
+        {
             Some(Arc::new(email::ResendEmailSender::new(key.to_string())))
         } else {
             Some(Arc::new(email::LogEmailSender))

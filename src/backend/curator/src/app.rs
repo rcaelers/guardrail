@@ -11,9 +11,9 @@ use apalis_redis::{ConnectionManager, RedisConfig, RedisStorage};
 use surrealdb::opt::auth::Root;
 use tracing::{debug, error, info, warn};
 
+use crate::settings::Settings;
 use common::jobs::{ImportSymbolJob, queue};
 use common::retry_startup;
-use crate::settings::Settings;
 use repos::Repo;
 
 use crate::import_crash::ImportCrashProcessor;

@@ -289,7 +289,10 @@ async fn test_memberships_self_or_admin() {
         StatusCode::OK
     );
     // non_admin cannot read someone else's
-    assert_eq!(app.call("GET", &admin_uri, None, Some(&f.non_admin)).await, StatusCode::FORBIDDEN);
+    assert_eq!(
+        app.call("GET", &admin_uri, None, Some(&f.non_admin)).await,
+        StatusCode::FORBIDDEN
+    );
 
     // imp_admin acts as admin
     assert_eq!(

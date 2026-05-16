@@ -148,8 +148,7 @@ async fn create_invitation(
             product_subject.unwrap_or_else(|| DEFAULT_INVITE_SUBJECT.to_string());
         let html_template = product_html.unwrap_or_else(|| DEFAULT_INVITE_HTML.to_string());
         let text_template = product_text.unwrap_or_else(|| DEFAULT_INVITE_TEXT.to_string());
-        let subject =
-            render_invite_template(&subject_template, &invite_url);
+        let subject = render_invite_template(&subject_template, &invite_url);
         let html = render_invite_template(&html_template, &invite_url);
         let text = render_invite_template(&text_template, &invite_url);
         let email = Email {

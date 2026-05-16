@@ -7,7 +7,6 @@ use object_store::{ObjectStore, aws::AmazonS3Builder};
 use serde::{Deserialize, Serialize};
 use tracing_subscriber::{EnvFilter, layer::SubscriberExt};
 
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthenticatedUser {
     pub id: String,
@@ -156,7 +155,9 @@ pub fn spawn_health_server(
     });
 }
 
-pub async fn init_s3_object_store(storage_config: &settings::ObjectStorage) -> Arc<dyn ObjectStore> {
+pub async fn init_s3_object_store(
+    storage_config: &settings::ObjectStorage,
+) -> Arc<dyn ObjectStore> {
     let mut builder = AmazonS3Builder::from_env();
 
     if let Some(region) = &storage_config.region {

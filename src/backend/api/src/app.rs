@@ -18,9 +18,9 @@ use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, Tr
 use tracing::Level;
 use tracing::info;
 
+use crate::settings::Settings;
 use common::jobs::queue;
 use common::retry_startup;
-use crate::settings::Settings;
 use repos::Repo;
 
 use crate::routes;

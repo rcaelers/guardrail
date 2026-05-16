@@ -92,7 +92,11 @@ mod tests {
     #[tokio::test]
     async fn maps_errors_to_expected_responses() {
         let cases = [
-            (ApiError::InternalFailure(), StatusCode::INTERNAL_SERVER_ERROR, "internal failure"),
+            (
+                ApiError::InternalFailure(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal failure",
+            ),
             (
                 ApiError::Failure("bad input".to_string()),
                 StatusCode::BAD_REQUEST,

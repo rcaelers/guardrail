@@ -9,9 +9,9 @@ use apalis::prelude::*;
 use apalis_redis::{ConnectionManager, RedisConfig, RedisStorage};
 use tracing::{debug, error, info, warn};
 
+use crate::settings::Settings;
 use common::jobs::queue;
 use common::retry_startup;
-use crate::settings::Settings;
 
 use crate::jobs::{ImportCrashJob, ImportSymbolJob, MinidumpJob, SymbolJob};
 use crate::minidump::MinidumpProcessor;

@@ -108,9 +108,21 @@ mod tests {
     #[tokio::test]
     async fn maps_errors_to_expected_responses() {
         let cases = [
-            (ApiError::InternalFailure(), StatusCode::INTERNAL_SERVER_ERROR, "internal failure"),
-            (ApiError::Failure("bad".to_string()), StatusCode::BAD_REQUEST, "general failure: bad"),
-            (ApiError::InvalidToken("missing".to_string()), StatusCode::UNAUTHORIZED, "missing"),
+            (
+                ApiError::InternalFailure(),
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "internal failure",
+            ),
+            (
+                ApiError::Failure("bad".to_string()),
+                StatusCode::BAD_REQUEST,
+                "general failure: bad",
+            ),
+            (
+                ApiError::InvalidToken("missing".to_string()),
+                StatusCode::UNAUTHORIZED,
+                "missing",
+            ),
             (ApiError::Forbidden("no".to_string()), StatusCode::FORBIDDEN, "no"),
             (
                 ApiError::ProductAccessDenied("product".to_string()),

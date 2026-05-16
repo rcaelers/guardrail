@@ -11,7 +11,10 @@ pub struct ProductSettingsRepo {}
 
 impl ProductSettingsRepo {
     /// Fetch settings for a product. Returns `None` if no record exists yet.
-    pub async fn get(db: &Surreal<Any>, product_id: &str) -> Result<Option<ProductSettings>, RepoError> {
+    pub async fn get(
+        db: &Surreal<Any>,
+        product_id: &str,
+    ) -> Result<Option<ProductSettings>, RepoError> {
         let mut result = db
             .query(
                 "SELECT *, meta::id(id) AS id, meta::id(product_id) AS product_id \
@@ -25,7 +28,10 @@ impl ProductSettingsRepo {
 
     /// Fetch settings for a product, creating a default record if none exists.
     /// The UPSERT is atomic, so concurrent calls safely converge on one record.
-    pub async fn get_or_create(db: &Surreal<Any>, product_id: &str) -> Result<ProductSettings, RepoError> {
+    pub async fn get_or_create(
+        db: &Surreal<Any>,
+        product_id: &str,
+    ) -> Result<ProductSettings, RepoError> {
         let key = record_key(product_id);
         let mut result = db
             .query(

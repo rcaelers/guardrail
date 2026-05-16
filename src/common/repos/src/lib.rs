@@ -1,6 +1,6 @@
 pub mod annotation;
-pub mod app_settings;
 pub mod api_token;
+pub mod app_settings;
 pub mod attachment;
 pub mod crash;
 pub mod crash_group;

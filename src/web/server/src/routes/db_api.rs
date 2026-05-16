@@ -59,10 +59,7 @@ pub fn router() -> Router<AppState> {
             "/products/{id}/validation-scripts",
             get(list_validation_scripts).post(upload_validation_script),
         )
-        .route(
-            "/products/{id}/validation-scripts/{sid}",
-            delete(delete_validation_script),
-        )
+        .route("/products/{id}/validation-scripts/{sid}", delete(delete_validation_script))
         .route("/products/{id}/product-token", post(update_product_token))
         .route("/products/{pid}/api-tokens", get(list_api_tokens).post(create_api_token))
         .route("/products/{pid}/api-tokens/{id}", delete(delete_api_token))
@@ -169,7 +166,10 @@ impl AppState {
 
         let jwt = crate::jwt::make_anon_jwt(&self.settings).map_err(|e| {
             tracing::error!("Anonymous JWT generation failed: {e}");
-            (StatusCode::SERVICE_UNAVAILABLE, "database authentication unavailable".to_string())
+            (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "database authentication unavailable".to_string(),
+            )
         })?;
 
         match self.repo.authenticated(&jwt).await {
@@ -1114,7 +1114,11 @@ async fn update_product_minidump_settings(
         .collect();
 
     let minidump = data::product_settings::MinidumpSettings {
-        mandatory_annotations: if annotations.is_empty() { None } else { Some(annotations) },
+        mandatory_annotations: if annotations.is_empty() {
+            None
+        } else {
+            Some(annotations)
+        },
     };
     let saved = repos::product_settings::ProductSettingsRepo::upsert_minidump(&db, &id, minidump)
         .await
@@ -1180,7 +1184,9 @@ async fn upload_validation_script(
         repos::validation_scripts::ValidationScriptsRepo::create(&db, &id, &name, &body.content)
             .await
             .map_err(server_error)?;
-    Ok(Json(json!({ "id": script.id, "name": script.name, "created_at": script.created_at })))
+    Ok(Json(
+        json!({ "id": script.id, "name": script.name, "created_at": script.created_at }),
+    ))
 }
 
 async fn delete_validation_script(
@@ -1226,10 +1232,7 @@ async fn update_product_token(
     let rows = run_value(
         &db,
         &format!("UPDATE type::record('products', $id) SET product_token = $new_token RETURN {PRODUCT_PROJ}"),
-        vec![
-            ("id", Value::String(id.clone())),
-            ("new_token", Value::String(token)),
-        ],
+        vec![("id", Value::String(id.clone())), ("new_token", Value::String(token))],
     )
     .await?;
 
@@ -1623,9 +1626,10 @@ async fn get_crash(
 fn build_annotations_map(rows: Vec<Value>) -> serde_json::Map<String, Value> {
     let mut map = serde_json::Map::new();
     for row in rows {
-        if let (Some(key), Some(value)) =
-            (row.get("key").and_then(|v| v.as_str()), row.get("value").and_then(|v| v.as_str()))
-        {
+        if let (Some(key), Some(value)) = (
+            row.get("key").and_then(|v| v.as_str()),
+            row.get("value").and_then(|v| v.as_str()),
+        ) {
             // script source wins over submission for the same key
             let source = row
                 .get("source")
@@ -2254,7 +2258,10 @@ async fn create_api_token(
             ("token_id", Value::String(token_id.to_string())),
             ("token_hash", Value::String(token_hash)),
             ("pid", Value::String(pid)),
-            ("entitlements", Value::Array(entitlements.into_iter().map(Value::String).collect())),
+            (
+                "entitlements",
+                Value::Array(entitlements.into_iter().map(Value::String).collect()),
+            ),
         ],
     )
     .await?;
@@ -2388,7 +2395,10 @@ async fn create_admin_api_token(
             ("token_hash", Value::String(token_hash)),
             ("pid", body.product_id.map(Value::String).unwrap_or(Value::Null)),
             ("uid", body.user_id.map(Value::String).unwrap_or(Value::Null)),
-            ("entitlements", Value::Array(entitlements.into_iter().map(Value::String).collect())),
+            (
+                "entitlements",
+                Value::Array(entitlements.into_iter().map(Value::String).collect()),
+            ),
         ],
     )
     .await?;

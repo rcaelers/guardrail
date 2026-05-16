@@ -26,9 +26,7 @@ impl PendingAccessRepo {
         invitation_id: &str,
     ) -> Result<Option<PendingAccess>, RepoError> {
         let mut result = db
-            .query(
-                "SELECT *, meta::id(id) as id FROM pending_access WHERE invitation_id = $invitation_id LIMIT 1",
-            )
+            .query("SELECT *, meta::id(id) as id FROM pending_access WHERE invitation_id = $invitation_id LIMIT 1")
             .bind(("invitation_id", invitation_id.to_owned()))
             .await
             .map_err(handle_surreal_error)?;

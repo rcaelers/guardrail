@@ -32,7 +32,9 @@ fn hash_secret(secret: &[u8]) -> Result<String, argon2::password_hash::Error> {
 pub fn generate_product_token() -> String {
     const CHARSET: &[u8] = b"abcdefghijklmnopqrstuvwxyz0123456789";
     let mut rng = rng();
-    (0..24).map(|_| CHARSET[rng.random_range(0..CHARSET.len())] as char).collect()
+    (0..24)
+        .map(|_| CHARSET[rng.random_range(0..CHARSET.len())] as char)
+        .collect()
 }
 
 pub fn generate_api_token() -> Result<(Uuid, String, String), argon2::password_hash::Error> {

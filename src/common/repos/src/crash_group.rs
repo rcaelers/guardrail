@@ -47,7 +47,10 @@ impl CrashGroupRepo {
 
     /// Create a new crash group. Returns `Some(id)` if created, `None` if a group with the
     /// same (product_id, fingerprint) already exists (silent duplicate — no DB error raised).
-    pub async fn create(db: &Surreal<Any>, group: NewCrashGroup) -> Result<Option<String>, RepoError> {
+    pub async fn create(
+        db: &Surreal<Any>,
+        group: NewCrashGroup,
+    ) -> Result<Option<String>, RepoError> {
         let id = uuid::Uuid::new_v4().to_string();
         let rows: Vec<serde_json::Value> = db
             .query(

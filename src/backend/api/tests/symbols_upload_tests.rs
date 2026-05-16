@@ -69,7 +69,15 @@ async fn setup(
     let (api_token, _) =
         create_test_token(db, "Test Token", Some(product.id), None, &["symbol-upload"]).await;
 
-    (app, store, boundary.to_owned(), config.content.to_owned(), body, product_token, api_token)
+    (
+        app,
+        store,
+        boundary.to_owned(),
+        config.content.to_owned(),
+        body,
+        product_token,
+        api_token,
+    )
 }
 
 #[derive(Debug, Clone)]

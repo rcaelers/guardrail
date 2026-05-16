@@ -80,15 +80,17 @@ impl IdentityProvisioner for PocketIdProvisioner {
         username: &str,
     ) -> Result<Option<String>, ProvisionerError> {
         // Search by email first; the search is a LIKE so we verify exact match.
-        if let Some(id) = self.search_exact(email, |u| {
-            u.email.as_deref().map(str::to_lowercase) == Some(email.to_lowercase())
-        }).await? {
+        if let Some(id) = self
+            .search_exact(email, |u| {
+                u.email.as_deref().map(str::to_lowercase) == Some(email.to_lowercase())
+            })
+            .await?
+        {
             return Ok(Some(id));
         }
         // Fall back to username.
-        self.search_exact(username, |u| {
-            u.username.to_lowercase() == username.to_lowercase()
-        }).await
+        self.search_exact(username, |u| u.username.to_lowercase() == username.to_lowercase())
+            .await
     }
 
     async fn create_recovery_url(&self, external_id: &str) -> Result<Url, ProvisionerError> {
@@ -134,7 +136,11 @@ impl PocketIdProvisioner {
         Ok(list.data.into_iter().find(|u| predicate(u)).map(|u| u.id))
     }
 
-    async fn build_login_code_url(&self, user_id: &str, ttl: &str) -> Result<Url, ProvisionerError> {
+    async fn build_login_code_url(
+        &self,
+        user_id: &str,
+        ttl: &str,
+    ) -> Result<Url, ProvisionerError> {
         let token = self.create_one_time_token(user_id, ttl).await?;
         let path = format!("{}/{}", self.setup_path.trim_end_matches('/'), token);
         let mut url = self
@@ -194,7 +200,11 @@ impl PocketIdProvisioner {
     }
 
     // Performs an outbound Pocket ID API call; invite handlers cover setup-url behavior through mocks.
-    async fn create_one_time_token(&self, user_id: &str, ttl: &str) -> Result<String, ProvisionerError> {
+    async fn create_one_time_token(
+        &self,
+        user_id: &str,
+        ttl: &str,
+    ) -> Result<String, ProvisionerError> {
         let url = self
             .api_url
             .join(&format!("/api/users/{user_id}/one-time-access-token"))

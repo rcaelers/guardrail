@@ -36,10 +36,7 @@ pub async fn require_entitlement(
 }
 
 /// Require a global (non-product-scoped) API token — grants admin access.
-pub async fn require_admin(
-    headers: &HeaderMap,
-    db: &Surreal<Any>,
-) -> Result<ApiToken, ApiError> {
+pub async fn require_admin(headers: &HeaderMap, db: &Surreal<Any>) -> Result<ApiToken, ApiError> {
     let token_str = extract_bearer_from_headers(headers)
         .ok_or_else(|| ApiError::InvalidToken("missing API token".into()))?;
 

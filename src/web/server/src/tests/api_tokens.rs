@@ -249,7 +249,11 @@ async fn test_delete_admin_api_token() {
     // non_admin and no_session fail on a fresh token
     let (_, tok_a) = create_test_token(&app.db, "del_admin_tok", None, None, &["token"]).await;
     let uri_a = format!("/api-tokens/{}", tok_a.id);
-    assert_eq!(app.call("DELETE", &uri_a, None, None).await, StatusCode::FORBIDDEN, "no_session");
+    assert_eq!(
+        app.call("DELETE", &uri_a, None, None).await,
+        StatusCode::FORBIDDEN,
+        "no_session"
+    );
     assert_eq!(
         app.call("DELETE", &uri_a, None, Some(&f.non_admin)).await,
         StatusCode::FORBIDDEN,
@@ -421,7 +425,8 @@ async fn test_product_api_tokens_with_bearer_tokens() {
         StatusCode::FORBIDDEN
     );
     assert_eq!(
-        app.call_bearer("GET", &list_uri, None, &mismatch_token).await,
+        app.call_bearer("GET", &list_uri, None, &mismatch_token)
+            .await,
         StatusCode::FORBIDDEN
     );
 }

@@ -1198,8 +1198,18 @@ async fn test_minidump_upload_multiple_validation_scripts_run_in_order() {
         .unwrap();
     let crash_info: serde_json::Value = serde_json::from_slice(&crash_info).unwrap();
 
-    assert_eq!(crash_info["annotations"]["step1"]["value"].as_str().unwrap(), "done");
-    assert_eq!(crash_info["annotations"]["step2"]["value"].as_str().unwrap(), "done");
+    assert_eq!(
+        crash_info["annotations"]["step1"]["value"]
+            .as_str()
+            .unwrap(),
+        "done"
+    );
+    assert_eq!(
+        crash_info["annotations"]["step2"]["value"]
+            .as_str()
+            .unwrap(),
+        "done"
+    );
 
     assert_count_crashes(store.clone(), 1).await;
     assert_count_minidumps(store.clone(), 1).await;

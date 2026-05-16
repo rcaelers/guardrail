@@ -52,9 +52,7 @@ impl ProductRepo {
         token: &str,
     ) -> Result<Option<Product>, RepoError> {
         let mut result = db
-            .query(
-                "SELECT *, meta::id(id) as id FROM products WHERE product_token = $product_token LIMIT 1",
-            )
+            .query("SELECT *, meta::id(id) as id FROM products WHERE product_token = $product_token LIMIT 1")
             .bind(("product_token", token.to_owned()))
             .await
             .map_err(handle_surreal_error)?;

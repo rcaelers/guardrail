@@ -655,7 +655,6 @@ impl MinidumpApi {
 
         engine
     }
-
 }
 
 #[cfg(test)]
