@@ -86,6 +86,7 @@ pub struct Database {
     pub database: String,
     pub username: String,
     pub password: String,
+    pub jwk: Jwk,
 }
 
 impl fmt::Debug for Database {
@@ -96,6 +97,7 @@ impl fmt::Debug for Database {
             .field("database", &self.database)
             .field("username", &self.username)
             .field("password", &"[REDACTED]")
+            .field("jwk", &self.jwk)
             .finish()
     }
 }
@@ -108,6 +110,7 @@ impl Default for Database {
             database: "guardrail".into(),
             username: "root".into(),
             password: "root".into(),
+            jwk: Jwk::default(),
         }
     }
 }

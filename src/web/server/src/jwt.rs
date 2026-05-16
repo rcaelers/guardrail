@@ -38,7 +38,7 @@ pub fn make_jwt(
     is_admin: bool,
     settings: &Settings,
 ) -> Result<String, jsonwebtoken::errors::Error> {
-    let validity = settings.jwk.token_validity_in_minutes;
+    let validity = settings.database.jwk.token_validity_in_minutes;
     let validity = if validity > 0 { validity } else { 60 };
     let now = Utc::now();
     let claims = JwtClaims {
@@ -55,7 +55,7 @@ pub fn make_jwt(
         db: settings.database.database.clone(),
         id: Some(user_record_id(username, user_id)),
     };
-    let key = EncodingKey::from_ed_pem(settings.jwk.private_key.as_bytes())?;
+    let key = EncodingKey::from_ed_pem(settings.database.jwk.private_key.as_bytes())?;
     encode(&Header::new(Algorithm::EdDSA), &claims, &key)
 }
 
@@ -77,7 +77,7 @@ mod tests {
     #[test]
     fn jwt_uses_default_validity_when_config_is_zero() {
         let mut settings = crate::settings::Settings::test_default();
-        settings.jwk.token_validity_in_minutes = 0;
+        settings.database.jwk.token_validity_in_minutes = 0;
 
         let token = make_anon_jwt(&settings).expect("jwt should be created");
         assert!(!token.is_empty());

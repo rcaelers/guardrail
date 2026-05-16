@@ -72,6 +72,16 @@ database:
   database: guardrail
   username: root
   password: root
+  jwk:
+    token_validity_in_minutes: 30
+    public_key: |
+      -----BEGIN PUBLIC KEY-----
+      MCowBQYDK2VwAyEAJuN0TiFkCg0HnTjpisG1gfVY7XjKsFGuRm1JVmqkt74=
+      -----END PUBLIC KEY-----"
+    private_key: |
+      -----BEGIN PRIVATE KEY-----
+      MC4CAQAwBQYDK2VwBCIEILRksnzl63UUib+nmLsATtXc/EjOHMaMgJu+nbpiX068
+      -----END PRIVATE KEY-----
 object_storage:
   region: us-east-1
   bucket: guardrail
@@ -79,16 +89,6 @@ object_storage:
   allow_http: true
   access_key_id: "guardrail"
   secret_access_key: "guardrail"
-jwk:
-  token_validity_in_minutes: 30
-  public_key: |
-    -----BEGIN PUBLIC KEY-----
-    MCowBQYDK2VwAyEAJuN0TiFkCg0HnTjpisG1gfVY7XjKsFGuRm1JVmqkt74=
-    -----END PUBLIC KEY-----"
-  private_key: |
-    -----BEGIN PRIVATE KEY-----
-    MC4CAQAwBQYDK2VwBCIEILRksnzl63UUib+nmLsATtXc/EjOHMaMgJu+nbpiX068
-    -----END PRIVATE KEY-----
 oidc:
   issuer_url: https://guardrail.home.krandor.org:1443
   internal_issuer_url:

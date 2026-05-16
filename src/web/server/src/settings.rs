@@ -2,7 +2,7 @@ use common::settings::ConfigError;
 use serde::Deserialize;
 use std::fmt;
 
-use common::settings::{Database, Ingress, Jwk, ObjectStorage, Oidc, Valkey};
+use common::settings::{Database, Ingress, ObjectStorage, Oidc, Valkey};
 
 #[derive(Deserialize, Default)]
 #[serde(default)]
@@ -78,7 +78,6 @@ pub struct ProcessorDefaults {
 #[derive(Debug, Deserialize, Default)]
 pub struct Settings {
     pub ingress: Ingress,
-    pub jwk: Jwk,
     pub oidc: Option<Oidc>,
     pub database: Database,
     pub valkey: Valkey,
@@ -102,8 +101,8 @@ impl Settings {
 impl Settings {
     pub fn test_default() -> Self {
         let mut s = Self::default();
-        s.jwk.public_key = testware::setup::TEST_PUBLIC_KEY.to_string();
-        s.jwk.private_key = testware::setup::TEST_PRIVATE_KEY.to_string();
+        s.database.jwk.public_key = testware::setup::TEST_PUBLIC_KEY.to_string();
+        s.database.jwk.private_key = testware::setup::TEST_PRIVATE_KEY.to_string();
         s.database.namespace = "test".to_string();
         s.database.database = "test".to_string();
         s

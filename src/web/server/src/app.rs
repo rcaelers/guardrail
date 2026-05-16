@@ -58,7 +58,7 @@ impl GuardrailWebApp {
         // Register the JWT access method so RLS $auth variables are populated.
         // OVERWRITE makes this idempotent on restart.
         {
-            let public_key = &settings.jwk.public_key;
+            let public_key = &settings.database.jwk.public_key;
             db.query(format!(
                 r#"DEFINE ACCESS OVERWRITE guardrail_api ON DATABASE TYPE RECORD
                     WITH JWT ALGORITHM EDDSA KEY '{public_key}'
