@@ -1,10 +1,6 @@
-web_server:
-  port: 8082
-  base_url: https://guardrail.home.krandor.org:4433
-api_server:
+ingress:
   port: 80
-ingestion_server:
-  port: 81
+  base_url: https://guardrail.home.krandor.org:4433
 valkey:
   uri: redis://valkey:6379
 processor:
