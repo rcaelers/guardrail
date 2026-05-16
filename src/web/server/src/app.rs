@@ -2,8 +2,10 @@ use std::{net::SocketAddr, sync::Arc};
 
 use axum::{
     Router,
-    extract::{DefaultBodyLimit, State},
+    extract::{DefaultBodyLimit, Request, State},
     http::StatusCode,
+    middleware::{Next, from_fn},
+    response::Response,
     routing::get,
 };
 use axum_server::tls_rustls::RustlsConfig;
@@ -12,19 +14,43 @@ use common::retry_startup;
 use repos::Repo;
 use tower_http::{
     services::ServeDir,
-    trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer},
+    trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
 };
-use tower_sessions::{Expiry, MemoryStore, SessionManagerLayer, cookie::SameSite};
+use tower_sessions::{Expiry, MemoryStore, Session, SessionManagerLayer, cookie::SameSite};
 use tracing::{Level, info};
 use url::Url;
 
+use crate::access::SESSION_KEY;
 use crate::auth_cache::AuthCache;
+use crate::auth_user::AuthenticatedUser;
 use crate::pocket_id;
 use crate::provisioner::IdentityProvisioner;
 use crate::routes::{auth, db_api, home, impersonation, invite};
 use crate::settings::Settings;
 use crate::state::AppState;
 use email::EmailSender;
+
+async fn log_request(session: Session, request: Request, next: Next) -> Response {
+    let user = session
+        .get::<AuthenticatedUser>(SESSION_KEY)
+        .await
+        .ok()
+        .flatten();
+
+    let user_id = user.as_ref().and_then(|u| u.user.as_ref()).map(|u| u.id.as_str()).unwrap_or("anonymous");
+    let real_user_id = user.as_ref().and_then(|u| u.real_user.as_ref()).map(|u| u.id.as_str());
+
+    let method = request.method().clone();
+    let path = request.uri().path().to_owned();
+    let query = request.uri().query().unwrap_or("").to_owned();
+
+    match real_user_id {
+        Some(real) => tracing::info!(method = %method, path, query, user_id, impersonated_by = real, "request"),
+        None => tracing::info!(method = %method, path, query, user_id, "request"),
+    }
+
+    next.run(request).await
+}
 
 pub struct GuardrailWebApp {
     state: AppState,
@@ -201,9 +227,9 @@ impl GuardrailWebApp {
             .layer(
                 TraceLayer::new_for_http()
                     .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
-                    .on_request(DefaultOnRequest::new().level(Level::INFO))
                     .on_response(DefaultOnResponse::new().level(Level::INFO)),
             )
+            .layer(from_fn(log_request))
             .layer(session_layer)
             .with_state(state.clone());
 

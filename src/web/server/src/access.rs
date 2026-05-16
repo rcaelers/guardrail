@@ -12,6 +12,7 @@
 
 use axum::http::{HeaderMap, header};
 use common::token::{decode_api_token, verify_api_secret};
+use tracing::{debug, warn};
 
 use crate::auth_user::{AuthenticatedUser, User};
 use data::api_token::ApiToken;
@@ -71,7 +72,10 @@ pub async fn require_session(session: &Session) -> AppResult<AuthenticatedUser> 
         .get::<AuthenticatedUser>(SESSION_KEY)
         .await
         .map_err(AppError::internal)?
-        .ok_or_else(AppError::forbidden)
+        .ok_or_else(|| {
+            debug!("require_session: no authenticated session");
+            AppError::forbidden()
+        })
 }
 
 /// Require a valid session *and* `is_admin = true`.
@@ -85,8 +89,10 @@ pub async fn require_session_admin(
 ) -> AppResult<AuthenticatedUser> {
     let user = require_current_session_user(session, db).await?;
     if !user.is_admin() {
+        warn!(user_id = %user.active().id, "require_session_admin: access denied, not an admin");
         return Err(AppError::forbidden());
     }
+    debug!(user_id = %user.active().id, "require_session_admin: access granted");
     Ok(user)
 }
 
@@ -123,8 +129,10 @@ pub async fn require_admin(
 ) -> AppResult<Principal> {
     let user = require_current_session_user(session, db).await?;
     if !user.is_admin() {
+        warn!(user_id = %user.active().id, "require_admin: access denied, not an admin");
         return Err(AppError::forbidden());
     }
+    debug!(user_id = %user.active().id, "require_admin: access granted");
     Ok(Principal::User(user))
 }
 
@@ -140,12 +148,15 @@ pub async fn require_product_maintainer(
 ) -> AppResult<Principal> {
     let user = require_current_session_user(session, db).await?;
     if user.is_admin() {
+        debug!(user_id = %user.active().id, product_id, "require_product_maintainer: access granted (admin)");
         return Ok(Principal::User(user));
     }
     let maintained = get_maintained_product_ids(db, &user.active().id).await?;
     if !maintained.contains(&product_id.to_string()) {
+        warn!(user_id = %user.active().id, product_id, "require_product_maintainer: access denied, not a maintainer");
         return Err(AppError::forbidden());
     }
+    debug!(user_id = %user.active().id, product_id, "require_product_maintainer: access granted");
     Ok(Principal::User(user))
 }
 
@@ -161,6 +172,7 @@ pub async fn require_session_product_role(
 ) -> AppResult<AuthenticatedUser> {
     let user = require_current_session_user(session, db).await?;
     if user.is_admin() {
+        debug!(user_id = %user.active().id, product_id, required_role, "require_session_product_role: access granted (admin)");
         return Ok(user);
     }
 
@@ -182,9 +194,11 @@ pub async fn require_session_product_role(
         .iter()
         .any(|role| product_role_satisfies(role, required_role))
     {
+        debug!(user_id = %user.active().id, product_id, required_role, "require_session_product_role: access granted");
         return Ok(user);
     }
 
+    warn!(user_id = %user.active().id, product_id, required_role, ?roles, "require_session_product_role: access denied, insufficient role");
     Err(AppError::forbidden())
 }
 
@@ -200,8 +214,10 @@ pub async fn require_user_or_admin(
 ) -> AppResult<Principal> {
     let user = require_current_session_user(session, db).await?;
     if user.is_admin() || repos::record_key(&user.active().id) == repos::record_key(user_id) {
+        debug!(user_id = %user.active().id, target_user_id = user_id, "require_user_or_admin: access granted");
         return Ok(Principal::User(user));
     }
+    warn!(user_id = %user.active().id, target_user_id = user_id, "require_user_or_admin: access denied");
     Err(AppError::forbidden())
 }
 
@@ -287,7 +303,10 @@ async fn require_current_session_user(
 
     let user = fetch_user(db, &active_id)
         .await?
-        .ok_or_else(AppError::forbidden)?;
+        .ok_or_else(|| {
+            warn!(user_id = %active_id, "session user no longer exists in database");
+            AppError::forbidden()
+        })?;
 
     Ok(AuthenticatedUser {
         user: Some(user),
@@ -381,6 +400,7 @@ async fn verify_and_touch_token(
 
     touch_token_last_used(db, &token.id).await;
 
+    debug!(token_id = %token.id, "API token verified");
     Ok(token)
 }
 
