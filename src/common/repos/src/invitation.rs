@@ -219,4 +219,12 @@ impl InvitationRepo {
         .map_err(handle_surreal_error)?;
         Ok(())
     }
+
+    pub async fn delete(db: &Surreal<Any>, id: impl ToString) -> Result<(), RepoError> {
+        db.query("DELETE type::record('invitations', $id)")
+            .bind(("id", record_key(id.to_string())))
+            .await
+            .map_err(handle_surreal_error)?;
+        Ok(())
+    }
 }

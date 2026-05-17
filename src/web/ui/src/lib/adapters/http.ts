@@ -348,8 +348,12 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
       return json<Invitation>(r, 'updateInvitation');
     },
     async revokeInvitation(id: string) {
-      const r = await req(`/invitations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const r = await jpost(`/invitations/${encodeURIComponent(id)}/revoke`, {});
       await assertOk(r, 'revokeInvitation');
+    },
+    async deleteInvitation(id: string) {
+      const r = await req(`/invitations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await assertOk(r, 'deleteInvitation');
     },
     async resendInvitation(id: string, to: string) {
       const r = await jpost(`/invitations/${encodeURIComponent(id)}/send`, { to });

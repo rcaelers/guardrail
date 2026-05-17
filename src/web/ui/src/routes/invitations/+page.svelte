@@ -347,6 +347,14 @@
               >Revoke</button>
             </form>
           {/if}
+          <form method="POST" action="?/delete" use:enhance>
+            <input type="hidden" name="id" value={inv.id} />
+            <button
+              type="button"
+              onclick={(e) => { pendingConfirm = { message: 'Permanently delete this invitation?', confirmLabel: 'Delete', form: (e.currentTarget as HTMLElement).closest('form')! }; }}
+              class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted hover:text-red-600"
+            >Delete</button>
+          </form>
         </div>
       </div>
 

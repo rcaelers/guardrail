@@ -35,7 +35,8 @@ fn render_invite_template(template: &str, invite_url: &str) -> String {
 pub fn api_router() -> Router<AppState> {
     Router::new()
         .route("/invitations", get(list_invitations).post(create_invitation))
-        .route("/invitations/{id}", put(update_invitation).delete(revoke_invitation))
+        .route("/invitations/{id}", put(update_invitation).delete(delete_invitation))
+        .route("/invitations/{id}/revoke", axum::routing::post(revoke_invitation))
         .route("/invitations/{id}/send", axum::routing::post(send_invitation_email))
         .route("/invitations/redeem/{code}", get(get_invite_info).post(redeem_invite_json))
         .route("/invitations/redeem/{code}/setup-url", axum::routing::post(refresh_setup_url))
@@ -307,6 +308,37 @@ async fn revoke_invitation(
         .await
         .map_err(AppError::internal)?;
     Ok(Json(serde_json::json!({ "status": "revoked" })))
+}
+
+async fn delete_invitation(
+    State(state): State<AppState>,
+    session: Session,
+    Path(id): Path<String>,
+) -> AppResult<Json<serde_json::Value>> {
+    let user = access::require_session(&session).await?;
+
+    if !user.is_admin() {
+        let invitation = repos::invitation::InvitationRepo::get_by_id(&state.repo.db, &id)
+            .await
+            .map_err(AppError::internal)?
+            .ok_or_else(|| AppError::not_found("Invitation not found"))?;
+
+        let maintained_ids =
+            access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
+        let can_delete = invitation.created_by == user.active().id
+            || invitation
+                .grants
+                .iter()
+                .any(|g| maintained_ids.contains(&g.product_id));
+        if !can_delete {
+            return Err(AppError::forbidden());
+        }
+    }
+
+    repos::invitation::InvitationRepo::delete(&state.repo.db, &id)
+        .await
+        .map_err(AppError::internal)?;
+    Ok(Json(serde_json::json!({ "status": "deleted" })))
 }
 
 // --- Public JSON endpoints for SvelteKit invite flow ---

@@ -115,6 +115,22 @@ export const actions: Actions = {
     }
   },
 
+  delete: async ({ request, locals }) => {
+    if (!locals.user) throw error(401);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+
+    const form = await request.formData();
+    const id = String(form.get('id') ?? '');
+    if (!id) return fail(400, { error: 'missing id' });
+
+    try {
+      await adapter.deleteInvitation(id);
+      return { ok: true };
+    } catch (e) {
+      return fail(400, { error: (e as Error).message });
+    }
+  },
+
   resend: async ({ request, locals }) => {
     if (!locals.user) throw error(401);
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
