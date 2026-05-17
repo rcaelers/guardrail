@@ -217,6 +217,24 @@ impl SignatureGenerator {
         flattened_frame_list
     }
 
+    fn collapse_consecutive_duplicates(signatures: Vec<String>) -> Vec<String> {
+        let mut result = Vec::new();
+        let mut iter = signatures.into_iter().peekable();
+        while let Some(current) = iter.next() {
+            let mut count = 1usize;
+            while iter.peek() == Some(&current) {
+                iter.next();
+                count += 1;
+            }
+            if count > 1 {
+                result.push(format!("{current}(x{count})"));
+            } else {
+                result.push(current);
+            }
+        }
+        result
+    }
+
     pub fn generate(&self, crashing_thread: &serde_json::Value) -> Result<String, JobError> {
         let frames = self.flatten_frame_list(crashing_thread);
         let signatures = self.generate_signatures(frames);
@@ -241,6 +259,8 @@ impl SignatureGenerator {
         if relevant_signatures.len() > self.maximum_frame_count {
             relevant_signatures.truncate(self.maximum_frame_count);
         }
+
+        let relevant_signatures = Self::collapse_consecutive_duplicates(relevant_signatures);
 
         let mut signature = relevant_signatures.join(&self.delimiter);
 
@@ -932,6 +952,50 @@ mod tests {
             result,
             "crash.exe!std::vector<T>::push_back|crash.exe!MyNamespace::MyClass::processData|helper.dll!operator<<"
         );
+    }
+
+    #[test]
+    fn test_collapse_consecutive_duplicates() {
+        let config = SignatureGeneratorConfig::default();
+        let generator = SignatureGenerator::new(config).unwrap();
+
+        let thread_data = serde_json::json!({
+            "frames": [
+                {"module": "workrave.exe", "function": "Menus::on_menu_about()", "line": 1},
+                {"module": "libgobject-2.0-0.dll", "offset": "0x1"},
+                {"module": "libgobject-2.0-0.dll", "offset": "0x2"},
+                {"module": "libgobject-2.0-0.dll", "offset": "0x3"},
+                {"module": "ucrtbase.dll", "offset": "0x1"}
+            ]
+        });
+
+        let result = generator.generate(&thread_data).unwrap();
+        assert_eq!(
+            result,
+            "workrave.exe!Menus::on_menu_about|libgobject-2.0-0.dll!(x3)|ucrtbase.dll!"
+        );
+
+        // Single occurrence — no annotation
+        let thread_data = serde_json::json!({
+            "frames": [
+                {"module": "a.dll", "offset": "0x1"},
+                {"module": "b.dll", "offset": "0x1"},
+                {"module": "a.dll", "offset": "0x2"}
+            ]
+        });
+        let result = generator.generate(&thread_data).unwrap();
+        assert_eq!(result, "a.dll!|b.dll!|a.dll!");
+
+        // All identical
+        let thread_data = serde_json::json!({
+            "frames": [
+                {"module": "foo.dll", "offset": "0x1"},
+                {"module": "foo.dll", "offset": "0x2"},
+                {"module": "foo.dll", "offset": "0x3"}
+            ]
+        });
+        let result = generator.generate(&thread_data).unwrap();
+        assert_eq!(result, "foo.dll!(x3)");
     }
 
     #[test]
