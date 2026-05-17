@@ -29,6 +29,23 @@
   let viewingScript: ValidationScript | null = $state(null);
   let viewLoading = $state(false);
   let viewError = $state('');
+  let panelWidth = $state(860);
+  let resizing = $state(false);
+
+  function startResize(e: MouseEvent) {
+    e.preventDefault();
+    resizing = true;
+    const onMove = (e: MouseEvent) => {
+      panelWidth = Math.max(380, Math.min(window.innerWidth * 0.95, window.innerWidth - e.clientX));
+    };
+    const onUp = () => {
+      resizing = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
 
   async function openScript(script: ValidationScript) {
     viewingScript = { ...script };
@@ -292,7 +309,20 @@
   ></button>
 
   <!-- Panel -->
-  <div class="fixed inset-y-0 right-0 z-50 flex w-full max-w-[680px] flex-col bg-[#1e1e1e] shadow-2xl">
+  <div
+    class="fixed inset-y-0 right-0 z-50 flex flex-col bg-[#1e1e1e] shadow-2xl"
+    style="width: min({panelWidth}px, 95vw); {resizing ? 'user-select:none' : ''}"
+  >
+    <!-- Resize handle -->
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize panel"
+      class="absolute inset-y-0 left-0 w-1.5 cursor-col-resize transition-colors hover:bg-white/20"
+      class:bg-white/20={resizing}
+      onmousedown={startResize}
+    ></div>
+
     <!-- Header -->
     <div class="flex items-center justify-between border-b border-white/10 px-5 py-3">
       <div>
