@@ -1,7 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { invalidateAll } from '$app/navigation';
-  import { createAdapter } from '$lib/adapters';
   import type { PageData, ActionData } from './$types';
   import type { ValidationScript } from '$lib/adapters/types';
 
@@ -36,9 +35,9 @@
     viewLoading = true;
     viewError = '';
     try {
-      const adapter = createAdapter('');
-      const full = await adapter.getValidationScript(data.productId, script.id);
-      viewingScript = full;
+      const r = await fetch(`/p/${encodeURIComponent(data.productId)}/settings/crash/scripts/${encodeURIComponent(script.id)}`);
+      if (!r.ok) throw new Error(`${r.status}`);
+      viewingScript = await r.json();
     } catch (e) {
       viewError = (e as Error).message || 'Failed to load script content.';
     } finally {
