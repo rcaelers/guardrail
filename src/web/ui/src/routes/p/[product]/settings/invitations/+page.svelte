@@ -159,13 +159,14 @@
         {:else}
           <input type="hidden" name="is_admin" value="false" />
         {/if}
-        <div class="flex flex-col justify-end gap-2">
-          <label class="flex items-center gap-2 text-[13px]">
+        <div class="flex flex-col gap-1.5">
+          <span class="mb-0.5 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Send invitation</span>
+          <label class="flex cursor-pointer items-center gap-2 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]">
             <input
               type="checkbox"
               name="send_email"
               bind:checked={createSendEmail}
-              class="h-4 w-4 rounded border border-line dark:border-line-dark"
+              class="h-4 w-4 shrink-0 rounded border border-line dark:border-line-dark"
             />
             Send email invitation
           </label>
