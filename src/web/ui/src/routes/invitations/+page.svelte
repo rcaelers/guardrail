@@ -158,8 +158,8 @@
         {:else}
           <input type="hidden" name="is_admin" value="false" />
         {/if}
-        <div class="flex flex-col gap-1.5">
-          <span class="mb-0.5 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Send invitation</span>
+        <div class="flex flex-col">
+          <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Send invitation</span>
           <label class="flex cursor-pointer items-center gap-2 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]">
             <input
               type="checkbox"
@@ -176,7 +176,7 @@
               placeholder="recipient@example.com"
               bind:value={createEmailTo}
               required
-              class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]"
+              class="mt-1.5 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]"
             />
           {/if}
         </div>
