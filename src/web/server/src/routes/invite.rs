@@ -128,6 +128,7 @@ async fn create_invitation(
         &state.repo.db,
         NewInvitation {
             created_by,
+            email_to: body.to.clone(),
             expires_at: body.expires_at,
             max_uses: body.max_uses,
             is_admin: body.is_admin,

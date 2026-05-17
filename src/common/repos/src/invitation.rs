@@ -131,6 +131,7 @@ impl InvitationRepo {
                 "CREATE type::record('invitations', $id) CONTENT {
                     code:       $code,
                     created_by: $created_by,
+                    email_to:   $email_to,
                     expires_at: $expires_at,
                     max_uses:   $max_uses,
                     use_count:  0,
@@ -144,6 +145,7 @@ impl InvitationRepo {
             .bind(("id", id))
             .bind(("code", code))
             .bind(("created_by", invitation.created_by))
+            .bind(("email_to", invitation.email_to))
             .bind(("expires_at", invitation.expires_at))
             .bind(("max_uses", invitation.max_uses))
             .bind(("is_admin", invitation.is_admin))

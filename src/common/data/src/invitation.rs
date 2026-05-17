@@ -22,6 +22,7 @@ pub struct Invitation {
     pub id: String,
     pub code: String,
     pub created_by: String,
+    pub email_to: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub max_uses: Option<u32>,
     pub use_count: u32,
@@ -35,6 +36,7 @@ pub struct Invitation {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewInvitation {
     pub created_by: String,
+    pub email_to: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub max_uses: Option<u32>,
     pub is_admin: bool,

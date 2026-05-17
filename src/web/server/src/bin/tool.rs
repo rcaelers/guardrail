@@ -400,6 +400,7 @@ async fn run_invite(
                 db,
                 NewInvitation {
                     created_by: args.created_by.trim().to_string(),
+                    email_to: None,
                     expires_at: args.expires_at,
                     max_uses: args.max_uses,
                     is_admin: args.admin,

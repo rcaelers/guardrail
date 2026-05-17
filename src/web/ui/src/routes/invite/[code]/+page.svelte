@@ -47,7 +47,7 @@
       </div>
     {/if}
 
-    <form method="POST" use:enhance class="flex flex-col gap-4">
+    <form method="POST" action="?/submit" use:enhance class="flex flex-col gap-4">
       <div class="flex flex-col gap-1">
         <label for="username" class="text-[13px] font-medium">Username</label>
         <input

@@ -333,6 +333,7 @@ export interface Invitation {
   id: string;
   code: string;
   created_by: string;
+  email_to: string | null;
   expires_at: string | null;
   max_uses: number | null;
   use_count: number;

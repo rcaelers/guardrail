@@ -54,7 +54,7 @@
     if (resendingId === inv.id) { resendingId = null; return; }
     editingId = null;
     resendingId = inv.id;
-    resendEmail = '';
+    resendEmail = inv.email_to ?? '';
   }
 
   function startEdit(inv: PageData['invitations'][number]) {
@@ -254,7 +254,7 @@
   <div class="overflow-hidden rounded-md border border-line dark:border-line-dark">
     <div
       class="grid items-center gap-4 bg-surface-panel dark:bg-surface-panelDark px-4 py-2 text-[10.5px] font-medium uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark"
-      style:grid-template-columns="180px 90px 130px 120px 1fr 130px"
+      style:grid-template-columns="180px 90px 130px 120px 1fr auto"
     >
       <span>Code</span>
       <span>Status</span>
@@ -278,7 +278,7 @@
 
       <div
         class="grid items-center gap-4 border-t border-line dark:border-line-dark px-4 py-2.5 text-[13px]"
-        style:grid-template-columns="180px 90px 130px 120px 1fr 130px"
+        style:grid-template-columns="180px 90px 130px 120px 1fr auto"
       >
         <!-- Code + copy -->
         <div class="flex min-w-0 items-center gap-1.5">

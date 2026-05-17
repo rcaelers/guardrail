@@ -1,0 +1,24 @@
+id = "20260517000001__invitation_email_to"
+name = "invitation_email_to"
+source_schema_hash = "7164b8656d6c6c106c0028bcaa5dc51c3d67b13fda1365804f598b958b84decf"
+target_schema_hash = "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+compatibility = "phased"
+renames = []
+
+[[steps]]
+id = "apply_expand_schema"
+phase = "start"
+kind = "apply_schema"
+files = ["database/schema/guardrail.surql"]
+entities = []
+
+[[steps]]
+id = "rollback_expand_schema"
+phase = "rollback"
+kind = "remove_entities"
+files = []
+
+[[steps.entities]]
+kind = "field"
+scope = "invitations"
+name = "email_to"

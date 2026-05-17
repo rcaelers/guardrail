@@ -24,7 +24,7 @@ export const load: PageServerLoad = async ({ params }) => {
 };
 
 export const actions: Actions = {
-  default: async ({ params, request }) => {
+  submit: async ({ params, request }) => {
     const form = await request.formData();
     const username = String(form.get('username') ?? '').trim();
     const email = String(form.get('email') ?? '').trim();
