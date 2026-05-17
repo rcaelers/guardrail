@@ -324,7 +324,7 @@
                 </div>
                 {#if isSelf}
                   <p class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
-                    You can edit your own name and email, but self-demotion is blocked to avoid locking yourself out of the admin console.
+                    Admin status cannot be changed for your own account to avoid locking yourself out.
                   </p>
                 {:else}
                   <label class="flex flex-col">
@@ -357,41 +357,33 @@
                         <span class="inline-block h-[10px] w-[10px] shrink-0 rounded-[3px]" style:background={perm.product.color}></span>
                         <span class="truncate text-[12.5px] font-medium">{perm.product.name}</span>
                       </div>
-                      {#if isSelf}
-                        <span class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
-                          {perm.role === 'maintainer' ? 'Maintainer' : perm.role === 'readwrite' ? 'Read · write' : 'Read-only'}
-                        </span>
-                      {:else}
-                        <select
-                          value={perm.role}
-                          onchange={(e) => {
-                            const newRole = e.currentTarget.value;
-                            editPermissions = editPermissions.map((ep) =>
-                              ep.productId === perm.productId ? { ...ep, role: newRole } : ep
-                            );
-                          }}
-                          class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1 text-[12px]"
-                        >
-                          <option value="readonly">Read-only</option>
-                          <option value="readwrite">Read · write</option>
-                          <option value="maintainer">Maintainer</option>
-                        </select>
-                      {/if}
+                      <select
+                        value={perm.role}
+                        onchange={(e) => {
+                          const newRole = e.currentTarget.value;
+                          editPermissions = editPermissions.map((ep) =>
+                            ep.productId === perm.productId ? { ...ep, role: newRole } : ep
+                          );
+                        }}
+                        class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1 text-[12px]"
+                      >
+                        <option value="readonly">Read-only</option>
+                        <option value="readwrite">Read · write</option>
+                        <option value="maintainer">Maintainer</option>
+                      </select>
                       <div class="flex justify-end">
-                        {#if !isSelf}
-                          <button
-                            type="button"
-                            onclick={() => { editPermissions = editPermissions.filter((ep) => ep.productId !== perm.productId); }}
-                            class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark hover:text-red-600"
-                          >Remove</button>
-                        {/if}
+                        <button
+                          type="button"
+                          onclick={() => { editPermissions = editPermissions.filter((ep) => ep.productId !== perm.productId); }}
+                          class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark hover:text-red-600"
+                        >Remove</button>
                       </div>
                     </div>
                   {/each}
                 {/if}
               </div>
 
-              {#if !isSelf && editAvailableProducts.length > 0}
+              {#if editAvailableProducts.length > 0}
                 <div class="mt-4 grid gap-3 rounded-md border border-dashed border-line dark:border-line-dark px-3 py-3 lg:grid-cols-[1.4fr,160px,120px]">
                   <label class="flex flex-col">
                     <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Add product</span>

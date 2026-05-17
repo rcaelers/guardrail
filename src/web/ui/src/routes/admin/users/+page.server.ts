@@ -73,15 +73,15 @@ export const actions: Actions = {
       await adapter.updateUser(id, { email, name });
       if (!isSelf) {
         await adapter.setAdmin(id, isAdmin);
-        const current = await adapter.membershipsFor(id);
-        const newIds = new Set(permissions.map((p) => p.productId));
-        for (const p of permissions) {
-          await adapter.grantAccess({ userId: id, productId: p.productId, role: p.role });
-        }
-        for (const p of current) {
-          if (!newIds.has(p.productId)) {
-            await adapter.revokeAccess({ userId: id, productId: p.productId });
-          }
+      }
+      const current = await adapter.membershipsFor(id);
+      const newIds = new Set(permissions.map((p) => p.productId));
+      for (const p of permissions) {
+        await adapter.grantAccess({ userId: id, productId: p.productId, role: p.role });
+      }
+      for (const p of current) {
+        if (!newIds.has(p.productId)) {
+          await adapter.revokeAccess({ userId: id, productId: p.productId });
         }
       }
       return { ok: true };
