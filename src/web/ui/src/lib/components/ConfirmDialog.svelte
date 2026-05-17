@@ -14,6 +14,7 @@
   onclick={oncancel}
 >
   <div
+    role="document"
     class="w-[380px] rounded-lg border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-5 py-5 shadow-xl"
     onclick={(e) => e.stopPropagation()}
   >
