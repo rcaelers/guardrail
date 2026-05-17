@@ -4,11 +4,11 @@ import { error, fail } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { requireProductAccess } from '$lib/server/product-access';
 
-export const load: PageServerLoad = async ({ parent }) => {
+export const load: PageServerLoad = async ({ parent, url }) => {
   const { product } = await parent();
   return {
     productToken: product.productToken ?? null,
-    ingestionUrl: env.GUARDRAIL_INGESTION_URL ?? ''
+    ingestionUrl: env.GUARDRAIL_INGESTION_URL || url.origin
   };
 };
 

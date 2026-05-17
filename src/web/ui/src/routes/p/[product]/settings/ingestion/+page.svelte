@@ -16,12 +16,8 @@
   const hasToken = $derived(tokenInput.trim().length > 0);
 
   const base = data.ingestionUrl;
-  const minidumpUrl = $derived(
-    hasToken && base ? `${base}/api/minidump/${tokenInput}/upload` : null
-  );
-  const symbolsUrl = $derived(
-    hasToken && base ? `${base}/api/symbols/${tokenInput}/upload` : null
-  );
+  const minidumpUrl = $derived(`${base}/api/minidump/${tokenInput}/upload`);
+  const symbolsUrl = $derived(`${base}/api/symbols/${tokenInput}/upload`);
 
   function generateToken() {
     tokenInput = crypto.randomUUID();
@@ -84,25 +80,11 @@
       <div class="px-4 py-3 bg-surface dark:bg-surface-dark space-y-3">
         <div>
           <div class="text-[12px] font-medium mb-1">Minidump upload</div>
-          {#if minidumpUrl}
-            <code class="font-mono text-[11px] break-all select-all text-ink-muted dark:text-ink-mutedDark">{minidumpUrl}</code>
-          {:else}
-            <code class="font-mono text-[11px] break-all text-ink-muted dark:text-ink-mutedDark">/api/minidump/{tokenInput}/upload</code>
-            {#if !base}
-              <p class="text-[11px] text-ink-muted dark:text-ink-mutedDark mt-1">Set <code class="font-mono">GUARDRAIL_INGESTION_URL</code> to see the full URL.</p>
-            {/if}
-          {/if}
+          <code class="font-mono text-[11px] break-all select-all text-ink-muted dark:text-ink-mutedDark">{minidumpUrl}</code>
         </div>
         <div>
           <div class="text-[12px] font-medium mb-1">Symbol upload</div>
-          {#if symbolsUrl}
-            <code class="font-mono text-[11px] break-all select-all text-ink-muted dark:text-ink-mutedDark">{symbolsUrl}</code>
-          {:else}
-            <code class="font-mono text-[11px] break-all text-ink-muted dark:text-ink-mutedDark">/api/symbols/{tokenInput}/upload</code>
-            {#if !base}
-              <p class="text-[11px] text-ink-muted dark:text-ink-mutedDark mt-1">Set <code class="font-mono">GUARDRAIL_INGESTION_URL</code> to see the full URL.</p>
-            {/if}
-          {/if}
+          <code class="font-mono text-[11px] break-all select-all text-ink-muted dark:text-ink-mutedDark">{symbolsUrl}</code>
         </div>
       </div>
     </div>
