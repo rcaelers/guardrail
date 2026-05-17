@@ -228,6 +228,10 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
       const r = await req(`/products/${encodeURIComponent(id)}/validation-scripts`);
       return json<ValidationScript[]>(r, 'listValidationScripts');
     },
+    async getValidationScript(productId, scriptId) {
+      const r = await req(`/products/${encodeURIComponent(productId)}/validation-scripts/${encodeURIComponent(scriptId)}`);
+      return json<ValidationScript>(r, 'getValidationScript');
+    },
     async uploadValidationScript(id, name, content) {
       const r = await jpost(`/products/${encodeURIComponent(id)}/validation-scripts`, { name, content });
       return json<ValidationScript>(r, 'uploadValidationScript');

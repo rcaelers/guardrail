@@ -56,6 +56,26 @@ impl ValidationScriptsRepo {
             .ok_or_else(|| RepoError::DatabaseError("create returned no row".into()))
     }
 
+    pub async fn get(
+        db: &Surreal<Any>,
+        script_id: &str,
+        product_id: &str,
+    ) -> Result<Option<ValidationScript>, RepoError> {
+        let sid = record_key(script_id);
+        let pid = record_key(product_id);
+        let mut result = db
+            .query(
+                "SELECT *, meta::id(id) AS id, meta::id(product_id) AS product_id \
+                 FROM ONLY type::record('validation_scripts', $sid) \
+                 WHERE product_id = type::record('products', $pid)",
+            )
+            .bind(("sid", sid))
+            .bind(("pid", pid))
+            .await
+            .map_err(handle_surreal_error)?;
+        crate::take_one(&mut result, 0)
+    }
+
     pub async fn delete(
         db: &Surreal<Any>,
         script_id: &str,

@@ -59,7 +59,10 @@ pub fn router() -> Router<AppState> {
             "/products/{id}/validation-scripts",
             get(list_validation_scripts).post(upload_validation_script),
         )
-        .route("/products/{id}/validation-scripts/{sid}", delete(delete_validation_script))
+        .route(
+            "/products/{id}/validation-scripts/{sid}",
+            get(get_validation_script).delete(delete_validation_script),
+        )
         .route("/products/{id}/product-token", post(update_product_token))
         .route("/products/{pid}/api-tokens", get(list_api_tokens).post(create_api_token))
         .route("/products/{pid}/api-tokens/{id}", delete(delete_api_token))
@@ -1192,6 +1195,30 @@ async fn upload_validation_script(
     Ok(Json(
         json!({ "id": script.id, "name": script.name, "created_at": script.created_at }),
     ))
+}
+
+async fn get_validation_script(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path((id, sid)): Path<(String, String)>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &id)
+        .await
+        .map_err(access_err)?;
+    let db = s.user_db(&session).await?;
+
+    let script = repos::validation_scripts::ValidationScriptsRepo::get(&db, &sid, &id)
+        .await
+        .map_err(server_error)?
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Script not found".to_string()))?;
+
+    Ok(Json(json!({
+        "id": script.id,
+        "name": script.name,
+        "content": script.content,
+        "created_at": script.created_at,
+    })))
 }
 
 async fn delete_validation_script(

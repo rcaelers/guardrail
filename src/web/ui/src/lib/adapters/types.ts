@@ -370,6 +370,7 @@ export interface ValidationScript {
   id: string;
   name: string;
   created_at: string;
+  content?: string;
 }
 
 export interface AppEmailSettings {
@@ -518,6 +519,7 @@ export interface GuardrailAdapter {
   getMinidumpSettings(id: string): Promise<MinidumpSettings>;
   updateMinidumpSettings(id: string, settings: MinidumpSettings): Promise<MinidumpSettings>;
   listValidationScripts(id: string): Promise<ValidationScript[]>;
+  getValidationScript(productId: string, scriptId: string): Promise<ValidationScript>;
   uploadValidationScript(id: string, name: string, content: string): Promise<ValidationScript>;
   deleteValidationScript(id: string, scriptId: string): Promise<void>;
 

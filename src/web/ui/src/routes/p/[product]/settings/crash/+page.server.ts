@@ -46,11 +46,10 @@ export const actions: Actions = {
       throw error(403, 'Maintainer required');
 
     const form = await request.formData();
-    const name = ((form.get('script_name') as string) ?? '').trim();
     const file = form.get('script_file') as File | null;
 
-    if (!name) return fail(400, { error: 'Script name is required' });
     if (!file || file.size === 0) return fail(400, { error: 'Script file is required' });
+    const name = file.name;
 
     const content = await file.text();
     if (!content.trim()) return fail(400, { error: 'Script file is empty' });
