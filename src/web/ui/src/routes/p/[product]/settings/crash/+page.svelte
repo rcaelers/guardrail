@@ -318,8 +318,7 @@
       role="separator"
       aria-orientation="vertical"
       aria-label="Resize panel"
-      class="absolute inset-y-0 left-0 w-1.5 cursor-col-resize transition-colors hover:bg-white/20"
-      class:bg-white/20={resizing}
+      class="absolute inset-y-0 left-0 w-1.5 cursor-col-resize transition-colors hover:bg-white/20 {resizing ? 'bg-white/20' : ''}"
       onmousedown={startResize}
     ></div>
 
