@@ -113,5 +113,23 @@ export const actions: Actions = {
     } catch (e) {
       return fail(400, { error: (e as Error).message });
     }
+  },
+
+  resend: async ({ request, locals }) => {
+    if (!locals.user) throw error(401);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+
+    const form = await request.formData();
+    const id = String(form.get('id') ?? '');
+    const to = String(form.get('email_to') ?? '');
+    if (!id) return fail(400, { error: 'missing id' });
+    if (!to) return fail(400, { error: 'missing email address' });
+
+    try {
+      await adapter.resendInvitation(id, to);
+      return { ok: true, action: 'resend' };
+    } catch (e) {
+      return fail(400, { error: (e as Error).message });
+    }
   }
 };

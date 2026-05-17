@@ -47,7 +47,18 @@
   let editProductPick = $state('');
   let editRolePick = $state<Role>('readonly');
 
+  let resendingId = $state<string | null>(null);
+  let resendEmail = $state('');
+
+  function startResend(inv: PageData['invitations'][number]) {
+    if (resendingId === inv.id) { resendingId = null; return; }
+    editingId = null;
+    resendingId = inv.id;
+    resendEmail = '';
+  }
+
   function startEdit(inv: PageData['invitations'][number]) {
+    resendingId = null;
     if (editingId === inv.id) { editingId = null; return; }
     editingId = inv.id;
     editGrants = inv.grants.map((g) => ({ ...g }));
@@ -319,6 +330,11 @@
           {#if inv.status !== 'Revoked'}
             <button
               type="button"
+              onclick={() => startResend(inv)}
+              class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px]"
+            >{resendingId === inv.id ? 'Close' : 'Resend'}</button>
+            <button
+              type="button"
               onclick={() => startEdit(inv)}
               class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px]"
             >{editingId === inv.id ? 'Close' : 'Edit'}</button>
@@ -333,6 +349,34 @@
           {/if}
         </div>
       </div>
+
+      <!-- Inline resend panel -->
+      {#if resendingId === inv.id}
+        <div class="border-t border-line dark:border-line-dark bg-surface-panel/55 px-5 py-3 dark:bg-surface-panelDark/55">
+          <form
+            method="POST"
+            action="?/resend"
+            use:enhance={() => async ({ update, result }) => {
+              await update();
+              if (result.type === 'success') resendingId = null;
+            }}
+            class="flex items-center gap-2"
+          >
+            <input type="hidden" name="id" value={inv.id} />
+            <span class="shrink-0 text-[12px] text-ink-muted dark:text-ink-mutedDark">Send to</span>
+            <input
+              name="email_to"
+              type="email"
+              placeholder="recipient@example.com"
+              bind:value={resendEmail}
+              required
+              class="min-w-0 flex-1 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]"
+            />
+            <button type="submit" class="shrink-0 rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-white">Send</button>
+            <button type="button" onclick={() => (resendingId = null)} class="shrink-0 rounded-md border border-line dark:border-line-dark bg-transparent px-3 py-1.5 text-[12px]">Cancel</button>
+          </form>
+        </div>
+      {/if}
 
       <!-- Inline edit panel -->
       {#if editingId === inv.id}

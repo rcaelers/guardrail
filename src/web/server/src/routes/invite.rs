@@ -36,6 +36,7 @@ pub fn api_router() -> Router<AppState> {
     Router::new()
         .route("/invitations", get(list_invitations).post(create_invitation))
         .route("/invitations/{id}", put(update_invitation).delete(revoke_invitation))
+        .route("/invitations/{id}/send", axum::routing::post(send_invitation_email))
         .route("/invitations/redeem/{code}", get(get_invite_info).post(redeem_invite_json))
         .route("/invitations/redeem/{code}/setup-url", axum::routing::post(refresh_setup_url))
 }
@@ -135,36 +136,85 @@ async fn create_invitation(
     .await
     .map_err(AppError::internal)?;
 
-    if let (Some(to), Some(sender)) = (body.to.as_deref(), state.email_sender.as_deref()) {
-        let origin = state.settings.ingress.base_url.trim_end_matches('/');
-        let invite_url = format!("{origin}/invite/{}", invitation.code);
-
-        let (product_subject, product_html, product_text) = if invitation.grants.len() == 1 {
-            product_email_templates(&state.repo.db, &invitation.grants[0].product_id).await
-        } else {
-            (None, None, None)
-        };
-
-        let subject_template =
-            product_subject.unwrap_or_else(|| DEFAULT_INVITE_SUBJECT.to_string());
-        let html_template = product_html.unwrap_or_else(|| DEFAULT_INVITE_HTML.to_string());
-        let text_template = product_text.unwrap_or_else(|| DEFAULT_INVITE_TEXT.to_string());
-        let subject = render_invite_template(&subject_template, &invite_url);
-        let html = render_invite_template(&html_template, &invite_url);
-        let text = render_invite_template(&text_template, &invite_url);
-        let email = Email {
-            from: state.settings.email.from.clone(),
-            to: to.to_string(),
-            subject,
-            html,
-            text: Some(text),
-        };
-        if let Err(e) = sender.send(email).await {
-            tracing::warn!(to, "failed to send invitation email: {e}");
-        }
+    if let Some(to) = body.to.as_deref() {
+        dispatch_invite_email(&state, &invitation, to).await;
     }
 
     Ok(Json(invitation))
+}
+
+async fn dispatch_invite_email(state: &AppState, invitation: &Invitation, to: &str) {
+    let Some(sender) = state.email_sender.as_deref() else {
+        tracing::warn!("invitation email not sent: no email sender configured");
+        return;
+    };
+    let origin = state.settings.ingress.base_url.trim_end_matches('/');
+    let invite_url = format!("{origin}/invite/{}", invitation.code);
+
+    let (product_subject, product_html, product_text) = if invitation.grants.len() == 1 {
+        product_email_templates(&state.repo.db, &invitation.grants[0].product_id).await
+    } else {
+        (None, None, None)
+    };
+
+    let subject = render_invite_template(
+        &product_subject.unwrap_or_else(|| DEFAULT_INVITE_SUBJECT.to_string()),
+        &invite_url,
+    );
+    let html = render_invite_template(
+        &product_html.unwrap_or_else(|| DEFAULT_INVITE_HTML.to_string()),
+        &invite_url,
+    );
+    let text = render_invite_template(
+        &product_text.unwrap_or_else(|| DEFAULT_INVITE_TEXT.to_string()),
+        &invite_url,
+    );
+
+    let email = Email {
+        from: state.settings.email.from.clone(),
+        to: to.to_string(),
+        subject,
+        html,
+        text: Some(text),
+    };
+    if let Err(e) = sender.send(email).await {
+        tracing::warn!(to, "failed to send invitation email: {e}");
+    }
+}
+
+#[derive(Deserialize)]
+struct SendInvitationEmailRequest {
+    to: String,
+}
+
+async fn send_invitation_email(
+    State(state): State<AppState>,
+    session: Session,
+    Path(id): Path<String>,
+    Json(body): Json<SendInvitationEmailRequest>,
+) -> AppResult<Json<serde_json::Value>> {
+    let user = access::require_session(&session).await?;
+
+    let invitation = repos::invitation::InvitationRepo::get_by_id(&state.repo.db, &id)
+        .await
+        .map_err(AppError::internal)?
+        .ok_or_else(|| AppError::not_found("Invitation not found"))?;
+
+    if !user.is_admin() {
+        let maintained_ids =
+            access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
+        let has_overlap = invitation
+            .grants
+            .iter()
+            .any(|g| maintained_ids.contains(&g.product_id))
+            || invitation.created_by == user.active().id;
+        if !has_overlap {
+            return Err(AppError::forbidden());
+        }
+    }
+
+    dispatch_invite_email(&state, &invitation, &body.to).await;
+    Ok(Json(serde_json::json!({ "ok": true })))
 }
 
 async fn update_invitation(

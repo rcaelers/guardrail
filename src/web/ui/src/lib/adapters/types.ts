@@ -553,6 +553,7 @@ export interface GuardrailAdapter {
   createInvitation(spec: CreateInvitationSpec): Promise<Invitation>;
   updateInvitation(id: string, patch: UpdateInvitationSpec): Promise<Invitation>;
   revokeInvitation(id: string): Promise<void>;
+  resendInvitation(id: string, to: string): Promise<void>;
 
   // --- symbols ---
   listSymbols(productId: string, q?: SymbolQuery): Promise<Symbol[]>;

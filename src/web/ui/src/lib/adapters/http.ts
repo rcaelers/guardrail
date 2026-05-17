@@ -351,6 +351,10 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
       const r = await req(`/invitations/${encodeURIComponent(id)}`, { method: 'DELETE' });
       await assertOk(r, 'revokeInvitation');
     },
+    async resendInvitation(id: string, to: string) {
+      const r = await jpost(`/invitations/${encodeURIComponent(id)}/send`, { to });
+      await assertOk(r, 'resendInvitation');
+    },
 
     // --- symbols ---
     async listSymbols(productId, q: SymbolQuery = {}) {
