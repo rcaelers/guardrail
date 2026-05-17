@@ -364,8 +364,19 @@ async fn get_invite_info(
                 serde_json::json!({ "valid": true, "redirect_url": stored_url, "needs_refresh": false }),
             ));
         }
-        // PendingAccess exists but no stored URL (created before this change);
-        // indicate that a fresh URL should be requested explicitly.
+        // No stored URL — call the provisioner to issue a fresh one if available.
+        if let Some(provisioner) = state.provisioner.as_ref() {
+            let setup_url = provisioner
+                .create_setup_url(&pending.sub)
+                .await
+                .map_err(|e| {
+                    tracing::warn!("re-issue setup URL for invite {code}: {e}");
+                    AppError::failure("Failed to re-issue setup URL")
+                })?;
+            return Ok(Json(
+                serde_json::json!({ "valid": true, "redirect_url": setup_url }),
+            ));
+        }
         return Ok(Json(serde_json::json!({ "valid": true, "needs_refresh": true })));
     }
 
