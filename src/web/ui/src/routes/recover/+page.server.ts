@@ -13,16 +13,19 @@ export const actions: Actions = {
 
     if (!email) return { ok: false, error: 'Please enter your email address.' };
 
+    let login_url: string | null = null;
     try {
-      await fetch('/auth/recovery', {
+      const r = await fetch('/auth/recovery', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ email })
       });
+      const data = await r.json().catch(() => ({}));
+      login_url = data.login_url ?? null;
     } catch {
       // Swallow errors — the backend always responds 200 to prevent enumeration.
     }
 
-    return { ok: true };
+    return { ok: true, login_url };
   }
 };

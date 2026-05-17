@@ -45,11 +45,12 @@ async fn request_recovery(
 ) -> AppResult<Json<Value>> {
     // Look up the user by email. We proceed silently regardless of outcome to
     // avoid leaking whether a given email is registered.
-    let result: AppResult<()> = async {
+    // Returns the login URL directly when no email sender is configured (dev mode).
+    let result: AppResult<Option<String>> = async {
         let user = repos::user::UserRepo::get_by_email(&state.repo.db, &body.email)
             .await
             .map_err(AppError::internal)?;
-        let Some(user) = user else { return Ok(()); };
+        let Some(user) = user else { return Ok(None); };
 
         let provisioner = state.provisioner.as_ref().ok_or_else(|| {
             AppError::failure("No identity provisioner configured")
@@ -93,19 +94,23 @@ async fn request_recovery(
             if let Err(e) = sender.send(email).await {
                 tracing::warn!(email = %body.email, "failed to send recovery email: {e}");
             }
+            Ok(None)
         } else {
             tracing::info!(email = %body.email, url = %recovery_url, "recovery URL generated (no email sender configured)");
+            Ok(Some(recovery_url.to_string()))
         }
-
-        Ok(())
     }
     .await;
 
-    if let Err(e) = result {
-        tracing::warn!(email = %body.email, "recovery request failed: {e}");
-    }
+    let login_url = match result {
+        Ok(url) => url,
+        Err(e) => {
+            tracing::warn!(email = %body.email, "recovery request failed: {e}");
+            None
+        }
+    };
 
-    Ok(Json(serde_json::json!({ "ok": true })))
+    Ok(Json(serde_json::json!({ "ok": true, "login_url": login_url })))
 }
 
 async fn logout(session: Session) -> impl IntoResponse {
