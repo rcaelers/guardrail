@@ -10,9 +10,17 @@ export const GET: RequestHandler = async ({ params, locals, request }) => {
 
   let response: Response | null;
   try {
-    response = await adapter.downloadAttachment(params.id);
+    const race = await Promise.race([
+      adapter.downloadAttachment(params.id),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 30_000)
+      ),
+    ]);
+    response = race;
   } catch (e) {
-    console.error('downloadAttachment failed:', e instanceof Error ? e.message : e);
+    const msg = e instanceof Error ? e.message : String(e);
+    if (msg === 'timeout') throw error(504, 'Storage backend timed out');
+    console.error('downloadAttachment failed:', msg);
     throw error(502, 'Failed to reach storage backend');
   }
   if (!response) throw error(404, `Attachment ${params.id} not found`);
