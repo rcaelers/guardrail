@@ -1,0 +1,24 @@
+id = "20260517192500__pending_access_setup_url"
+name = "pending_access_setup_url"
+source_schema_hash = "287da980b4540c6f2c46a84f3e1a0bef08656e53f7745eaecb987028b40e3325"
+target_schema_hash = "a547ea13770a463849cce5d4cb9fdde068c349aba4353e6001c40c5e672ede50"
+compatibility = "phased"
+renames = []
+
+[[steps]]
+id = "apply_expand_schema"
+phase = "start"
+kind = "apply_schema"
+files = ["database/schema/guardrail.surql"]
+entities = []
+
+[[steps]]
+id = "rollback_expand_schema"
+phase = "rollback"
+kind = "remove_entities"
+files = []
+
+[[steps.entities]]
+kind = "field"
+scope = "pending_access"
+name = "setup_url"
