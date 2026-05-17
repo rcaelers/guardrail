@@ -43,6 +43,7 @@ impl PendingAccessRepo {
                     invitation_id: $invitation_id,
                     is_admin:      $is_admin,
                     grants:        $grants,
+                    setup_url:     $setup_url,
                     created_at:    time::now(),
                 }",
             )
@@ -55,6 +56,7 @@ impl PendingAccessRepo {
                 serde_json::to_value(&pending.grants)
                     .map_err(|e| RepoError::DatabaseError(e.to_string()))?,
             ))
+            .bind(("setup_url", pending.setup_url))
             .await
             .map_err(handle_surreal_error)?
             .take(0)

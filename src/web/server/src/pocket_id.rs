@@ -150,6 +150,7 @@ impl PocketIdProvisioner {
         if let Some(redirect) = &self.post_setup_redirect {
             url.query_pairs_mut().append_pair("redirect", redirect);
         }
+        tracing::info!(user_id, setup_url = %url, "built PocketID setup URL");
         Ok(url)
     }
 
@@ -210,9 +211,11 @@ impl PocketIdProvisioner {
             .join(&format!("/api/users/{user_id}/one-time-access-token"))
             .map_err(|e| ProvisionerError::ApiError(e.to_string()))?;
 
+        tracing::info!(user_id, ttl, endpoint = %url, "requesting one-time access token from PocketID");
+
         let response = self
             .client
-            .post(url)
+            .post(url.clone())
             .header("X-API-KEY", &self.api_key)
             .json(&serde_json::json!({ "ttl": ttl }))
             .send()
@@ -222,6 +225,7 @@ impl PocketIdProvisioner {
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
+            tracing::warn!(user_id, ttl, endpoint = %url, %status, body, "PocketID one-time-access-token request failed");
             return Err(ProvisionerError::ApiError(format!(
                 "one-time-access-token returned {status}: {body}"
             )));
@@ -232,6 +236,7 @@ impl PocketIdProvisioner {
             .await
             .map_err(|e| ProvisionerError::ApiError(format!("parse token response: {e}")))?;
 
+        tracing::info!(user_id, token = %token_data.token, "PocketID one-time access token created successfully");
         Ok(token_data.token)
     }
 }

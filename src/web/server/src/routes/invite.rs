@@ -37,6 +37,7 @@ pub fn api_router() -> Router<AppState> {
         .route("/invitations", get(list_invitations).post(create_invitation))
         .route("/invitations/{id}", put(update_invitation).delete(revoke_invitation))
         .route("/invitations/redeem/{code}", get(get_invite_info).post(redeem_invite_json))
+        .route("/invitations/redeem/{code}/setup-url", axum::routing::post(refresh_setup_url))
 }
 
 /// Web routes for the invitation redemption flow.
@@ -269,24 +270,21 @@ async fn get_invite_info(
         .map_err(AppError::internal)?
         .ok_or_else(|| AppError::not_found("Invitation not found or has expired"))?;
 
-    if let Some(provisioner) = state.provisioner.as_ref()
-        && let Some(pending) = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
-            &state.repo.db,
-            &invitation.id,
-        )
-        .await
-        .map_err(AppError::internal)?
+    if let Some(pending) = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
+        &state.repo.db,
+        &invitation.id,
+    )
+    .await
+    .map_err(AppError::internal)?
     {
-        let setup_url = provisioner
-            .create_setup_url(&pending.sub)
-            .await
-            .map_err(|e| {
-                tracing::warn!("re-issue setup URL for invite {code}: {e}");
-                AppError::failure(e.to_string())
-            })?;
-        return Ok(Json(
-            serde_json::json!({ "valid": true, "redirect_url": setup_url.to_string() }),
-        ));
+        if let Some(stored_url) = pending.setup_url {
+            return Ok(Json(
+                serde_json::json!({ "valid": true, "redirect_url": stored_url, "needs_refresh": false }),
+            ));
+        }
+        // PendingAccess exists but no stored URL (created before this change);
+        // indicate that a fresh URL should be requested explicitly.
+        return Ok(Json(serde_json::json!({ "valid": true, "needs_refresh": true })));
     }
 
     Ok(Json(serde_json::json!({ "valid": true })))
@@ -322,6 +320,8 @@ async fn redeem_invite_json(
         .as_ref()
         .ok_or_else(|| AppError::failure("No identity provisioner configured"))?;
 
+    // If a PendingAccess already exists (user previously submitted the form),
+    // return the stored setup URL rather than creating a new token.
     if let Some(pending) = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
         &state.repo.db,
         &invitation.id,
@@ -329,6 +329,10 @@ async fn redeem_invite_json(
     .await
     .map_err(AppError::internal)?
     {
+        if let Some(stored_url) = pending.setup_url {
+            return Ok(Json(serde_json::json!({ "redirect_url": stored_url })));
+        }
+        // Legacy record without a stored URL — issue a fresh token.
         let setup_url = provisioner
             .create_setup_url(&pending.sub)
             .await
@@ -352,6 +356,8 @@ async fn redeem_invite_json(
             AppError::failure(e.to_string())
         })?;
 
+    let setup_url_str = provisioned.setup_url.as_ref().map(|u| u.to_string());
+
     repos::pending_access::PendingAccessRepo::create(
         &state.repo.db,
         NewPendingAccess {
@@ -366,17 +372,51 @@ async fn redeem_invite_json(
                     role: g.role.clone(),
                 })
                 .collect(),
+            setup_url: setup_url_str.clone(),
         },
     )
     .await
     .map_err(AppError::internal)?;
 
-    let redirect_url = provisioned
-        .setup_url
-        .map(|u| u.to_string())
-        .unwrap_or_else(|| "/auth/login/start".to_string());
+    let redirect_url = setup_url_str.unwrap_or_else(|| "/auth/login/start".to_string());
 
     Ok(Json(serde_json::json!({ "redirect_url": redirect_url })))
+}
+
+/// Issues a fresh one-time setup URL for an already-provisioned pending user.
+/// Called when the user returns to the invite page after the stored URL was consumed.
+async fn refresh_setup_url(
+    State(state): State<AppState>,
+    Path(code): Path<String>,
+) -> AppResult<Json<serde_json::Value>> {
+    let invitation = repos::invitation::InvitationRepo::get_by_code(&state.repo.db, &code)
+        .await
+        .map_err(AppError::internal)?
+        .ok_or_else(|| AppError::not_found("Invitation not found or has expired"))?;
+
+    let pending = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
+        &state.repo.db,
+        &invitation.id,
+    )
+    .await
+    .map_err(AppError::internal)?
+    .ok_or_else(|| AppError::not_found("No pending account for this invitation"))?;
+
+    let provisioner = state
+        .provisioner
+        .as_ref()
+        .ok_or_else(|| AppError::failure("No identity provisioner configured"))?;
+
+    let setup_url = provisioner
+        .create_setup_url(&pending.sub)
+        .await
+        .map_err(|e| {
+            tracing::warn!("refresh setup URL for invite {code}: {e}");
+            AppError::failure(e.to_string())
+        })?;
+
+    tracing::info!(code, sub = %pending.sub, url = %setup_url, "refreshed setup URL for pending invite");
+    Ok(Json(serde_json::json!({ "redirect_url": setup_url.to_string() })))
 }
 
 // --- Public invite flow (template-based, kept for reference) ---
@@ -404,22 +444,28 @@ async fn show_invite_form(
         .map_err(AppError::internal)?
         .ok_or_else(|| AppError::not_found("Invitation not found or has expired"))?;
 
-    if let Some(provisioner) = state.provisioner.as_ref()
-        && let Some(pending) = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
-            &state.repo.db,
-            &invitation.id,
-        )
-        .await
-        .map_err(AppError::internal)?
+    if let Some(pending) = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
+        &state.repo.db,
+        &invitation.id,
+    )
+    .await
+    .map_err(AppError::internal)?
     {
-        let setup_url = provisioner
-            .create_setup_url(&pending.sub)
-            .await
-            .map_err(|e| {
-                tracing::warn!("re-issue setup URL for invite {code}: {e}");
-                AppError::failure(e.to_string())
-            })?;
-        return Ok(Redirect::to(setup_url.as_str()).into_response());
+        let redirect_target = if let Some(stored_url) = pending.setup_url {
+            stored_url
+        } else if let Some(provisioner) = state.provisioner.as_ref() {
+            provisioner
+                .create_setup_url(&pending.sub)
+                .await
+                .map_err(|e| {
+                    tracing::warn!("re-issue setup URL for invite {code}: {e}");
+                    AppError::failure(e.to_string())
+                })?
+                .to_string()
+        } else {
+            "/auth/login/start".to_string()
+        };
+        return Ok(Redirect::to(&redirect_target).into_response());
     }
 
     let error = query.error.unwrap_or_default();
@@ -469,6 +515,8 @@ async fn redeem_invite(
             AppError::failure(e.to_string())
         })?;
 
+    let setup_url_str = provisioned.setup_url.as_ref().map(|u| u.to_string());
+
     repos::pending_access::PendingAccessRepo::create(
         &state.repo.db,
         NewPendingAccess {
@@ -483,15 +531,13 @@ async fn redeem_invite(
                     role: g.role.clone(),
                 })
                 .collect(),
+            setup_url: setup_url_str.clone(),
         },
     )
     .await
     .map_err(AppError::internal)?;
 
-    let redirect = provisioned
-        .setup_url
-        .map(|u| u.to_string())
-        .unwrap_or_else(|| "/auth/login/start".to_string());
+    let redirect = setup_url_str.unwrap_or_else(|| "/auth/login/start".to_string());
 
     Ok(Redirect::to(&redirect).into_response())
 }

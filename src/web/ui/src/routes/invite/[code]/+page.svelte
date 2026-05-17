@@ -14,6 +14,28 @@
       <div class="font-sans text-[15px] font-semibold tracking-[-0.01em]">Guardrail</div>
     </div>
 
+    {#if data.needs_refresh}
+      <h1 class="mb-1 text-[22px] font-semibold tracking-[-0.01em]">Complete your setup</h1>
+      <p class="mb-6 text-[13px] text-ink-muted dark:text-ink-mutedDark">
+        Your account was created. Request a new link to complete passkey setup.
+      </p>
+
+      {#if form?.error}
+        <div class="mb-4 rounded-md border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950 px-3 py-2 text-[13px] text-red-700 dark:text-red-400">
+          {form.error}
+        </div>
+      {/if}
+
+      <form method="POST" action="?/refresh" use:enhance>
+        <button
+          type="submit"
+          class="w-full rounded-md bg-ink dark:bg-ink-dark px-3 py-2 text-[13px] font-medium text-surface dark:text-surface-dark"
+        >
+          Get new setup link
+        </button>
+      </form>
+    {:else}
+
     <h1 class="mb-1 text-[22px] font-semibold tracking-[-0.01em]">Create your account</h1>
     <p class="mb-6 text-[13px] text-ink-muted dark:text-ink-mutedDark">
       Fill in your details to accept this invitation.
@@ -88,5 +110,6 @@
         Continue
       </button>
     </form>
+    {/if}
   </div>
 </div>

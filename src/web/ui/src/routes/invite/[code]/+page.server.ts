@@ -18,7 +18,9 @@ export const load: PageServerLoad = async ({ params }) => {
   if (data.redirect_url) {
     throw redirect(303, data.redirect_url);
   }
-  return { code: params.code };
+  // needs_refresh means a user was created but their setup URL was consumed;
+  // show a button to request a fresh one.
+  return { code: params.code, needs_refresh: data.needs_refresh === true };
 };
 
 export const actions: Actions = {
@@ -46,6 +48,19 @@ export const actions: Actions = {
       return fail(r.status >= 500 ? 500 : 400, { error: msg, username, email, first_name, last_name });
     }
 
+    const { redirect_url } = await r.json();
+    throw redirect(303, redirect_url);
+  },
+
+  refresh: async ({ params }) => {
+    const r = await fetch(
+      `${apiBase}/invitations/redeem/${encodeURIComponent(params.code)}/setup-url`,
+      { method: 'POST', signal: AbortSignal.timeout(10_000) }
+    );
+    if (!r.ok) {
+      const text = await r.text();
+      return fail(r.status >= 500 ? 500 : 400, { error: text || 'Failed to get a new setup link.' });
+    }
     const { redirect_url } = await r.json();
     throw redirect(303, redirect_url);
   }
