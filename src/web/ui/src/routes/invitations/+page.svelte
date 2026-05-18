@@ -54,7 +54,7 @@
     if (resendingId === inv.id) { resendingId = null; return; }
     editingId = null;
     resendingId = inv.id;
-    resendEmail = inv.email_to ?? '';
+    resendEmail = '';
   }
 
   function startEdit(inv: PageData['invitations'][number]) {
@@ -365,13 +365,13 @@
             class="flex items-center gap-2"
           >
             <input type="hidden" name="id" value={inv.id} />
+            <input type="hidden" name="email_to_fallback" value={inv.email_to ?? ''} />
             <span class="shrink-0 text-[12px] text-ink-muted dark:text-ink-mutedDark">Send to</span>
             <input
               name="email_to"
               type="email"
-              placeholder="recipient@example.com"
+              placeholder={inv.email_to ?? 'recipient@example.com'}
               bind:value={resendEmail}
-              required
               class="min-w-0 flex-1 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]"
             />
             <button type="submit" class="shrink-0 rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-white">Send</button>

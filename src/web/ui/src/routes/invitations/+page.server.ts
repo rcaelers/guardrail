@@ -137,7 +137,7 @@ export const actions: Actions = {
 
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
-    const to = String(form.get('email_to') ?? '');
+    const to = String(form.get('email_to') || form.get('email_to_fallback') || '');
     if (!id) return fail(400, { error: 'missing id' });
     if (!to) return fail(400, { error: 'missing email address' });
 
