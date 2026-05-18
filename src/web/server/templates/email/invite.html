@@ -21,18 +21,28 @@
                 helps identify patterns across versions and platforms, and gives developers
                 the information they need to fix issues quickly.
               </p>
+              {% if !products.is_empty() %}
+              <p style="font-size: 15px; color: #444; line-height: 1.6; margin: 0 0 8px;">
+                You will have access to the following products:
+              </p>
+              <ul style="font-size: 15px; color: #444; line-height: 1.8; margin: 0 0 24px; padding-left: 24px;">
+                {% for p in products %}
+                <li><strong>{{ p.name }}</strong> &ndash; {{ p.role }}</li>
+                {% endfor %}
+              </ul>
+              {% endif %}
               <p style="font-size: 15px; color: #444; line-height: 1.6; margin: 0 0 24px;">
                 Click the button below to accept your invitation and create your account.
               </p>
               <p style="margin: 0 0 24px;">
-                <a href="{{invite_url}}"
+                <a href="{{ invite_url }}"
                   style="display: inline-block; background: #3b82f6; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 6px; font-size: 15px; font-weight: 600;">
                   Accept invitation
                 </a>
               </p>
               <p style="font-size: 13px; color: #888; margin: 0;">
                 Or copy this link into your browser:<br>
-                <a href="{{invite_url}}" style="color: #3b82f6; word-break: break-all;">{{invite_url}}</a>
+                <a href="{{ invite_url }}" style="color: #3b82f6; word-break: break-all;">{{ invite_url }}</a>
               </p>
             </td>
           </tr>

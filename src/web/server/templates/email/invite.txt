@@ -4,6 +4,11 @@ You have been invited to join Guardrail, a crash reporting and analysis
 platform. Guardrail collects crash reports from your applications, helps
 identify patterns across versions and platforms, and gives developers the
 information they need to fix issues quickly.
-
+{% if !products.is_empty() %}
+Products you will have access to:
+{% for p in products %}
+- {{ p.name }} ({{ p.role }})
+{% endfor %}
+{% endif %}
 Accept your invitation here:
-{{invite_url}}
+{{ invite_url }}

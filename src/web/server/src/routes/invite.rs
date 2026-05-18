@@ -20,15 +20,33 @@ use crate::{
     auth_user::AuthenticatedUser,
     error::{AppError, AppResult},
     provisioner::CreateUserRequest,
-    templates::InviteTemplate,
+    templates::{InviteEmailHtml, InviteEmailText, InviteTemplate, ProductGrant},
 };
 
 pub(crate) const DEFAULT_INVITE_HTML: &str = include_str!("../../templates/email/invite.html");
 pub(crate) const DEFAULT_INVITE_TEXT: &str = include_str!("../../templates/email/invite.txt");
 pub(crate) const DEFAULT_INVITE_SUBJECT: &str = "You've been invited to Guardrail";
 
-fn render_invite_template(template: &str, invite_url: &str) -> String {
-    template.replace("{{invite_url}}", invite_url)
+/// Renders a per-product custom email template (loaded from the DB at runtime).
+/// Supports only flat substitution: {{invite_url}}, {{product_name}}, {{product_role}}.
+fn render_custom_template(template: &str, invite_url: &str, products: &[ProductGrant]) -> String {
+    let (name, role) = products
+        .first()
+        .map(|p| (p.name.as_str(), p.role.as_str()))
+        .unwrap_or(("", ""));
+    template
+        .replace("{{invite_url}}", invite_url)
+        .replace("{{product_name}}", name)
+        .replace("{{product_role}}", role)
+}
+
+fn role_label(role: &str) -> &'static str {
+    match role {
+        "readonly" => "Read-only",
+        "readwrite" => "Read & write",
+        "maintainer" => "Maintainer",
+        _ => "Member",
+    }
 }
 
 /// Invitation API routes, to be nested under /api/v1 in main.rs.
@@ -153,24 +171,31 @@ async fn dispatch_invite_email(state: &AppState, invitation: &Invitation, to: &s
     let origin = state.settings.ingress.base_url.trim_end_matches('/');
     let invite_url = format!("{origin}/invite/{}", invitation.code);
 
-    let (product_subject, product_html, product_text) = if invitation.grants.len() == 1 {
+    let (product_subject, product_html_template, product_text_template) = if invitation.grants.len() == 1 {
         product_email_templates(&state.repo.db, &invitation.grants[0].product_id).await
     } else {
         (None, None, None)
     };
 
-    let subject = render_invite_template(
-        &product_subject.unwrap_or_else(|| DEFAULT_INVITE_SUBJECT.to_string()),
-        &invite_url,
-    );
-    let html = render_invite_template(
-        &product_html.unwrap_or_else(|| DEFAULT_INVITE_HTML.to_string()),
-        &invite_url,
-    );
-    let text = render_invite_template(
-        &product_text.unwrap_or_else(|| DEFAULT_INVITE_TEXT.to_string()),
-        &invite_url,
-    );
+    let products = build_products(&state.repo.db, &invitation.grants).await;
+
+    let subject = product_subject
+        .map(|t| render_custom_template(&t, &invite_url, &products))
+        .unwrap_or_else(|| DEFAULT_INVITE_SUBJECT.to_string());
+
+    use askama::Template as _;
+    let html = match product_html_template {
+        Some(t) => render_custom_template(&t, &invite_url, &products),
+        None => InviteEmailHtml { invite_url: &invite_url, products: &products }
+            .render()
+            .unwrap_or_default(),
+    };
+    let text = match product_text_template {
+        Some(t) => render_custom_template(&t, &invite_url, &products),
+        None => InviteEmailText { invite_url: &invite_url, products: &products }
+            .render()
+            .unwrap_or_default(),
+    };
 
     let email = Email {
         from: state.settings.email.from.clone(),
@@ -636,6 +661,23 @@ async fn redeem_invite(
 
 fn non_empty(s: String) -> Option<String> {
     if s.is_empty() { None } else { Some(s) }
+}
+
+async fn build_products(
+    db: &surrealdb::Surreal<surrealdb::engine::any::Any>,
+    grants: &[InvitationGrant],
+) -> Vec<ProductGrant> {
+    let mut out = Vec::with_capacity(grants.len());
+    for grant in grants {
+        let name = repos::product::ProductRepo::get_by_id(db, &grant.product_id)
+            .await
+            .ok()
+            .flatten()
+            .map(|p| p.name)
+            .unwrap_or_else(|| grant.product_id.clone());
+        out.push(ProductGrant { name, role: role_label(&grant.role).to_string() });
+    }
+    out
 }
 
 /// Returns per-product subject, HTML, and text invite email templates from `product_settings`.
