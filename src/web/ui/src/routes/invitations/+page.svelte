@@ -254,12 +254,11 @@
   <div class="overflow-hidden rounded-md border border-line dark:border-line-dark">
     <div
       class="grid items-center gap-4 bg-surface-panel dark:bg-surface-panelDark px-4 py-2 text-[10.5px] font-medium uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark"
-      style:grid-template-columns="180px 90px 130px 120px 1fr auto"
+      style:grid-template-columns="180px 90px 130px 1fr auto"
     >
       <span>Code</span>
       <span>Status</span>
       <span>Created</span>
-      <span>Uses</span>
       <span>Products</span>
       <span></span>
     </div>
@@ -278,7 +277,7 @@
 
       <div
         class="grid items-center gap-4 border-t border-line dark:border-line-dark px-4 py-2.5 text-[13px]"
-        style:grid-template-columns="180px 90px 130px 120px 1fr auto"
+        style:grid-template-columns="180px 90px 130px 1fr auto"
       >
         <!-- Code + copy -->
         <div class="flex min-w-0 items-center gap-1.5">
@@ -302,11 +301,6 @@
         <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
           <div>{fmtDate(inv.created_at)}</div>
           <div class="text-[11px]">by {creatorLabel}</div>
-        </div>
-
-        <!-- Uses -->
-        <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
-          {inv.use_count}{inv.max_uses != null ? ` / ${inv.max_uses}` : ''}
           {#if inv.expires_at}
             <div class="text-[11px]">exp {fmtDateOnly(inv.expires_at)}</div>
           {/if}
