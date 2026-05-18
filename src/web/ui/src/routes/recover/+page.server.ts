@@ -11,7 +11,7 @@ export const actions: Actions = {
     const form = await request.formData();
     const email = (form.get('email') as string ?? '').trim();
 
-    if (!email) return { ok: false, error: 'Please enter your email address.' };
+    if (!email) return { ok: false, error: 'Please enter your email address.', login_url: null };
 
     let login_url: string | null = null;
     try {
