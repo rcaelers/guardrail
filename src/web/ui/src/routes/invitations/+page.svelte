@@ -307,7 +307,7 @@
         </div>
 
         <!-- Grants summary -->
-        <div class="flex min-w-0 flex-wrap gap-1">
+        <div class="flex min-w-0 flex-col gap-1">
           {#each inv.grants as g}
             {@const name = data.assignableProducts.find((p) => p.id === g.product_id)?.name ?? g.product_id}
             <span class="rounded bg-surface-panel dark:bg-surface-panelDark px-1.5 py-0.5 text-[11px]">

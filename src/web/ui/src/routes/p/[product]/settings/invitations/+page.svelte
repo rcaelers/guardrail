@@ -42,6 +42,17 @@
     createEmailTo = '';
   }
 
+  // --- Resend state ---
+  let resendingId = $state<string | null>(null);
+  let resendEmail = $state('');
+
+  function startResend(inv: PageData['invitations'][number]) {
+    if (resendingId === inv.id) { resendingId = null; return; }
+    editingId = null;
+    resendingId = inv.id;
+    resendEmail = inv.email_to ?? '';
+  }
+
   // --- Edit state ---
   let editingId = $state<string | null>(null);
   let editGrants = $state<InvitationGrant[]>([]);
@@ -51,6 +62,7 @@
   let editRolePick = $state<Role>('readonly');
 
   function startEdit(inv: PageData['invitations'][number]) {
+    resendingId = null;
     if (editingId === inv.id) { editingId = null; return; }
     editingId = inv.id;
     editGrants = inv.grants.map((g) => ({ ...g }));
@@ -244,12 +256,11 @@
   <div class="overflow-hidden rounded-md border border-line dark:border-line-dark">
     <div
       class="grid items-center gap-4 bg-surface-panel dark:bg-surface-panelDark px-4 py-2 text-[10.5px] font-medium uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark"
-      style:grid-template-columns="180px 90px 130px 120px 1fr 130px"
+      style:grid-template-columns="180px 90px 130px 1fr auto"
     >
       <span>Code</span>
       <span>Status</span>
       <span>Created</span>
-      <span>Uses</span>
       <span>Products</span>
       <span></span>
     </div>
@@ -268,7 +279,7 @@
 
       <div
         class="grid items-center gap-4 border-t border-line dark:border-line-dark px-4 py-2.5 text-[13px]"
-        style:grid-template-columns="180px 90px 130px 120px 1fr 130px"
+        style:grid-template-columns="180px 90px 130px 1fr auto"
       >
         <!-- Code + copy -->
         <div class="flex min-w-0 items-center gap-1.5">
@@ -292,18 +303,13 @@
         <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
           <div>{fmtDate(inv.created_at)}</div>
           <div class="text-[11px]">by {creatorLabel}</div>
-        </div>
-
-        <!-- Uses -->
-        <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
-          {inv.use_count}{inv.max_uses != null ? ` / ${inv.max_uses}` : ''}
           {#if inv.expires_at}
             <div class="text-[11px]">exp {fmtDateOnly(inv.expires_at)}</div>
           {/if}
         </div>
 
         <!-- Grants summary -->
-        <div class="flex min-w-0 flex-wrap gap-1">
+        <div class="flex min-w-0 flex-col gap-1">
           {#each inv.grants as g}
             {@const name = data.assignableProducts.find((p) => p.id === g.product_id)?.name ?? g.product_id}
             <span class="rounded bg-surface-panel dark:bg-surface-panelDark px-1.5 py-0.5 text-[11px]">
@@ -320,6 +326,11 @@
           {#if inv.status !== 'Revoked'}
             <button
               type="button"
+              onclick={() => startResend(inv)}
+              class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px]"
+            >{resendingId === inv.id ? 'Close' : 'Resend'}</button>
+            <button
+              type="button"
               onclick={() => startEdit(inv)}
               class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px]"
             >{editingId === inv.id ? 'Close' : 'Edit'}</button>
@@ -332,8 +343,44 @@
               >Revoke</button>
             </form>
           {/if}
+          <form method="POST" action="?/delete" use:enhance>
+            <input type="hidden" name="id" value={inv.id} />
+            <button
+              type="button"
+              onclick={(e) => { pendingConfirm = { message: 'Permanently delete this invitation?', confirmLabel: 'Delete', form: (e.currentTarget as HTMLElement).closest('form')! }; }}
+              class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted hover:text-red-600"
+            >Delete</button>
+          </form>
         </div>
       </div>
+
+      <!-- Inline resend panel -->
+      {#if resendingId === inv.id}
+        <div class="border-t border-line dark:border-line-dark bg-surface-panel/55 px-5 py-3 dark:bg-surface-panelDark/55">
+          <form
+            method="POST"
+            action="?/resend"
+            use:enhance={() => async ({ update, result }) => {
+              await update();
+              if (result.type === 'success') resendingId = null;
+            }}
+            class="flex items-center gap-2"
+          >
+            <input type="hidden" name="id" value={inv.id} />
+            <span class="shrink-0 text-[12px] text-ink-muted dark:text-ink-mutedDark">Send to</span>
+            <input
+              name="email_to"
+              type="email"
+              placeholder="recipient@example.com"
+              bind:value={resendEmail}
+              required
+              class="min-w-0 flex-1 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px]"
+            />
+            <button type="submit" class="shrink-0 rounded-md bg-accent px-3 py-1.5 text-[12px] font-medium text-white">Send</button>
+            <button type="button" onclick={() => (resendingId = null)} class="shrink-0 rounded-md border border-line dark:border-line-dark bg-transparent px-3 py-1.5 text-[12px]">Cancel</button>
+          </form>
+        </div>
+      {/if}
 
       <!-- Inline edit panel -->
       {#if editingId === inv.id}
