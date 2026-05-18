@@ -360,12 +360,8 @@ async fn get_invite_info(
     .await
     .map_err(AppError::internal)?
     {
-        if let Some(stored_url) = pending.setup_url {
-            return Ok(Json(
-                serde_json::json!({ "valid": true, "redirect_url": stored_url, "needs_refresh": false }),
-            ));
-        }
-        // No stored URL — call the provisioner to issue a fresh one if available.
+        // Always issue a fresh setup URL: the stored one is a one-time token that
+        // becomes invalid after first use, so it cannot be reused on return visits.
         if let Some(provisioner) = state.provisioner.as_ref() {
             let setup_url = provisioner
                 .create_setup_url(&pending.sub)
