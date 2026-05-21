@@ -7,6 +7,11 @@ https://guardrail.home.krandor.org:1443 {
   reverse_proxy pocket-id:1411
 }
 
+https://guardrail.home.krandor.org:2443 {
+  tls /certs/guardrail.home.krandor.org.crt /certs/guardrail.home.krandor.org.key
+  reverse_proxy rauthy:8080
+}
+
 https://guardrail.home.krandor.org:4433 {
   tls /certs/guardrail.home.krandor.org.crt /certs/guardrail.home.krandor.org.key
 

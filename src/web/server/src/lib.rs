@@ -6,6 +6,7 @@ pub(crate) mod jwt;
 pub(crate) mod oidc;
 pub(crate) mod pocket_id;
 pub(crate) mod provisioner;
+pub(crate) mod rauthy;
 pub(crate) mod routes;
 pub mod settings;
 pub(crate) mod state;

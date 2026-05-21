@@ -1,0 +1,38 @@
+[
+  {
+    "id": "guardrail",
+    "name": "Guardrail",
+    "secret": {
+      "Plain": "GuardrailRauthyDevClientSecret0123456789012345678901234567890123"
+    },
+    "redirect_uris": [
+      "https://guardrail.home.krandor.org:4433/auth/oidc/callback"
+    ],
+    "post_logout_redirect_uris": [
+      "https://guardrail.home.krandor.org:4433/"
+    ],
+    "enabled": true,
+    "flows_enabled": [
+      "authorization_code"
+    ],
+    "access_token_alg": "EdDSA",
+    "id_token_alg": "EdDSA",
+    "auth_code_lifetime": 300,
+    "access_token_lifetime": 1800,
+    "scopes": [
+      "openid",
+      "profile",
+      "email"
+    ],
+    "default_scopes": [
+      "openid",
+      "profile",
+      "email"
+    ],
+    "challenges": [
+      "S256"
+    ],
+    "force_mfa": false,
+    "client_uri": "https://guardrail.home.krandor.org:4433"
+  }
+]

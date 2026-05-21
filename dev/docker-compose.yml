@@ -3,6 +3,7 @@ volumes:
   minio-storage:
   valkey-storage:
   pocket-id-storage:
+  rauthy-data:
   caddy-data:
   caddy-config:
   svelte-node-modules:
@@ -117,11 +118,45 @@ services:
       start_period: 10s
     restart: unless-stopped
 
+  rauthy:
+    image: ghcr.io/sebadob/rauthy:v0.35.2
+    container_name: rauthy
+    environment:
+      LISTEN_SCHEME: http
+      PUB_URL: "guardrail.home.krandor.org:2443"
+      PROXY_MODE: "true"
+      TRUSTED_PROXIES: "172.0.0.0/8"
+      RP_ID: "guardrail.home.krandor.org"
+      RP_ORIGIN: "https://guardrail.home.krandor.org:2443"
+      HQL_NODE_ID: "1"
+      HQL_NODES: "1 127.0.0.1:8100 127.0.0.1:8200"
+      HQL_SECRET_RAFT: "GuardrailRauthyRaftSecret1234567"
+      HQL_SECRET_API: "GuardrailRauthyApiSecret12345678"
+      ENC_KEYS: "devkey/lGXvpx00uJJVb+Uo3S0epNwKVTQZaqXgshTMbE2A+Ns="
+      ENC_KEY_ACTIVE: "devkey"
+      BOOTSTRAP_ADMIN_EMAIL: "admin@localhost"
+      BOOTSTRAP_ADMIN_PASSWORD_PLAIN: "RauthyDevAdmin123!"
+      BOOTSTRAP_API_KEY: "eyJuYW1lIjoiZ3VhcmRyYWlsIiwiZXhwIjo5OTk5OTk5OTk5LCJhY2Nlc3MiOlt7Imdyb3VwIjoiQ2xpZW50cyIsImFjY2Vzc19yaWdodHMiOlsicmVhZCIsImNyZWF0ZSIsInVwZGF0ZSIsImRlbGV0ZSJdfSx7Imdyb3VwIjoiVXNlcnMiLCJhY2Nlc3NfcmlnaHRzIjpbInJlYWQiLCJjcmVhdGUiLCJ1cGRhdGUiLCJkZWxldGUiXX0seyJncm91cCI6IlNlY3JldHMiLCJhY2Nlc3NfcmlnaHRzIjpbInJlYWQiXX1dfQ=="
+      BOOTSTRAP_API_KEY_SECRET: "GuardrailRauthyDevApiKeySecret0123456789abcdefghijklmnopqrstuvwx"
+      BOOTSTRAP_DIR: "bootstrap"
+    volumes:
+      - rauthy-data:/app/data
+      - ./rauthy-bootstrap:/app/data/bootstrap:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:8080/auth/v1/health || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    restart: unless-stopped
+
   caddy:
     image: caddy:2
     container_name: caddy
     depends_on:
       pocket-id:
+        condition: service_healthy
+      rauthy:
         condition: service_healthy
       guardrail:
         condition: service_healthy
@@ -129,6 +164,7 @@ services:
         condition: service_started
     ports:
       - '1443:1443'
+      - '2443:2443'
       - '4433:4433'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
@@ -164,7 +200,9 @@ services:
     volumes:
       - ../config/scripts:/config/scripts:ro
       - ./config/settings.yaml:/config/settings.yaml:ro
-      - ./config/web-docker.yaml:/config/web-docker.yaml:ro
+      # Mount ONE of the following OIDC+provisioner configs:
+      - ./config/web-docker.yaml:/config/web-docker.yaml:ro   # PocketID (default)
+      # - ./config/web-rauthy.yaml:/config/web-rauthy.yaml:ro  # Rauthy (experimental)
       - /tmp/guardrail
     ports:
       - '8080:80'

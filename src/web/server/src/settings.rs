@@ -61,9 +61,27 @@ impl fmt::Debug for PocketIdSettings {
     }
 }
 
+#[derive(Deserialize, Default)]
+pub struct RauthySettings {
+    pub api_url: String,
+    pub api_key: String,
+    pub public_url: Option<String>,
+}
+
+impl fmt::Debug for RauthySettings {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RauthySettings")
+            .field("api_url", &self.api_url)
+            .field("api_key", &"[REDACTED]")
+            .field("public_url", &self.public_url)
+            .finish()
+    }
+}
+
 #[derive(Debug, Deserialize, Default)]
 pub struct ProvisionerSettings {
     pub pocket_id: Option<PocketIdSettings>,
+    pub rauthy: Option<RauthySettings>,
 }
 
 #[derive(Debug, Deserialize, Default)]
