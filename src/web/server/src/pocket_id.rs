@@ -66,12 +66,12 @@ impl IdentityProvisioner for PocketIdProvisioner {
         let setup_url = self.create_setup_url(&user_id).await?;
         Ok(ProvisionedUser {
             external_id: user_id,
-            setup_url: Some(setup_url),
+            setup_url,
         })
     }
 
-    async fn create_setup_url(&self, external_id: &str) -> Result<Url, ProvisionerError> {
-        self.build_login_code_url(external_id, "168h").await
+    async fn create_setup_url(&self, external_id: &str) -> Result<Option<Url>, ProvisionerError> {
+        self.build_login_code_url(external_id, "168h").await.map(Some)
     }
 
     async fn find_user_id(

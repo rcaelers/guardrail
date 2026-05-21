@@ -395,9 +395,10 @@ async fn get_invite_info(
                     tracing::warn!("re-issue setup URL for invite {code}: {e}");
                     AppError::failure("Failed to re-issue setup URL")
                 })?;
-            return Ok(Json(
-                serde_json::json!({ "valid": true, "redirect_url": setup_url }),
-            ));
+            return Ok(Json(match setup_url {
+                Some(url) => serde_json::json!({ "valid": true, "setup_url": url.to_string() }),
+                None => serde_json::json!({ "valid": true, "redirect_url": "/auth/login/start" }),
+            }));
         }
         return Ok(Json(serde_json::json!({ "valid": true, "needs_refresh": true })));
     }
@@ -445,7 +446,7 @@ async fn redeem_invite_json(
     .map_err(AppError::internal)?
     {
         if let Some(stored_url) = pending.setup_url {
-            return Ok(Json(serde_json::json!({ "redirect_url": stored_url })));
+            return Ok(Json(serde_json::json!({ "setup_url": stored_url })));
         }
         // Legacy record without a stored URL — issue a fresh token.
         let setup_url = provisioner
@@ -455,7 +456,10 @@ async fn redeem_invite_json(
                 tracing::warn!("re-issue setup URL for invite {code}: {e}");
                 AppError::failure(e.to_string())
             })?;
-        return Ok(Json(serde_json::json!({ "redirect_url": setup_url.to_string() })));
+        return Ok(Json(match setup_url {
+            Some(url) => serde_json::json!({ "setup_url": url.to_string() }),
+            None => serde_json::json!({ "redirect_url": "/auth/login/start" }),
+        }));
     }
 
     let provisioned = provisioner
@@ -493,9 +497,10 @@ async fn redeem_invite_json(
     .await
     .map_err(AppError::internal)?;
 
-    let redirect_url = setup_url_str.unwrap_or_else(|| "/auth/login/start".to_string());
-
-    Ok(Json(serde_json::json!({ "redirect_url": redirect_url })))
+    Ok(Json(match setup_url_str {
+        Some(url) => serde_json::json!({ "setup_url": url }),
+        None => serde_json::json!({ "redirect_url": "/auth/login/start" }),
+    }))
 }
 
 /// Issues a fresh one-time setup URL for an already-provisioned pending user.
@@ -530,8 +535,11 @@ async fn refresh_setup_url(
             AppError::failure(e.to_string())
         })?;
 
-    tracing::info!(code, sub = %pending.sub, url = %setup_url, "refreshed setup URL for pending invite");
-    Ok(Json(serde_json::json!({ "redirect_url": setup_url.to_string() })))
+    tracing::info!(code, sub = %pending.sub, ?setup_url, "refreshed setup URL for pending invite");
+    Ok(Json(match setup_url {
+        Some(url) => serde_json::json!({ "setup_url": url.to_string() }),
+        None => serde_json::json!({ "redirect_url": "/auth/login/start" }),
+    }))
 }
 
 // --- Public invite flow (template-based, kept for reference) ---
@@ -576,7 +584,8 @@ async fn show_invite_form(
                     tracing::warn!("re-issue setup URL for invite {code}: {e}");
                     AppError::failure(e.to_string())
                 })?
-                .to_string()
+                .map(|u| u.to_string())
+                .unwrap_or_else(|| "/auth/login/start".to_string())
         } else {
             "/auth/login/start".to_string()
         };

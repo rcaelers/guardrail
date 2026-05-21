@@ -137,7 +137,7 @@ impl GuardrailWebApp {
                         .and_then(|o| o.launch_url.as_deref())
                         .filter(|u| !u.is_empty())
                         .map(|launch_url| {
-                            format!("{}/auth/login/start", launch_url.trim_end_matches('/'))
+                            format!("{}/invite/popup-done", launch_url.trim_end_matches('/'))
                         })
                 });
                 Some(Arc::new(pocket_id::PocketIdProvisioner {

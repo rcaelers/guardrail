@@ -91,9 +91,11 @@ impl crate::provisioner::IdentityProvisioner for MockProvisioner {
     async fn create_setup_url(
         &self,
         _external_id: &str,
-    ) -> Result<url::Url, crate::provisioner::ProvisionerError> {
-        url::Url::parse("https://example.com/setup")
-            .map_err(|e| crate::provisioner::ProvisionerError::ApiError(e.to_string()))
+    ) -> Result<Option<url::Url>, crate::provisioner::ProvisionerError> {
+        Ok(Some(
+            url::Url::parse("https://example.com/setup")
+                .map_err(|e| crate::provisioner::ProvisionerError::ApiError(e.to_string()))?,
+        ))
     }
 
     async fn find_user_id(
@@ -129,7 +131,7 @@ impl crate::provisioner::IdentityProvisioner for FailingMockProvisioner {
     async fn create_setup_url(
         &self,
         _external_id: &str,
-    ) -> Result<url::Url, crate::provisioner::ProvisionerError> {
+    ) -> Result<Option<url::Url>, crate::provisioner::ProvisionerError> {
         Err(crate::provisioner::ProvisionerError::ApiError(
             "simulated setup_url failure".to_string(),
         ))

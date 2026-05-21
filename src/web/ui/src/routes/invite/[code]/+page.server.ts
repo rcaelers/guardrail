@@ -15,12 +15,19 @@ export const load: PageServerLoad = async ({ params }) => {
     throw error(500, 'Failed to load invitation.');
   }
   const data = await r.json();
+
+  // Provider returned a direct navigation URL (e.g. Rauthy: proceed to login).
   if (data.redirect_url) {
     throw redirect(303, data.redirect_url);
   }
-  // needs_refresh means a user was created but their setup URL was consumed;
-  // show a button to request a fresh one.
-  return { code: params.code, needs_refresh: data.needs_refresh === true };
+
+  // Provider returned a popup setup URL (e.g. PocketID one-time link).
+  // Pass it to the page so the UI can open the popup.
+  if (data.setup_url) {
+    return { code: params.code, needs_refresh: false, setup_url: data.setup_url as string };
+  }
+
+  return { code: params.code, needs_refresh: data.needs_refresh === true, setup_url: null };
 };
 
 export const actions: Actions = {
@@ -48,8 +55,15 @@ export const actions: Actions = {
       return fail(r.status >= 500 ? 500 : 400, { error: msg, username, email, first_name, last_name });
     }
 
-    const { redirect_url } = await r.json();
-    throw redirect(303, redirect_url);
+    const data = await r.json();
+
+    // Provider supports a popup setup window.
+    if (data.setup_url) {
+      return { setup_url: data.setup_url as string };
+    }
+
+    // Provider has no popup URL (e.g. Rauthy); go straight to login.
+    throw redirect(303, data.redirect_url ?? '/auth/login/start');
   },
 
   refresh: async ({ params }) => {
@@ -61,7 +75,10 @@ export const actions: Actions = {
       const text = await r.text();
       return fail(r.status >= 500 ? 500 : 400, { error: text || 'Failed to get a new setup link.' });
     }
-    const { redirect_url } = await r.json();
-    throw redirect(303, redirect_url);
+    const data = await r.json();
+    if (data.setup_url) {
+      return { setup_url: data.setup_url as string };
+    }
+    throw redirect(303, data.redirect_url ?? '/auth/login/start');
   }
 };

@@ -690,12 +690,12 @@ async fn test_get_invite_info_with_pending_access() {
         api_create_invitation(&app, &f.admin, json!({"is_admin": false, "grants": []})).await;
     create_pending_access(&app.db, &inv_id, "ext-testuser").await;
 
-    // GET /invitations/redeem/{code} with provisioner + pending → returns redirect_url
+    // GET /invitations/redeem/{code} with provisioner + pending → returns setup_url
     let (status, body) = app
         .call_json("GET", &format!("/invitations/redeem/{code}"), None, None)
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.get("redirect_url").is_some(), "expected redirect_url; got {body}");
+    assert!(body.get("setup_url").is_some(), "expected setup_url; got {body}");
 }
 
 // API calls:
@@ -721,7 +721,7 @@ async fn test_redeem_invite_json_existing_pending() {
         .call_json("POST", &format!("/invitations/redeem/{code}"), Some(body), None)
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(resp.get("redirect_url").is_some(), "expected redirect_url; got {resp}");
+    assert!(resp.get("setup_url").is_some(), "expected setup_url; got {resp}");
 }
 
 // API calls:
@@ -753,7 +753,7 @@ async fn test_redeem_invite_json_new_user() {
         .call_json("POST", &format!("/invitations/redeem/{code}"), Some(body), None)
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(resp.get("redirect_url").is_some(), "expected redirect_url; got {resp}");
+    assert!(resp.get("setup_url").is_some(), "expected setup_url; got {resp}");
 }
 
 // API calls:

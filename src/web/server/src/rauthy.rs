@@ -44,10 +44,12 @@ impl IdentityProvisioner for RauthyProvisioner {
         })
     }
 
-    async fn create_setup_url(&self, _external_id: &str) -> Result<Url, ProvisionerError> {
-        // Rauthy has no admin API for generating one-time login links.
-        // Return the public URL; the user can initiate password/passkey reset from there.
-        Ok(self.public_url.clone())
+    async fn create_setup_url(&self, _external_id: &str) -> Result<Option<Url>, ProvisionerError> {
+        // Rauthy has no admin API for one-time setup links — it emails the user automatically
+        // on account creation. Return the public URL so the frontend opens a popup there;
+        // the user follows the emailed link inside the popup to register their passkey,
+        // then closes it manually.
+        Ok(Some(self.public_url.clone()))
     }
 
     async fn find_user_id(
