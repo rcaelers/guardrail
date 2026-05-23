@@ -41,7 +41,7 @@ pub trait IdentityProvisioner: Send + Sync {
     /// Issue a fresh credential-setup URL for an already-provisioned user.
     /// Returns `Some(url)` when the provider supports a direct popup link (e.g. PocketID
     /// one-time token). Returns `None` when no such link is available and the caller
-    /// should proceed straight to OIDC login (e.g. Rauthy, which emails the link).
+    /// should proceed straight to OIDC login.
     async fn create_setup_url(&self, external_id: &str) -> Result<Option<Url>, ProvisionerError>;
 
     /// Look up the identity provider's internal user ID by email, falling back

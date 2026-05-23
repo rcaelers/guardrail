@@ -25,7 +25,6 @@ use crate::auth_cache::AuthCache;
 use crate::auth_user::AuthenticatedUser;
 use crate::pocket_id;
 use crate::provisioner::IdentityProvisioner;
-use crate::rauthy;
 use crate::routes::{auth, db_api, home, impersonation, invite};
 use crate::settings::Settings;
 use crate::state::AppState;
@@ -146,20 +145,6 @@ impl GuardrailWebApp {
                     api_key: cfg.api_key.clone(),
                     setup_path,
                     post_setup_redirect,
-                    client: http_client.clone(),
-                }) as Arc<dyn IdentityProvisioner>)
-            } else if let Some(cfg) = settings.provisioner.rauthy.as_ref() {
-                let api_url =
-                    Url::parse(&cfg.api_url).expect("Invalid provisioner.rauthy.api_url");
-                let public_url = cfg
-                    .public_url
-                    .as_deref()
-                    .map(|u| Url::parse(u).expect("Invalid provisioner.rauthy.public_url"))
-                    .unwrap_or_else(|| api_url.clone());
-                Some(Arc::new(rauthy::RauthyProvisioner {
-                    api_url,
-                    public_url,
-                    api_key: cfg.api_key.clone(),
                     client: http_client.clone(),
                 }) as Arc<dyn IdentityProvisioner>)
             } else {
