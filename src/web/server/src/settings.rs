@@ -48,6 +48,9 @@ pub struct PocketIdSettings {
     pub public_url: Option<String>,
     pub setup_path: Option<String>,
     pub post_setup_redirect: Option<String>,
+    /// URL of the Guardrail auto-login page served at the PocketID domain.
+    /// When set, overrides setup_path/post_setup_redirect for the invite flow.
+    pub auto_login_url: Option<String>,
 }
 
 impl fmt::Debug for PocketIdSettings {

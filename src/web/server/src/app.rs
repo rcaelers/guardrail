@@ -139,12 +139,26 @@ impl GuardrailWebApp {
                             format!("{}/invite/popup-done", launch_url.trim_end_matches('/'))
                         })
                 });
+                // auto_login_url: prefer explicit config; fall back to {public_url}/invite/auto-login
+                // when public_url is set (the path is served via reverse proxy to guardrail-ui).
+                let auto_login_url = cfg
+                    .auto_login_url
+                    .as_deref()
+                    .map(|u| Url::parse(u).expect("Invalid provisioner.pocket_id.auto_login_url"))
+                    .or_else(|| {
+                        cfg.public_url.as_deref().and_then(|base| {
+                            Url::parse(base)
+                                .ok()
+                                .and_then(|u| u.join("/invite/auto-login").ok())
+                        })
+                    });
                 Some(Arc::new(pocket_id::PocketIdProvisioner {
                     api_url,
                     public_url,
                     api_key: cfg.api_key.clone(),
                     setup_path,
                     post_setup_redirect,
+                    auto_login_url,
                     client: http_client.clone(),
                 }) as Arc<dyn IdentityProvisioner>)
             } else {

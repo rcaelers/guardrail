@@ -15,6 +15,11 @@ pub struct PocketIdProvisioner {
     pub setup_path: String,
     /// If set, appended as `?redirect=<url>` so PocketID sends the user here after passkey setup.
     pub post_setup_redirect: Option<String>,
+    /// URL of the Guardrail auto-login page served at the PocketID domain via reverse proxy.
+    /// When set, the setup URL becomes `{auto_login_url}?token={token}` and the popup page
+    /// calls PocketID's one-time-access-token API directly (same-origin), bypassing the
+    /// PocketID login UI entirely.
+    pub auto_login_url: Option<Url>,
     pub client: reqwest::Client,
 }
 
@@ -71,7 +76,22 @@ impl IdentityProvisioner for PocketIdProvisioner {
     }
 
     async fn create_setup_url(&self, external_id: &str) -> Result<Option<Url>, ProvisionerError> {
-        self.build_login_code_url(external_id, "168h").await.map(Some)
+        let token = self.create_one_time_token(external_id, "168h").await?;
+        if let Some(base) = &self.auto_login_url {
+            let mut url = base.clone();
+            url.query_pairs_mut().append_pair("token", &token);
+            tracing::info!(external_id, setup_url = %url, "built auto-login setup URL");
+            return Ok(Some(url));
+        }
+        let mut url = self
+            .public_url
+            .join(&format!("{}/{}", self.setup_path.trim_end_matches('/'), token))
+            .map_err(|e| ProvisionerError::ApiError(e.to_string()))?;
+        if let Some(redirect) = &self.post_setup_redirect {
+            url.query_pairs_mut().append_pair("redirect", redirect);
+        }
+        tracing::info!(external_id, setup_url = %url, "built PocketID setup URL");
+        Ok(Some(url))
     }
 
     async fn find_user_id(

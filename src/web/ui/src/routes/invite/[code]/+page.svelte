@@ -27,9 +27,21 @@
     }, 500);
   }
 
+  function buildPopupUrl(url: string): string {
+    // Pass our origin so the popup can target the postMessage correctly,
+    // even when the popup is served from a different domain (e.g. auth.workrave.org).
+    try {
+      const u = new URL(url);
+      u.searchParams.set('origin', window.location.origin);
+      return u.toString();
+    } catch {
+      return url;
+    }
+  }
+
   function openPopup(url: string) {
     if (popup && !popup.closed) { popup.focus(); return; }
-    const p = window.open(url, 'guardrail-setup', 'popup,width=520,height=640,left=200,top=100');
+    const p = window.open(buildPopupUrl(url), 'guardrail-setup', 'popup,width=520,height=640,left=200,top=100');
     if (!p) {
       popupBlocked = true;
       return;
@@ -39,11 +51,12 @@
     startPolling(p);
   }
 
-  // postMessage from the popup-done page (when PocketID redirects back to guardrail).
+  // postMessage from the popup (auto-login page or popup-done page).
+  // We check e.source === popup so we accept it from any domain the popup is served at.
   $effect(() => {
     if (!browser) return;
     function handleMessage(e: MessageEvent) {
-      if (e.origin !== window.location.origin) return;
+      if (e.source !== popup) return;
       if ((e.data as { type?: string })?.type === 'setup-complete') {
         popup?.close();
         popup = null;
@@ -70,7 +83,7 @@
         if (url) {
           actionSetupUrl = url;
           if (p && !p.closed) {
-            p.location.href = url;
+            p.location.href = buildPopupUrl(url);
             popup = p;
             startPolling(p);
             return; // don't call update(); we handle state ourselves
@@ -97,13 +110,13 @@
     </div>
 
     {#if setupUrl}
-      <!-- ── Popup setup phase ─────────────────────────────────────────── -->
-      <h1 class="mb-1 text-[22px] font-semibold tracking-[-0.01em]">Register your passkey</h1>
+      <!-- ── Popup sign-in phase ──────────────────────────────────────────── -->
+      <h1 class="mb-1 text-[22px] font-semibold tracking-[-0.01em]">Signing you in…</h1>
       <p class="mb-6 text-[13px] text-ink-muted dark:text-ink-mutedDark">
         {#if popup && !popup.closed}
-          Complete passkey registration in the popup window, then close it to sign in.
+          Completing sign-in in the popup window.
         {:else}
-          Click the button below to open the passkey registration window.
+          Click the button below to open the sign-in window.
         {/if}
       </p>
 
@@ -113,7 +126,7 @@
           onclick={() => openPopup(setupUrl!)}
           class="w-full rounded-md bg-ink dark:bg-ink-dark px-3 py-2 text-[13px] font-medium text-surface dark:text-surface-dark"
         >
-          Open registration window
+          Open sign-in window
         </button>
         {#if popupBlocked}
           <p class="mt-3 text-[12px] text-ink-muted dark:text-ink-mutedDark">
@@ -126,7 +139,7 @@
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
           </svg>
-          Waiting for passkey registration…
+          Signing in…
         </div>
         <button
           type="button"
@@ -138,10 +151,10 @@
       {/if}
 
     {:else if data.needs_refresh}
-      <!-- ── No provisioner: request a new link ────────────────────────── -->
-      <h1 class="mb-1 text-[22px] font-semibold tracking-[-0.01em]">Complete your setup</h1>
+      <!-- ── Returning user: account exists, open popup to sign in ──────── -->
+      <h1 class="mb-1 text-[22px] font-semibold tracking-[-0.01em]">Continue sign-in</h1>
       <p class="mb-6 text-[13px] text-ink-muted dark:text-ink-mutedDark">
-        Your account was created. Request a new link to complete passkey setup.
+        Your account is ready. Click the button below to sign in.
       </p>
 
       {#if (form as { error?: string } | null)?.error}
@@ -155,7 +168,7 @@
           type="submit"
           class="w-full rounded-md bg-ink dark:bg-ink-dark px-3 py-2 text-[13px] font-medium text-surface dark:text-surface-dark"
         >
-          Get new setup link
+          Sign in
         </button>
       </form>
 

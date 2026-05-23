@@ -16,15 +16,9 @@ export const load: PageServerLoad = async ({ params }) => {
   }
   const data = await r.json();
 
-  // Provider returned a direct navigation URL (e.g. Rauthy: proceed to login).
+  // Provider returned a direct navigation URL (e.g. no provisioner configured).
   if (data.redirect_url) {
     throw redirect(303, data.redirect_url);
-  }
-
-  // Provider returned a popup setup URL (e.g. PocketID one-time link).
-  // Pass it to the page so the UI can open the popup.
-  if (data.setup_url) {
-    return { code: params.code, needs_refresh: false, setup_url: data.setup_url as string };
   }
 
   return { code: params.code, needs_refresh: data.needs_refresh === true, setup_url: null };

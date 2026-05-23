@@ -2,7 +2,7 @@ use axum::{
     Form, Json, Router,
     extract::{Path, State},
     http::HeaderMap,
-    response::{IntoResponse, Redirect, Response},
+    response::{Html, IntoResponse, Redirect, Response},
     routing::{get, put},
 };
 use chrono::{DateTime, Utc};
@@ -26,6 +26,8 @@ use crate::{
 pub(crate) const DEFAULT_INVITE_HTML: &str = include_str!("../../templates/email/invite.html");
 pub(crate) const DEFAULT_INVITE_TEXT: &str = include_str!("../../templates/email/invite.txt");
 pub(crate) const DEFAULT_INVITE_SUBJECT: &str = "You've been invited to Guardrail";
+
+const AUTO_LOGIN_HTML: &str = include_str!("../../templates/invite-auto-login.html");
 
 /// Renders a per-product custom email template (loaded from the DB at runtime).
 /// Supports only flat substitution: {{invite_url}}, {{product_name}}, {{product_role}}.
@@ -62,7 +64,15 @@ pub fn api_router() -> Router<AppState> {
 
 /// Web routes for the invitation redemption flow.
 pub fn router() -> Router<AppState> {
-    Router::new().route("/invite/{code}", get(show_invite_form).post(redeem_invite))
+    Router::new()
+        // Static segment wins over /{code} — this page is served at the PocketID domain
+        // via reverse proxy so its fetch("/one-time-access-token/…") is same-origin.
+        .route("/invite/auto-login", get(auto_login_page))
+        .route("/invite/{code}", get(show_invite_form).post(redeem_invite))
+}
+
+async fn auto_login_page() -> impl IntoResponse {
+    Html(AUTO_LOGIN_HTML)
 }
 
 // --- Invitation API ---
@@ -378,28 +388,17 @@ async fn get_invite_info(
         .map_err(AppError::internal)?
         .ok_or_else(|| AppError::not_found("Invitation not found or has expired"))?;
 
-    if let Some(pending) = repos::pending_access::PendingAccessRepo::get_by_invitation_id(
+    if repos::pending_access::PendingAccessRepo::get_by_invitation_id(
         &state.repo.db,
         &invitation.id,
     )
     .await
     .map_err(AppError::internal)?
+    .is_some()
     {
-        // Always issue a fresh setup URL: the stored one is a one-time token that
-        // becomes invalid after first use, so it cannot be reused on return visits.
-        if let Some(provisioner) = state.provisioner.as_ref() {
-            let setup_url = provisioner
-                .create_setup_url(&pending.sub)
-                .await
-                .map_err(|e| {
-                    tracing::warn!("re-issue setup URL for invite {code}: {e}");
-                    AppError::failure("Failed to re-issue setup URL")
-                })?;
-            return Ok(Json(match setup_url {
-                Some(url) => serde_json::json!({ "valid": true, "setup_url": url.to_string() }),
-                None => serde_json::json!({ "valid": true, "redirect_url": "/auth/login/start" }),
-            }));
-        }
+        // Pending user exists — the frontend will prompt the user to open the popup,
+        // which calls the refresh endpoint to get a fresh one-time token on demand.
+        // We do NOT create a token here to avoid invalidating an in-flight token.
         return Ok(Json(serde_json::json!({ "valid": true, "needs_refresh": true })));
     }
 
