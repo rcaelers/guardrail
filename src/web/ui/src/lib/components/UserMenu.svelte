@@ -41,8 +41,13 @@
         <button
           type="button"
           onclick={async () => {
-            try { await fetch('/logout', { method: 'POST' }); } catch {}
-            window.location.href = '/login';
+            try {
+              const resp = await fetch('/logout', { method: 'POST' });
+              const { logoutUrl } = await resp.json() as { logoutUrl: string };
+              window.location.href = logoutUrl;
+            } catch {
+              window.location.href = '/login';
+            }
           }}
           class="block w-full cursor-pointer px-3 py-1.5 text-left hover:bg-surface-panel dark:hover:bg-surface-panelDark"
         >Sign out</button>
