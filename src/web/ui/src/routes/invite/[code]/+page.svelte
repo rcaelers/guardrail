@@ -22,7 +22,7 @@
       if (p.closed) {
         clearInterval(timer);
         if (popup === p) popup = null;
-        window.location.href = '/auth/login/start?prompt=none';
+        window.location.href = '/auth/login/start';
       }
     }, 500);
   }
@@ -60,7 +60,7 @@
       if ((e.data as { type?: string })?.type === 'setup-complete') {
         popup?.close();
         popup = null;
-        window.location.href = '/auth/login/start?prompt=none';
+        window.location.href = '/auth/login/start';
       }
     }
     window.addEventListener('message', handleMessage);
@@ -151,10 +151,10 @@
       {/if}
 
     {:else if data.needs_refresh}
-      <!-- ── Returning user: account exists, open popup to sign in ──────── -->
-      <h1 class="mb-1 text-[22px] font-semibold tracking-[-0.01em]">Continue sign-in</h1>
+      <!-- ── Returning user: account exists, open popup to complete setup ── -->
+      <h1 class="mb-1 text-[22px] font-semibold tracking-[-0.01em]">Complete account setup</h1>
       <p class="mb-6 text-[13px] text-ink-muted dark:text-ink-mutedDark">
-        Your account is ready. Click the button below to sign in.
+        Your account was registered. Click below to add your passkey and sign in.
       </p>
 
       {#if (form as { error?: string } | null)?.error}
@@ -168,7 +168,7 @@
           type="submit"
           class="w-full rounded-md bg-ink dark:bg-ink-dark px-3 py-2 text-[13px] font-medium text-surface dark:text-surface-dark"
         >
-          Sign in
+          Complete setup
         </button>
       </form>
 
