@@ -87,7 +87,7 @@
       if (!token) { fail('No token provided.'); return; }
 
       // Step 1: exchange one-time token → sets access_token + session cookie
-      fetch('/one-time-access-token/' + encodeURIComponent(token), {
+      fetch('/api/one-time-access-token/' + encodeURIComponent(token), {
         method: 'POST', credentials: 'include'
       })
       .then(function (r) {
