@@ -32,6 +32,7 @@ pub fn router() -> Router<AppState> {
         .route("/auth/logout", post(logout))
         .route("/auth/real-user", get(get_real_user))
         .route("/auth/recovery", post(request_recovery))
+        .route("/auth/config", get(get_config))
 }
 
 #[derive(Deserialize)]
@@ -134,6 +135,18 @@ async fn logout(State(state): State<AppState>, session: Session) -> impl IntoRes
         HeaderValue::from_static("gr_real_uid=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"),
     );
     response
+}
+
+/// Returns public app configuration for the UI (no auth required).
+async fn get_config(State(state): State<AppState>) -> Json<Value> {
+    let self_service_url = state
+        .settings
+        .oidc
+        .as_ref()
+        .and_then(|o| o.self_service_url.as_deref())
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    Json(serde_json::json!({ "self_service_url": self_service_url }))
 }
 
 /// Returns the real (admin) user's data when impersonation is active.

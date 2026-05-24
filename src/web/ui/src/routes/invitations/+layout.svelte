@@ -48,7 +48,7 @@
     <span class="flex-1"></span>
     <a href="/" class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[12px] text-ink-muted dark:text-ink-mutedDark">← Back to app</a>
     <ThemeToggle {dark} setDark={(v) => (dark = v)} />
-    {#if data.user}<UserMenu user={data.user} isAdmin={data.user.isAdmin} />{/if}
+    {#if data.user}<UserMenu user={data.user} isAdmin={data.user.isAdmin} profileUrl={data.selfServiceUrl} />{/if}
   </header>
 
   <div class="flex min-h-0 flex-1">

@@ -15,7 +15,7 @@
       </div>
     </div>
     <span class="flex-1"></span>
-    {#if data.user}<UserMenu user={data.user} isAdmin={data.user.isAdmin} />{/if}
+    {#if data.user}<UserMenu user={data.user} isAdmin={data.user.isAdmin} profileUrl={data.selfServiceUrl} />{/if}
   </header>
 
   <main class="flex flex-1 items-center justify-center px-6 py-16">

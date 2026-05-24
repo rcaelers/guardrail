@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { User } from '$lib/adapters/types';
 
-  let { user, isAdmin = false }: { user: User; isAdmin?: boolean } = $props();
+  let { user, isAdmin = false, profileUrl = null }: { user: User; isAdmin?: boolean; profileUrl?: string | null } = $props();
 
   let open = $state(false);
   let btn: HTMLButtonElement | undefined;
@@ -37,6 +37,9 @@
       <div class="py-1 text-[13px]">
         {#if isAdmin}
           <a href="/admin" class="block px-3 py-1.5 hover:bg-surface-panel dark:hover:bg-surface-panelDark">Admin console</a>
+        {/if}
+        {#if profileUrl}
+          <a href={profileUrl} target="_blank" rel="noopener noreferrer" class="block px-3 py-1.5 hover:bg-surface-panel dark:hover:bg-surface-panelDark">Profile</a>
         {/if}
         <button
           type="button"

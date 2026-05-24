@@ -6,6 +6,21 @@
 import type { LayoutServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
 import { createAdapter } from '$lib/adapters';
+import { env } from '$env/dynamic/private';
+
+async function fetchSelfServiceUrl(request: Request): Promise<string | null> {
+  try {
+    const webBase = (env.GUARDRAIL_API_URL ?? '').replace(/\/api\/v1\/?$/, '');
+    const resp = await fetch(`${webBase}/auth/config`, {
+      headers: { cookie: request.headers.get('cookie') ?? '' }
+    });
+    if (!resp.ok) return null;
+    const data = await resp.json() as { self_service_url?: string | null };
+    return data.self_service_url ?? null;
+  } catch {
+    return null;
+  }
+}
 
 export const load: LayoutServerLoad = async ({ locals, url, request }) => {
   const path = url.pathname;
@@ -20,12 +35,13 @@ export const load: LayoutServerLoad = async ({ locals, url, request }) => {
 
   const realUser = locals.realUser ?? null;
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
+  const selfServiceUrl = await fetchSelfServiceUrl(request);
 
   if (!locals.user) {
-    if (isLogin) return { user: null, products: [], realUser: null };
+    if (isLogin) return { user: null, products: [], realUser: null, selfServiceUrl };
     if (isPublicAllowed) {
       const products = await adapter.listProducts('public');
-      return { user: null, products, realUser: null };
+      return { user: null, products, realUser: null, selfServiceUrl };
     }
     const next = encodeURIComponent(path + url.search);
     throw redirect(303, `/login?next=${next}`);
@@ -35,6 +51,7 @@ export const load: LayoutServerLoad = async ({ locals, url, request }) => {
   return {
     user: locals.user,
     products,
-    realUser
+    realUser,
+    selfServiceUrl
   };
 };

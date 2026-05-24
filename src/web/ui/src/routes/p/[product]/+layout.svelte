@@ -72,7 +72,7 @@
     <span class="flex-1"></span>
     <ThemeToggle {dark} setDark={(v) => (dark = v)} />
     {#if data.user}
-      <UserMenu user={data.user} isAdmin={data.user.isAdmin} />
+      <UserMenu user={data.user} isAdmin={data.user.isAdmin} profileUrl={data.selfServiceUrl} />
     {:else}
       <a
         href="/login"
