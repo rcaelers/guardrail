@@ -22,7 +22,7 @@
       if (p.closed) {
         clearInterval(timer);
         if (popup === p) popup = null;
-        window.location.href = '/auth/login/start';
+        window.location.href = '/auth/login/start?prompt=none';
       }
     }, 500);
   }
@@ -60,7 +60,7 @@
       if ((e.data as { type?: string })?.type === 'setup-complete') {
         popup?.close();
         popup = null;
-        window.location.href = '/auth/login/start';
+        window.location.href = '/auth/login/start?prompt=none';
       }
     }
     window.addEventListener('message', handleMessage);
