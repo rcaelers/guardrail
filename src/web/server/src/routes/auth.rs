@@ -113,9 +113,12 @@ async fn request_recovery(
     Ok(Json(serde_json::json!({ "ok": true, "login_url": login_url })))
 }
 
-async fn logout(session: Session) -> impl IntoResponse {
+async fn logout(State(state): State<AppState>, session: Session) -> impl IntoResponse {
     let _ = session.flush().await;
-    let mut response = Redirect::to("/").into_response();
+    let redirect_to = oidc::end_session_url(&state)
+        .await
+        .unwrap_or_else(|| "/".to_string());
+    let mut response = Redirect::to(&redirect_to).into_response();
     response.headers_mut().append(
         SET_COOKIE,
         HeaderValue::from_static("gr_uid=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"),

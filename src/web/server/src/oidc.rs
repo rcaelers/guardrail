@@ -42,6 +42,7 @@ struct OidcDiscoveryDocument {
     authorization_endpoint: String,
     token_endpoint: String,
     userinfo_endpoint: String,
+    end_session_endpoint: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -262,6 +263,22 @@ fn rewrite_internal_endpoint(endpoint: &mut String, oidc: &Oidc) {
     if let Some(path) = endpoint.strip_prefix(public_issuer) {
         *endpoint = format!("{internal_issuer}{path}");
     }
+}
+
+/// Returns the IdP end_session URL with `post_logout_redirect_uri` set, or `None`
+/// if the discovery document doesn't advertise one or settings are unavailable.
+pub async fn end_session_url(state: &AppState) -> Option<String> {
+    let oidc = oidc_settings(state).ok()?;
+    let post_logout_redirect = oidc.logout_callback_url.as_str();
+    if post_logout_redirect.is_empty() {
+        return None;
+    }
+    let discovery = fetch_discovery(state, oidc).await.ok()?;
+    let endpoint = discovery.end_session_endpoint?;
+    let mut url = Url::parse(&endpoint).ok()?;
+    url.query_pairs_mut()
+        .append_pair("post_logout_redirect_uri", post_logout_redirect);
+    Some(url.into())
 }
 
 fn sanitize_prompt(prompt: Option<&str>) -> Option<&str> {
