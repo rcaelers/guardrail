@@ -16,15 +16,15 @@
   "devDependencies": {
     "@sveltejs/adapter-auto": "^7.0.1",
     "@sveltejs/adapter-node": "^5.5.4",
-    "@sveltejs/kit": "^2.59.1",
-    "@sveltejs/vite-plugin-svelte": "^7.1.0",
-    "@tailwindcss/vite": "^4.2.4",
+    "@sveltejs/kit": "^2.61.1",
+    "@sveltejs/vite-plugin-svelte": "^7.1.2",
+    "@tailwindcss/vite": "^4.3.0",
     "autoprefixer": "^10.5.0",
-    "postcss": "^8.5.14",
-    "svelte": "^5.55.7",
+    "postcss": "^8.5.15",
+    "svelte": "^5.55.9",
     "svelte-check": "^4.4.8",
-    "tailwindcss": "^4.2.4",
+    "tailwindcss": "^4.3.0",
     "typescript": "^6.0.3",
-    "vite": "^8.0.10"
+    "vite": "^8.0.14"
   }
 }
