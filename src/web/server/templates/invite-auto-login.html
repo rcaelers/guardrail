@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Signing in · Guardrail</title>
+  <title>Set up your account · Guardrail</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -19,7 +19,7 @@
     .container { text-align: center; padding: 1.5rem; max-width: 400px; width: 100%; }
     .logo { width: 26px; height: 26px; border-radius: 6px; background: #1c1917; margin: 0 auto 1.5rem; }
     h1 { font-size: 1.375rem; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 0.5rem; }
-    p { font-size: 0.8125rem; color: #78716c; margin: 0; }
+    p { font-size: 0.8125rem; color: #78716c; margin: 0 0 1rem; }
     .spinner {
       display: inline-block;
       width: 20px; height: 20px;
@@ -30,18 +30,20 @@
       margin-top: 1rem;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .error-msg { color: #dc2626; font-size: 0.8125rem; margin: 1rem 0 0; }
-    button {
-      margin-top: 1rem;
-      padding: 0.4rem 0.875rem;
-      border: 1px solid #d1d5db;
+    .error-msg { color: #dc2626; font-size: 0.8125rem; margin: 0 0 1rem; }
+    .btn {
+      display: inline-block;
+      margin-top: 0.5rem;
+      padding: 0.5rem 1rem;
       border-radius: 0.375rem;
-      background: #fff;
       cursor: pointer;
       font-size: 0.8125rem;
-      color: #374151;
+      width: 100%;
     }
-    button:hover { background: #f9fafb; }
+    .btn-primary { background: #1c1917; color: #fafaf9; border: 1px solid #1c1917; }
+    .btn-primary:hover { background: #292524; }
+    .btn-secondary { background: #fff; color: #374151; border: 1px solid #d1d5db; }
+    .btn-secondary:hover { background: #f9fafb; }
     .hidden { display: none; }
   </style>
 </head>
@@ -54,15 +56,17 @@
       <div class="spinner"></div>
     </div>
 
-    <div id="success" class="hidden">
-      <h1>Signed in</h1>
-      <p>You can close this window and return to Guardrail.</p>
+    <div id="setup" class="hidden">
+      <h1>Add your passkey</h1>
+      <p>We&rsquo;ve opened your PocketID profile in a new tab. Add a passkey there, then click Continue below.</p>
+      <button class="btn btn-secondary" onclick="openProfile()">Reopen PocketID profile</button>
+      <button class="btn btn-primary" onclick="complete()">I&rsquo;ve added my passkey &mdash; Continue</button>
     </div>
 
     <div id="error" class="hidden">
-      <h1>Sign-in failed</h1>
+      <h1>Setup failed</h1>
       <p class="error-msg" id="error-msg"></p>
-      <button onclick="window.close()">Close window</button>
+      <button class="btn btn-secondary" onclick="window.close()">Close window</button>
     </div>
   </div>
 
@@ -73,9 +77,20 @@
       var openerOrigin = params.get('origin');
 
       function show(id) {
-        ['pending', 'success', 'error'].forEach(function (s) {
+        ['pending', 'setup', 'error'].forEach(function (s) {
           document.getElementById(s).className = s === id ? '' : 'hidden';
         });
+      }
+
+      function openProfile() {
+        window.open('/profile', 'pocketid-profile', 'width=960,height=720');
+      }
+
+      function complete() {
+        if (window.opener) {
+          window.opener.postMessage({ type: 'setup-complete' }, openerOrigin || '*');
+        }
+        window.close();
       }
 
       if (!token) {
@@ -95,11 +110,8 @@
             show('error');
           });
         }
-        show('success');
-        if (window.opener) {
-          window.opener.postMessage({ type: 'setup-complete' }, openerOrigin || '*');
-        }
-        window.close();
+        openProfile();
+        show('setup');
       }).catch(function (err) {
         document.getElementById('error-msg').textContent = String(err);
         show('error');
