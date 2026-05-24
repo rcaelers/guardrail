@@ -8,40 +8,24 @@
     *, *::before, *::after { box-sizing: border-box; }
     body {
       font-family: system-ui, -apple-system, sans-serif;
-      display: flex;
-      min-height: 100vh;
-      align-items: center;
-      justify-content: center;
-      background: #fafaf9;
-      color: #1c1917;
-      margin: 0;
+      display: flex; min-height: 100vh; align-items: center;
+      justify-content: center; background: #fafaf9; color: #1c1917; margin: 0;
     }
     .container { text-align: center; padding: 1.5rem; max-width: 400px; width: 100%; }
     .logo { width: 26px; height: 26px; border-radius: 6px; background: #1c1917; margin: 0 auto 1.5rem; }
     h1 { font-size: 1.375rem; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 0.5rem; }
     p { font-size: 0.8125rem; color: #78716c; margin: 0 0 1rem; }
     .spinner {
-      display: inline-block;
-      width: 20px; height: 20px;
-      border: 2px solid #e5e7eb;
-      border-top-color: #374151;
-      border-radius: 50%;
-      animation: spin 0.75s linear infinite;
-      margin-top: 1rem;
+      display: inline-block; width: 20px; height: 20px;
+      border: 2px solid #e5e7eb; border-top-color: #374151;
+      border-radius: 50%; animation: spin 0.75s linear infinite; margin-top: 1rem;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .error-msg { color: #dc2626; font-size: 0.8125rem; margin: 0 0 1rem; }
     .btn {
-      display: inline-block;
-      margin-top: 0.5rem;
-      padding: 0.5rem 1rem;
-      border-radius: 0.375rem;
-      cursor: pointer;
-      font-size: 0.8125rem;
-      width: 100%;
+      display: block; width: 100%; margin-top: 0.5rem;
+      padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; font-size: 0.8125rem;
     }
-    .btn-primary { background: #1c1917; color: #fafaf9; border: 1px solid #1c1917; }
-    .btn-primary:hover { background: #292524; }
     .btn-secondary { background: #fff; color: #374151; border: 1px solid #d1d5db; }
     .btn-secondary:hover { background: #f9fafb; }
     .hidden { display: none; }
@@ -50,26 +34,14 @@
 <body>
   <div class="container">
     <div class="logo"></div>
-
-    <div id="pending">
-      <h1>Signing in&hellip;</h1>
-      <div class="spinner"></div>
-    </div>
-
-    <div id="setup" class="hidden">
-      <h1>Add your passkey</h1>
-      <p>We&rsquo;ve opened your PocketID profile in a new tab. Add a passkey there, then click Continue below.</p>
-      <button class="btn btn-secondary" onclick="openProfile()">Reopen PocketID profile</button>
-      <button class="btn btn-primary" onclick="complete()">I&rsquo;ve added my passkey &mdash; Continue</button>
-    </div>
-
+    <div id="pending"><h1>Setting up your account&hellip;</h1><div class="spinner"></div></div>
+    <div id="success" class="hidden"><h1>Account ready</h1><p>Redirecting you to sign in&hellip;</p></div>
     <div id="error" class="hidden">
       <h1>Setup failed</h1>
       <p class="error-msg" id="error-msg"></p>
       <button class="btn btn-secondary" onclick="window.close()">Close window</button>
     </div>
   </div>
-
   <script>
     (function () {
       var params = new URLSearchParams(location.search);
@@ -77,44 +49,104 @@
       var openerOrigin = params.get('origin');
 
       function show(id) {
-        ['pending', 'setup', 'error'].forEach(function (s) {
+        ['pending', 'success', 'error'].forEach(function (s) {
           document.getElementById(s).className = s === id ? '' : 'hidden';
         });
       }
 
-      function openProfile() {
-        window.open('/profile', 'pocketid-profile', 'width=960,height=720');
+      function fail(msg) {
+        document.getElementById('error-msg').textContent = msg;
+        show('error');
+      }
+
+      // base64url ↔ ArrayBuffer helpers
+      function fromB64url(str) {
+        var padded = str + '==='.slice(0, (4 - str.length % 4) % 4);
+        var b64 = padded.replace(/-/g, '+').replace(/_/g, '/');
+        var bin = atob(b64);
+        var buf = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
+        return buf.buffer;
+      }
+
+      function toB64url(buf) {
+        var bytes = new Uint8Array(buf);
+        var str = '';
+        bytes.forEach(function (b) { str += String.fromCharCode(b); });
+        return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
       }
 
       function complete() {
+        show('success');
         if (window.opener) {
           window.opener.postMessage({ type: 'setup-complete' }, openerOrigin || '*');
         }
-        window.close();
+        setTimeout(function () { window.close(); }, 800);
       }
 
-      if (!token) {
-        document.getElementById('error-msg').textContent = 'No token provided.';
-        show('error');
-        return;
-      }
+      if (!token) { fail('No token provided.'); return; }
 
+      // Step 1: exchange one-time token → sets access_token + session cookie
       fetch('/one-time-access-token/' + encodeURIComponent(token), {
-        method: 'POST',
-        credentials: 'include',
-      }).then(function (resp) {
-        if (!resp.ok) {
-          return resp.text().then(function (text) {
-            document.getElementById('error-msg').textContent =
-              text || 'Sign-in failed (' + resp.status + ').';
-            show('error');
-          });
+        method: 'POST', credentials: 'include'
+      })
+      .then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'Sign-in failed (' + r.status + ')'); });
+        // Step 2: begin passkey registration
+        return fetch('/api/webauthn/register/start', { credentials: 'include' });
+      })
+      .then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'Registration start failed (' + r.status + ')'); });
+        return r.json();
+      })
+      .then(function (opts) {
+        // Step 3: create passkey — browser shows native dialog (one touch)
+        var createOpts = {
+          challenge: fromB64url(opts.challenge),
+          rp: opts.rp,
+          user: { id: fromB64url(opts.user.id), name: opts.user.name, displayName: opts.user.displayName },
+          pubKeyCredParams: opts.pubKeyCredParams,
+          timeout: opts.timeout,
+          excludeCredentials: (opts.excludeCredentials || []).map(function (c) {
+            return { id: fromB64url(c.id), type: c.type, transports: c.transports };
+          }),
+          authenticatorSelection: opts.authenticatorSelection,
+          attestation: opts.attestation
+        };
+        return navigator.credentials.create({ publicKey: createOpts });
+      })
+      .then(function (cred) {
+        if (!cred) throw new Error('Passkey creation was cancelled.');
+        // Step 4: finish registration
+        var body = {
+          id: cred.id,
+          rawId: toB64url(cred.rawId),
+          type: cred.type,
+          authenticatorAttachment: cred.authenticatorAttachment || null,
+          clientExtensionResults: {},
+          response: {
+            clientDataJSON: toB64url(cred.response.clientDataJSON),
+            attestationObject: toB64url(cred.response.attestationObject),
+            transports: cred.response.getTransports ? cred.response.getTransports() : []
+          }
+        };
+        return fetch('/api/webauthn/register/finish', {
+          method: 'POST', credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+      })
+      .then(function (r) {
+        if (!r.ok) return r.text().then(function (t) { throw new Error(t || 'Registration finish failed (' + r.status + ')'); });
+        complete();
+      })
+      .catch(function (err) {
+        // NotAllowedError means the user cancelled the passkey dialog
+        if (err && err.name === 'NotAllowedError') {
+          fail('Passkey setup was cancelled. Please try again.');
+        } else {
+          fail(String(err.message || err));
         }
-        openProfile();
-        show('setup');
-      }).catch(function (err) {
-        document.getElementById('error-msg').textContent = String(err);
-        show('error');
       });
     })();
   </script>

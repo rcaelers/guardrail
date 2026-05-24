@@ -108,7 +108,7 @@ pub async fn login_start(
         oidc,
         &csrf_state,
         code_challenge.as_deref(),
-        prompt,
+        prompt.as_deref(),
     )?;
     Ok(Redirect::to(authorize_url.as_str()))
 }
@@ -264,10 +264,10 @@ fn rewrite_internal_endpoint(endpoint: &mut String, oidc: &Oidc) {
     }
 }
 
-fn sanitize_prompt(prompt: Option<&str>) -> &str {
+fn sanitize_prompt(prompt: Option<&str>) -> Option<&str> {
     match prompt {
-        Some("none") | Some("consent") | Some("select_account") => prompt.unwrap(),
-        _ => "login",
+        Some("login") | Some("none") | Some("consent") | Some("select_account") => prompt,
+        _ => None,
     }
 }
 
@@ -276,7 +276,7 @@ fn build_authorize_url(
     oidc: &Oidc,
     csrf_state: &str,
     code_challenge: Option<&str>,
-    prompt: &str,
+    prompt: Option<&str>,
 ) -> AppResult<Url> {
     let mut url = Url::parse(authorization_endpoint).map_err(AppError::internal)?;
     {
@@ -286,8 +286,10 @@ fn build_authorize_url(
             .append_pair("client_id", oidc.client_id.as_str())
             .append_pair("redirect_uri", oidc.callback_url.as_str())
             .append_pair("scope", OIDC_SCOPE)
-            .append_pair("state", csrf_state)
-            .append_pair("prompt", prompt);
+            .append_pair("state", csrf_state);
+        if let Some(p) = prompt {
+            pairs.append_pair("prompt", p);
+        }
         if let Some(challenge) = code_challenge {
             pairs
                 .append_pair("code_challenge", challenge)
@@ -555,7 +557,7 @@ mod tests {
             &oidc,
             "csrf",
             Some("challenge"),
-            "login",
+            Some("login"),
         )
         .unwrap();
         let params: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
@@ -572,26 +574,22 @@ mod tests {
         assert_eq!(params.get("code_challenge").unwrap(), "challenge");
         assert_eq!(params.get("code_challenge_method").unwrap(), "S256");
 
-        let no_pkce = build_authorize_url(
-            "https://issuer.example/authorize",
-            &oidc,
-            "csrf",
-            None,
-            "login",
-        )
-        .unwrap();
-        assert!(!no_pkce.query().unwrap().contains("code_challenge"));
+        let no_pkce =
+            build_authorize_url("https://issuer.example/authorize", &oidc, "csrf", None, None)
+                .unwrap();
+        assert!(!no_pkce.query().unwrap_or("").contains("code_challenge"));
+        assert!(!no_pkce.query().unwrap_or("").contains("prompt"));
     }
 
     #[test]
-    fn sanitize_prompt_allows_none_consent_select_account_and_defaults_to_login() {
-        assert_eq!(sanitize_prompt(None), "login");
-        assert_eq!(sanitize_prompt(Some("login")), "login");
-        assert_eq!(sanitize_prompt(Some("none")), "none");
-        assert_eq!(sanitize_prompt(Some("consent")), "consent");
-        assert_eq!(sanitize_prompt(Some("select_account")), "select_account");
-        assert_eq!(sanitize_prompt(Some("evil")), "login");
-        assert_eq!(sanitize_prompt(Some("")), "login");
+    fn sanitize_prompt_allows_known_values_and_rejects_unknown() {
+        assert_eq!(sanitize_prompt(None), None);
+        assert_eq!(sanitize_prompt(Some("login")), Some("login"));
+        assert_eq!(sanitize_prompt(Some("none")), Some("none"));
+        assert_eq!(sanitize_prompt(Some("consent")), Some("consent"));
+        assert_eq!(sanitize_prompt(Some("select_account")), Some("select_account"));
+        assert_eq!(sanitize_prompt(Some("evil")), None);
+        assert_eq!(sanitize_prompt(Some("")), None);
     }
 
     #[test]
