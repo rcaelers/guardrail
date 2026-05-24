@@ -26,6 +26,7 @@ const AUTHENTICATED_USER_SESSION_KEY: &str = "authenticated_user";
 #[derive(Debug, Deserialize)]
 pub struct LoginStartQuery {
     pub next: Option<String>,
+    pub prompt: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -101,11 +102,13 @@ pub async fn login_start(
         .await
         .map_err(AppError::internal)?;
 
+    let prompt = sanitize_prompt(query.prompt.as_deref());
     let authorize_url = build_authorize_url(
         &discovery.authorization_endpoint,
         oidc,
         &csrf_state,
         code_challenge.as_deref(),
+        prompt,
     )?;
     Ok(Redirect::to(authorize_url.as_str()))
 }
@@ -261,11 +264,19 @@ fn rewrite_internal_endpoint(endpoint: &mut String, oidc: &Oidc) {
     }
 }
 
+fn sanitize_prompt(prompt: Option<&str>) -> &str {
+    match prompt {
+        Some("none") | Some("consent") | Some("select_account") => prompt.unwrap(),
+        _ => "login",
+    }
+}
+
 fn build_authorize_url(
     authorization_endpoint: &str,
     oidc: &Oidc,
     csrf_state: &str,
     code_challenge: Option<&str>,
+    prompt: &str,
 ) -> AppResult<Url> {
     let mut url = Url::parse(authorization_endpoint).map_err(AppError::internal)?;
     {
@@ -276,7 +287,7 @@ fn build_authorize_url(
             .append_pair("redirect_uri", oidc.callback_url.as_str())
             .append_pair("scope", OIDC_SCOPE)
             .append_pair("state", csrf_state)
-            .append_pair("prompt", "login");
+            .append_pair("prompt", prompt);
         if let Some(challenge) = code_challenge {
             pairs
                 .append_pair("code_challenge", challenge)
@@ -544,6 +555,7 @@ mod tests {
             &oidc,
             "csrf",
             Some("challenge"),
+            "login",
         )
         .unwrap();
         let params: std::collections::HashMap<_, _> = url.query_pairs().into_owned().collect();
@@ -560,9 +572,26 @@ mod tests {
         assert_eq!(params.get("code_challenge").unwrap(), "challenge");
         assert_eq!(params.get("code_challenge_method").unwrap(), "S256");
 
-        let no_pkce =
-            build_authorize_url("https://issuer.example/authorize", &oidc, "csrf", None).unwrap();
+        let no_pkce = build_authorize_url(
+            "https://issuer.example/authorize",
+            &oidc,
+            "csrf",
+            None,
+            "login",
+        )
+        .unwrap();
         assert!(!no_pkce.query().unwrap().contains("code_challenge"));
+    }
+
+    #[test]
+    fn sanitize_prompt_allows_none_consent_select_account_and_defaults_to_login() {
+        assert_eq!(sanitize_prompt(None), "login");
+        assert_eq!(sanitize_prompt(Some("login")), "login");
+        assert_eq!(sanitize_prompt(Some("none")), "none");
+        assert_eq!(sanitize_prompt(Some("consent")), "consent");
+        assert_eq!(sanitize_prompt(Some("select_account")), "select_account");
+        assert_eq!(sanitize_prompt(Some("evil")), "login");
+        assert_eq!(sanitize_prompt(Some("")), "login");
     }
 
     #[test]
