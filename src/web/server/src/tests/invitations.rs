@@ -677,9 +677,9 @@ async fn test_redeem_invite_form() {
 // | ------ | -------------------------- |
 // | GET    | /invitations/redeem/{code} |
 // Cases:
-// | Case                                                 | Expected              |
-// | ---------------------------------------------------- | --------------------- |
-// | valid invitation with pending access and provisioner | 200 with redirect_url |
+// | Case                                                 | Expected                  |
+// | ---------------------------------------------------- | ------------------------- |
+// | valid invitation with pending access and provisioner | 200 with needs_refresh=true |
 #[tokio::test]
 async fn test_get_invite_info_with_pending_access() {
     let app = TestApp::new_with_provisioner().await;
@@ -690,12 +690,13 @@ async fn test_get_invite_info_with_pending_access() {
         api_create_invitation(&app, &f.admin, json!({"is_admin": false, "grants": []})).await;
     create_pending_access(&app.db, &inv_id, "ext-testuser").await;
 
-    // GET /invitations/redeem/{code} with provisioner + pending → returns setup_url
+    // GET /invitations/redeem/{code} with pending → no token created, frontend polls via refresh
     let (status, body) = app
         .call_json("GET", &format!("/invitations/redeem/{code}"), None, None)
         .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(body.get("setup_url").is_some(), "expected setup_url; got {body}");
+    assert_eq!(body.get("needs_refresh").and_then(|v| v.as_bool()), Some(true), "expected needs_refresh=true; got {body}");
+    assert!(body.get("setup_url").is_none(), "setup_url must not be returned on GET; got {body}");
 }
 
 // API calls:
@@ -821,17 +822,17 @@ async fn test_redeem_invite_form_with_provisioner() {
 // ---------------------------------------------------------------------------
 
 // API calls:
-// | Method | Route                      |
-// | ------ | -------------------------- |
-// | GET    | /invitations/redeem/{code} |
+// | Method | Route                                       |
+// | ------ | ------------------------------------------- |
+// | POST   | /invitations/redeem/{code}/setup-url        |
 // Cases:
 // | Case                             | Expected |
 // | -------------------------------- | -------- |
 // | pending access setup URL failure | 400      |
 #[tokio::test]
-async fn test_get_invite_info_setup_url_error() {
-    // Covers the map_err closure in get_invite_info (lines 240-242):
-    // provisioner.create_setup_url fails → 500 Failure response.
+async fn test_refresh_setup_url_error() {
+    // Covers the map_err closure in refresh_setup_url:
+    // provisioner.create_setup_url fails → 400 Failure response.
     let app = TestApp::new_with_failing_provisioner().await;
     let f = Fixture::setup(&app).await;
 
@@ -840,7 +841,7 @@ async fn test_get_invite_info_setup_url_error() {
     create_pending_access(&app.db, &inv_id, "ext-testuser").await;
 
     let (status, _) = app
-        .call_json("GET", &format!("/invitations/redeem/{code}"), None, None)
+        .call_json("POST", &format!("/invitations/redeem/{code}/setup-url"), None, None)
         .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
 }
