@@ -17,6 +17,8 @@ pub struct User {
 pub struct AuthenticatedUser {
     pub user: Option<User>,
     pub real_user: Option<User>,
+    /// The OIDC id_token issued at login; used as id_token_hint for RP-initiated logout.
+    pub id_token: Option<String>,
 }
 
 impl AuthenticatedUser {
@@ -24,6 +26,7 @@ impl AuthenticatedUser {
         Self {
             user: Some(user),
             real_user: None,
+            id_token: None,
         }
     }
 

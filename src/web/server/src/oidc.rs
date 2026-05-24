@@ -48,6 +48,7 @@ struct OidcDiscoveryDocument {
 #[derive(Debug, Deserialize)]
 struct OidcTokenResponse {
     access_token: String,
+    id_token: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -185,8 +186,10 @@ pub async fn callback(
         .into_response());
     };
 
+    let mut session_user = authenticated_user.clone();
+    session_user.id_token = token.id_token;
     session
-        .insert(AUTHENTICATED_USER_SESSION_KEY, authenticated_user.clone())
+        .insert(AUTHENTICATED_USER_SESSION_KEY, session_user)
         .await
         .map_err(AppError::internal)?;
 
@@ -265,9 +268,9 @@ fn rewrite_internal_endpoint(endpoint: &mut String, oidc: &Oidc) {
     }
 }
 
-/// Returns the IdP end_session URL with `post_logout_redirect_uri` set, or `None`
-/// if the discovery document doesn't advertise one or settings are unavailable.
-pub async fn end_session_url(state: &AppState) -> Option<String> {
+/// Returns the IdP end_session URL with `post_logout_redirect_uri` and `id_token_hint` set,
+/// or `None` if the discovery document doesn't advertise one or settings are unavailable.
+pub async fn end_session_url(state: &AppState, id_token_hint: Option<&str>) -> Option<String> {
     let oidc = oidc_settings(state).ok()?;
     let post_logout_redirect = oidc.logout_callback_url.as_str();
     if post_logout_redirect.is_empty() {
@@ -276,8 +279,13 @@ pub async fn end_session_url(state: &AppState) -> Option<String> {
     let discovery = fetch_discovery(state, oidc).await.ok()?;
     let endpoint = discovery.end_session_endpoint?;
     let mut url = Url::parse(&endpoint).ok()?;
-    url.query_pairs_mut()
-        .append_pair("post_logout_redirect_uri", post_logout_redirect);
+    {
+        let mut pairs = url.query_pairs_mut();
+        pairs.append_pair("post_logout_redirect_uri", post_logout_redirect);
+        if let Some(hint) = id_token_hint {
+            pairs.append_pair("id_token_hint", hint);
+        }
+    }
     Some(url.into())
 }
 

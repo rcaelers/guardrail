@@ -59,7 +59,7 @@ async fn test_login_handler(session: Session, Json(body): Json<Value>) -> Status
         avatar: None,
     });
     let _ = session
-        .insert(SESSION_KEY, AuthenticatedUser { user, real_user })
+        .insert(SESSION_KEY, AuthenticatedUser { user, real_user, id_token: None })
         .await;
     StatusCode::OK
 }

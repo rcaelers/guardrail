@@ -311,6 +311,7 @@ async fn require_current_session_user(
     Ok(AuthenticatedUser {
         user: Some(user),
         real_user: session_auth.real_user,
+        id_token: session_auth.id_token,
     })
 }
 

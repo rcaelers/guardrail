@@ -48,6 +48,7 @@ async fn start_impersonation(
             avatar: None,
         }),
         real_user: current.user,
+        id_token: None,
     };
 
     session

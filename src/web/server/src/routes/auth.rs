@@ -114,8 +114,14 @@ async fn request_recovery(
 }
 
 async fn logout(State(state): State<AppState>, session: Session) -> impl IntoResponse {
+    let id_token = session
+        .get::<crate::auth_user::AuthenticatedUser>(access::SESSION_KEY)
+        .await
+        .ok()
+        .flatten()
+        .and_then(|u| u.id_token);
     let _ = session.flush().await;
-    let redirect_to = oidc::end_session_url(&state)
+    let redirect_to = oidc::end_session_url(&state, id_token.as_deref())
         .await
         .unwrap_or_else(|| "/".to_string());
     let mut response = Redirect::to(&redirect_to).into_response();
