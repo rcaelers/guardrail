@@ -13,9 +13,12 @@
     crashes?: Crash[];
     /** The crash id currently shown in the detail pane, if any. */
     selectedCrashId?: string | null;
+    canDelete?: boolean;
     onSelect: (id: string) => void;
     onToggle: (id: string) => void;
     onSelectCrash: (crashId: string, groupId: string) => void;
+    onDeleteGroup?: (id: string) => void;
+    onDeleteCrash?: (crashId: string, groupId: string) => void;
   }
   let {
     g,
@@ -23,9 +26,12 @@
     expanded,
     crashes = [],
     selectedCrashId = null,
+    canDelete = false,
     onSelect,
     onToggle,
-    onSelectCrash
+    onSelectCrash,
+    onDeleteGroup,
+    onDeleteCrash
   }: Props = $props();
 
   const INITIAL_VISIBLE = 5;
@@ -39,7 +45,7 @@
     }
   }
 
-  const COLS = '28px 1fr 260px 130px 80px 110px 90px';
+  const COLS = '28px 1fr 260px 130px 80px 110px 90px 76px';
 
   const groupName = $derived(g.fingerprint || g.title || g.id);
   const exception = $derived(g.exceptionType || g.exceptionTypeShort || g.signal);
@@ -84,6 +90,15 @@
   <div class="text-sm font-medium tabular-nums text-ink dark:text-ink-dark">{fmtInt(g.count)}</div>
   <Sparkline trend={g.trend} count={g.count} />
   <StatusPill status={g.status} />
+  <div class="flex justify-end">
+    {#if canDelete && onDeleteGroup}
+      <button
+        type="button"
+        onclick={(e) => { e.stopPropagation(); onDeleteGroup(g.id); }}
+        class="rounded-md border border-line dark:border-line-dark bg-transparent px-2 py-1 text-[11px] text-ink-muted hover:text-red-600 dark:text-ink-mutedDark"
+      >Delete</button>
+    {/if}
+  </div>
 </div>
 
 {#if expanded}
@@ -110,6 +125,15 @@
       <span></span>
       <span>{fmtDate(c.at)}</span>
       <span>{(c.similarity * 100).toFixed(1)}%</span>
+      <div class="flex justify-end">
+        {#if canDelete && onDeleteCrash}
+          <button
+            type="button"
+            onclick={(e) => { e.stopPropagation(); onDeleteCrash(c.id, g.id); }}
+            class="rounded-md border border-line dark:border-line-dark bg-transparent px-2 py-1 font-sans text-[11px] text-ink-muted hover:text-red-600 dark:text-ink-mutedDark"
+          >Delete</button>
+        {/if}
+      </div>
     </div>
   {/each}
   {@const shown = Math.min(crashes.length, visibleCount)}

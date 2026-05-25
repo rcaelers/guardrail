@@ -6,13 +6,16 @@
 
   import Select from '$lib/components/Select.svelte';
   import GroupRow from '$lib/components/GroupRow.svelte';
+  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
   import DetailPanel from '$lib/components/detail/DetailPanel.svelte';
   import { pane } from '$lib/stores/pane.svelte';
 
   let { data }: { data: PageData } = $props();
 
   const readOnly = $derived(data.role === 'readonly' && !data.user?.isAdmin);
+  const canDelete = $derived(!readOnly);
   const canMerge = $derived(data.role === 'maintainer' || !!data.user?.isAdmin);
+  let pendingConfirm = $state<{ message: string; confirmLabel: string; action: () => Promise<void> } | null>(null);
 
   // Expanded-group state (per-row chevron) — local to session.
   let expanded = $state<Set<string>>(new Set());
@@ -124,7 +127,69 @@
     await fetch('?/merge', { method: 'POST', body });
     await invalidateAll();
   }
+
+  function confirmDeleteCrash(crashId: string) {
+    pendingConfirm = {
+      message: 'Permanently delete this crash event?',
+      confirmLabel: 'Delete crash',
+      action: () => deleteCrash(crashId)
+    };
+  }
+
+  function confirmDeleteGroup(groupId: string) {
+    pendingConfirm = {
+      message: 'Permanently delete this entire crash group and all crash events in it?',
+      confirmLabel: 'Delete group',
+      action: () => deleteGroup(groupId)
+    };
+  }
+
+  async function deleteCrash(crashId: string) {
+    const body = new FormData();
+    body.set('id', crashId);
+    const r = await fetch('?/deleteCrash', { method: 'POST', body });
+    if (!r.ok) return;
+    const url = new URL($page.url);
+    if (data.selectedCrash?.id === crashId) {
+      url.searchParams.delete('crash');
+      url.searchParams.delete('id');
+      pane.open = false;
+      await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
+    }
+    await invalidateAll();
+  }
+
+  async function deleteGroup(groupId: string) {
+    const body = new FormData();
+    body.set('id', groupId);
+    const r = await fetch('?/deleteGroup', { method: 'POST', body });
+    if (!r.ok) return;
+    const next = new Set(expanded);
+    next.delete(groupId);
+    expanded = next;
+    const url = new URL($page.url);
+    if (data.selectedGroup?.id === groupId || url.searchParams.get('id') === groupId) {
+      url.searchParams.delete('id');
+      url.searchParams.delete('crash');
+      pane.open = false;
+      await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
+    }
+    await invalidateAll();
+  }
 </script>
+
+{#if pendingConfirm}
+  <ConfirmDialog
+    message={pendingConfirm.message}
+    confirmLabel={pendingConfirm.confirmLabel}
+    onconfirm={() => {
+      const action = pendingConfirm!.action;
+      pendingConfirm = null;
+      void action();
+    }}
+    oncancel={() => (pendingConfirm = null)}
+  />
+{/if}
 
 <div class="flex h-full min-h-0">
   <!-- LIST -->
@@ -180,7 +245,7 @@
     <!-- Column header -->
     <div
       class="grid shrink-0 items-center gap-4 border-b border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-5 py-2 text-[10.5px] font-medium uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark"
-      style:grid-template-columns="28px 1fr 260px 130px 80px 110px 90px"
+      style:grid-template-columns="28px 1fr 260px 130px 80px 110px 90px 76px"
     >
       <span></span>
       <span>Crash group</span>
@@ -189,6 +254,7 @@
       <span>Events</span>
       <span>30d trend</span>
       <span>Status</span>
+      <span></span>
     </div>
 
     <!-- Rows -->
@@ -200,9 +266,12 @@
           expanded={expanded.has(g.id)}
           crashes={data.selectedGroup?.id === g.id ? data.selectedGroup.crashes : []}
           selectedCrashId={data.selectedCrash?.id ?? null}
+          {canDelete}
           onSelect={selectGroup}
           onToggle={toggleExpanded}
           onSelectCrash={selectCrash}
+          onDeleteCrash={(id) => confirmDeleteCrash(id)}
+          onDeleteGroup={confirmDeleteGroup}
         />
       {/each}
     </div>
@@ -284,6 +353,8 @@
         onStatusChange={setStatus}
         onMerge={merge}
         onAddNote={addNote}
+        onDeleteCrash={confirmDeleteCrash}
+        onDeleteGroup={confirmDeleteGroup}
         {readOnly}
         {canMerge}
         onClose={() => (pane.open = false)}

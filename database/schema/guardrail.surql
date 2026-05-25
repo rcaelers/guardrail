@@ -451,8 +451,7 @@ DEFINE TABLE OVERWRITE crashes SCHEMAFULL
 DEFINE TABLE OVERWRITE crash_groups SCHEMAFULL
 	PERMISSIONS
 		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
-		FOR create, update WHERE fn::auth::has_product_role(product_id, "readwrite")
-		FOR delete WHERE fn::auth::is_product_admin(product_id);
+		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE TABLE OVERWRITE annotations SCHEMAFULL
 	PERMISSIONS

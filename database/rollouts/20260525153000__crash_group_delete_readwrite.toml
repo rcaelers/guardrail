@@ -1,0 +1,12 @@
+id = "20260525153000__crash_group_delete_readwrite"
+name = "crash_group_delete_readwrite"
+source_schema_hash = "32b839c2acb385be9c7f5d06fc7a690d38d00c093534a7851b5f082ebbf40368"
+target_schema_hash = "62fb3ede19e2d358c89f6ad3b2fb34f891bd91118bee4f9ce143067102cfb893"
+compatibility = "phased"
+renames = []
+
+[[steps]]
+id = "apply_permissions"
+phase = "start"
+kind = "apply_schema"
+files = ["database/schema/guardrail.surql"]

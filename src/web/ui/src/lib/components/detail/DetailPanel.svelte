@@ -29,6 +29,8 @@
     onStatusChange: (s: Status) => void;
     onMerge: (mergedId: string) => void;
     onAddNote: (body: string) => void;
+    onDeleteCrash?: (id: string) => void;
+    onDeleteGroup?: (id: string) => void;
     onClose?: () => void;
     /** When true, hide mutating affordances (status chips, merge, add-note). */
     readOnly?: boolean;
@@ -41,6 +43,8 @@
     onStatusChange,
     onMerge,
     onAddNote,
+    onDeleteCrash,
+    onDeleteGroup,
     onClose,
     readOnly = false,
     canMerge = true
@@ -172,6 +176,20 @@
       {/each}
       <button type="button" disabled={readOnly} class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink dark:text-ink-dark" class:cursor-pointer={!readOnly} class:cursor-not-allowed={readOnly} class:opacity-50={readOnly}>Assign…</button>
       <button type="button" class="cursor-pointer rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink dark:text-ink-dark">Open in issue tracker</button>
+      {#if !readOnly && onDeleteCrash}
+        <button
+          type="button"
+          onclick={() => onDeleteCrash(crash.id)}
+          class="cursor-pointer rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted hover:text-red-600 dark:text-ink-mutedDark"
+        >Delete crash</button>
+      {/if}
+      {#if !readOnly && onDeleteGroup}
+        <button
+          type="button"
+          onclick={() => onDeleteGroup(group.id)}
+          class="cursor-pointer rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted hover:text-red-600 dark:text-ink-mutedDark"
+        >Delete group</button>
+      {/if}
       {#if readOnly}
         <span class="ml-1 self-center text-[11px] text-ink-muted dark:text-ink-mutedDark">Read-only access</span>
       {/if}

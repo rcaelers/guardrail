@@ -118,5 +118,31 @@ export const actions: Actions = {
     if (!primaryId || !mergedId) return fail(400, { error: 'missing ids' });
     await adapter.mergeGroups(primaryId, mergedId);
     throw redirect(303, `/p/${params.product}/crashes?id=${encodeURIComponent(primaryId)}`);
+  },
+  deleteCrash: async ({ request, locals, params }) => {
+    if (!locals.user) throw error(401);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { product, role } = await requireProductAccess(locals.user, params.product, adapter);
+    if (!canWrite(role) && !locals.user.isAdmin) throw error(403, 'You are read-only on this product');
+    const form = await request.formData();
+    const id = String(form.get('id') ?? '');
+    if (!id) return fail(400, { error: 'missing id' });
+    const bundle = await adapter.getCrash(id);
+    if (!bundle || bundle.crash.productId !== product.id) throw error(404, 'Crash not found');
+    await adapter.deleteCrash(id);
+    return { ok: true };
+  },
+  deleteGroup: async ({ request, locals, params }) => {
+    if (!locals.user) throw error(401);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { product, role } = await requireProductAccess(locals.user, params.product, adapter);
+    if (!canWrite(role) && !locals.user.isAdmin) throw error(403, 'You are read-only on this product');
+    const form = await request.formData();
+    const id = String(form.get('id') ?? '');
+    if (!id) return fail(400, { error: 'missing id' });
+    const group = await adapter.getGroup(id);
+    if (!group || group.productId !== product.id) throw error(404, 'Crash group not found');
+    await adapter.deleteGroup(id);
+    return { ok: true };
   }
 };

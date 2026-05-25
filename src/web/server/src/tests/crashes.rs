@@ -85,11 +85,35 @@ async fn test_merge_groups_requires_session() {
 }
 
 // API calls:
+// | Method | Route                           |
+// | ------ | ------------------------------- |
+// | DELETE | /crashes/{group_id}             |
+// | DELETE | /crashes/by-crash/{crash_id}    |
+// Cases:
+// | Auth context  | Expected |
+// | ------------- | -------- |
+// | no_session    | 403      |
+// | admin         | not 403  |
+// | non_admin     | not 403  |
+// | imp_admin     | not 403  |
+// | imp_non_admin | not 403  |
+#[tokio::test]
+async fn test_delete_crashes_requires_session() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    assert_session_only_not_forbidden(&app, &f, "DELETE", "/crashes/nonexistent", None).await;
+    assert_session_only_not_forbidden(&app, &f, "DELETE", "/crashes/by-crash/nonexistent", None)
+        .await;
+}
+
+// API calls:
 // | Method | Route                      |
 // | ------ | -------------------------- |
 // | POST   | /crashes/{group_id}/status |
 // | POST   | /crashes/{group_id}/notes  |
 // | POST   | /crashes/{group_id}/merge  |
+// | DELETE | /crashes/{group_id}        |
+// | DELETE | /crashes/by-crash/{id}     |
 // Cases:
 // | Case                                   | Expected |
 // | -------------------------------------- | -------- |
@@ -99,6 +123,10 @@ async fn test_merge_groups_requires_session() {
 // | read-write user adds note              | 200      |
 // | read-write user merges groups          | 403      |
 // | maintainer user merges maintained group | 204      |
+// | read-only user deletes crash           | 403      |
+// | read-write user deletes crash          | 204      |
+// | read-only user deletes group           | 403      |
+// | read-write user deletes group          | 204      |
 #[tokio::test]
 async fn test_crash_mutations_by_product_role() {
     let app = TestApp::new().await;
@@ -180,6 +208,83 @@ async fn test_crash_mutations_by_product_role() {
         .await,
         StatusCode::NO_CONTENT,
         "maintainers can merge groups for maintained products"
+    );
+
+    let readonly_delete_group = create_test_crash_group(&app.db, &f.products[0].id).await;
+    let readonly_delete_crash =
+        create_test_crash_in_group(&app.db, &f.products[0].id, &readonly_delete_group).await;
+    let readwrite_delete_crash_group = create_test_crash_group(&app.db, &f.products[1].id).await;
+    let readwrite_delete_crash =
+        create_test_crash_in_group(&app.db, &f.products[1].id, &readwrite_delete_crash_group).await;
+    let readwrite_delete_group = create_test_crash_group(&app.db, &f.products[1].id).await;
+    create_test_crash_in_group(&app.db, &f.products[1].id, &readwrite_delete_group).await;
+
+    assert_eq!(
+        app.call(
+            "DELETE",
+            &format!("/crashes/by-crash/{readonly_delete_crash}"),
+            None,
+            Some(&f.non_admin),
+        )
+        .await,
+        StatusCode::FORBIDDEN,
+        "read-only users cannot delete individual crashes"
+    );
+    assert_eq!(
+        app.call(
+            "DELETE",
+            &format!("/crashes/by-crash/{readwrite_delete_crash}"),
+            None,
+            Some(&f.non_admin),
+        )
+        .await,
+        StatusCode::NO_CONTENT,
+        "read-write users can delete individual crashes"
+    );
+    assert_eq!(
+        app.call(
+            "GET",
+            &format!("/crashes/by-crash/{readwrite_delete_crash}"),
+            None,
+            Some(&f.admin),
+        )
+        .await,
+        StatusCode::NOT_FOUND,
+        "deleted crash is gone"
+    );
+
+    assert_eq!(
+        app.call(
+            "DELETE",
+            &format!("/crashes/{readonly_delete_group}"),
+            None,
+            Some(&f.non_admin),
+        )
+        .await,
+        StatusCode::FORBIDDEN,
+        "read-only users cannot delete crash groups"
+    );
+    assert_eq!(
+        app.call(
+            "DELETE",
+            &format!("/crashes/{readwrite_delete_group}"),
+            None,
+            Some(&f.non_admin),
+        )
+        .await,
+        StatusCode::NO_CONTENT,
+        "read-write users can delete crash groups"
+    );
+    assert_eq!(
+        app.call(
+            "GET",
+            &format!("/crashes/{readwrite_delete_group}"),
+            None,
+            Some(&f.admin),
+        )
+        .await,
+        StatusCode::NOT_FOUND,
+        "deleted crash group is gone"
     );
 }
 

@@ -36,11 +36,11 @@ pub fn router() -> Router<AppState> {
         .route("/api-tokens/entitlements", get(list_entitlements_handler))
         .route("/attachments/{id}/download", get(download_attachment))
         .route("/crashes", get(list_groups))
-        .route("/crashes/{id}", get(get_group))
+        .route("/crashes/{id}", get(get_group).delete(delete_group))
         .route("/crashes/{id}/merge", post(merge_groups))
         .route("/crashes/{id}/notes", post(add_note))
         .route("/crashes/{id}/status", post(set_status))
-        .route("/crashes/by-crash/{crash_id}", get(get_crash))
+        .route("/crashes/by-crash/{crash_id}", get(get_crash).delete(delete_crash))
         .route("/products", get(list_products).post(create_product))
         .route("/products/{id}", get(get_product).post(update_product).delete(delete_product))
         .route(
@@ -255,6 +255,35 @@ async fn product_id_for_crash_group(
                 .map(String::from)
         })
         .ok_or_else(|| not_found(group_id))
+}
+
+async fn crash_product_and_group(
+    db: &Surreal<Any>,
+    crash_id: &str,
+) -> Result<(String, Option<String>), (StatusCode, String)> {
+    let rows = run_value(
+        db,
+        "SELECT meta::id(product_id) AS productId,
+                IF group_id != NONE THEN meta::id(group_id) ELSE NONE END AS groupId
+         FROM ONLY type::record('crashes', $id)",
+        vec![("id", Value::String(crash_id.to_string()))],
+    )
+    .await?;
+    rows.into_iter()
+        .next()
+        .filter(|v| !v.is_null())
+        .and_then(|row| {
+            let product_id = row
+                .get("productId")
+                .and_then(|v| v.as_str())
+                .map(String::from)?;
+            let group_id = row
+                .get("groupId")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            Some((product_id, group_id))
+        })
+        .ok_or_else(|| not_found(crash_id))
 }
 
 async fn product_id_for_symbol(
@@ -1653,6 +1682,133 @@ async fn get_crash(
         return Err(not_found(&crash_id));
     };
     Ok(Json(json!({ "crash": crash_value, "group": group })))
+}
+
+async fn delete_crash(
+    State(s): State<AppState>,
+    session: Session,
+    Path(crash_id): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_session(&session)
+        .await
+        .map_err(access_err)?;
+    let (product_id, group_id) = crash_product_and_group(&s.repo.db, &crash_id).await?;
+    crate::access::require_session_product_role(&session, &s.repo.db, &product_id, "readwrite")
+        .await
+        .map_err(access_err)?;
+
+    let db = s.user_db(&session).await?;
+    run_value(
+        &db,
+        "DELETE annotations WHERE crash_id = type::record('crashes', $cid)",
+        vec![("cid", Value::String(crash_id.clone()))],
+    )
+    .await?;
+    run_value(
+        &db,
+        "DELETE attachments WHERE crash_id = type::record('crashes', $cid)",
+        vec![("cid", Value::String(crash_id.clone()))],
+    )
+    .await?;
+    run_value(
+        &db,
+        "DELETE type::record('crashes', $cid)",
+        vec![("cid", Value::String(crash_id))],
+    )
+    .await?;
+
+    if let Some(group_id) = group_id {
+        refresh_or_delete_group_after_crash_delete(&db, &group_id).await?;
+    }
+
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_group(
+    State(s): State<AppState>,
+    session: Session,
+    Path(group_id): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_session(&session)
+        .await
+        .map_err(access_err)?;
+    let product_id = product_id_for_crash_group(&s.repo.db, &group_id).await?;
+    crate::access::require_session_product_role(&session, &s.repo.db, &product_id, "readwrite")
+        .await
+        .map_err(access_err)?;
+
+    let db = s.user_db(&session).await?;
+    delete_group_contents(&db, &group_id).await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn delete_group_contents(
+    db: &Surreal<Any>,
+    group_id: &str,
+) -> Result<(), (StatusCode, String)> {
+    let args = vec![("gid", Value::String(group_id.to_string()))];
+    for sql in [
+        "DELETE annotations WHERE group_id = type::record('crash_groups', $gid)",
+        "DELETE annotations WHERE crash_id IN (
+            SELECT VALUE id FROM crashes WHERE group_id = type::record('crash_groups', $gid)
+        )",
+        "DELETE attachments WHERE crash_id IN (
+            SELECT VALUE id FROM crashes WHERE group_id = type::record('crash_groups', $gid)
+        )",
+        "DELETE crashes WHERE group_id = type::record('crash_groups', $gid)",
+        "DELETE type::record('crash_groups', $gid)",
+    ] {
+        run_value(db, sql, args.clone()).await?;
+    }
+    Ok(())
+}
+
+async fn refresh_or_delete_group_after_crash_delete(
+    db: &Surreal<Any>,
+    group_id: &str,
+) -> Result<(), (StatusCode, String)> {
+    let rows = run_value(
+        db,
+        "SELECT created_at
+         FROM crashes
+         WHERE group_id = type::record('crash_groups', $gid)
+         ORDER BY created_at ASC",
+        vec![("gid", Value::String(group_id.to_string()))],
+    )
+    .await?;
+    if rows.is_empty() {
+        delete_group_contents(db, group_id).await?;
+        return Ok(());
+    }
+
+    let first_seen = rows
+        .first()
+        .and_then(|r| r.get("created_at"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| server_error("remaining crash is missing created_at"))?
+        .to_string();
+    let last_seen = rows
+        .last()
+        .and_then(|r| r.get("created_at"))
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| server_error("remaining crash is missing created_at"))?
+        .to_string();
+    run_value(
+        db,
+        "UPDATE type::record('crash_groups', $gid) SET
+            count = $count,
+            first_seen = <datetime>$first_seen,
+            last_seen = <datetime>$last_seen,
+            updated_at = time::now()",
+        vec![
+            ("gid", Value::String(group_id.to_string())),
+            ("count", Value::Number((rows.len() as i64).into())),
+            ("first_seen", Value::String(first_seen)),
+            ("last_seen", Value::String(last_seen)),
+        ],
+    )
+    .await?;
+    Ok(())
 }
 
 fn build_annotations_map(rows: Vec<Value>) -> serde_json::Map<String, Value> {

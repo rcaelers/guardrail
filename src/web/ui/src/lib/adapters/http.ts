@@ -329,6 +329,14 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
       const r = await jpost(`/crashes/${encodeURIComponent(primaryId)}/merge`, { mergedId });
       await assertOk(r, 'mergeGroups');
     },
+    async deleteCrash(id) {
+      const r = await jdel(`/crashes/by-crash/${encodeURIComponent(id)}`);
+      await assertOk(r, 'deleteCrash');
+    },
+    async deleteGroup(id) {
+      const r = await jdel(`/crashes/${encodeURIComponent(id)}`);
+      await assertOk(r, 'deleteGroup');
+    },
 
     // --- invitations ---
     async listInvitations() {

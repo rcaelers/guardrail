@@ -551,6 +551,8 @@ export interface GuardrailAdapter {
   setStatus(id: string, status: Status): Promise<void>;
   addNote(id: string, body: string, author: string): Promise<Note>;
   mergeGroups(primaryId: string, mergedId: string): Promise<void>;
+  deleteCrash(id: string): Promise<void>;
+  deleteGroup(id: string): Promise<void>;
 
   // --- invitations ---
   listInvitations(): Promise<Invitation[]>;
