@@ -1,0 +1,29 @@
+id = "20260525121618__invitation_accepted_identity"
+name = "invitation_accepted_identity"
+source_schema_hash = "90daec9e94e7e908bb1a6ed773066990eaf7323beb2ff4699ec90c93316246f2"
+target_schema_hash = "536c41e09ba71de4d3c256b07989454b173196cf5fd5ee3579b5ed2bc7043590"
+compatibility = "phased"
+renames = []
+
+[[steps]]
+id = "apply_expand_schema"
+phase = "start"
+kind = "apply_schema"
+files = ["database/schema/guardrail.surql"]
+entities = []
+
+[[steps]]
+id = "rollback_expand_schema"
+phase = "rollback"
+kind = "remove_entities"
+files = []
+
+[[steps.entities]]
+kind = "field"
+scope = "invitations"
+name = "accepted_email"
+
+[[steps.entities]]
+kind = "field"
+scope = "invitations"
+name = "accepted_username"

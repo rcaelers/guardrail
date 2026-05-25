@@ -7,7 +7,9 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use data::api_token::{ApiToken, ENTITLEMENT_INVITATION_CREATE};
-use data::invitation::{Invitation, InvitationGrant, NewInvitation, UpdateInvitation};
+use data::invitation::{
+    Invitation, InvitationGrant, InvitationStatus, NewInvitation, UpdateInvitation,
+};
 use data::pending_access::{NewPendingAccess, PendingAccessGrant};
 use email::Email;
 use serde::Deserialize;
@@ -49,6 +51,13 @@ fn role_label(role: &str) -> &'static str {
         "maintainer" => "Maintainer",
         _ => "Member",
     }
+}
+
+fn invitation_has_reached_use_limit(invitation: &Invitation) -> bool {
+    invitation.status == InvitationStatus::Exhausted
+        || invitation
+            .max_uses
+            .is_some_and(|max| invitation.use_count >= max)
 }
 
 /// Invitation API routes, to be nested under /api/v1 in main.rs.
@@ -250,6 +259,10 @@ async fn send_invitation_email(
         }
     }
 
+    if invitation_has_reached_use_limit(&invitation) {
+        return Err(AppError::failure("Invitation has already been used"));
+    }
+
     dispatch_invite_email(&state, &invitation, &body.to).await;
     Ok(Json(serde_json::json!({ "ok": true })))
 }
@@ -266,6 +279,10 @@ async fn update_invitation(
         .await
         .map_err(AppError::internal)?
         .ok_or_else(|| AppError::not_found("Invitation not found"))?;
+
+    if invitation_has_reached_use_limit(&invitation) {
+        return Err(AppError::failure("Invitation has already been used"));
+    }
 
     let (grants, is_admin) = if user.is_admin() {
         (body.grants, body.is_admin)
@@ -322,22 +339,29 @@ async fn revoke_invitation(
 ) -> AppResult<Json<serde_json::Value>> {
     let user = access::require_session(&session).await?;
 
-    if !user.is_admin() {
-        let invitation = repos::invitation::InvitationRepo::get_by_id(&state.repo.db, &id)
-            .await
-            .map_err(AppError::internal)?
-            .ok_or_else(|| AppError::not_found("Invitation not found"))?;
+    let invitation = repos::invitation::InvitationRepo::get_by_id(&state.repo.db, &id)
+        .await
+        .map_err(AppError::internal)?;
 
-        let maintained_ids =
-            access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
-        let can_revoke = invitation.created_by == user.active().id
-            || invitation
-                .grants
-                .iter()
-                .any(|g| maintained_ids.contains(&g.product_id));
-        if !can_revoke {
-            return Err(AppError::forbidden());
+    if let Some(invitation) = invitation.as_ref() {
+        if invitation_has_reached_use_limit(invitation) {
+            return Err(AppError::failure("Invitation has already been used"));
         }
+
+        if !user.is_admin() {
+            let maintained_ids =
+                access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
+            let can_revoke = invitation.created_by == user.active().id
+                || invitation
+                    .grants
+                    .iter()
+                    .any(|g| maintained_ids.contains(&g.product_id));
+            if !can_revoke {
+                return Err(AppError::forbidden());
+            }
+        }
+    } else if !user.is_admin() {
+        return Err(AppError::not_found("Invitation not found"));
     }
 
     repos::invitation::InvitationRepo::revoke(&state.repo.db, &id)
@@ -492,6 +516,15 @@ async fn redeem_invite_json(
                 .collect(),
             setup_url: setup_url_str.clone(),
         },
+    )
+    .await
+    .map_err(AppError::internal)?;
+
+    repos::invitation::InvitationRepo::record_acceptance(
+        &state.repo.db,
+        &invitation.id,
+        &body.username,
+        &body.email,
     )
     .await
     .map_err(AppError::internal)?;
@@ -656,6 +689,15 @@ async fn redeem_invite(
                 .collect(),
             setup_url: setup_url_str.clone(),
         },
+    )
+    .await
+    .map_err(AppError::internal)?;
+
+    repos::invitation::InvitationRepo::record_acceptance(
+        &state.repo.db,
+        &invitation.id,
+        &form.username,
+        &form.email,
     )
     .await
     .map_err(AppError::internal)?;

@@ -23,6 +23,8 @@ pub struct Invitation {
     pub code: String,
     pub created_by: String,
     pub email_to: Option<String>,
+    pub accepted_username: Option<String>,
+    pub accepted_email: Option<String>,
     pub expires_at: Option<DateTime<Utc>>,
     pub max_uses: Option<u32>,
     pub use_count: u32,

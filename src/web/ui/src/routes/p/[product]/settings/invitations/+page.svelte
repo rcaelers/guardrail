@@ -98,9 +98,19 @@
     navigator.clipboard.writeText(`${data.origin}/invite/${code}`);
   }
 
+  function hasReachedUseLimit(inv: PageData['invitations'][number]) {
+    return inv.status === 'Exhausted' || (inv.max_uses !== null && inv.use_count >= inv.max_uses);
+  }
+
+  function displayStatusFor(inv: PageData['invitations'][number], isExpired: boolean | null) {
+    if (hasReachedUseLimit(inv)) return 'Used';
+    if (isExpired && inv.status === 'Active') return 'Expired';
+    return inv.status;
+  }
+
   function statusClass(s: string) {
     if (s === 'Active') return 'text-green-600 dark:text-green-400';
-    if (s === 'Exhausted') return 'text-amber-600 dark:text-amber-400';
+    if (s === 'Used') return 'text-amber-600 dark:text-amber-400';
     return 'text-ink-muted dark:text-ink-mutedDark';
   }
 </script>
@@ -272,8 +282,10 @@
     {/if}
 
     {#each data.invitations as inv (inv.id)}
-      {@const isExpired = inv.expires_at && new Date(inv.expires_at) < new Date()}
-      {@const displayStatus = isExpired && inv.status === 'Active' ? 'Expired' : inv.status}
+      {@const isExpired = Boolean(inv.expires_at && new Date(inv.expires_at) < new Date())}
+      {@const isUsed = hasReachedUseLimit(inv)}
+      {@const isRedeemable = inv.status === 'Active' && !isExpired && !isUsed}
+      {@const displayStatus = displayStatusFor(inv, isExpired)}
       {@const isMine = inv.created_by === data.currentUserId}
       {@const creatorLabel = data.isAdmin ? (data.userMap[inv.created_by] ?? inv.created_by) : isMine ? 'you' : '—'}
 
@@ -286,7 +298,7 @@
           <code class="truncate rounded bg-surface-panel dark:bg-surface-panelDark px-1.5 py-0.5 font-mono text-[11px]">
             {inv.code.slice(0, 12)}…
           </code>
-          {#if inv.status === 'Active' && !isExpired}
+          {#if isRedeemable}
             <button
               type="button"
               onclick={() => copyLink(inv.code)}
@@ -297,7 +309,19 @@
         </div>
 
         <!-- Status -->
-        <span class="text-[12px] font-medium {statusClass(displayStatus)}">{displayStatus}</span>
+        <div class="min-w-0">
+          <div class="text-[12px] font-medium {statusClass(displayStatus)}">{displayStatus}</div>
+          {#if isUsed}
+            <div class="mt-0.5 truncate text-[11px] text-ink-muted dark:text-ink-mutedDark" title={inv.accepted_username ?? inv.accepted_email ?? ''}>
+              {inv.accepted_username ?? inv.accepted_email ?? 'accepted user unknown'}
+            </div>
+            {#if inv.accepted_username && inv.accepted_email && inv.accepted_email !== inv.accepted_username}
+              <div class="truncate text-[11px] text-ink-muted dark:text-ink-mutedDark" title={inv.accepted_email}>
+                {inv.accepted_email}
+              </div>
+            {/if}
+          {/if}
+        </div>
 
         <!-- Created -->
         <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
@@ -323,7 +347,7 @@
 
         <!-- Actions -->
         <div class="flex justify-end gap-1.5">
-          {#if inv.status !== 'Revoked'}
+          {#if inv.status !== 'Revoked' && !isUsed}
             <button
               type="button"
               onclick={() => startResend(inv)}
@@ -355,7 +379,7 @@
       </div>
 
       <!-- Inline resend panel -->
-      {#if resendingId === inv.id}
+      {#if resendingId === inv.id && !isUsed}
         <div class="border-t border-line dark:border-line-dark bg-surface-panel/55 px-5 py-3 dark:bg-surface-panelDark/55">
           <form
             method="POST"
@@ -383,7 +407,7 @@
       {/if}
 
       <!-- Inline edit panel -->
-      {#if editingId === inv.id}
+      {#if editingId === inv.id && !isUsed}
         <div class="border-t border-line dark:border-line-dark bg-surface-panel/55 px-5 py-4 dark:bg-surface-panelDark/55">
           <form
             method="POST"

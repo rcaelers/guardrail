@@ -129,17 +129,19 @@ impl InvitationRepo {
         let mut result = db
             .query(
                 "CREATE type::record('invitations', $id) CONTENT {
-                    code:       $code,
-                    created_by: $created_by,
-                    email_to:   $email_to,
-                    expires_at: $expires_at,
-                    max_uses:   $max_uses,
-                    use_count:  0,
-                    is_admin:   $is_admin,
-                    grants:     $grants,
-                    status:     'Active',
-                    created_at: time::now(),
-                    updated_at: time::now(),
+                    code:              $code,
+                    created_by:        $created_by,
+                    email_to:          $email_to,
+                    accepted_username: NONE,
+                    accepted_email:    NONE,
+                    expires_at:        $expires_at,
+                    max_uses:          $max_uses,
+                    use_count:         0,
+                    is_admin:          $is_admin,
+                    grants:            $grants,
+                    status:            'Active',
+                    created_at:        time::now(),
+                    updated_at:        time::now(),
                 } RETURN *, meta::id(id) as id",
             )
             .bind(("id", id))
@@ -158,6 +160,26 @@ impl InvitationRepo {
             .map_err(handle_surreal_error)?;
         crate::take_one(&mut result, 0)?
             .ok_or_else(|| RepoError::DatabaseError("invitation not created".into()))
+    }
+
+    pub async fn record_acceptance(
+        db: &Surreal<Any>,
+        id: &str,
+        username: &str,
+        email: &str,
+    ) -> Result<(), RepoError> {
+        db.query(
+            "UPDATE type::record('invitations', $id) SET
+                accepted_username = $username,
+                accepted_email = $email,
+                updated_at = time::now()",
+        )
+        .bind(("id", record_key(id)))
+        .bind(("username", username.to_owned()))
+        .bind(("email", email.to_owned()))
+        .await
+        .map_err(handle_surreal_error)?;
+        Ok(())
     }
 
     pub async fn increment_use_count(

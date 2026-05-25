@@ -460,6 +460,55 @@ async fn test_revoke_invitation_existing() {
     );
 }
 
+#[tokio::test]
+async fn test_used_invitation_only_allows_delete() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+
+    let (id, _) = api_create_invitation(
+        &app,
+        &f.admin,
+        json!({"is_admin": false, "grants": [], "max_uses": 1}),
+    )
+    .await;
+    app.db
+        .query("UPDATE type::record('invitations', $id) SET use_count = 1, status = 'Exhausted'")
+        .bind(("id", id.clone()))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        app.call(
+            "PUT",
+            &format!("/invitations/{id}"),
+            Some(json!({"is_admin": false, "grants": [], "max_uses": 1})),
+            Some(&f.admin)
+        )
+        .await,
+        StatusCode::BAD_REQUEST,
+    );
+    assert_eq!(
+        app.call(
+            "POST",
+            &format!("/invitations/{id}/send"),
+            Some(json!({"to": "user@example.com"})),
+            Some(&f.admin)
+        )
+        .await,
+        StatusCode::BAD_REQUEST,
+    );
+    assert_eq!(
+        app.call("POST", &format!("/invitations/{id}/revoke"), None, Some(&f.admin))
+            .await,
+        StatusCode::BAD_REQUEST,
+    );
+    assert_eq!(
+        app.call("DELETE", &format!("/invitations/{id}"), None, Some(&f.admin))
+            .await,
+        StatusCode::OK,
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Tests: invite – create_invitation via API token (Principal::Token path)
 // ---------------------------------------------------------------------------
@@ -740,7 +789,7 @@ async fn test_redeem_invite_json_new_user() {
 
     // Use non-empty grants so the grants mapping closure (lines 321-323) is exercised.
     let pid = &f.products[0].id;
-    let (_inv_id, code) = api_create_invitation(
+    let (inv_id, code) = api_create_invitation(
         &app,
         &f.admin,
         json!({"is_admin": false, "grants": [{"product_id": pid, "role": "readonly"}]}),
@@ -755,6 +804,13 @@ async fn test_redeem_invite_json_new_user() {
         .await;
     assert_eq!(status, StatusCode::OK);
     assert!(resp.get("setup_url").is_some(), "expected setup_url; got {resp}");
+
+    let invitation = repos::invitation::InvitationRepo::get_by_id(&app.db, inv_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(invitation.accepted_username.as_deref(), Some("newuser"));
+    assert_eq!(invitation.accepted_email.as_deref(), Some("newuser@x.com"));
 }
 
 // API calls:
@@ -796,7 +852,7 @@ async fn test_redeem_invite_form_with_provisioner() {
 
     // Use non-empty grants so the grants mapping closure (lines 439-441) is exercised.
     let pid = &f.products[0].id;
-    let (_inv_id, code) = api_create_invitation(
+    let (inv_id, code) = api_create_invitation(
         &app,
         &f.admin,
         json!({"is_admin": false, "grants": [{"product_id": pid, "role": "readonly"}]}),
@@ -815,6 +871,13 @@ async fn test_redeem_invite_form_with_provisioner() {
         .unwrap();
     let (status, _, _) = app.send(req).await;
     assert_eq!(status, StatusCode::SEE_OTHER);
+
+    let invitation = repos::invitation::InvitationRepo::get_by_id(&app.db, inv_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(invitation.accepted_username.as_deref(), Some("formuser"));
+    assert_eq!(invitation.accepted_email.as_deref(), Some("formuser@x.com"));
 }
 
 // ---------------------------------------------------------------------------

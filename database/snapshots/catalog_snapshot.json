@@ -7,7 +7,7 @@
       "name": "author",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "bdb8ca73eba9fb37091d4e25aee46c2ce3711a6f55c3bbaead53922c5ce7bea4",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -15,7 +15,7 @@
       "name": "crash_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "cc7a9da891c23ef77abaf3e3b1dc189fce1ca218fb2fa34aa1f6c92d4b56ce4e",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -23,7 +23,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "8f1ac49b807d093d48d7634556cd69cab37c2d73c8e1eb497676e6e8742e9acd",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -31,7 +31,7 @@
       "name": "group_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d63d1a50a4d1f7478676c5f08152a34d435ab47eb24ba8edf825faec5ef26fc2",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -39,7 +39,7 @@
       "name": "key",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "26edf5bd090ce4b8c5567c2f48152a030863462251ad56d19d9af656b8d2e2f0",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -47,7 +47,7 @@
       "name": "product_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "91f66d8790131e43af28eed4ab05057e4c03b625304ca0f368e8480d1df63faf",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -55,7 +55,7 @@
       "name": "source",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "b0fb37e1b07e97fe7c29ae58c1c8780b2c14c7b81fdcfc4c395d1d0e07d5a257",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -63,7 +63,7 @@
       "name": "updated_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "218a01248baae91cf6ea386d891cb0231a206e87cc27b762c894b286a167eba9",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -71,7 +71,7 @@
       "name": "value",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "fea7357587f7937f8e7c4050d7e15e3f1b8e026189818aa479766afceb595f46",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -79,7 +79,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "e24e04a3d881a5bd5315c1b29e835854af2f9f4866cec5a74ec0123c48526e55",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -87,7 +87,7 @@
       "name": "description",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d27ee0d84adc80daacef1fc3d13669b90366e514e42474dc4b25eac31cded4f8",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -95,7 +95,7 @@
       "name": "entitlements",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "b42341d36dfcf213223dfc3ca984246f394a2d22bad0ddefdc004b56c887dfd1",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -103,7 +103,7 @@
       "name": "expires_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "b60b0685d7919989b932d0bf9c717b219cdf71b4d9520d0f08d26772e39e378f",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -111,7 +111,7 @@
       "name": "is_active",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "2f842578473c1678e0797e210b45b5afcf50dd1054bdd479ca98d13c494bb763",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -119,7 +119,7 @@
       "name": "last_used_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "9bc934c93c60984e50401e87b4e9a5ca152c2926a9775de73bc346081aafeee1",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -127,7 +127,7 @@
       "name": "product_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "6ad57727b172e186de9cb397e81635cecff2d82f558a2b975121c68034720960",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -135,7 +135,7 @@
       "name": "token_hash",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "b6369caa31a363f0150c0a26a93a9683fb48bfaf4003edc8a5c5d6ecd24cc447",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -143,7 +143,7 @@
       "name": "token_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "706aea5096e18e9aa71be0224b5fbc542ad490eb2182bf131a95f5f8b19f80ec",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -151,7 +151,7 @@
       "name": "updated_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d0b2f46964447699530e723c2fac3783d21ef8cdae1e90788775c83e2d8a9795",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -159,7 +159,7 @@
       "name": "user_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "6b9f15a3ed3bb47a1be87e36a72e33534da8323f890cf656728773bcc8ef9d0f",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -167,7 +167,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d6c671d957ec34c67dfea3759a9728e58970cbe716b21a6f68ea7bd8085a406e",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -175,7 +175,7 @@
       "name": "email",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "6b23330ed37a7664763e446935d9bfb495d50c2a94c75df1db5889287972af3d",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -183,7 +183,7 @@
       "name": "email.recovery_html_template",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "90811c8be06dbb89ed9757b91256caf24ab4ce875ef6e04eeadc2f96ee6d2848",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -191,7 +191,7 @@
       "name": "email.recovery_subject",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "6d983a9ada9f759ac1ec5730f9fb611e243dd392852d449d4a7e60e992f46be2",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -199,7 +199,7 @@
       "name": "email.recovery_text_template",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "9f84a4cc770c3c1ad2b30455c4c08aa0d2396120b01e4810628fa1536e5f6294",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -207,7 +207,7 @@
       "name": "updated_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d8638d30bbfc9f011ddbb940920c777f03e7f66d884fd18948fb2aec6b992ac5",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -215,7 +215,7 @@
       "name": "crash_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "861a0d6f2232f6127957d9d34d96f09639893842a905d688e74f2feece1d7b47",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -223,7 +223,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "03de9a95627bf7286a060fee4b64a6db97c602473340524fec0db4c54f51e349",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -231,7 +231,7 @@
       "name": "filename",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "01199f76d64a551a14f5e3998864a05e4e1b5a85b0bf711e703840179a417da6",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -239,7 +239,7 @@
       "name": "mime_type",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "ebe7a87fd2f0129b90fd47020e76f882e175ad9e8cd3f9866c8ad562e60fdb1e",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -247,7 +247,7 @@
       "name": "name",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "2450516cadba980b9944fd310f81931b740c24ceca6c39cea5bcb955fab84890",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -255,7 +255,7 @@
       "name": "product_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "2ffb214ad30895e5df503a789da9a892ff5b3fa242d7d29660d777e95aac7375",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -263,7 +263,7 @@
       "name": "size",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "75a92f3730be7176e37b6b240dc1163d7bfe0733542539be411cd17c111bc05d",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -271,7 +271,7 @@
       "name": "storage_path",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "0260bc4a987ceb752d00856c3e04a25054dccda61e4a92c32dc192e50089f3e5",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -279,7 +279,7 @@
       "name": "updated_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "c0c5f254992842f355520b4875979697298794a6eb20695333c834842f850300",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -287,7 +287,7 @@
       "name": "assignee",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "a1e817e5da82ee93a5863714301035c93103b7269d5874bd5e4c1870d8feb3f5",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -295,7 +295,7 @@
       "name": "count",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "5783dc8b5812cb9d21b551c13b63a81dd5cef88383bc1c8e122d5838f4baa84c",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -303,7 +303,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "30d23b2c17b2b4beaf3b550728f26cb51b56143ffbe09a7bc754748c31a30008",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -311,7 +311,7 @@
       "name": "fingerprint",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d658400ef19f1489f508978b012ff3ffb18ef650e6804f5d6f214ec79f723d49",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -319,7 +319,7 @@
       "name": "first_seen",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "419635ceb5ec11a324002d6bb04884cb145979229a5a3c37d23122d7c00ccd67",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -327,7 +327,7 @@
       "name": "last_seen",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "93ae5de7569a4abe2483380910a930b331bf9744125cd662efa07438b05cde8f",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -335,7 +335,7 @@
       "name": "product_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "c5c6c269c45789c981566d2caff078629cd3140f7a964ce3cc42716da7ea022a",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -343,7 +343,7 @@
       "name": "signal",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "1cbf33ed54737dd94d5b114848240b7c8b36be733daf171032e5c0c33f9d9190",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -351,7 +351,7 @@
       "name": "status",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "f7b1ec2946660e143bf8a1d93489b9465b327be8ae2b0c35a27725d396bc1ece",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -359,7 +359,7 @@
       "name": "updated_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d0d1c60e4ccef240dfffdb0e9c312f16a083e0a1c49e90cf73a5b0d59fc19669",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -367,7 +367,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "5d84cba000a0f905c5b825142a97e38ff462a8b71de3403cd63678f87a10dbe3",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -375,7 +375,7 @@
       "name": "fingerprint",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "782b27da85c3d0b1e0ed2c3a77cec0cb26855ea2986a77037c20d5f3642e792c",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -383,7 +383,7 @@
       "name": "group_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "ab318a79a8da04edc316006384631e1a0f5792af384f144c9ee7fefd7212f13a",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -391,7 +391,7 @@
       "name": "minidump",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "1d5dc07debe048e9033bc59870e8d4860c048cda5e9d5e7149880bf42f980f1d",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -399,7 +399,7 @@
       "name": "product_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "ea8535015a90d30e2f1088e7750acfad034532a23910837fe7b3bd2b82ac9cf0",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -407,7 +407,7 @@
       "name": "report",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "5e3f3146a891c95aa84e09e2c9456cfe53a8f55d2aa030192c597b5210ceccfe",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -415,7 +415,23 @@
       "name": "updated_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "fcbd458ffdfd84d26c44256328cfc4a67d99085398b9be8270cf2f497db6d4ed",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
+    },
+    {
+      "kind": "field",
+      "scope": "invitations",
+      "name": "accepted_email",
+      "source_path": "database/schema/guardrail.surql",
+      "statement_hash": "514f842f26daedb2e55e6002266e99e58e6fc3d75ec85ff658e019acce96badf",
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
+    },
+    {
+      "kind": "field",
+      "scope": "invitations",
+      "name": "accepted_username",
+      "source_path": "database/schema/guardrail.surql",
+      "statement_hash": "6a5fc900010da36a4b3af073213737fb82a5b48ad401fc7215a87f0d65a4bf39",
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -423,7 +439,7 @@
       "name": "code",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "e2741ea09785b1d913278d6fd013a36786405597440c34a5518270135a1fd248",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -431,7 +447,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "30b91fdc90baca9acac7b47d0c565114e99c0f3f7a536d8aa011733b5dee7e64",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -439,7 +455,7 @@
       "name": "created_by",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "9274b31b536fcdecef45fbb2aa21bdd37e55c4df6cec575e79fe249ee55519d6",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -447,7 +463,7 @@
       "name": "email_to",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "3952781e2aa853d95f15aca67ce9e0104c1090fdb82c7599eb7ff7f674ad1943",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -455,7 +471,7 @@
       "name": "expires_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "9246e754d2886f75c948b6e86c218b9a0ffb7fa492f465629a17065c20a5dd9c",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -463,7 +479,7 @@
       "name": "grants",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "3522687bd943c28e23a12c2eb03fdb6659e4abfb7995f6e846a90f3098304745",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -471,7 +487,7 @@
       "name": "grants[*]",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "8e41f6cdbe35302d61fae446531dbb7f8a9c9206ca8ceba3145c23c6fc5d7a2d",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -479,7 +495,7 @@
       "name": "is_admin",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "bd28592b65074d055df0d56c86a9e8a9c530471cc6212f4baa1ef990352de3e3",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -487,7 +503,7 @@
       "name": "max_uses",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "a696cf2e21761d811469847cdb55e1493cb40f4f5d9a9a8e7dd880157f8d5732",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -495,7 +511,7 @@
       "name": "status",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "356f1b4a5af93e42b027f18b9c537792d66e3a65e93a0737bef23c6af72116c8",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -503,7 +519,7 @@
       "name": "updated_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "1ed922667c3902b8b8470625904be777eb7628e400ef6637fe595f0f64a2041f",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -511,7 +527,7 @@
       "name": "use_count",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "a9d080c900ddc93387c85becff00bb62fdbcf69489c5b51c767d7b22dfafe4d9",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -519,7 +535,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "a9367523ca69ad64371d2476e9953ddd80772f406a68197b7c57ef069570bcf6",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -527,7 +543,7 @@
       "name": "grants",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "fd7b5eed126e8f7074cf092d9dcf831154c86c48c861e8c59ab4ed54e5eef16b",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -535,7 +551,7 @@
       "name": "grants[*]",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "23d8d0923162db7ddd9aea0b37519db1cd648afcaf957f837e9eaf19d8e30500",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -543,7 +559,7 @@
       "name": "invitation_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "84de9c9f5532580967a48182ac1705800b320e0ab3847f5be48a4f53e2fe3dc1",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -551,7 +567,7 @@
       "name": "is_admin",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "fc1b0b9e0f7a0c31fd26956daea8d9d1c526e1e8d7c162dd707d6eb3e5c69757",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -559,7 +575,7 @@
       "name": "setup_url",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "ff4b899868e9d69784cc95e78553fb56a5e5104d088fb7e05d9f55c75c42d7de",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -567,7 +583,7 @@
       "name": "sub",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "54702b3ff7277a20fb1618a1e41bbee328085abe5f49201b3a8be9d5506562fb",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -575,7 +591,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "73f04241de7db07ef650d043e55f525e4758c2f70d568144fd2be3b963532f61",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -583,7 +599,7 @@
       "name": "email",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "ee514be38b947054bf904b1cd5bb2e3009f9279fdc219dd8ae359f531d6eaf10",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -591,7 +607,7 @@
       "name": "email.invite_html_template",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "b07b37f8c27d6be96b0f6a552d198a5fd3fd66433075f67ef544deda726171e1",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -599,7 +615,7 @@
       "name": "email.invite_subject",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "843b1ee0e303f4d1813aa921695c00a0329060ca56b4d70706343e548f730858",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -607,7 +623,7 @@
       "name": "email.invite_text_template",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "e3c5e2c7322a7d78c02366948fb331672c937a9f0a47e5bfa319b581955151c2",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -615,7 +631,7 @@
       "name": "minidump",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "f310bc835cda45e5febbdb1202e0a0954e4609d50a283bee1f807d032107ac22",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -623,7 +639,7 @@
       "name": "minidump.mandatory_annotations",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "33e22ffa9d52b007743d7bac7350ea1bf8be53495b759aff882346b40e6056ec",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -631,7 +647,7 @@
       "name": "processor",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "9087f3cb0ca77f5d232f17f54b73d4636e9c08f41b3d6ea5270cf391eddf4791",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -639,7 +655,7 @@
       "name": "processor.delimiter",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "33572c9fbde6763996a507ea3ad6a0e32e09489a631df99567f13c00fa1776de",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -647,7 +663,7 @@
       "name": "processor.end_patterns",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "b9dbb7aaea0ce3ac26f357b0dbd268c1a2e7f36b7aecc5c96f47e834e3a20ab8",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -655,7 +671,7 @@
       "name": "processor.maximum_frame_count",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "92db03626b39dd07e60450d917f074d05892058f6c76ec8a8c123a3141a86dbc",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -663,7 +679,7 @@
       "name": "processor.skip_patterns",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "0f533283b2b67b40da7b3c04a911be96b08ec807b535583b825961f0ef7b21d2",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -671,7 +687,7 @@
       "name": "product_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "a7a66921f102e32dcc05b36a54c4fede33b2648ebc9f423515ff7e0fa50210ee",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -679,7 +695,7 @@
       "name": "updated_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "0687108627a99fabc89d3f78eb575e4df3cd01fbce20ca510d74c6d9882fcfac",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -687,7 +703,7 @@
       "name": "accepting_crashes",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d50650f6f479ecb3f1a28474d53dc485808e20c1d3b0f07caed70a65424205c8",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -695,7 +711,7 @@
       "name": "color",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "8e075f6cdcaa3f1d931849344d257ab57f4c9d256338b1876e8b726b935e7c62",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -703,7 +719,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "57763de19e5732f2e0c23f939a591cffc7cdb445cdae8ef03ec2ccdbc92681c3",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -711,7 +727,7 @@
       "name": "description",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "a7611eb8335fe4b92348823e85c4183300c4a1723c1994e42bfc2a8ffa4b63c7",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -719,7 +735,7 @@
       "name": "metadata",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "37b907e55dd4dfdbc027b5f1e7c4b40109c46451a2c7da9167c85069f222edc0",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -727,7 +743,7 @@
       "name": "name",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "450ff1c6704b3c7a36b64f081c16db40f538797f2889ac3baa8c47599c7406c9",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -735,7 +751,7 @@
       "name": "product_token",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "4fd5007138236acd39ce0b3be426e859ade2bc2ab3d3f64fd9f680a65d9859a3",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -743,7 +759,7 @@
       "name": "public",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "6328dce497da30232fd234feb094c2be1ff42268a567b83f4b21aa0168b49643",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -751,7 +767,7 @@
       "name": "slug",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "fabfdde17351cc005df6388faf574c142f57be8b144fa4a25cce520f3310b05c",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -759,7 +775,7 @@
       "name": "updated_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "628fc1dad0b6f39467146d54b299807d725b039fa5ede8796354fe46761e6b4d",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -767,7 +783,7 @@
       "name": "data",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "73007e8e74bea59fe9f13f00d52dd1da3252ece5ca92f4ea30be78a066324718",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -775,7 +791,7 @@
       "name": "expires_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "eb652829290a9303a73ca84680c784ae9e5f199c471381fa6962288c4f2b2288",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -783,7 +799,7 @@
       "name": "arch",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "e8d7976abdbb0bdcecfbe58b3da9f19b9a9cca4f5e5cb70c99c8eaf16d912012",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -791,7 +807,7 @@
       "name": "build_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "8cf1e4b1476f23597599315a4f9ecd006374ab3d2b807317539535fbe852393c",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -799,7 +815,7 @@
       "name": "build_tag",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "2e542f2126b0c37f2ee65237dd2d56779afa339bcf4316268827cc16e007e16d",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -807,7 +823,7 @@
       "name": "channel",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "c883bd8388a0738a20fbe3c88349f56a6d38e098fac973d7dd7fb55a6ec079a6",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -815,7 +831,7 @@
       "name": "commit",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d1c8be2e86adf91dfd3f95d514ad2d8266b623cf3fa36b3517f31d6e637c6cd8",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -823,7 +839,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "85a8c22967d7a45d1fdbb456e3bc6b3c5a04459fc9c8e8c89a142500f878bbe7",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -831,7 +847,7 @@
       "name": "module_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "17058051e57845fa4ff9371b3f0a3b0e4c1b305cba0b02ce51ffc9f379648321",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -839,7 +855,7 @@
       "name": "os",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "100d474ed4e5c0277715660865b01556fcc3fc5b2e9dd5f019ec103b5ba6bdd8",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -847,7 +863,7 @@
       "name": "product_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "5022e3dc2acb0f64b6bfcc04e58f20ffcaa80f2ab204ed0697a13e637be643d5",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -855,7 +871,7 @@
       "name": "storage_path",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "5f152b7a9dc70634c648ee934a8112f8492528a0dcccbf39c46712266eac8462",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -863,7 +879,7 @@
       "name": "updated_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "8f2149407c21acd5f15f1ef484b6b609e58fa7d82015d658d1ca1d0f326c1fdb",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -871,7 +887,7 @@
       "name": "version",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "98f4d1a37cbcc0a87adae5946e2653abd1b5d5120a5762a3e73b432fce5d7f3c",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -879,7 +895,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "bdd9924d3eee93a4cffdddabeae8b696ca008c6054178148dca40ba64fae70a3",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -887,7 +903,7 @@
       "name": "product_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "feb8ffc97c891e47791f2c11fd48aaf216ce53b3d68da32b5655e33240c583ff",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -895,7 +911,7 @@
       "name": "role",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "ce095be728483a2af3471d699a8e842ad30874c10cf3daabf10133c1940131f0",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -903,7 +919,7 @@
       "name": "updated_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "054004ec7a20fc883994ab697cc9c07aa077e8dad9b4a62e1a7a4008957e75db",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -911,7 +927,7 @@
       "name": "user_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "8ca9271fab9d879781b9f9162226bbf17db8773cbf3e33692b3fe7c5b03a7bd8",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -919,7 +935,7 @@
       "name": "avatar",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "8034393854c2075410a618c04cab9243021b0fbd000aa39e59f03653c5d15040",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -927,7 +943,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "e0dbc84cc9883b559ba840da30392c6526c99ea2cd20d774ad722ef7e1531db1",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -935,7 +951,7 @@
       "name": "email",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "cf61edea40625d2416dfe865a28a5c8658a80f6f5f991ca7b56181d1fe1445c4",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -943,7 +959,7 @@
       "name": "is_admin",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "0f6b97debcdce97270a88523d972810a2783c728fa99131c796005416aec68f6",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -951,7 +967,7 @@
       "name": "last_login_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "9acc53caa720a1e52dce9166cd9e39cca59ce2f2936651de684f221f60421d21",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -959,7 +975,7 @@
       "name": "name",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "9340dcad9432f8b2ec0e6a41eca8d5c3ff88f8106423e70a686bc4952b3552df",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -967,7 +983,7 @@
       "name": "updated_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "0d1792b958bcb99c60e1d6041080667aaf1c04871f44b04c9e1ce4e6f626e2c6",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -975,7 +991,7 @@
       "name": "username",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "cdc8a5d10abc19de7bf2460e6d793c2cf7f05ab82af58f845278f078fcc63293",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -983,7 +999,7 @@
       "name": "content",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "e12d317ffd451a005fc8a4a309d6fa7bec2dc1cd49f1c15dd8c94499f9af7ca7",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -991,7 +1007,7 @@
       "name": "created_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "95dffa3382c7c328812ec5f826de6c8921fdf4e05286ab61a4586b5c8d825a5e",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -999,7 +1015,7 @@
       "name": "name",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "f7bbc3391396fc6c56e8c7e4b29b2de42d642b7e482aeb0638b0d74bf58386d7",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -1007,7 +1023,7 @@
       "name": "product_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "e2a3dfa5e77f6543bb475152771e289d062d98997c1e09cbafc637adb1d09bf8",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "field",
@@ -1015,7 +1031,7 @@
       "name": "updated_at",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "c3615731b0b36b969f00806a9542b06cd3ccd08267f3d0833392516d1f6bf503",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "function",
@@ -1023,7 +1039,7 @@
       "name": "fn::auth::has_product_role",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "5c8a6d6a341292761b105539577ea034cd9e6df54282929e51c6d080c18b953d",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "function",
@@ -1031,7 +1047,7 @@
       "name": "fn::auth::is_admin",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "8574bed9d670557b6fa02647bc478ad6f1358a660adb62ef1236345c2527a2da",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "function",
@@ -1039,7 +1055,7 @@
       "name": "fn::auth::is_product_admin",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "cf3ad49b31e569e58146aa404964ddd1f2163c684410ab8ec8cec7d6aed603df",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "function",
@@ -1047,7 +1063,7 @@
       "name": "fn::auth::shares_admin_product_with_user",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "f21769ebb21eba27288467690399983a734ec22fd8a0dd045919423c8ab42d0e",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "function",
@@ -1055,7 +1071,7 @@
       "name": "fn::auth::user_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "04c6e5332f44971618965b4b011c0b3a22ab167d494b3952240ba9a53e50c4ae",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "function",
@@ -1063,7 +1079,7 @@
       "name": "fn::auth::username",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "8c4114afa9ac25a30f2b02fd64538607121b8ed8893a017200cf1907b9958e87",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1071,7 +1087,7 @@
       "name": "idx_annotations_crash",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "9327210235ce8aeee79eb6af239c167bf3f77199a4a95d3394df5bd9013056f6",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1079,7 +1095,7 @@
       "name": "idx_annotations_group",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "1a9b3af813618d3061bac1ecb4f08def26d1939a59d0bc1928ba7b6d773b4bab",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1087,7 +1103,7 @@
       "name": "idx_annotations_source",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "62e6501a53f11c2e55d439687f7eec74dc03526c719972cd557f7c0e17c250b8",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1095,7 +1111,7 @@
       "name": "idx_api_tokens_product",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d365e39adf3dbefebad258534117c288e08e3e61abb992fb054572009506de94",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1103,7 +1119,7 @@
       "name": "idx_api_tokens_token_hash",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "8e7a971bc25821f8723d989ad3166ddc1c3a10158199644776ec2cca58fbe848",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1111,7 +1127,7 @@
       "name": "idx_api_tokens_token_id",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "e8538aae92efc3d770ee9a476d2932e5b890c8b828cf47969d39b18ccad7e302",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1119,7 +1135,7 @@
       "name": "idx_api_tokens_user",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "82bc8234acb77d333f886a989323e412cffb9f9941d813a50f3081f14df9d97f",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1127,7 +1143,7 @@
       "name": "idx_attachments_unique",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "3b39efa8d3ae3e95e187209d4ef1bb194aee0ea2664931f64403f97f31de5e12",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1135,7 +1151,7 @@
       "name": "idx_crash_groups_fingerprint",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "bdb43e0747f9f699ddf4fcd22389afd45921f9dec7940908ddca75e47a7024b6",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1143,7 +1159,7 @@
       "name": "idx_crash_groups_last_seen",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "4aaf29049aae423c6cdf5cd625e24481bef7bff8f39f8b555ba1d6e03e6abc5d",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1151,7 +1167,7 @@
       "name": "idx_crash_groups_status",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "ecf9d2b232582f10c5837af8036ab4a78eb040f4bb70984c9d7a72751de5cb9f",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1159,7 +1175,7 @@
       "name": "idx_crashes_fingerprint",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "3dd6662f925d778c28aac6e249d162491454be90f48acdc1dd20fc160a2e0a3c",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1167,7 +1183,7 @@
       "name": "idx_crashes_group",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "0243151a7dca6e9949a0bd08f28b745fd25cc01d4aecd3e6095c54042cf2c2b9",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1175,7 +1191,7 @@
       "name": "idx_crashes_product",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "c473b233a2a991c042e41b865a673612ff18ee37874890b09cfa5256efd0eee5",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1183,7 +1199,7 @@
       "name": "idx_invitations_code",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "a6388a3964f78ec81f75279429651e47663cf37d6e53bcb516e39dedf5d6524c",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1191,7 +1207,7 @@
       "name": "idx_invitations_created_by",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "79f15de30dc8ff03c015dccd64a65f6fdb5addc9f29420ff8a72944de8287d59",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1199,7 +1215,7 @@
       "name": "idx_pending_access_invitation",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "44c5aad6ed20f5903c4a440f33a0d38de4111d4efa4a846dc8e448ac28662af4",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1207,7 +1223,7 @@
       "name": "idx_pending_access_sub",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "9970642704282c748fe44565f52d2cf893b21094d9fb2632a67e5397b6f012de",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1215,7 +1231,7 @@
       "name": "idx_products_name",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "06ca52c8c7265ed2073dc279cdf661199a79cfe15fd198fbdf60160c7157f92f",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1223,7 +1239,7 @@
       "name": "idx_products_product_token",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "ee232e4d06bbe9e0400989972b7a28a19389080f69360b289fb019542b547b2f",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1231,7 +1247,7 @@
       "name": "idx_products_slug",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "e24182868c0f9c2d0a6d58385a34a2e03c210674d5e25bff63fa8d2f498b1b47",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1239,7 +1255,7 @@
       "name": "idx_symbols_module_build",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "818ffb7e840a9ac50856f86fb44cbbf224f3f34c2cfc57e90329e928879a279a",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1247,7 +1263,7 @@
       "name": "idx_symbols_product",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "c44917159bae6294d0062a45d932836b887154fb351f7f4c51b171c971ef3067",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1255,7 +1271,7 @@
       "name": "idx_user_access_pk",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "8293334c715ac63d88ed3ae863a6a933b8c70464b4dd591cc2f280570c358580",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1263,7 +1279,7 @@
       "name": "idx_users_email",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "c024877e2e080ebdbce4ea174ca94f24e609932285a4f7285a8ea5e470560bb0",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1271,7 +1287,7 @@
       "name": "idx_users_username",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "a4c40ca3f8cb3f5ff6f7930600de9341a9c929ec4ecd88164fa3c292758059dd",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "index",
@@ -1279,7 +1295,7 @@
       "name": "idx_validation_scripts_product",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "51b0e3c2eb9eaa90d59c687a296ce36ec7c88749d941fdaa42168d084940d5e8",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1287,7 +1303,7 @@
       "name": "annotations",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "63b188cc9700cf050287fcefc5d77e4121c4d08207b80760f6183be8c072510d",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1295,7 +1311,7 @@
       "name": "annotations",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "ec5491ce3f2314160ee1d41e7754285cb0e2cdc232671837526dd2c654f7337c",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1303,7 +1319,7 @@
       "name": "api_tokens",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "71fa1737771d2a4a66be8fa8aa8117f452223835cda50c3b867e0157faa9c5ae",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1311,7 +1327,7 @@
       "name": "api_tokens",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "78fdc2c0b1328f9c44578e7381adb152e633641c33671670a016fe1dee7c772a",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1319,7 +1335,7 @@
       "name": "app_settings",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "92a328b35020bb0efa23e3cc55747c1d66a3ea54762de8a5be5dcfe6b5566c58",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1327,7 +1343,7 @@
       "name": "app_settings",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "ce15c2f5f1044ac572a0f9663e5cef07933bb8f5e324ad2ab2528b360b27b1c3",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1335,7 +1351,7 @@
       "name": "attachments",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "10c2120876f2b12760e56af77c977d4cdad40505a7829073e505dd31706bb1df",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1343,7 +1359,7 @@
       "name": "attachments",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "54089edecdab7f92eadb01f30da2e2f196bac60c01c1ff113b0f8b426cda20f4",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1351,7 +1367,7 @@
       "name": "crash_groups",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "2c655433f9f324f1039fa83771c590c7441705306359e49bf96fb404c739d784",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1359,7 +1375,7 @@
       "name": "crash_groups",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d60a92fd0269c966c41056c1cd8081200a01c9cb9b68885dd2c693c6a82be508",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1367,7 +1383,7 @@
       "name": "crashes",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "99f139153fb685d6fe6428affd0ede18c154de733d167d7d3e894b3231552825",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1375,7 +1391,7 @@
       "name": "crashes",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "9b4e9443aec6753916afa5225f51f389cfb687f4efa18d7e50d6ceb1f203dce4",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1383,7 +1399,7 @@
       "name": "invitations",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "679eed33f4f710913897e7e02c274568e96e89ec1c0b990a5ccf64074461c232",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1391,7 +1407,7 @@
       "name": "pending_access",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "ef89a974a8cb735b9f07a3b7916cb50b854598b618748d0485daa0cc3343b230",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1399,7 +1415,7 @@
       "name": "product_settings",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "601ff11dbf926d8629de8cf5346b1866cdd6c9b1b9ecc91c93c630de5bff7fa4",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1407,7 +1423,7 @@
       "name": "product_settings",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d00f2c1419f6c384cce95eaf96488166a1eae37433d86422c673eb1f1c87545f",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1415,7 +1431,7 @@
       "name": "products",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d555e42480401a6d6577585c9f37f65ca0df715331554aff9479a876aafb5660",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1423,7 +1439,7 @@
       "name": "products",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "e1d6d509e47bd37a7589dafcf0c99a89e2d3660eb773472f33be4e2fb9ed7a0e",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1431,7 +1447,7 @@
       "name": "sessions",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "504048bf209bd539fe447446f0c2c949cac6557c9a8d18285571f251ab35150f",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1439,7 +1455,7 @@
       "name": "sessions",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "576ebec41918272b660339f9bd78647364ea1c9352aa7b4c98335fdf0b6638c1",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1447,7 +1463,7 @@
       "name": "symbols",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "19b44f56db23c778f0fe64e8b9e4a062e7b366d2b737d3aed46d7b437405d7e7",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1455,7 +1471,7 @@
       "name": "symbols",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "1b7215e342453ce175a164a966c9456dcda427a08379203c1ee63a542ad7a434",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1463,7 +1479,7 @@
       "name": "user_access",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "10689e63e561250c758a5f045775a0b2629af2875959c0ddcb5af0ed810e35d7",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1471,7 +1487,7 @@
       "name": "user_access",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "6307031aac54c6bde09a461e66e62e5b537dccebeae8b30578ce5ff3c06092a4",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1479,7 +1495,7 @@
       "name": "users",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "07e245cc3073043cb7c0fad63d97977b395a8f14c307c6774688e3de65eb615a",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1487,7 +1503,7 @@
       "name": "users",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "31d53363b85aa920c202f0ff45aaf58eabee04808e0cecf9adc8c3fc971b69c8",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1495,7 +1511,7 @@
       "name": "validation_scripts",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "66a84fd944de15e85a0c63e451700443f4e7aad397602ac084a6e63be0772bdd",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     },
     {
       "kind": "table",
@@ -1503,7 +1519,7 @@
       "name": "validation_scripts",
       "source_path": "database/schema/guardrail.surql",
       "statement_hash": "d507f10772dbda6c64f731b3a972b7492c2579f8298ad47c06cbe5c933dc2b4a",
-      "file_hash": "a647af39786b76fdc34651e28a24bd39916e71bbc16949dabef46db60cb24ac8"
+      "file_hash": "70366b8139668eb42135178a854557c41124df4cdd288167906511a8e770835e"
     }
   ]
 }

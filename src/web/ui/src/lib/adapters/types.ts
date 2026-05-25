@@ -334,6 +334,8 @@ export interface Invitation {
   code: string;
   created_by: string;
   email_to: string | null;
+  accepted_username: string | null;
+  accepted_email: string | null;
   expires_at: string | null;
   max_uses: number | null;
   use_count: number;

@@ -303,6 +303,8 @@ DEFINE FIELD status ON TABLE invitations TYPE string
     ASSERT $value != NONE AND $value INSIDE ["Active", "Exhausted", "Expired", "Revoked"]
     DEFAULT "Active";
 DEFINE FIELD email_to ON TABLE invitations TYPE option<string>;
+DEFINE FIELD accepted_username ON TABLE invitations TYPE option<string>;
+DEFINE FIELD accepted_email ON TABLE invitations TYPE option<string>;
 DEFINE FIELD created_at ON TABLE invitations TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 DEFINE FIELD updated_at ON TABLE invitations TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
