@@ -308,7 +308,7 @@ async fn run_value(
 }
 
 const USER_PROJ: &str =
-    "meta::id(id) AS id, email, name, avatar, is_admin AS isAdmin, created_at AS joinedAt";
+    "meta::id(id) AS id, username, email, name, avatar, is_admin AS isAdmin, created_at AS joinedAt";
 const PRODUCT_PROJ: &str =
     "meta::id(id) AS id, name, slug, description, color, public, product_token AS productToken";
 const SYMBOL_PROJ: &str = "meta::id(id) AS id, meta::id(product_id) AS productId, \

@@ -227,9 +227,10 @@
   <div class="overflow-hidden rounded-md border border-line dark:border-line-dark">
     <div
       class="grid items-center gap-4 bg-surface-panel dark:bg-surface-panelDark px-4 py-2 text-[10.5px] font-medium uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark"
-      style:grid-template-columns="1.5fr 1.7fr 1.3fr 140px 240px"
+      style:grid-template-columns="1.4fr 1.25fr 1.6fr 1.15fr 130px 230px"
     >
       <span>User</span>
+      <span>Username</span>
       <span>Email</span>
       <span>Permissions</span>
       <span>Joined</span>
@@ -238,7 +239,7 @@
     {#each data.users as u (u.id)}
       <div
         class="grid items-center gap-4 border-t border-line dark:border-line-dark px-4 py-2.5 text-[13px]"
-        style:grid-template-columns="1.5fr 1.7fr 1.3fr 140px 240px"
+        style:grid-template-columns="1.4fr 1.25fr 1.6fr 1.15fr 130px 230px"
       >
         <div class="flex min-w-0 items-center gap-2.5 truncate">
           <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft dark:bg-accent-softDark text-[10.5px] font-semibold text-accent">{u.avatar}</span>
@@ -248,6 +249,7 @@
             {#if data.user && u.id === data.user.id}<span class="ml-1 text-[11px] text-ink-muted dark:text-ink-mutedDark">(you)</span>{/if}
           </span>
         </div>
+        <div class="truncate font-mono text-[12px] text-ink-muted dark:text-ink-mutedDark">{u.username}</div>
         <div class="truncate text-ink-muted dark:text-ink-mutedDark">{u.email}</div>
         <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
           {u.permissions.length} product{u.permissions.length === 1 ? '' : 's'}
