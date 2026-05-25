@@ -676,6 +676,11 @@ async fn run_user(
                     NewUser {
                         username: pocket_user.username.clone(),
                         email: pocket_user.email.clone(),
+                        name: Some(display_name(
+                            &pocket_user.username,
+                            pocket_user.first_name.as_deref(),
+                            pocket_user.last_name.as_deref(),
+                        )),
                         is_admin: args.admin,
                     },
                 )
@@ -685,6 +690,21 @@ async fn run_user(
         }
     }
     Ok(())
+}
+
+fn display_name(username: &str, first_name: Option<&str>, last_name: Option<&str>) -> String {
+    let first_name = first_name.map(str::trim).filter(|value| !value.is_empty());
+    let last_name = last_name.map(str::trim).filter(|value| !value.is_empty());
+    let full_name = [first_name, last_name]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if full_name.is_empty() {
+        username.to_string()
+    } else {
+        full_name
+    }
 }
 
 fn print_users(cli: &Cli, users: &[PocketIdUser]) -> Result<(), AnyErr> {

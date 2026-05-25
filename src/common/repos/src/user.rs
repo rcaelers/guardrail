@@ -13,6 +13,20 @@ use data::user::{NewUser, User};
 
 pub struct UserRepo {}
 
+fn avatar_initials(name: &str) -> String {
+    let avatar = name
+        .split_whitespace()
+        .filter_map(|w| w.chars().next())
+        .take(2)
+        .collect::<String>()
+        .to_uppercase();
+    if avatar.is_empty() {
+        "U".to_string()
+    } else {
+        avatar
+    }
+}
+
 impl UserRepo {
     pub async fn get_by_id(
         db: &Surreal<Any>,
@@ -107,11 +121,19 @@ impl UserRepo {
         let email = user
             .email
             .unwrap_or_else(|| format!("{}@test.local", user.username));
+        let name = user
+            .name
+            .map(|name| name.trim().to_string())
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| user.username.clone());
+        let avatar = avatar_initials(&name);
         let _: Option<serde_json::Value> = db
             .query(
                 "CREATE type::record('users', $id) CONTENT {
                 username: $username,
                 email: $email,
+                name: $name,
+                avatar: $avatar,
                 is_admin: $is_admin,
                 created_at: time::now(),
                 updated_at: time::now(),
@@ -120,6 +142,8 @@ impl UserRepo {
             .bind(("id", id.clone()))
             .bind(("username", user.username.clone()))
             .bind(("email", email))
+            .bind(("name", name))
+            .bind(("avatar", avatar))
             .bind(("is_admin", user.is_admin))
             .await
             .map_err(handle_surreal_error)?

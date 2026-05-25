@@ -215,6 +215,7 @@ pub async fn create_test_user(db: &Surreal<Any>, username: &str, is_admin: bool)
     let new_user = NewUser {
         username: username.to_string(),
         email: None,
+        name: None,
         is_admin,
     };
 
@@ -234,6 +235,7 @@ pub async fn create_random_test_user(db: &Surreal<Any>) -> String {
     let new_user = NewUser {
         username,
         email: None,
+        name: None,
         is_admin: false,
     };
 

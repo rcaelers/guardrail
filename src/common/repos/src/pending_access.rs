@@ -43,6 +43,7 @@ impl PendingAccessRepo {
                     invitation_id: $invitation_id,
                     is_admin:      $is_admin,
                     grants:        $grants,
+                    display_name:  $display_name,
                     setup_url:     $setup_url,
                     created_at:    time::now(),
                 }",
@@ -51,6 +52,7 @@ impl PendingAccessRepo {
             .bind(("sub", pending.sub))
             .bind(("invitation_id", pending.invitation_id))
             .bind(("is_admin", pending.is_admin))
+            .bind(("display_name", pending.display_name))
             .bind((
                 "grants",
                 serde_json::to_value(&pending.grants)

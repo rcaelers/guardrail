@@ -168,12 +168,15 @@ pub async fn callback(
         fetch_userinfo(&state, &discovery.userinfo_endpoint, &token.access_token).await?;
     let username = resolve_username(&userinfo);
 
-    let authenticated_user =
-        get_or_create_local_user(&state, &userinfo.sub, &username, userinfo.email.as_deref())
-            .await
-            .map_err(|e| {
-                AppError::internal(format!("failed to get or create user '{username}': {e}"))
-            })?;
+    let authenticated_user = get_or_create_local_user(
+        &state,
+        &userinfo.sub,
+        &username,
+        userinfo.email.as_deref(),
+        userinfo.name.as_deref(),
+    )
+    .await
+    .map_err(|e| AppError::internal(format!("failed to get or create user '{username}': {e}")))?;
 
     let Some(authenticated_user) = authenticated_user else {
         return Ok(Redirect::to(
@@ -416,6 +419,7 @@ async fn get_or_create_local_user(
     sub: &str,
     username: &str,
     email: Option<&str>,
+    oidc_name: Option<&str>,
 ) -> AppResult<Option<AuthenticatedUser>> {
     let pending = repos::pending_access::PendingAccessRepo::get_by_sub(&state.repo.db, sub)
         .await
@@ -445,9 +449,13 @@ async fn get_or_create_local_user(
         }
         return Ok(Some(AuthenticatedUser::authenticated(User {
             id: user.id,
-            name: user.username,
+            name: if user.name.is_empty() {
+                user.username
+            } else {
+                user.name
+            },
             is_admin: user.is_admin,
-            avatar: None,
+            avatar: Some(user.avatar).filter(|avatar| !avatar.is_empty()),
         })));
     }
 
@@ -455,12 +463,20 @@ async fn get_or_create_local_user(
     let Some(pa) = pending else {
         return Ok(None);
     };
+    let display_name = pa
+        .display_name
+        .clone()
+        .or_else(|| oidc_name.map(str::to_string))
+        .map(|name| name.trim().to_string())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| username.to_owned());
 
     let user_id = repos::user::UserRepo::create(
         &state.repo.db,
         NewUser {
             username: username.to_owned(),
             email: email.map(str::to_string),
+            name: Some(display_name.clone()),
             is_admin: pa.is_admin,
         },
     )
@@ -473,7 +489,7 @@ async fn get_or_create_local_user(
 
     Ok(Some(AuthenticatedUser::authenticated(User {
         id: user_id,
-        name: username.to_owned(),
+        name: display_name,
         is_admin: pa.is_admin,
         avatar: None,
     })))
@@ -659,6 +675,43 @@ mod tests {
             }),
             "sub"
         );
+    }
+
+    #[tokio::test]
+    async fn invited_user_creation_uses_pending_display_name() {
+        let state = state_with_oidc(Some(oidc())).await;
+        repos::pending_access::PendingAccessRepo::create(
+            &state.repo.db,
+            data::pending_access::NewPendingAccess {
+                sub: "external-sub".to_string(),
+                invitation_id: "missing-invitation".to_string(),
+                is_admin: false,
+                grants: vec![],
+                display_name: Some("Ada Lovelace".to_string()),
+                setup_url: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        let authenticated = get_or_create_local_user(
+            &state,
+            "external-sub",
+            "account-name",
+            Some("ada@example.com"),
+            Some("Ignored OIDC Name"),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(authenticated.active().name, "Ada Lovelace");
+        let user = repos::user::UserRepo::get_by_name(&state.repo.db, "account-name")
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(user.name, "Ada Lovelace");
+        assert_eq!(user.avatar, "AL");
     }
 
     #[test]

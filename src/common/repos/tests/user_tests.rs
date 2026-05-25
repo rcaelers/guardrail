@@ -130,6 +130,7 @@ async fn test_create_user() {
     let new_user = NewUser {
         username: "newuser".to_string(),
         email: None,
+        name: None,
         is_admin: false,
     };
 

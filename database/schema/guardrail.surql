@@ -321,6 +321,7 @@ DEFINE FIELD invitation_id ON TABLE pending_access TYPE string ASSERT $value != 
 DEFINE FIELD is_admin ON TABLE pending_access TYPE bool ASSERT $value != NONE DEFAULT false;
 DEFINE FIELD grants ON TABLE pending_access TYPE array ASSERT $value != NONE DEFAULT [];
 DEFINE FIELD grants[*] ON TABLE pending_access TYPE object FLEXIBLE;
+DEFINE FIELD display_name ON TABLE pending_access TYPE option<string>;
 DEFINE FIELD setup_url ON TABLE pending_access TYPE option<string>;
 DEFINE FIELD created_at ON TABLE pending_access TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 

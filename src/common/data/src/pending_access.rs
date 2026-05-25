@@ -17,6 +17,7 @@ pub struct PendingAccess {
     pub invitation_id: String,
     pub is_admin: bool,
     pub grants: Vec<PendingAccessGrant>,
+    pub display_name: Option<String>,
     pub setup_url: Option<String>,
     pub created_at: DateTime<Utc>,
 }
@@ -27,5 +28,6 @@ pub struct NewPendingAccess {
     pub invitation_id: String,
     pub is_admin: bool,
     pub grants: Vec<PendingAccessGrant>,
+    pub display_name: Option<String>,
     pub setup_url: Option<String>,
 }

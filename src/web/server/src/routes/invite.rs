@@ -437,6 +437,25 @@ struct RedeemJsonRequest {
     last_name: Option<String>,
 }
 
+fn invitation_display_name(
+    username: &str,
+    first_name: Option<&str>,
+    last_name: Option<&str>,
+) -> String {
+    let first_name = first_name.map(str::trim).filter(|value| !value.is_empty());
+    let last_name = last_name.map(str::trim).filter(|value| !value.is_empty());
+    let full_name = [first_name, last_name]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(" ");
+    if full_name.is_empty() {
+        username.trim().to_string()
+    } else {
+        full_name
+    }
+}
+
 async fn redeem_invite_json(
     State(state): State<AppState>,
     Path(code): Path<String>,
@@ -489,8 +508,8 @@ async fn redeem_invite_json(
         .create_user(CreateUserRequest {
             username: body.username.clone(),
             email: body.email.clone(),
-            first_name: body.first_name,
-            last_name: body.last_name,
+            first_name: body.first_name.clone(),
+            last_name: body.last_name.clone(),
         })
         .await
         .map_err(|e| {
@@ -499,6 +518,11 @@ async fn redeem_invite_json(
         })?;
 
     let setup_url_str = provisioned.setup_url.as_ref().map(|u| u.to_string());
+    let display_name = invitation_display_name(
+        &body.username,
+        body.first_name.as_deref(),
+        body.last_name.as_deref(),
+    );
 
     repos::pending_access::PendingAccessRepo::create(
         &state.repo.db,
@@ -514,6 +538,7 @@ async fn redeem_invite_json(
                     role: g.role.clone(),
                 })
                 .collect(),
+            display_name: Some(display_name),
             setup_url: setup_url_str.clone(),
         },
     )
@@ -657,6 +682,8 @@ async fn redeem_invite(
         .provisioner
         .as_ref()
         .ok_or_else(|| AppError::failure("No identity provisioner configured"))?;
+    let display_name =
+        invitation_display_name(&form.username, Some(&form.first_name), Some(&form.last_name));
 
     let provisioned = provisioner
         .create_user(CreateUserRequest {
@@ -687,6 +714,7 @@ async fn redeem_invite(
                     role: g.role.clone(),
                 })
                 .collect(),
+            display_name: Some(display_name),
             setup_url: setup_url_str.clone(),
         },
     )

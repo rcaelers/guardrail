@@ -266,7 +266,7 @@
   <div class="overflow-hidden rounded-md border border-line dark:border-line-dark">
     <div
       class="grid items-center gap-4 bg-surface-panel dark:bg-surface-panelDark px-4 py-2 text-[10.5px] font-medium uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark"
-      style:grid-template-columns="180px 90px 130px 1fr auto"
+      style:grid-template-columns="170px minmax(150px, 190px) 125px 1fr auto"
     >
       <span>Code</span>
       <span>Status</span>
@@ -291,7 +291,7 @@
 
       <div
         class="grid items-center gap-4 border-t border-line dark:border-line-dark px-4 py-2.5 text-[13px]"
-        style:grid-template-columns="180px 90px 130px 1fr auto"
+        style:grid-template-columns="170px minmax(150px, 190px) 125px 1fr auto"
       >
         <!-- Code + copy -->
         <div class="flex min-w-0 items-center gap-1.5">
