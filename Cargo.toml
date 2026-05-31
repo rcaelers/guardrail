@@ -87,10 +87,6 @@ tracing-log = "0.2.0"
 # SurrealDB
 surrealdb = { version = "3.0.5", features = ["kv-mem"] }
 
-# K8s
-k8s-openapi = { version = "0.27.1", features = ["latest"] }
-kube = { version = "3.1.0", features = ["runtime", "derive"] }
-
 # Minidump
 minidump = { version = "0.26.1" }
 minidump-processor = { version = "0.26.1" }

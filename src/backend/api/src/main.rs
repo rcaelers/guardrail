@@ -24,10 +24,5 @@ async fn main() {
     info!("Starting server on port {}", settings.ingress.port);
 
     let app = GuardrailApiApp::from_settings(settings).await;
-
-    if let Err(err) = app.ensure_default_api_token().await {
-        tracing::warn!("Failed to ensure default API token: {}", err);
-    }
-
     app.serve().await;
 }
