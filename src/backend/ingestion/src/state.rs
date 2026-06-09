@@ -3,6 +3,7 @@ use object_store::ObjectStore;
 use std::sync::Arc;
 
 use crate::product_cache::ProductCache;
+use crate::rate_limit::RateLimiter;
 use crate::settings::Settings;
 use crate::worker::Worker;
 
@@ -12,4 +13,6 @@ pub struct AppState {
     pub settings: Arc<Settings>,
     pub storage: Arc<dyn ObjectStore>,
     pub worker: Arc<dyn Worker>,
+    /// `None` disables rate limiting (tests / when unconfigured).
+    pub rate_limiter: Option<Arc<RateLimiter>>,
 }

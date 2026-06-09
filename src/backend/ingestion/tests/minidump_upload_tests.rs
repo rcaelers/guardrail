@@ -101,6 +101,7 @@ async fn setup_with_storage_and_cache(
         settings: settings.clone(),
         storage: store.clone(),
         worker: worker.clone(),
+        rate_limiter: None,
     };
     let app: Router = Router::new()
         .nest("/api", routes(state.clone()).await)

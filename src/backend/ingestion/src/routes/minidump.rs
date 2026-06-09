@@ -978,6 +978,7 @@ mod tests {
             settings: Arc::new(settings),
             storage: Arc::new(InMemory::new()),
             worker,
+            rate_limiter: None,
         };
         let mut info = crash_info();
         info.minidump = None;

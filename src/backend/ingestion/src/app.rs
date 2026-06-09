@@ -23,6 +23,7 @@ use common::jobs::queue;
 use common::retry_startup;
 
 use crate::product_cache::ProductCache;
+use crate::rate_limit::RateLimiter;
 use crate::routes;
 use crate::state::AppState;
 use crate::worker::WorkQueue;
@@ -55,6 +56,10 @@ impl GuardrailIngestionApp {
             async move { redis::aio::ConnectionManager::new(redis_client).await }
         })
         .await;
+        let rate_limiter = Some(Arc::new(RateLimiter::new(
+            redis_manager.clone(),
+            settings.rate_limit.clone(),
+        )));
         let product_cache = ProductCache::new(redis_manager);
 
         let redis_minidump = RedisStorage::new_with_config(
@@ -68,6 +73,7 @@ impl GuardrailIngestionApp {
             settings,
             storage: store,
             worker,
+            rate_limiter,
         };
 
         Self { state }
@@ -138,14 +144,14 @@ impl GuardrailIngestionApp {
             let port = settings.ingress.port;
             let addr = SocketAddr::from(([0, 0, 0, 0], port));
             axum_server::bind_rustls(addr, config)
-                .serve(router.into_make_service())
+                .serve(router.into_make_service_with_connect_info::<SocketAddr>())
                 .await
                 .unwrap();
         } else {
             let port = settings.ingress.port;
             let addr = SocketAddr::from(([0, 0, 0, 0], port));
             axum_server::bind(addr)
-                .serve(router.into_make_service())
+                .serve(router.into_make_service_with_connect_info::<SocketAddr>())
                 .await
                 .unwrap();
         }
@@ -169,6 +175,7 @@ mod tests {
             settings: Arc::new(crate::settings::Settings::test_default()),
             storage: Arc::new(InMemory::new()),
             worker: Arc::new(TestWorker::new()),
+            rate_limiter: None,
         }
     }
 

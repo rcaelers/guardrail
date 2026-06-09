@@ -33,6 +33,9 @@ pub enum ApiError {
     #[error("Upload validation for product {0} failed: {1}")]
     ValidationError(String, String),
 
+    #[error("rate limit exceeded")]
+    RateLimited,
+
     #[error("parameters rejected: `{0}`")]
     QueryExtractorRejection(#[from] QueryRejection),
 }
@@ -61,6 +64,9 @@ impl IntoResponse for ApiError {
                 StatusCode::BAD_REQUEST,
                 format!("validation of product {product} failed: {error_message}"),
             ),
+            ApiError::RateLimited => {
+                (StatusCode::TOO_MANY_REQUESTS, "rate limit exceeded".to_string())
+            }
             ApiError::QueryExtractorRejection(err) => {
                 error!("query extractor rejection: {:?}", err);
                 (StatusCode::BAD_REQUEST, err.to_string())

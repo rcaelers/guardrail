@@ -31,6 +31,7 @@ mod tests {
             settings: Arc::new(crate::settings::Settings::test_default()),
             storage: Arc::new(InMemory::new()),
             worker: Arc::new(TestWorker::new()),
+            rate_limiter: None,
         }
     }
 
