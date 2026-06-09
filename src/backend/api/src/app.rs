@@ -130,8 +130,6 @@ impl GuardrailApiApp {
 
         if Self::tls_configured(settings) {
             info!("Starting server with TLS");
-            info!("Public key: {}", settings.ingress.public_key.clone().unwrap_or_default());
-            info!("Private key: {}", settings.ingress.private_key.clone().unwrap_or_default());
             let config = RustlsConfig::from_pem(
                 settings
                     .ingress

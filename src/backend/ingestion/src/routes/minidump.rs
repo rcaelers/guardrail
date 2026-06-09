@@ -616,6 +616,30 @@ impl MinidumpApi {
     #[instrument(fields(crash_id = %crash_id))]
     fn create_rhai_engine(crash_id: &str) -> Engine {
         let mut engine = Engine::new();
+
+        // Validation scripts run synchronously inside the public upload path on
+        // attacker-controlled crash data. Bound their resource use so a buggy or
+        // hostile script (infinite loop, runaway recursion/allocation) cannot
+        // stall an ingestion worker.
+        engine.set_max_operations(1_000_000);
+        engine.set_max_call_levels(64);
+        engine.set_max_expr_depths(64, 64);
+        engine.set_max_string_size(64 * 1024);
+        engine.set_max_array_size(10_000);
+        engine.set_max_map_size(10_000);
+
+        // Wall-clock guard in case a single operation blocks: abort the script
+        // if it runs longer than the deadline.
+        let deadline = std::time::Duration::from_secs(5);
+        let started = std::time::Instant::now();
+        engine.on_progress(move |_ops| {
+            if started.elapsed() > deadline {
+                Some(rhai::Dynamic::from("validation script exceeded time limit"))
+            } else {
+                None
+            }
+        });
+
         engine.build_type::<TrackedAnnotations>();
 
         let crash_id_for_print = crash_id.to_string();

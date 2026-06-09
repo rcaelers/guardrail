@@ -80,7 +80,9 @@ impl IdentityProvisioner for PocketIdProvisioner {
         if let Some(base) = &self.auto_login_url {
             let mut url = base.clone();
             url.query_pairs_mut().append_pair("token", &token);
-            tracing::info!(external_id, setup_url = %url, "built auto-login setup URL");
+            // Never log the URL: it embeds a one-time setup token that, if leaked
+            // from logs, lets an attacker complete account/passkey setup.
+            tracing::info!(external_id, "built auto-login setup URL");
             return Ok(Some(url));
         }
         let mut url = self
@@ -90,7 +92,7 @@ impl IdentityProvisioner for PocketIdProvisioner {
         if let Some(redirect) = &self.post_setup_redirect {
             url.query_pairs_mut().append_pair("redirect", redirect);
         }
-        tracing::info!(external_id, setup_url = %url, "built PocketID setup URL");
+        tracing::info!(external_id, "built PocketID setup URL");
         Ok(Some(url))
     }
 
@@ -170,7 +172,7 @@ impl PocketIdProvisioner {
         if let Some(redirect) = &self.post_setup_redirect {
             url.query_pairs_mut().append_pair("redirect", redirect);
         }
-        tracing::info!(user_id, setup_url = %url, "built PocketID setup URL");
+        tracing::info!(user_id, "built PocketID setup URL");
         Ok(url)
     }
 
@@ -256,7 +258,7 @@ impl PocketIdProvisioner {
             .await
             .map_err(|e| ProvisionerError::ApiError(format!("parse token response: {e}")))?;
 
-        tracing::info!(user_id, token = %token_data.token, "PocketID one-time access token created successfully");
+        tracing::info!(user_id, "PocketID one-time access token created successfully");
         Ok(token_data.token)
     }
 }

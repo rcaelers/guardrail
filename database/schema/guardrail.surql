@@ -443,7 +443,11 @@ DEFINE TABLE OVERWRITE users SCHEMAFULL
 		FOR select WHERE fn::auth::is_admin()
 			OR username = fn::auth::username()
 			OR fn::auth::shares_admin_product_with_user(id)
-		FOR create WHERE fn::auth::is_admin() OR is_admin = false
+		-- Only admins may create users through an RLS-scoped connection. Just-in-time
+		-- provisioning (OIDC login / invitations) runs on the root connection, which
+		-- bypasses RLS, so it is unaffected. The previous `OR is_admin = false` let
+		-- any principal — including the anonymous role — insert non-admin user rows.
+		FOR create WHERE fn::auth::is_admin()
 		FOR update WHERE fn::auth::is_admin()
 			OR (id = fn::auth::user_id() AND is_admin = false)
 		FOR delete WHERE fn::auth::is_admin();

@@ -210,8 +210,10 @@ fn not_found(what: &str) -> (StatusCode, String) {
     (StatusCode::NOT_FOUND, format!("not found: {what}"))
 }
 fn server_error(e: impl std::fmt::Display) -> (StatusCode, String) {
+    // Keep full detail in the server log, but never leak DB internals (query
+    // structure, record ids, driver errors) to the client.
     tracing::error!("db_api: {e}");
-    (StatusCode::INTERNAL_SERVER_ERROR, format!("db error: {e}"))
+    (StatusCode::INTERNAL_SERVER_ERROR, "internal error".to_string())
 }
 
 /// Converts an `access` module error into the `(StatusCode, String)` tuple
@@ -230,7 +232,7 @@ fn storage_error(err: object_store::Error) -> (StatusCode, String) {
         object_store::Error::NotFound { .. } => not_found("attachment object"),
         other => {
             tracing::error!("db_api storage: {other}");
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("storage error: {other}"))
+            (StatusCode::INTERNAL_SERVER_ERROR, "internal error".to_string())
         }
     }
 }
@@ -306,6 +308,32 @@ async fn product_id_for_symbol(
                 .map(String::from)
         })
         .ok_or_else(|| not_found(symbol_id))
+}
+
+/// Reduce an untrusted string to a safe single object-storage path segment:
+/// keep only `[A-Za-z0-9._-]`, replace anything else (including `/` and `\`)
+/// with `_`, and never allow a `..` traversal or an empty result.
+fn sanitize_path_segment(input: &str) -> String {
+    let mut out: String = input
+        .chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .take(128)
+        .collect();
+    while out.contains("..") {
+        out = out.replace("..", "_");
+    }
+    let trimmed = out.trim_matches('.').to_string();
+    if trimmed.is_empty() {
+        "unknown".to_string()
+    } else {
+        trimmed
+    }
 }
 
 fn avatar_initials(name: &str) -> String {
@@ -2053,6 +2081,13 @@ async fn download_attachment(
     response
         .headers_mut()
         .insert(header::CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    // Attachments carry attacker-controlled content and MIME type. Combined with
+    // the forced `attachment` disposition above, prevent the browser from
+    // MIME-sniffing the body into an executable/HTML type.
+    response.headers_mut().insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
     Ok(response)
 }
 
@@ -2313,7 +2348,9 @@ async fn upload_symbol(
     let id = uuid::Uuid::new_v4().to_string();
     let module_id = body.name;
     let build_id = uuid::Uuid::new_v4().to_string();
-    let storage_path = format!("symbols/{module_id}-{build_id}");
+    // `module_id` is client-supplied; never interpolate it raw into a storage
+    // key or it could escape the `symbols/` prefix via `/` or `..`.
+    let storage_path = format!("symbols/{}-{build_id}", sanitize_path_segment(&module_id));
 
     let rows = run_value(
         &db,
@@ -2675,9 +2712,10 @@ mod tests {
     fn local_error_helpers_return_expected_statuses() {
         assert_eq!(bad("bad"), (StatusCode::BAD_REQUEST, "bad".to_string()));
         assert_eq!(not_found("thing"), (StatusCode::NOT_FOUND, "not found: thing".to_string()));
+        // Detail is logged, not returned: clients get a generic message.
         assert_eq!(
             server_error("boom"),
-            (StatusCode::INTERNAL_SERVER_ERROR, "db error: boom".to_string())
+            (StatusCode::INTERNAL_SERVER_ERROR, "internal error".to_string())
         );
         assert_eq!(
             access_err(crate::error::AppError::Forbidden),
@@ -2691,6 +2729,20 @@ mod tests {
             access_err(crate::error::AppError::failure("bad")),
             (StatusCode::INTERNAL_SERVER_ERROR, "internal error".to_string())
         );
+    }
+
+    #[test]
+    fn sanitize_path_segment_blocks_traversal_and_separators() {
+        assert_eq!(sanitize_path_segment("libfoo.so"), "libfoo.so");
+        assert_eq!(sanitize_path_segment("ABC123-_."), "ABC123-_");
+        // Path separators and traversal are neutralized.
+        assert!(!sanitize_path_segment("../../etc/passwd").contains('/'));
+        assert!(!sanitize_path_segment("../../etc/passwd").contains(".."));
+        assert!(!sanitize_path_segment("a/b\\c").contains(['/', '\\']));
+        // Never empty, never a traversal.
+        assert_eq!(sanitize_path_segment(""), "unknown");
+        let dots = sanitize_path_segment("...");
+        assert!(!dots.is_empty() && !dots.contains(".."));
     }
 
     #[test]
