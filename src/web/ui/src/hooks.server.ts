@@ -5,10 +5,59 @@ import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { createAdapter } from '$lib/adapters';
 
+const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+function newCsrfToken(): string {
+  return crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
+}
+
 export const handle: Handle = async ({ event, resolve }) => {
   const start = Date.now();
   const { method } = event.request;
   const path = event.url.pathname + event.url.search;
+
+  // --- CSRF: double-submit token ----------------------------------------
+  // Ensure a readable token cookie exists, then require every mutating request
+  // to echo it (x-csrf-token header, or a __csrf form field as a fallback).
+  // Cross-site callers can neither read the cookie nor set the header, so they
+  // cannot forge a matching pair. The client patches fetch to send the header.
+  const secure =
+    event.url.protocol === 'https:' ||
+    event.request.headers.get('x-forwarded-proto') === 'https';
+  let csrfToken = event.cookies.get('csrf');
+  if (!csrfToken) {
+    csrfToken = newCsrfToken();
+    event.cookies.set('csrf', csrfToken, {
+      path: '/',
+      httpOnly: false,
+      sameSite: 'lax',
+      secure,
+      maxAge: 60 * 60 * 24 * 7
+    });
+  }
+  if (MUTATING_METHODS.has(method)) {
+    let provided = event.request.headers.get('x-csrf-token');
+    if (!provided) {
+      const contentType = event.request.headers.get('content-type') ?? '';
+      if (
+        contentType.includes('form-urlencoded') ||
+        contentType.includes('multipart/form-data')
+      ) {
+        try {
+          const field = (await event.request.clone().formData()).get('__csrf');
+          provided = typeof field === 'string' ? field : null;
+        } catch {
+          provided = null;
+        }
+      }
+    }
+    if (!provided || provided !== csrfToken) {
+      console.warn(
+        JSON.stringify({ level: 'WARN', message: 'CSRF validation failed', method, uri: path })
+      );
+      return new Response('CSRF validation failed', { status: 403 });
+    }
+  }
 
   console.log(
     JSON.stringify({

@@ -1,7 +1,11 @@
 <script lang="ts">
   import '../app.css';
   import { browser } from '$app/environment';
+  import { installCsrfFetch } from '$lib/csrf';
   import type { LayoutData } from './$types';
+
+  // Attach the CSRF header to same-origin mutating fetches app-wide.
+  installCsrfFetch();
 
   let { data, children }: { data: LayoutData; children: any } = $props();
 
