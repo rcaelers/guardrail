@@ -42,6 +42,18 @@ fn convert(s: &str) -> &str {
     s
 }
 
+/// `module_id` and `build_id` come from the attacker-controlled minidump and are
+/// interpolated into object-store keys. Reject anything that is not a safe single
+/// path segment so a crafted module can't address objects outside the `symbols/`
+/// prefix — notably on filesystem-backed stores, where a `..` segment traverses.
+///
+/// This rejects rather than rewrites: rewriting on the read path (as the upload
+/// side does) would mismatch symbols legitimately stored under names containing
+/// characters like `+` (e.g. `libstdc++`).
+fn is_safe_path_segment(s: &str) -> bool {
+    !s.is_empty() && s != "." && s != ".." && !s.contains('/') && !s.contains('\\')
+}
+
 #[async_trait]
 impl SymbolSupplier for S3SymbolSupplier {
     async fn locate_symbols(
@@ -56,6 +68,15 @@ impl SymbolSupplier for S3SymbolSupplier {
             .and_then(|f| f.to_str())
             .ok_or(SymbolError::NotFound)?
             .to_string();
+
+        if !is_safe_path_segment(&module_id) || !is_safe_path_segment(&build_id) {
+            error!(
+                module_id = %module_id,
+                build_id = %build_id,
+                "Rejecting unsafe symbol path segment from minidump"
+            );
+            return Err(SymbolError::NotFound);
+        }
 
         info!("Searching symbols for module_id: {}, build_id: {}", module_id, build_id);
 
@@ -114,6 +135,18 @@ mod test {
     use tracing::info;
 
     use super::*;
+
+    #[test]
+    fn is_safe_path_segment_rejects_traversal_and_separators() {
+        assert!(super::is_safe_path_segment("crash.pdb"));
+        assert!(super::is_safe_path_segment("libstdc++.so.6"));
+        assert!(super::is_safe_path_segment("EE9E2672A6863B084C4C44205044422E1"));
+        assert!(!super::is_safe_path_segment(""));
+        assert!(!super::is_safe_path_segment("."));
+        assert!(!super::is_safe_path_segment(".."));
+        assert!(!super::is_safe_path_segment("a/b"));
+        assert!(!super::is_safe_path_segment("a\\b"));
+    }
 
     #[tokio::test]
     async fn get_symbols_object_and_parse_symbols_report_failures() {
