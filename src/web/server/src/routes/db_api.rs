@@ -288,6 +288,28 @@ async fn crash_product_and_group(
         .ok_or_else(|| not_found(crash_id))
 }
 
+async fn product_id_for_attachment(
+    db: &Surreal<Any>,
+    attachment_id: &str,
+) -> Result<String, (StatusCode, String)> {
+    let rows = run_value(
+        db,
+        "SELECT meta::id(product_id) AS productId
+         FROM ONLY type::record('attachments', $id)",
+        vec![("id", Value::String(attachment_id.to_string()))],
+    )
+    .await?;
+    rows.into_iter()
+        .next()
+        .filter(|v| !v.is_null())
+        .and_then(|row| {
+            row.get("productId")
+                .and_then(|v| v.as_str())
+                .map(String::from)
+        })
+        .ok_or_else(|| not_found(attachment_id))
+}
+
 async fn product_id_for_symbol(
     db: &Surreal<Any>,
     symbol_id: &str,
@@ -2027,6 +2049,14 @@ async fn download_attachment(
     session: Session,
     Path(id): Path<String>,
 ) -> Result<Response, (StatusCode, String)> {
+    // Attachments may contain PII and are never exposed for public products.
+    // Enforce the readonly product role explicitly (defense in depth on top of
+    // the RLS gate) before reading the object. Map an authz failure to 404 so we
+    // don't disclose the existence of attachments the caller can't access.
+    let product_id = product_id_for_attachment(&s.repo.db, &id).await?;
+    crate::access::require_session_product_role(&session, &s.repo.db, &product_id, "readonly")
+        .await
+        .map_err(|_| not_found(&id))?;
     let db = s.user_db(&session).await?;
     let rows = run_value(
         &db,

@@ -469,14 +469,18 @@ DEFINE TABLE OVERWRITE crash_groups SCHEMAFULL
 		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
 		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
+-- Annotations and attachments can hold user-submitted PII (memory dumps, URLs,
+-- comments), so they are NOT exposed for public products: reading them requires
+-- at least the `readonly` product role. Public products still expose crash
+-- groups/signatures/counts (crash_groups, crashes, symbols) for anonymous view.
 DEFINE TABLE OVERWRITE annotations SCHEMAFULL
 	PERMISSIONS
-		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
+		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
 		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE TABLE OVERWRITE attachments SCHEMAFULL
 	PERMISSIONS
-		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
+		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
 		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE TABLE OVERWRITE symbols SCHEMAFULL
