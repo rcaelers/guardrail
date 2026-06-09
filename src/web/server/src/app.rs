@@ -199,11 +199,19 @@ impl GuardrailWebApp {
         let state = &self.state;
         let settings = &state.settings;
 
+        // Mark the session cookie `Secure` based on the public URL scheme, not on
+        // whether the app itself terminates TLS. With TLS terminating at an
+        // ingress/proxy the app speaks plain HTTP but is still reached over HTTPS,
+        // so keying off local TLS material would wrongly ship a non-Secure session
+        // cookie. `base_url` is the canonical externally-visible URL, so an
+        // `https://` scheme there means the browser uses a secure transport; a
+        // local `http://localhost` dev deployment keeps cookies usable.
         let use_secure_cookies = settings
             .ingress
-            .public_key
-            .as_deref()
-            .is_some_and(|pem| !pem.is_empty());
+            .base_url
+            .trim()
+            .to_ascii_lowercase()
+            .starts_with("https://");
 
         let session_layer = SessionManagerLayer::new(MemoryStore::default())
             .with_name("guardrail")
