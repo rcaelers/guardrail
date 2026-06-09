@@ -77,6 +77,11 @@ DEFINE TABLE users SCHEMAFULL;
 
 DEFINE FIELD username ON TABLE users TYPE string ASSERT $value != NONE AND $value != "";
 DEFINE FIELD email ON TABLE users TYPE string ASSERT $value != NONE AND $value != "";
+-- Stable identity from the identity provider (OIDC `sub`). Logins are matched
+-- on this immutable value, never on the mutable username/email claims. Optional
+-- so the seeded `anonymous` record and not-yet-linked legacy accounts remain
+-- valid; the application enforces one user per `sub`.
+DEFINE FIELD sub ON TABLE users TYPE option<string>;
 DEFINE FIELD name ON TABLE users TYPE string ASSERT $value != NONE DEFAULT "";
 DEFINE FIELD avatar ON TABLE users TYPE string ASSERT $value != NONE DEFAULT "";
 DEFINE FIELD is_admin ON TABLE users TYPE bool ASSERT $value != NONE DEFAULT false;
@@ -86,6 +91,10 @@ DEFINE FIELD updated_at ON TABLE users TYPE datetime ASSERT $value != NONE DEFAU
 
 DEFINE INDEX idx_users_username ON TABLE users COLUMNS username UNIQUE;
 DEFINE INDEX idx_users_email ON TABLE users COLUMNS email UNIQUE;
+-- Non-unique to tolerate multiple `sub = NONE` rows (anonymous + unlinked legacy
+-- accounts). Uniqueness of set values is enforced in application code, which
+-- looks up by `sub` before creating. Promote to UNIQUE once all rows are linked.
+DEFINE INDEX idx_users_sub ON TABLE users COLUMNS sub;
 
 -- ============================================================
 -- User Access (per-product role membership)
@@ -349,9 +358,12 @@ DEFINE FUNCTION OVERWRITE fn::auth::user_id() -> option<record<users>> {
 };
 
 DEFINE FUNCTION OVERWRITE fn::auth::is_admin() -> bool {
+	-- Admin status is determined solely by the server-issued `is_admin` claim
+	-- and the persisted `is_admin` flag. There is deliberately no magic-username
+	-- shortcut: a username is attacker-influenceable (OIDC `preferred_username`),
+	-- so granting admin to anyone called "admin" was a privilege-escalation hole.
 	RETURN $auth.is_admin = true
 		OR $token.is_admin = true
-		OR fn::auth::username() = "admin"
 		OR array::len((
 			SELECT VALUE id
 			FROM users

@@ -50,6 +50,42 @@ impl UserRepo {
         Ok(users.into_iter().next())
     }
 
+    /// Look up a user by their identity-provider subject (OIDC `sub`). This is
+    /// the only identity match that should be trusted for authentication: `sub`
+    /// is immutable, unlike username/email.
+    pub async fn get_by_sub(db: &Surreal<Any>, sub: &str) -> Result<Option<User>, RepoError> {
+        let mut result = db
+            .query("SELECT *, meta::id(id) as id FROM users WHERE sub = $sub LIMIT 1")
+            .bind(("sub", sub.to_owned()))
+            .await
+            .map_err(handle_surreal_error)?;
+        let users: Vec<User> = crate::take_many(&mut result, 0)?;
+        Ok(users.into_iter().next())
+    }
+
+    /// Bind an existing (legacy, sub-less) user record to an identity-provider
+    /// subject. Only updates rows whose `sub` is still unset, so a linked
+    /// account can never be re-pointed at a different `sub`.
+    pub async fn link_sub(
+        db: &Surreal<Any>,
+        user_id: &str,
+        sub: &str,
+    ) -> Result<bool, RepoError> {
+        let mut result = db
+            .query(
+                "UPDATE type::record('users', $id)
+                 SET sub = $sub, updated_at = time::now()
+                 WHERE sub = NONE
+                 RETURN meta::id(id) as id",
+            )
+            .bind(("id", record_key(user_id)))
+            .bind(("sub", sub.to_owned()))
+            .await
+            .map_err(handle_surreal_error)?;
+        let rows: Vec<serde_json::Value> = result.take(0).map_err(handle_surreal_error)?;
+        Ok(!rows.is_empty())
+    }
+
     pub async fn get_by_email(db: &Surreal<Any>, email: &str) -> Result<Option<User>, RepoError> {
         let mut result = db
             .query("SELECT *, meta::id(id) as id FROM users WHERE email = $email LIMIT 1")
@@ -135,6 +171,7 @@ impl UserRepo {
                 name: $name,
                 avatar: $avatar,
                 is_admin: $is_admin,
+                sub: $sub,
                 created_at: time::now(),
                 updated_at: time::now(),
             }",
@@ -145,6 +182,7 @@ impl UserRepo {
             .bind(("name", name))
             .bind(("avatar", avatar))
             .bind(("is_admin", user.is_admin))
+            .bind(("sub", user.sub.clone()))
             .await
             .map_err(handle_surreal_error)?
             .take(0)

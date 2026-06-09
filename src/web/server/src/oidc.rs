@@ -425,17 +425,40 @@ async fn get_or_create_local_user(
         .await
         .map_err(AppError::internal)?;
 
-    // Look up by username first, then fall back to email if the OIDC provider
-    // returns an email as the username but the stored record uses a different username.
-    let existing = repos::user::UserRepo::get_by_name(&state.repo.db, username)
+    // Trusted identity match: the immutable OIDC `sub`. Never authenticate based
+    // on the mutable `preferred_username`/`email` claims — doing so would let
+    // anyone who can set those claims at the IdP log in as an existing user.
+    let mut existing = repos::user::UserRepo::get_by_sub(&state.repo.db, sub)
         .await
-        .map_err(AppError::internal)?
-        .or(match email {
+        .map_err(AppError::internal)?;
+
+    // First-login / legacy linking: accounts provisioned before sub-binding (or
+    // created via the admin UI) have no `sub` yet. Claim such an account by email,
+    // then username, but ONLY while it is still unlinked. `link_sub` updates only
+    // when `sub = NONE`, so an account already bound to a different `sub` can
+    // never be re-pointed here.
+    if existing.is_none() {
+        let mut candidate = match email {
             Some(e) => repos::user::UserRepo::get_by_email(&state.repo.db, e)
                 .await
                 .map_err(AppError::internal)?,
             None => None,
-        });
+        };
+        if candidate.is_none() {
+            candidate = repos::user::UserRepo::get_by_name(&state.repo.db, username)
+                .await
+                .map_err(AppError::internal)?;
+        }
+        if let Some(candidate) = candidate
+            && candidate.sub.is_none()
+            && repos::user::UserRepo::link_sub(&state.repo.db, &candidate.id, sub)
+                .await
+                .map_err(AppError::internal)?
+        {
+            tracing::info!(user_id = %candidate.id, "linked legacy account to OIDC sub on login");
+            existing = Some(candidate);
+        }
+    }
 
     if let Some(user) = existing {
         if let Some(pa) = pending {
@@ -478,6 +501,7 @@ async fn get_or_create_local_user(
             email: email.map(str::to_string),
             name: Some(display_name.clone()),
             is_admin: pa.is_admin,
+            sub: Some(sub.to_owned()),
         },
     )
     .await

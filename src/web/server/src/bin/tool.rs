@@ -682,6 +682,8 @@ async fn run_user(
                             pocket_user.last_name.as_deref(),
                         )),
                         is_admin: args.admin,
+                        // PocketID's user id is the OIDC `sub`.
+                        sub: Some(pocket_user.id.clone()),
                     },
                 )
                 .await?;

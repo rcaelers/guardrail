@@ -217,6 +217,7 @@ pub async fn create_test_user(db: &Surreal<Any>, username: &str, is_admin: bool)
         email: None,
         name: None,
         is_admin,
+        sub: None,
     };
 
     let user_id = UserRepo::create(db, new_user)
@@ -237,6 +238,7 @@ pub async fn create_random_test_user(db: &Surreal<Any>) -> String {
         email: None,
         name: None,
         is_admin: false,
+        sub: None,
     };
 
     UserRepo::create(db, new_user)

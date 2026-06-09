@@ -11,6 +11,7 @@ use std::time::Duration;
 use tower_http::CompressionLevel;
 use tower_http::compression::CompressionLayer;
 use tower_http::decompression::RequestDecompressionLayer;
+use tower_http::limit::RequestBodyLimitLayer;
 use tower_http::sensitive_headers::SetSensitiveRequestHeadersLayer;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnRequest, DefaultOnResponse, TraceLayer};
@@ -76,6 +77,12 @@ impl GuardrailIngestionApp {
         Router::new()
             .nest("/api", routes::routes(self.state.clone()).await)
             .layer(SetSensitiveRequestHeadersLayer::new(once(AUTHORIZATION)))
+            // Bound the *decompressed* request body. This layer sits inner to
+            // RequestDecompressionLayer, so it counts post-decompression bytes
+            // and stops a small `Content-Encoding: gzip` bomb from expanding into
+            // an unbounded stream to S3. axum's DefaultBodyLimit below caps the
+            // raw/compressed body but does not reliably bound streaming Multipart.
+            .layer(RequestBodyLimitLayer::new(MAX_UPLOAD_BYTES))
             .layer(RequestDecompressionLayer::new())
             .layer(CompressionLayer::new().quality(CompressionLevel::Fastest))
             .layer(DefaultBodyLimit::max(MAX_UPLOAD_BYTES))

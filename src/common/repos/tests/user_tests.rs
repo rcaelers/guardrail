@@ -132,6 +132,7 @@ async fn test_create_user() {
         email: None,
         name: None,
         is_admin: false,
+        sub: None,
     };
 
     let user_id = UserRepo::create(&db, new_user.clone())
