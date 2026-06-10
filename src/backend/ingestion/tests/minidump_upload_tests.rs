@@ -1039,6 +1039,48 @@ async fn test_minidump_upload_rejects_mismatched_product_annotation() {
 }
 
 #[tokio::test]
+async fn test_minidump_upload_overwrites_spoofed_product_annotation() {
+    // With no validation script to reject a mismatch, a client-submitted `product`
+    // annotation that disagrees with the token-resolved product must still NOT be
+    // persisted: the stored value is the trusted, token-derived product name.
+    let store: Arc<dyn ObjectStore> = Arc::new(object_store::memory::InMemory::new());
+    let cache = create_test_product_cache_with(vec![("TestProduct", true)]);
+    let (app, store, boundary, _worker, _body) =
+        setup_with_storage_and_cache(store, cache).await;
+
+    let body = create_body_from_config(&MinidumpBodyConfig {
+        boundary: &boundary,
+        product: Some("SpoofedProduct"),
+        ..Default::default()
+    });
+
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/api/minidump/{TEST_TOKEN}/upload"))
+        .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+        .body(Body::from(body))
+        .unwrap();
+
+    let result = assert_response_ok(app.oneshot(request).await.unwrap()).await;
+    let crash_id = result["crash_id"].as_str().unwrap();
+
+    let bytes = store
+        .get(&Path::from(format!("crashes/{crash_id}.json")))
+        .await
+        .expect("crash info object")
+        .bytes()
+        .await
+        .expect("crash info bytes");
+    let crash_info: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+
+    assert_eq!(
+        crash_info["annotations"]["product"]["value"].as_str().unwrap(),
+        "TestProduct",
+        "client-submitted product annotation must be overwritten with the token product"
+    );
+}
+
+#[tokio::test]
 async fn test_minidump_upload_per_product_validation_script() {
     // Script in the product cache runs and its annotation side-effect is observable.
     let script_content = r#"

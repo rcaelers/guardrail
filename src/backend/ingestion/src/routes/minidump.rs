@@ -383,6 +383,19 @@ impl MinidumpApi {
         Self::validate_mandatory_annotations(crash_info, &product.mandatory_annotations)?;
         Self::run_validation_scripts(crash_info, &product.validation_scripts)?;
 
+        // Re-assert the server-controlled `product` annotation. Validation scripts
+        // above intentionally saw any client-submitted `product` value (so they can
+        // reject mismatches), but the persisted value must always be the trusted,
+        // token-derived product name — a client annotation can otherwise overwrite
+        // it during field processing.
+        crash_info.annotations.insert(
+            "product".to_string(),
+            AnnotationEntry {
+                value: product.name.clone(),
+                source: "submission".to_string(),
+            },
+        );
+
         let mut crash_info_json = serde_json::to_value(&crash_info).map_err(|e| {
             error!(error = ?e, "Failed to serialize crash info");
             ApiError::Failure("failed to serialize crash info".to_string())
