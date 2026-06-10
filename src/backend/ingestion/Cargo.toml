@@ -48,3 +48,4 @@ redis.workspace = true
 [dev-dependencies]
 testware = { path = "../testware" }
 mockall.workspace = true
+flate2 = "1"

@@ -9,6 +9,60 @@ use repos::user::*;
 
 use testware::create_test_user;
 
+// Regression for sub-based identity binding: logins are matched on the immutable
+// OIDC `sub`, and an account already bound to a sub can never be re-pointed.
+#[tokio::test]
+async fn get_by_sub_and_link_sub_enforce_single_binding() {
+    let db = TestSetup::create_db().await;
+
+    let bound = UserRepo::create(
+        &db,
+        NewUser {
+            username: "bound".to_string(),
+            email: Some("bound@example.com".to_string()),
+            name: None,
+            is_admin: false,
+            sub: Some("sub-1".to_string()),
+        },
+    )
+    .await
+    .expect("create bound user");
+
+    assert_eq!(
+        UserRepo::get_by_sub(&db, "sub-1").await.unwrap().unwrap().id,
+        bound
+    );
+    assert!(UserRepo::get_by_sub(&db, "unknown-sub").await.unwrap().is_none());
+
+    // A legacy account with no sub can be claimed once...
+    let legacy = UserRepo::create(
+        &db,
+        NewUser {
+            username: "legacy".to_string(),
+            email: Some("legacy@example.com".to_string()),
+            name: None,
+            is_admin: false,
+            sub: None,
+        },
+    )
+    .await
+    .expect("create legacy user");
+
+    assert!(UserRepo::link_sub(&db, &legacy, "sub-2").await.unwrap());
+    assert_eq!(
+        UserRepo::get_by_sub(&db, "sub-2").await.unwrap().unwrap().id,
+        legacy
+    );
+
+    // ...but a now-bound account cannot be re-pointed at a different sub.
+    assert!(!UserRepo::link_sub(&db, &legacy, "sub-evil").await.unwrap());
+    assert_eq!(
+        UserRepo::get_by_sub(&db, "sub-2").await.unwrap().unwrap().id,
+        legacy
+    );
+    assert!(UserRepo::get_by_sub(&db, "sub-evil").await.unwrap().is_none());
+}
+
 #[tokio::test]
 async fn test_get_by_id() {
     let db = TestSetup::create_db().await;

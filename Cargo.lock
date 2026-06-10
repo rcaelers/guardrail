@@ -2930,6 +2930,7 @@ dependencies = [
  "common",
  "data-encoding",
  "fancy-regex",
+ "flate2",
  "futures",
  "log",
  "mockall",
