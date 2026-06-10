@@ -1,0 +1,12 @@
+id = "20260610000000__hardening"
+name = "hardening"
+source_schema_hash = "62fb3ede19e2d358c89f6ad3b2fb34f891bd91118bee4f9ce143067102cfb893"
+target_schema_hash = "c6e094e4c5a55a9ec173d50e1313246eb8afa4d5dca04b4b0af4422c9b5145cc"
+compatibility = "phased"
+renames = []
+
+[[steps]]
+id = "apply_hardening_schema"
+phase = "start"
+kind = "apply_schema"
+files = ["database/schema/guardrail.surql"]
