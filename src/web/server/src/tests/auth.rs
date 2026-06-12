@@ -91,6 +91,8 @@ async fn test_get_real_user() {
 // | ----------------------- | -------- |
 // | no_session              | 403      |
 // | non_admin               | 403      |
+// | admin, cross-origin     | 403      |
+// | admin, missing origin   | 403      |
 // | already impersonating   | 400      |
 // | admin impersonates self | 400      |
 // | admin missing target    | 404      |
@@ -103,6 +105,25 @@ async fn test_start_impersonation() {
 
     // no session → 403
     assert_eq!(app.call("POST", &target_uri, None, None).await, StatusCode::FORBIDDEN);
+    // cross-origin and origin-less requests → 403, even as admin: this native-
+    // form route bypasses the SvelteKit CSRF hook, so the server checks Origin.
+    let req = Request::builder()
+        .method("POST")
+        .uri(&target_uri)
+        .header("origin", "https://evil.example")
+        .header("cookie", &f.admin)
+        .body(Body::empty())
+        .unwrap();
+    let (status, _, _) = app.send(req).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let req = Request::builder()
+        .method("POST")
+        .uri(&target_uri)
+        .header("cookie", &f.admin)
+        .body(Body::empty())
+        .unwrap();
+    let (status, _, _) = app.send(req).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
     // non-admin → 403
     assert_eq!(
         app.call("POST", &target_uri, None, Some(&f.non_admin))
@@ -128,6 +149,7 @@ async fn test_start_impersonation() {
     let req = Request::builder()
         .method("POST")
         .uri(&target_uri)
+        .header("origin", TEST_ORIGIN)
         .header("cookie", &f.admin)
         .body(Body::empty())
         .unwrap();
@@ -145,6 +167,7 @@ async fn test_start_impersonation() {
 // | no_session                  | 403      |
 // | admin not impersonating     | 400      |
 // | non_admin not impersonating | 400      |
+// | imp_admin, cross-origin     | 403      |
 // | imp_admin                   | 303      |
 // | imp_non_admin               | 303      |
 #[tokio::test]
@@ -168,10 +191,21 @@ async fn test_stop_impersonation() {
             .await,
         StatusCode::BAD_REQUEST
     );
+    // cross-origin → 403 even while impersonating (Origin check, see above)
+    let req = Request::builder()
+        .method("POST")
+        .uri("/auth/impersonate/stop")
+        .header("origin", "https://evil.example")
+        .header("cookie", &f.imp_admin)
+        .body(Body::empty())
+        .unwrap();
+    let (status, _, _) = app.send(req).await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
     // impersonating → 303
     let req = Request::builder()
         .method("POST")
         .uri("/auth/impersonate/stop")
+        .header("origin", TEST_ORIGIN)
         .header("cookie", &f.imp_admin)
         .body(Body::empty())
         .unwrap();
@@ -180,6 +214,7 @@ async fn test_stop_impersonation() {
     let req = Request::builder()
         .method("POST")
         .uri("/auth/impersonate/stop")
+        .header("origin", TEST_ORIGIN)
         .header("cookie", &f.imp_non_admin)
         .body(Body::empty())
         .unwrap();

@@ -6,16 +6,20 @@
 // manual `?/action` fetches, and `/logout`), so patching `fetch` once attaches
 // the header everywhere without touching individual forms.
 //
-// (The only native, non-fetch form posts to the Rust `/auth/*` routes, which are
-// a separate origin concern guarded by SameSite=Lax, not by this token.)
+// (The only native, non-fetch form posts go to the Rust `/auth/*` routes, which
+// bypass the SvelteKit server entirely; those are guarded by SameSite=Lax plus
+// a server-side Origin check, not by this token.)
 
 import { browser } from '$app/environment';
 
-const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+export const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+export const CSRF_COOKIE = 'csrf';
+export const CSRF_HEADER = 'x-csrf-token';
+export const CSRF_FIELD = '__csrf';
 
 export function readCsrfToken(): string | null {
   if (!browser) return null;
-  const match = document.cookie.match(/(?:^|;\s*)csrf=([^;]+)/);
+  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${CSRF_COOKIE}=([^;]+)`));
   return match ? decodeURIComponent(match[1]) : null;
 }
 
@@ -34,7 +38,7 @@ export function installCsrfFetch(): void {
         init?.method ?? (input instanceof Request ? input.method : 'GET')
       ).toUpperCase();
 
-      if (MUTATING.has(method)) {
+      if (MUTATING_METHODS.has(method)) {
         const url = input instanceof Request ? input.url : String(input);
         const sameOrigin =
           url.startsWith('/') || url.startsWith('?') || url.startsWith(location.origin);
@@ -44,8 +48,8 @@ export function installCsrfFetch(): void {
           const headers = new Headers(
             init?.headers ?? (input instanceof Request ? input.headers : undefined)
           );
-          if (!headers.has('x-csrf-token')) {
-            headers.set('x-csrf-token', token);
+          if (!headers.has(CSRF_HEADER)) {
+            headers.set(CSRF_HEADER, token);
           }
           init = { ...(init ?? {}), headers };
         }

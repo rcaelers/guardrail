@@ -28,6 +28,10 @@ use uuid::Uuid;
 
 pub(super) type Db = surrealdb::Surreal<surrealdb::engine::any::Any>;
 
+/// Public origin the test app is configured with (`ingress.base_url`); the
+/// harness sends it as `Origin` on mutating requests, like a browser would.
+pub(super) const TEST_ORIGIN: &str = "http://guardrail.test";
+
 // ---------------------------------------------------------------------------
 // Test harness
 // ---------------------------------------------------------------------------
@@ -168,6 +172,7 @@ impl TestApp {
         let mut settings = crate::settings::Settings::test_default();
         settings.database.namespace = "test".to_string();
         settings.database.database = "test".to_string();
+        settings.ingress.base_url = TEST_ORIGIN.to_string();
         mutate_settings(&mut settings);
         let settings = Arc::new(settings);
         let storage_inner = Arc::new(InMemory::new());
@@ -282,6 +287,9 @@ impl TestApp {
         cookie: Option<&str>,
     ) -> (StatusCode, Bytes) {
         let mut b = Request::builder().method(method).uri(uri);
+        if matches!(method, "POST" | "PUT" | "PATCH" | "DELETE") {
+            b = b.header("origin", TEST_ORIGIN);
+        }
         if body.is_some() {
             b = b.header("content-type", "application/json");
         }
