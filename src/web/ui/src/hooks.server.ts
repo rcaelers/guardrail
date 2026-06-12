@@ -4,8 +4,7 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import { createAdapter } from '$lib/adapters';
-
-const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+import { CSRF_COOKIE, CSRF_FIELD, CSRF_HEADER, MUTATING_METHODS } from '$lib/csrf';
 
 function newCsrfToken(): string {
   return crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
@@ -24,10 +23,10 @@ export const handle: Handle = async ({ event, resolve }) => {
   const secure =
     event.url.protocol === 'https:' ||
     event.request.headers.get('x-forwarded-proto') === 'https';
-  let csrfToken = event.cookies.get('csrf');
+  let csrfToken = event.cookies.get(CSRF_COOKIE);
   if (!csrfToken) {
     csrfToken = newCsrfToken();
-    event.cookies.set('csrf', csrfToken, {
+    event.cookies.set(CSRF_COOKIE, csrfToken, {
       path: '/',
       httpOnly: false,
       sameSite: 'lax',
@@ -36,7 +35,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     });
   }
   if (MUTATING_METHODS.has(method)) {
-    let provided = event.request.headers.get('x-csrf-token');
+    let provided = event.request.headers.get(CSRF_HEADER);
     if (!provided) {
       const contentType = event.request.headers.get('content-type') ?? '';
       if (
@@ -44,7 +43,7 @@ export const handle: Handle = async ({ event, resolve }) => {
         contentType.includes('multipart/form-data')
       ) {
         try {
-          const field = (await event.request.clone().formData()).get('__csrf');
+          const field = (await event.request.clone().formData()).get(CSRF_FIELD);
           provided = typeof field === 'string' ? field : null;
         } catch {
           provided = null;

@@ -13,7 +13,8 @@ use data::user::{NewUser, User};
 
 pub struct UserRepo {}
 
-fn avatar_initials(name: &str) -> String {
+/// Derive a one-or-two-letter avatar from a display name ("U" when empty).
+pub fn avatar_initials(name: &str) -> String {
     let avatar = name
         .split_whitespace()
         .filter_map(|w| w.chars().next())

@@ -19,6 +19,7 @@ use axum::{
 };
 use chrono::Utc;
 use object_store::{ObjectStoreExt, path::Path as ObjectPath};
+use repos::user::avatar_initials;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use surrealdb::Surreal;
@@ -336,7 +337,7 @@ async fn product_id_for_symbol(
 /// keep only `[A-Za-z0-9._-]`, replace anything else (including `/` and `\`)
 /// with `_`, and never allow a `..` traversal or an empty result.
 fn sanitize_path_segment(input: &str) -> String {
-    let mut out: String = input
+    let out: String = input
         .chars()
         .map(|c| {
             if c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-') {
@@ -347,28 +348,13 @@ fn sanitize_path_segment(input: &str) -> String {
         })
         .take(128)
         .collect();
-    while out.contains("..") {
-        out = out.replace("..", "_");
-    }
+    // One pass suffices: replacing ".." with "_" can never form a new "..".
+    let out = out.replace("..", "_");
     let trimmed = out.trim_matches('.').to_string();
     if trimmed.is_empty() {
         "unknown".to_string()
     } else {
         trimmed
-    }
-}
-
-fn avatar_initials(name: &str) -> String {
-    let avatar = name
-        .split_whitespace()
-        .filter_map(|w| w.chars().next())
-        .take(2)
-        .collect::<String>()
-        .to_uppercase();
-    if avatar.is_empty() {
-        "U".to_string()
-    } else {
-        avatar
     }
 }
 
