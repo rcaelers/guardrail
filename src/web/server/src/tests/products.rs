@@ -384,20 +384,29 @@ async fn test_list_products() {
 // | ------ | ------------------------------ |
 // | GET    | /products/{product_id}/members |
 // Cases:
-// | Auth context | Expected |
-// | ------------ | -------- |
-// | no_session   | 200      |
-// | admin        | 200      |
-// | non_admin    | 200      |
+// | Auth/product role          | Expected |
+// | -------------------------- | -------- |
+// | no_session                 | 403      |
+// | admin                      | 200      |
+// | non_admin: member (ro)     | 200      |
+// | non_admin: no access       | 403      |
 #[tokio::test]
 async fn test_list_members() {
     let app = TestApp::new().await;
     let f = Fixture::setup(&app).await;
+    // products[0] (p_ro): admin and non_admin both have readonly access.
     let uri = format!("/products/{}/members", f.products[0].id);
-    // list_members has no auth guard — RLS scopes results
+    // Viewing requires product membership (any role); RLS still scopes rows.
     assert_eq!(app.call("GET", &uri, None, Some(&f.admin)).await, StatusCode::OK);
     assert_eq!(app.call("GET", &uri, None, Some(&f.non_admin)).await, StatusCode::OK);
-    assert_eq!(app.call("GET", &uri, None, None).await, StatusCode::OK);
+    // No session → rejected by the explicit guard.
+    assert_eq!(app.call("GET", &uri, None, None).await, StatusCode::FORBIDDEN);
+    // products[3] (p_none): non_admin has no access → rejected.
+    let none_uri = format!("/products/{}/members", f.products[3].id);
+    assert_eq!(
+        app.call("GET", &none_uri, None, Some(&f.non_admin)).await,
+        StatusCode::FORBIDDEN
+    );
 }
 
 // ---------------------------------------------------------------------------

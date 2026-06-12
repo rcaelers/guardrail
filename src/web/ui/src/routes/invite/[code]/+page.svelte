@@ -27,21 +27,26 @@
     }, 500);
   }
 
-  function buildPopupUrl(url: string): string {
+  function buildPopupUrl(url: string): string | null {
     // Pass our origin so the popup can target the postMessage correctly,
     // even when the popup is served from a different domain (e.g. auth.workrave.org).
+    // Reject anything that isn't an http(s) URL so a non-navigational scheme
+    // (e.g. javascript:) can never reach window.open.
     try {
       const u = new URL(url);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
       u.searchParams.set('origin', window.location.origin);
       return u.toString();
     } catch {
-      return url;
+      return null;
     }
   }
 
   function openPopup(url: string) {
     if (popup && !popup.closed) { popup.focus(); return; }
-    const p = window.open(buildPopupUrl(url), 'guardrail-setup', 'popup,width=520,height=640,left=200,top=100');
+    const popupUrl = buildPopupUrl(url);
+    if (!popupUrl) { popupBlocked = true; return; }
+    const p = window.open(popupUrl, 'guardrail-setup', 'popup,width=520,height=640,left=200,top=100');
     if (!p) {
       popupBlocked = true;
       return;
@@ -80,10 +85,11 @@
     return async ({ result, update }: { result: import('@sveltejs/kit').ActionResult; update: () => Promise<void> }) => {
       if (result.type === 'success') {
         const url = (result.data as Record<string, unknown> | undefined)?.setup_url as string | undefined;
-        if (url) {
+        const popupUrl = url ? buildPopupUrl(url) : null;
+        if (url && popupUrl) {
           actionSetupUrl = url;
           if (p && !p.closed) {
-            p.location.href = buildPopupUrl(url);
+            p.location.href = popupUrl;
             popup = p;
             startPolling(p);
             return; // don't call update(); we handle state ourselves

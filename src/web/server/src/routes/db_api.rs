@@ -1406,6 +1406,12 @@ async fn list_members(
     session: Session,
     Path(pid): Path<String>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
+    // Viewing the member list is open to any member of the product (mutations
+    // require maintainer, enforced on grant/revoke). RLS on user_access is the
+    // backstop; this explicit check rejects non-members with a clean 403.
+    crate::access::require_session_product_role(&session, &s.repo.db, &pid, "readonly")
+        .await
+        .map_err(access_err)?;
     let db = s.user_db(&session).await?;
     let rows = run_value(
         &db,

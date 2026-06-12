@@ -46,7 +46,13 @@
     (function () {
       var params = new URLSearchParams(location.search);
       var token = params.get('token');
-      var openerOrigin = params.get('origin');
+      // Only trust an explicit, well-formed http(s) origin for postMessage;
+      // never broadcast to '*'. The opener also detects the window closing.
+      var openerOrigin = null;
+      try {
+        var o = new URL(params.get('origin'));
+        if (o.protocol === 'http:' || o.protocol === 'https:') openerOrigin = o.origin;
+      } catch (e) { /* no usable origin; fall back to window-close signal */ }
 
       function show(id) {
         ['pending', 'success', 'error'].forEach(function (s) {
@@ -78,8 +84,8 @@
 
       function complete() {
         show('success');
-        if (window.opener) {
-          window.opener.postMessage({ type: 'setup-complete' }, openerOrigin || '*');
+        if (window.opener && openerOrigin) {
+          window.opener.postMessage({ type: 'setup-complete' }, openerOrigin);
         }
         setTimeout(function () { window.close(); }, 800);
       }
