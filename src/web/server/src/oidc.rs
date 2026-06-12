@@ -451,12 +451,23 @@ async fn get_or_create_local_user(
         }
         if let Some(candidate) = candidate
             && candidate.sub.is_none()
-            && repos::user::UserRepo::link_sub(&state.repo.db, &candidate.id, sub)
+        {
+            if repos::user::UserRepo::link_sub(&state.repo.db, &candidate.id, sub)
                 .await
                 .map_err(AppError::internal)?
-        {
-            tracing::info!(user_id = %candidate.id, "linked legacy account to OIDC sub on login");
-            existing = Some(candidate);
+            {
+                tracing::info!(user_id = %candidate.id, "linked legacy account to OIDC sub on login");
+                existing = Some(candidate);
+            } else {
+                // Lost the link race to a concurrent login. If that login
+                // carried the same `sub` (the same person signing in twice),
+                // the account is now linked to us — re-read by sub instead of
+                // falling through to the create path, which would collide on
+                // the unique username/email indexes.
+                existing = repos::user::UserRepo::get_by_sub(&state.repo.db, sub)
+                    .await
+                    .map_err(AppError::internal)?;
+            }
         }
     }
 
