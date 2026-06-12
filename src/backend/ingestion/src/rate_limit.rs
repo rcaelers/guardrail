@@ -43,18 +43,25 @@ impl RateLimiter {
 
     /// Increment the fixed-window counter for `key` and return the new count.
     /// The TTL is set on first increment so the window is anchored to the first
-    /// request and resets cleanly.
+    /// request and resets cleanly. INCR and EXPIRE run as one server-side
+    /// script: issued as two separate commands, a failure between them would
+    /// leave a counter with no TTL that grows forever, rate-limiting that
+    /// client permanently.
     async fn incr(&self, key: &str) -> redis::RedisResult<u64> {
+        const INCR_WITH_TTL: &str = r"
+            local count = redis.call('INCR', KEYS[1])
+            if count == 1 then
+                redis.call('EXPIRE', KEYS[1], ARGV[1])
+            end
+            return count";
         let mut conn = self.manager.clone();
-        let count: u64 = redis::cmd("INCR").arg(key).query_async(&mut conn).await?;
-        if count == 1 {
-            let _: () = redis::cmd("EXPIRE")
-                .arg(key)
-                .arg(WINDOW_SECS)
-                .query_async(&mut conn)
-                .await?;
-        }
-        Ok(count)
+        redis::cmd("EVAL")
+            .arg(INCR_WITH_TTL)
+            .arg(1)
+            .arg(key)
+            .arg(WINDOW_SECS)
+            .query_async(&mut conn)
+            .await
     }
 
     /// Returns `Err(RateLimited)` when either the per-IP or per-token window is
