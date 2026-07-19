@@ -1,0 +1,5 @@
+object_storage:
+  region: us-east-1
+  bucket: guardrail
+  endpoint: http://garage:3900
+  allow_http: true

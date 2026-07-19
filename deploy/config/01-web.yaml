@@ -1,0 +1,24 @@
+processor:
+  maximum_frame_count: 10
+  delimiter: "|"
+  skip_patterns: []
+  end_patterns:
+    - "WinMainCRTStartup"
+    - "mainCRTStartup"
+    - "main()"
+oidc:
+  issuer_url: https://guardrail.home.krandor.org:1443
+  internal_issuer_url: http://pocket-id:1411
+  client_id: guardrail
+  callback_url: https://guardrail.home.krandor.org:4433/auth/oidc/callback
+  logout_callback_url: https://guardrail.home.krandor.org:4433
+  launch_url: https://guardrail.home.krandor.org:4433
+  self_service_url: https://guardrail.home.krandor.org:1443
+  pkce: true
+  allow_insecure_tls: true
+provisioner:
+  pocket_id:
+    api_url: http://pocket-id:1411
+    public_url: https://guardrail.home.krandor.org:1443
+email:
+  from: "noreply@workrave.org"

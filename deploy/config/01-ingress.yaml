@@ -1,0 +1,3 @@
+ingress:
+  port: 80
+  base_url: https://guardrail.home.krandor.org:4433

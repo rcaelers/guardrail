@@ -1,0 +1,10 @@
+database:
+  endpoint: ws://surrealdb:8000
+  namespace: guardrail
+  database: guardrail
+  jwk:
+    token_validity_in_minutes: 30
+    public_key: |
+      -----BEGIN PUBLIC KEY-----
+      MCowBQYDK2VwAyEAUSg2FBR6AEzLffDVQMNsxwRrExjGgolGLyheQeHZDq0=
+      -----END PUBLIC KEY-----

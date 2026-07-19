@@ -10,8 +10,19 @@ https://guardrail.home.krandor.org:1443 {
 https://guardrail.home.krandor.org:4433 {
   tls /certs/guardrail.home.krandor.org.crt /certs/guardrail.home.krandor.org.key
 
+  # Order matters: /api/minidump must be matched before the generic /api
+  # prefix below, same as the PathPrefix rule ordering in workrave-infra's
+  # guardrail-ingestion/guardrail-api HTTPRoutes.
+  handle /api/minidump* {
+    reverse_proxy guardrail-ingestion:80
+  }
+
+  handle /api/* {
+    reverse_proxy guardrail-api:80
+  }
+
   handle /auth/* {
-    reverse_proxy guardrail:8082
+    reverse_proxy guardrail-web:80
   }
 
   handle {

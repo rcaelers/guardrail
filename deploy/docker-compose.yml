@@ -1,0 +1,420 @@
+name: guardrail-dev
+
+volumes:
+  surrealdb-storage:
+  garage-meta:
+  garage-data:
+  valkey-storage:
+  pocket-id-storage:
+  caddy-data:
+  caddy-config:
+  svelte-node-modules:
+  svelte-kit:
+
+x-rust-build-args: &rust-build-args
+  CARGO_BUILD_FLAGS: ${GUARDRAIL_CARGO_BUILD_FLAGS:-}
+  CARGO_BUILD_OUTPUT_DIR: ${GUARDRAIL_CARGO_BUILD_OUTPUT_DIR:-debug}
+  CARGO_BUILD_RUSTFLAGS: ${GUARDRAIL_CARGO_BUILD_RUSTFLAGS:-}
+
+# Shared by the five guardrail-* services below, which are separate
+# containers running `guardrail <role> -C /config` from the same image —
+# mirroring the api/web/ingestion/curator/processor Deployments in
+# workrave-infra instead of the old single `guardrail all` process (which
+# had all three HTTP roles racing to bind the same port in-process).
+x-guardrail-service: &guardrail-service
+  build:
+    context: ..
+    dockerfile: Containerfile
+    target: server
+    args: *rust-build-args
+    provenance: false
+    sbom: false
+  read_only: true
+  tmpfs:
+    - /tmp
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  restart: unless-stopped
+
+services:
+  valkey:
+    container_name: valkey
+    image: valkey/valkey:latest
+    command: ['valkey-server', '--requirepass', '${VALKEY_PASSWORD}']
+    ports:
+      - 6379:6379
+    volumes:
+      - valkey-storage:/data
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    # No cap_drop here: the official entrypoint starts as root and uses
+    # setpriv/setresuid to drop to the valkey user, which needs CAP_SETUID —
+    # unlike the guardrail/garage images, which are already the target user
+    # at container start and never call setuid themselves.
+    healthcheck:
+      test: ['CMD', 'valkey-cli', '-a', '${VALKEY_PASSWORD}', '--no-auth-warning', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  surrealdb:
+    container_name: surrealdb
+    image: surrealdb/surrealdb:latest
+    user: '0:0'
+    ports:
+      - 8000:8000
+    volumes:
+      - surrealdb-storage:/data
+    command: start --user root --pass ${SURREALDB_ROOT_PASSWORD} rocksdb:/data/srdb.db
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ['CMD', '/surreal', 'is-ready']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  schema-sync:
+    container_name: schema-sync
+    build:
+      context: ..
+      dockerfile: Containerfile
+      target: schema-sync
+      provenance: false
+      sbom: false
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+    environment:
+      DATABASE_HOST: ws://surrealdb:8000
+      DATABASE_NAMESPACE: guardrail
+      DATABASE_NAME: guardrail
+      DATABASE_USER: root
+      DATABASE_PASSWORD: ${SURREALDB_ROOT_PASSWORD}
+    command:
+      - sh
+      - -c
+      - surrealkit setup && surrealkit sync --fail-fast
+    restart: 'no'
+
+  # Garage replaces MinIO to match the object storage backend workrave-infra
+  # actually runs in production (apps/garage). garage-init mirrors the chart's
+  # prepare-local-storage initContainer: named volumes are root-owned until
+  # something chowns them, and garage itself runs as uid 1000.
+  garage-init:
+    container_name: garage-init
+    image: busybox:stable
+    user: '0:0'
+    volumes:
+      - garage-meta:/mnt/meta
+      - garage-data:/mnt/data
+    command: ['sh', '-ec', 'chown -R 1000:1000 /mnt/meta /mnt/data && chmod 700 /mnt/meta /mnt/data']
+    restart: 'no'
+
+  garage:
+    container_name: garage
+    image: dxflrs/garage:v2.3.0
+    user: '1000:1000'
+    depends_on:
+      garage-init:
+        condition: service_completed_successfully
+    volumes:
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+      - ./garage.toml:/etc/garage.toml:ro
+      - ./_private/garage/rpc_secret:/etc/garage/secrets/rpc_secret:ro
+      - ./_private/garage/admin_token:/etc/garage/secrets/admin_token:ro
+      - ./_private/garage/metrics_token:/etc/garage/secrets/metrics_token:ro
+    ports:
+      - '3900:3900' # S3 API
+      - '3903:3903' # Admin API
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # No healthcheck: the dxflrs/garage image is a minimal static binary with
+    # no shell/wget/curl, so a Docker-exec healthcheck can't run inside it
+    # (unlike k8s, whose kubelet probes hit the pod over the network from
+    # outside). garage-setup's own polling loop against the admin API is the
+    # real readiness gate that downstream guardrail-* services wait on.
+
+  garage-setup:
+    container_name: garage-setup
+    image: curlimages/curl:8.13.0
+    depends_on:
+      garage:
+        condition: service_started
+    environment:
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+      GARAGE_ACCESS_KEY: ${GARAGE_ACCESS_KEY}
+      GARAGE_SECRET_KEY: ${GARAGE_SECRET_KEY}
+    volumes:
+      - ./garage-setup.sh:/garage-setup.sh:ro
+    entrypoint: ['/bin/sh', '/garage-setup.sh']
+    restart: 'no'
+
+  pocket-id:
+    image: ghcr.io/pocket-id/pocket-id:v2
+    container_name: pocket-id
+    environment:
+      APP_URL: https://guardrail.home.krandor.org:1443
+      ENCRYPTION_KEY: ${POCKET_ID_ENCRYPTION_KEY}
+      STATIC_API_KEY: ${POCKET_ID_STATIC_API_KEY}
+      TRUST_PROXY: 'true'
+      UI_CONFIG_DISABLED: 'true'
+      ALLOW_USER_SIGNUPS: withToken
+    volumes:
+      - pocket-id-storage:/app/data
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ['CMD', '/app/pocket-id', 'healthcheck']
+      interval: 90s
+      timeout: 5s
+      retries: 2
+      start_period: 10s
+    restart: unless-stopped
+
+  pocket-id-setup:
+    image: alpine:3.22
+    container_name: pocket-id-setup
+    depends_on:
+      pocket-id:
+        condition: service_healthy
+    environment:
+      POCKET_ID_URL: http://pocket-id:1411
+      POCKET_ID_PUBLIC_URL: https://guardrail.home.krandor.org:1443
+      POCKET_ID_API_KEY: ${POCKET_ID_STATIC_API_KEY}
+      POCKET_ID_ADMIN_USERNAME: admin
+      POCKET_ID_ADMIN_EMAIL: admin@localhost
+      POCKET_ID_ADMIN_FIRST_NAME: Guardrail
+      POCKET_ID_ADMIN_LAST_NAME: Admin
+      GUARDRAIL_AUTH_OIDC_CLIENT_ID: guardrail
+      GUARDRAIL_AUTH_OIDC_CLIENT_NAME: Guardrail
+      GUARDRAIL_AUTH_OIDC_CALLBACK_URL: https://guardrail.home.krandor.org:4433/auth/oidc/callback
+      GUARDRAIL_AUTH_OIDC_LOGOUT_CALLBACK_URL: https://guardrail.home.krandor.org:4433/
+      GUARDRAIL_AUTH_OIDC_LAUNCH_URL: https://guardrail.home.krandor.org:4433/
+      POCKET_ID_OUTPUT_DIR: /bootstrap-output
+      # Written directly so guardrail-web picks up the real client secret —
+      # see dev/guardrail-auth-setup.sh.
+      GUARDRAIL_OIDC_SECRET_FILE: /config-secrets/04-oidc-secret.yaml
+    volumes:
+      - ./guardrail-auth-setup.sh:/guardrail-auth-setup.sh:ro
+      - ./_private/pocket-id:/bootstrap-output
+      - ./_private/config:/config-secrets
+    entrypoint:
+      - /bin/sh
+      - -c
+      - apk add --no-cache curl jq >/dev/null && /bin/sh /guardrail-auth-setup.sh
+    restart: 'no'
+
+  guardrail-api:
+    <<: *guardrail-service
+    container_name: guardrail-api
+    command: ['/app/guardrail', 'api', '-C', '/config']
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+      schema-sync:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+      garage-setup:
+        condition: service_completed_successfully
+    environment:
+      RUST_LOG: info
+    volumes:
+      - ./config/01-ingress.yaml:/config/01-ingress.yaml:ro
+      - ./config/01-database.yaml:/config/01-database.yaml:ro
+      - ./config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
+      - ./_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
+      - ./_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
+      - ./_private/config/04-jwk-secret.yaml:/config/04-jwk-secret.yaml:ro
+      - ./_private/config/04-oidc-secret.yaml:/config/04-oidc-secret.yaml:ro
+      - ./_private/config/05-provisioner-secret.yaml:/config/05-provisioner-secret.yaml:ro
+      - ./_private/config/06-database-secret.yaml:/config/06-database-secret.yaml:ro
+    ports:
+      - '8080:80'
+    mem_limit: 512m
+    cpus: 0.5
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:80/api/ready || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  guardrail-ingestion:
+    <<: *guardrail-service
+    container_name: guardrail-ingestion
+    command: ['/app/guardrail', 'ingestion', '-C', '/config']
+    depends_on:
+      valkey:
+        condition: service_healthy
+      garage-setup:
+        condition: service_completed_successfully
+    environment:
+      RUST_LOG: info
+    volumes:
+      - ./config/01-ingress.yaml:/config/01-ingress.yaml:ro
+      - ./config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
+      - ./_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
+      - ./_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
+    ports:
+      - '8083:80'
+    mem_limit: 256m
+    cpus: 0.5
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:80/api/ready || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  guardrail-web:
+    <<: *guardrail-service
+    container_name: guardrail-web
+    command: ['/app/guardrail', 'web', '-C', '/config']
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+      schema-sync:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+      garage-setup:
+        condition: service_completed_successfully
+      pocket-id-setup:
+        condition: service_completed_successfully
+    environment:
+      RUST_LOG: info
+    volumes:
+      - ./config/01-ingress.yaml:/config/01-ingress.yaml:ro
+      - ./config/01-database.yaml:/config/01-database.yaml:ro
+      - ./config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
+      - ./config/01-web.yaml:/config/01-web.yaml:ro
+      - ./_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
+      - ./_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
+      - ./_private/config/04-jwk-secret.yaml:/config/04-jwk-secret.yaml:ro
+      - ./_private/config/04-oidc-secret.yaml:/config/04-oidc-secret.yaml:ro
+      - ./_private/config/05-provisioner-secret.yaml:/config/05-provisioner-secret.yaml:ro
+      - ./_private/config/06-database-secret.yaml:/config/06-database-secret.yaml:ro
+      - ./_private/config/07-email-secret.yaml:/config/07-email-secret.yaml:ro
+    ports:
+      - '8082:80'
+    mem_limit: 512m
+    cpus: 0.5
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:80/ready || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  guardrail-curator:
+    <<: *guardrail-service
+    container_name: guardrail-curator
+    command: ['/app/guardrail', 'curator', '-C', '/config']
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+      schema-sync:
+        condition: service_completed_successfully
+      valkey:
+        condition: service_healthy
+      garage-setup:
+        condition: service_completed_successfully
+    environment:
+      RUST_LOG: 'guardrail=debug,apalis=debug,apalis_redis=debug'
+    volumes:
+      - ./config/01-database.yaml:/config/01-database.yaml:ro
+      - ./config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
+      - ./_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
+      - ./_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
+      - ./_private/config/04-jwk-secret.yaml:/config/04-jwk-secret.yaml:ro
+      - ./_private/config/06-database-secret.yaml:/config/06-database-secret.yaml:ro
+    ports:
+      - '9095:9090'
+    mem_limit: 256m
+    cpus: 0.5
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:9090/ready || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  guardrail-processor:
+    <<: *guardrail-service
+    container_name: guardrail-processor
+    command: ['/app/guardrail', 'processor', '-C', '/config']
+    depends_on:
+      valkey:
+        condition: service_healthy
+      garage-setup:
+        condition: service_completed_successfully
+    environment:
+      RUST_LOG: 'guardrail=debug,apalis=debug,apalis_redis=debug'
+    volumes:
+      - ./config/01-database.yaml:/config/01-database.yaml:ro
+      - ./config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
+      - ./_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
+      - ./_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
+      - ./_private/config/06-database-secret.yaml:/config/06-database-secret.yaml:ro
+    ports:
+      - '9096:9090'
+    mem_limit: 512m
+    cpus: 1.0
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:9090/ready || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    depends_on:
+      pocket-id:
+        condition: service_healthy
+      guardrail-api:
+        condition: service_healthy
+      guardrail-ingestion:
+        condition: service_healthy
+      guardrail-web:
+        condition: service_healthy
+      svelte:
+        condition: service_started
+    ports:
+      - '1443:1443'
+      - '4433:4433'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./_private/certs/guardrail.home.krandor.org.crt:/certs/guardrail.home.krandor.org.crt:ro
+      - ./_private/certs/guardrail.home.krandor.org.key:/certs/guardrail.home.krandor.org.key:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+  svelte:
+    container_name: svelte
+    build:
+      context: ..
+      dockerfile: Containerfile.ui
+      target: dev
+      provenance: false
+      sbom: false
+    environment:
+      PORT: '3000'
+      HOST: '0.0.0.0'
+      ORIGIN: 'https://guardrail.home.krandor.org:4433'
+      GUARDRAIL_API_URL: 'http://guardrail-web:80/api/v1'
+      # Vite uses Chokidar for file watching. Polling makes host bind-mount
+      # changes reliable on Docker Desktop filesystems.
+      CHOKIDAR_USEPOLLING: 'true'
+    volumes:
+      - ../src/web/ui:/app
+      - svelte-node-modules:/app/node_modules
+      - svelte-kit:/app/.svelte-kit
+    restart: unless-stopped

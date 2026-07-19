@@ -85,18 +85,38 @@ binary:
 GUARDRAIL_MAXPERF_NATIVE=0 dev/build-maxperf.sh -p web
 ```
 
-The Docker Compose development stack still builds debug binaries by default:
+The Docker Compose stack under `deploy/` mirrors workrave-infra's Kubernetes
+topology closely enough to run standalone, not just as a dev convenience:
+SurrealDB, Valkey, and Garage (S3-compatible object storage, matching
+production) back five separate `guardrail-*` services — `api`, `web`,
+`ingestion`, `curator`, `processor` — instead of one `guardrail all` process,
+plus Pocket ID for OIDC and Caddy as the local HTTPS front door.
+
+Local secrets (SurrealDB/Valkey/Garage passwords, the dev JWK keypair, the
+Pocket ID encryption/API keys) aren't committed — generate them once before
+the first `up`:
 
 ```sh
-docker compose --parallel 1 -f dev/docker-compose.yml up -d --build
+deploy/generate-secrets.sh
+```
+
+It's idempotent: re-running it fills in anything missing without rotating
+secrets that other services have already bootstrapped against (the Pocket ID
+OIDC client secret, the Garage access key). It writes to `deploy/.env` and
+`deploy/_private/`, both gitignored.
+
+The stack builds debug binaries by default:
+
+```sh
+docker compose --parallel 1 -f deploy/docker-compose.yml up -d --build
 ```
 
 To build the Rust services in the compose containers with the local maxperf
 profile, pass the optional env file:
 
 ```sh
-docker compose --env-file dev/docker-compose.maxperf.env \
-  --parallel 1 -f dev/docker-compose.yml up -d --build
+docker compose --env-file deploy/docker-compose.maxperf.vars \
+  --parallel 1 -f deploy/docker-compose.yml up -d --build
 ```
 
 That env file sets `--profile maxperf`, copies binaries from
@@ -105,8 +125,8 @@ builder. For a portable optimized compose build, override the Rust flags:
 
 ```sh
 GUARDRAIL_CARGO_BUILD_RUSTFLAGS='' \
-  docker compose --env-file dev/docker-compose.maxperf.env \
-  --parallel 1 -f dev/docker-compose.yml up -d --build
+  docker compose --env-file deploy/docker-compose.maxperf.vars \
+  --parallel 1 -f deploy/docker-compose.yml up -d --build
 ```
 
 ## Web UI
@@ -174,13 +194,13 @@ annotations share the `annotations` table, discriminated by `source`
 
 ## Pocket ID Local Dev
 
-`dev/docker-compose.yml` now includes a local Pocket ID service, a small Caddy reverse proxy for HTTPS, and a one-shot bootstrap container.
+`deploy/docker-compose.yml` now includes a local Pocket ID service, a small Caddy reverse proxy for HTTPS, and a one-shot bootstrap container.
 The Pocket ID service is configured directly from compose environment variables for local development.
 
 Bring the local stack up with:
 
 ```sh
-docker compose --parallel 1 -f dev/docker-compose.yml up -d
+docker compose --parallel 1 -f deploy/docker-compose.yml up -d
 ```
 
 On first start, Pocket ID boots with a static admin API key and token-based user signups enabled.
@@ -201,17 +221,17 @@ The generated Guardrail OIDC client uses:
 No Pocket ID admin UI setup is required for the local test stack.
 The browser-facing URL is `https://guardrail.home.krandor.org:1443`, proxied to Pocket ID by Caddy.
 
-Generated artifacts are written under `dev/_private/pocket-id/`:
+Generated artifacts are written under `deploy/_private/pocket-id/`:
 
 - `guardrail-oidc.env`: generic `GUARDRAIL_AUTH_OIDC_*` issuer, client id, and client secret values for Guardrail
 - `admin-login.env`: admin id, username, and a one-time login URL
 
 ### Getting an Admin Login Code
 
-The bootstrap container writes a ready-to-use login URL to `dev/_private/pocket-id/admin-login.env` on every startup:
+The bootstrap container writes a ready-to-use login URL to `deploy/_private/pocket-id/admin-login.env` on every startup:
 
 ```sh
-cat dev/_private/pocket-id/admin-login.env
+cat deploy/_private/pocket-id/admin-login.env
 # POCKET_ID_ADMIN_LOGIN_URL=https://guardrail.home.krandor.org:1443/lc/<token>
 ```
 
@@ -220,14 +240,14 @@ Open the `POCKET_ID_ADMIN_LOGIN_URL` value in a browser to log in as admin witho
 To refresh the login code, re-run the setup container (safe to repeat; it reuses the existing OIDC client secret):
 
 ```sh
-docker compose -f dev/docker-compose.yml run --rm pocket-id-setup
-cat dev/_private/pocket-id/admin-login.env
+docker compose -f deploy/docker-compose.yml run --rm pocket-id-setup
+cat deploy/_private/pocket-id/admin-login.env
 ```
 
 To generate a token manually:
 
 ```sh
-docker compose -f dev/docker-compose.yml exec pocket-id /app/pocket-id one-time-access-token <username or email>
+docker compose -f deploy/docker-compose.yml exec pocket-id /app/pocket-id one-time-access-token <username or email>
 ```
 
 ### Getting an Admin Login Code on Kubernetes
@@ -244,7 +264,7 @@ Export the generated OIDC settings before starting the Rust web server:
 
 ```sh
 set -a
-source dev/_private/pocket-id/guardrail-oidc.env
+source deploy/_private/pocket-id/guardrail-oidc.env
 set +a
 ```
 
@@ -264,28 +284,28 @@ guardrailctl <invite|token|product|user> <list|create|remove|...>
 Create an initial admin invitation from the running compose stack:
 
 ```sh
-docker compose -f dev/docker-compose.yml exec web \
+docker compose -f deploy/docker-compose.yml exec guardrail-web \
   /app/guardrailctl -C /config invite create --admin
 ```
 
 For a product-scoped invitation:
 
 ```sh
-docker compose -f dev/docker-compose.yml exec web \
+docker compose -f deploy/docker-compose.yml exec guardrail-web \
   /app/guardrailctl -C /config invite create --grant '<product-id>:maintainer'
 ```
 
 To create an API token with the `invitation-create` entitlement:
 
 ```sh
-docker compose -f dev/docker-compose.yml exec web \
+docker compose -f deploy/docker-compose.yml exec guardrail-web \
   /app/guardrailctl -C /config token create --entitlement invitation-create
 ```
 
 The invite command can also create that token alongside the invite:
 
 ```sh
-docker compose -f dev/docker-compose.yml exec web \
+docker compose -f deploy/docker-compose.yml exec guardrail-web \
   /app/guardrailctl -C /config invite create --admin --create-api-key
 ```
 
@@ -335,33 +355,33 @@ kubectl exec -n guardrail deploy/guardrail-web -- \
 Useful inspection and cleanup commands:
 
 ```sh
-docker compose -f dev/docker-compose.yml exec web \
+docker compose -f deploy/docker-compose.yml exec guardrail-web \
   /app/guardrailctl -C /config invite list
 
-docker compose -f dev/docker-compose.yml exec web \
+docker compose -f deploy/docker-compose.yml exec guardrail-web \
   /app/guardrailctl -C /config token list
 
-docker compose -f dev/docker-compose.yml exec web \
+docker compose -f deploy/docker-compose.yml exec guardrail-web \
   /app/guardrailctl -C /config product list
 ```
 
 Create a product directly in the database:
 
 ```sh
-docker compose -f dev/docker-compose.yml exec web \
+docker compose -f deploy/docker-compose.yml exec guardrail-web \
   /app/guardrailctl -C /config product create --name Workrave --public
 ```
 
 Remove or revoke records by id:
 
 ```sh
-docker compose -f dev/docker-compose.yml exec web \
+docker compose -f deploy/docker-compose.yml exec guardrail-web \
   /app/guardrailctl -C /config invite remove '<invite-id>'
 
-docker compose -f dev/docker-compose.yml exec web \
+docker compose -f deploy/docker-compose.yml exec guardrail-web \
   /app/guardrailctl -C /config token revoke '<token-id>'
 
-docker compose -f dev/docker-compose.yml exec web \
+docker compose -f deploy/docker-compose.yml exec guardrail-web \
   /app/guardrailctl -C /config product remove '<product-id>'
 ```
 
@@ -399,10 +419,10 @@ if the user already has (or already lacks) the requested status.
 The same commands work against the local compose stack:
 
 ```sh
-docker compose -f dev/docker-compose.yml exec web \
+docker compose -f deploy/docker-compose.yml exec guardrail-web \
   /app/guardrailctl -C /config user list
 
-docker compose -f dev/docker-compose.yml exec web \
+docker compose -f deploy/docker-compose.yml exec guardrail-web \
   /app/guardrailctl -C /config user set-admin admin
 ```
 
@@ -411,7 +431,7 @@ docker compose -f dev/docker-compose.yml exec web \
 Upload a test minidump to the local ingestion service:
 
 ```sh
-curl -vv -X POST "localhost:8081/api/minidump/ljedvhandhqns8ey218x0m65/upload" \
+curl -vv -X POST "localhost:8083/api/minidump/ljedvhandhqns8ey218x0m65/upload" \
   --insecure \
   -F"upload_file_minidump=@dev/6fda4029-be94-43ea-90b6-32fe2a78074a.dmp;type=application/octet-stream" \
   -F"product=workrave;type=text/plain" \
