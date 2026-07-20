@@ -513,6 +513,7 @@ export interface GuardrailAdapter {
     slug?: string;
     description?: string;
     color?: string;
+    public?: boolean;
   }): Promise<Product>;
   deleteProduct(id: string): Promise<void>;
   getProductEmailSettings(id: string): Promise<ProductEmailSettings>;

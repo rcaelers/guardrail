@@ -186,6 +186,13 @@
                   <span class="font-mono text-[12px] text-ink-muted dark:text-ink-mutedDark">{p.color}</span>
                 </div>
               </label>
+              <label class="col-span-2 flex items-center gap-2 rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-3 py-2">
+                <input name="public" type="checkbox" checked={p.public} class="h-3.5 w-3.5" />
+                <span class="text-[12.5px]">
+                  Public
+                  <span class="text-ink-muted dark:text-ink-mutedDark">— anyone can view crash groups and counts without logging in. Annotations and attachments stay private.</span>
+                </span>
+              </label>
             </div>
 
             <div class="mt-4 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-4 py-3">

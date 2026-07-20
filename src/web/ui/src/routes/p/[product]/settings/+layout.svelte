@@ -19,7 +19,7 @@
     ...(canManage ? [['ingestion', 'Product token']] as Array<[string, string]> : []),
     ...(canManage ? [['processor', 'Processor']] as Array<[string, string]> : []),
     ...(canManage ? [['crash', 'Crash ingestion']] as Array<[string, string]> : []),
-    ...(canManage ? [['danger', 'Danger zone']] as Array<[string, string]> : []),
+    ...(canManage ? [['danger', 'Visibility & danger']] as Array<[string, string]> : []),
   ]);
 </script>
 

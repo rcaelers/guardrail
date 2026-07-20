@@ -48,6 +48,7 @@ export const actions: Actions = {
     const slug = String(form.get('slug') ?? '').trim();
     const description = String(form.get('description') ?? '').trim();
     const color = String(form.get('color') ?? '').trim();
+    const isPublic = form.get('public') === 'on';
     const members: Array<{ userId: string; role: Role }> = JSON.parse(
       String(form.get('members') ?? '[]')
     );
@@ -55,7 +56,7 @@ export const actions: Actions = {
     if (!name) return fail(400, { error: 'Name required.' });
     if (!slug) return fail(400, { error: 'Slug required.' });
     try {
-      await adapter.updateProduct(id, { name, slug, description, color });
+      await adapter.updateProduct(id, { name, slug, description, color, public: isPublic });
       const current = await adapter.listMembers(id);
       const newIds = new Set(members.map((m) => m.userId));
       for (const m of members) {
