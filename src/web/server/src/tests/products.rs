@@ -130,10 +130,11 @@ async fn test_update_product_all_contexts() {
     let app = TestApp::new().await;
     let f = Fixture::setup(&app).await;
 
-    // products RLS: `FOR update WHERE fn::auth::is_admin()` — admin only at DB level.
-    // The auth guard (require_product_maintainer) is checked first:
+    // products RLS: `FOR update WHERE fn::auth::is_admin() OR fn::auth::is_product_admin(id)`
+    // — admin or product maintainer at DB level, matching the auth guard
+    // (require_product_maintainer) checked first:
     //   - no role or readonly/readwrite → 403 from guard
-    //   - maintainer → guard passes, but RLS blocks the UPDATE → 0 rows → 404
+    //   - maintainer → guard passes and RLS allows UPDATE → 200
     //   - admin → guard passes and RLS allows UPDATE → 200
 
     for p in &f.products {
@@ -166,8 +167,8 @@ async fn test_update_product_all_contexts() {
 
         // non_admin: depends on their product role
         let (non_admin_expected, label) = if p.non_admin_maintainer {
-            // guard passes (maintainer), but RLS blocks UPDATE → 0 rows → 404
-            (StatusCode::NOT_FOUND, "non_admin maintainer (RLS blocks)")
+            // guard passes (maintainer) and RLS now allows UPDATE → 200
+            (StatusCode::OK, "non_admin maintainer")
         } else {
             // guard rejects (no maintainer role) → 403
             (StatusCode::FORBIDDEN, "non_admin non-maintainer")
