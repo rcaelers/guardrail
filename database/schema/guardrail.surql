@@ -430,7 +430,7 @@ DEFINE TABLE OVERWRITE products SCHEMAFULL
 	PERMISSIONS
 		FOR select WHERE public = true OR fn::auth::has_product_role(id, "readonly")
 		FOR create WHERE fn::auth::is_admin()
-		FOR update WHERE fn::auth::is_admin()
+		FOR update WHERE fn::auth::is_admin() OR fn::auth::is_product_admin(id)
 		FOR delete WHERE fn::auth::is_admin();
 
 DEFINE TABLE OVERWRITE product_settings SCHEMAFULL
