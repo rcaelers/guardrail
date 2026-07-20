@@ -6,13 +6,13 @@ use tracing::{error, info};
 use crate::jobs::ImportCrashJob;
 use crate::state::AppState;
 
-pub mod job_cleaner;
-pub mod orphaned_attachment_cleaner;
-pub mod orphaned_minidump_cleaner;
+mod job_cleaner;
+mod orphaned_attachment_cleaner;
+mod orphaned_minidump_cleaner;
 
-pub use job_cleaner::JobCleaner;
-pub use orphaned_attachment_cleaner::OrphanedAttachmentCleaner;
-pub use orphaned_minidump_cleaner::OrphanedMinidumpCleaner;
+use job_cleaner::JobCleaner;
+use orphaned_attachment_cleaner::OrphanedAttachmentCleaner;
+use orphaned_minidump_cleaner::OrphanedMinidumpCleaner;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MaintenanceJob;

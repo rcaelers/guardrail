@@ -460,6 +460,82 @@ async fn test_revoke_invitation_existing() {
     );
 }
 
+// API calls:
+// | Method | Route                    |
+// | ------ | ------------------------ |
+// | GET    | /invitations             |
+// | POST   | /invitations/{id}/revoke |
+// Scenario: one invitation grants access to two products — one the non_admin
+// maintains, one they don't.
+// Cases:
+// | Step                                                    | Expected                                            |
+// | -------------------------------------------------------- | --------------------------------------------------- |
+// | non_admin lists invitations                              | only the maintained-product grant is visible         |
+// | admin lists invitations                                  | both grants are visible                              |
+// | non_admin revokes                                        | 200 partially_revoked; unmaintained grant survives   |
+// | admin revokes remaining grant                            | 200 revoked; invitation status becomes Revoked       |
+#[tokio::test]
+async fn test_list_and_revoke_scope_grants_to_maintained_products() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+
+    let (id, _) = api_create_invitation(
+        &app,
+        &f.admin,
+        json!({
+            "is_admin": false,
+            "grants": [
+                {"product_id": f.products[2].id, "role": "readonly"},
+                {"product_id": f.products[3].id, "role": "readonly"},
+            ]
+        }),
+    )
+    .await;
+
+    // non_admin only sees the grant for the product they maintain.
+    let (status, body) = app.call_json("GET", "/invitations", None, Some(&f.non_admin)).await;
+    assert_eq!(status, StatusCode::OK);
+    let inv = body
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|v| v["id"] == id)
+        .expect("invitation not visible to non_admin");
+    let grants = inv["grants"].as_array().unwrap();
+    assert_eq!(grants.len(), 1, "non_admin should only see their own product's grant");
+    assert_eq!(grants[0]["product_id"], f.products[2].id);
+
+    // admin still sees both grants.
+    let (_, admin_body) = app.call_json("GET", "/invitations", None, Some(&f.admin)).await;
+    let admin_inv = admin_body.as_array().unwrap().iter().find(|v| v["id"] == id).unwrap();
+    assert_eq!(admin_inv["grants"].as_array().unwrap().len(), 2);
+
+    // non_admin revoking removes only their grant; invitation stays active.
+    let (status, body) = app
+        .call_json("POST", &format!("/invitations/{id}/revoke"), None, Some(&f.non_admin))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["status"], "partially_revoked");
+
+    let (_, admin_body) = app.call_json("GET", "/invitations", None, Some(&f.admin)).await;
+    let admin_inv = admin_body.as_array().unwrap().iter().find(|v| v["id"] == id).unwrap();
+    let remaining = admin_inv["grants"].as_array().unwrap();
+    assert_eq!(remaining.len(), 1);
+    assert_eq!(remaining[0]["product_id"], f.products[3].id);
+    assert_eq!(admin_inv["status"], "Active");
+
+    // admin revokes the rest → invitation fully revoked.
+    let (status, body) = app
+        .call_json("POST", &format!("/invitations/{id}/revoke"), None, Some(&f.admin))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["status"], "revoked");
+
+    let (_, admin_body) = app.call_json("GET", "/invitations", None, Some(&f.admin)).await;
+    let admin_inv = admin_body.as_array().unwrap().iter().find(|v| v["id"] == id).unwrap();
+    assert_eq!(admin_inv["status"], "Revoked");
+}
+
 #[tokio::test]
 async fn test_used_invitation_only_allows_delete() {
     let app = TestApp::new().await;

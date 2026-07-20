@@ -111,7 +111,7 @@ async fn list_invitations(
     let user = access::require_session(&session).await?;
     let maintained_ids =
         access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
-    let invitations = repos::invitation::InvitationRepo::get_for_user(
+    let mut invitations = repos::invitation::InvitationRepo::get_for_user(
         &state.repo.db,
         &user.active().id,
         user.is_admin(),
@@ -119,6 +119,17 @@ async fn list_invitations(
     )
     .await
     .map_err(AppError::internal)?;
+
+    // Non-admins only administer a subset of products, so an invitation that
+    // also grants access to other products must not reveal those grants.
+    if !user.is_admin() {
+        for invitation in &mut invitations {
+            invitation
+                .grants
+                .retain(|g| maintained_ids.contains(&g.product_id));
+        }
+    }
+
     Ok(Json(invitations))
 }
 
@@ -347,27 +358,54 @@ async fn revoke_invitation(
         if invitation_has_reached_use_limit(invitation) {
             return Err(AppError::failure("Invitation has already been used"));
         }
-
-        if !user.is_admin() {
-            let maintained_ids =
-                access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
-            let can_revoke = invitation.created_by == user.active().id
-                || invitation
-                    .grants
-                    .iter()
-                    .any(|g| maintained_ids.contains(&g.product_id));
-            if !can_revoke {
-                return Err(AppError::forbidden());
-            }
-        }
     } else if !user.is_admin() {
         return Err(AppError::not_found("Invitation not found"));
     }
 
-    repos::invitation::InvitationRepo::revoke(&state.repo.db, &id)
-        .await
-        .map_err(AppError::internal)?;
-    Ok(Json(serde_json::json!({ "status": "revoked" })))
+    if user.is_admin() {
+        repos::invitation::InvitationRepo::revoke(&state.repo.db, &id)
+            .await
+            .map_err(AppError::internal)?;
+        return Ok(Json(serde_json::json!({ "status": "revoked" })));
+    }
+
+    // Non-admin path: `invitation` is guaranteed Some here (the None+non-admin
+    // case already returned 404 above).
+    let invitation = invitation.expect("checked above");
+
+    let maintained_ids =
+        access::get_maintained_product_ids(&state.repo.db, &user.active().id).await?;
+    let can_revoke = invitation.created_by == user.active().id
+        || invitation
+            .grants
+            .iter()
+            .any(|g| maintained_ids.contains(&g.product_id));
+    if !can_revoke {
+        return Err(AppError::forbidden());
+    }
+
+    // A maintainer only administers some of the invitation's grants — revoking
+    // removes just those, leaving the rest of the invitation (and the invite
+    // itself) intact for whoever administers the other products. Once no
+    // grants are left, the invitation as a whole is revoked.
+    let remaining_grants: Vec<InvitationGrant> = invitation
+        .grants
+        .iter()
+        .filter(|g| !maintained_ids.contains(&g.product_id))
+        .cloned()
+        .collect();
+
+    if remaining_grants.is_empty() {
+        repos::invitation::InvitationRepo::revoke(&state.repo.db, &id)
+            .await
+            .map_err(AppError::internal)?;
+        Ok(Json(serde_json::json!({ "status": "revoked" })))
+    } else {
+        repos::invitation::InvitationRepo::set_grants(&state.repo.db, &id, &remaining_grants)
+            .await
+            .map_err(AppError::internal)?;
+        Ok(Json(serde_json::json!({ "status": "partially_revoked" })))
+    }
 }
 
 async fn delete_invitation(

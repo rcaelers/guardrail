@@ -7,7 +7,7 @@ use crate::{
     record_key,
 };
 use common::QueryParams;
-use data::invitation::{Invitation, InvitationStatus, NewInvitation, UpdateInvitation};
+use data::invitation::{Invitation, InvitationGrant, InvitationStatus, NewInvitation, UpdateInvitation};
 
 pub struct InvitationRepo {}
 
@@ -227,6 +227,29 @@ impl InvitationRepo {
                 updated_at = time::now()",
         )
         .bind(("id", record_key(id)))
+        .await
+        .map_err(handle_surreal_error)?;
+        Ok(())
+    }
+
+    /// Replaces the grants list without touching status. Used when a maintainer
+    /// revokes only the grants for the products they administer, leaving the
+    /// invitation active for whatever grants remain.
+    pub async fn set_grants(
+        db: &Surreal<Any>,
+        id: impl ToString,
+        grants: &[InvitationGrant],
+    ) -> Result<(), RepoError> {
+        db.query(
+            "UPDATE type::record('invitations', $id) SET
+                grants     = $grants,
+                updated_at = time::now()",
+        )
+        .bind(("id", record_key(id.to_string())))
+        .bind((
+            "grants",
+            serde_json::to_value(grants).map_err(|e| RepoError::DatabaseError(e.to_string()))?,
+        ))
         .await
         .map_err(handle_surreal_error)?;
         Ok(())
