@@ -308,7 +308,11 @@ async fn create_test_crash_in_group_with_module(
 // | ------ | ------------------------------ |
 // | GET    | /products/{product_id}/symbols |
 // Verifies `referencedBy` reflects the number of distinct crash groups with
-// a stack frame in that symbol's module, not merely a hardcoded zero.
+// a stack frame in that symbol's module, not merely a hardcoded zero. Frame
+// `module` is the loaded binary's filename ("app.exe"), while the symbol's
+// `module_id` is the debug file's name from its Breakpad MODULE record
+// ("app.pdb") -- the common case for PDB-derived uploads -- so the match has
+// to be extension-agnostic, not a literal string comparison.
 #[tokio::test]
 async fn test_list_symbols_referenced_by() {
     let app = TestApp::new().await;
@@ -330,14 +334,15 @@ async fn test_list_symbols_referenced_by() {
     )
     .await;
 
-    // Two distinct groups reference "app.pdb"; the second has two crashes,
-    // which must still count as one referencing group.
+    // Two distinct groups reference "app.exe" (the loaded binary; the
+    // uploaded symbol is "app.pdb"); the second has two crashes, which must
+    // still count as one referencing group.
     let g1 = create_test_crash_group(&app.db, pid).await;
-    create_test_crash_in_group_with_module(&app.db, pid, &g1, "app.pdb").await;
+    create_test_crash_in_group_with_module(&app.db, pid, &g1, "app.exe").await;
 
     let g2 = create_test_crash_group(&app.db, pid).await;
-    create_test_crash_in_group_with_module(&app.db, pid, &g2, "app.pdb").await;
-    create_test_crash_in_group_with_module(&app.db, pid, &g2, "app.pdb").await;
+    create_test_crash_in_group_with_module(&app.db, pid, &g2, "app.exe").await;
+    create_test_crash_in_group_with_module(&app.db, pid, &g2, "app.exe").await;
 
     let (status, symbols) =
         app.call_json("GET", &format!("/products/{pid}/symbols"), None, Some(&f.admin)).await;
@@ -345,7 +350,10 @@ async fn test_list_symbols_referenced_by() {
     let symbols = symbols.as_array().expect("symbols response should be an array");
 
     let app_pdb = symbols.iter().find(|s| s["name"] == "app.pdb").expect("app.pdb symbol missing");
-    assert_eq!(app_pdb["referencedBy"], 2, "two distinct groups reference app.pdb");
+    assert_eq!(
+        app_pdb["referencedBy"], 2,
+        "two distinct groups have a frame in app.exe, matching symbol app.pdb by stem"
+    );
 
     let unused_pdb = symbols
         .iter()

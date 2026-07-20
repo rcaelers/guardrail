@@ -2281,7 +2281,19 @@ struct SymbolsQuery {
     sort: Option<String>,
 }
 
-/// Maps module name -> set of crash-group ids whose crashes have a stack
+/// A crash frame's `module` is the loaded binary's filename (e.g.
+/// `workrave.exe`), while a symbol's `module_id` is the debug file's name
+/// from its Breakpad MODULE record (e.g. `workrave.pdb` for a PDB-derived
+/// upload) -- same module, different extension, on PE/PDB targets. On
+/// Breakpad/ELF targets debug_file usually equals the binary name exactly,
+/// so this normalization is a no-op there. Comparing by lowercased stem
+/// (filename without its final extension) matches both cases without
+/// needing the build's debug_id, which isn't persisted per-frame.
+fn module_stem(name: &str) -> String {
+    name.rsplit_once('.').map_or(name, |(stem, _)| stem).to_lowercase()
+}
+
+/// Maps module stem -> set of crash-group ids whose crashes have a stack
 /// frame in that module, for every grouped crash in the product. Used to
 /// derive `referencedBy` per symbol: a symbol resolves frames for a module,
 /// so any group with a frame in that module counts as "referencing" it.
@@ -2314,7 +2326,7 @@ async fn symbol_module_group_counts(
                 if let Some(module) =
                     frame.get("module").and_then(|v| v.as_str()).filter(|m| !m.is_empty())
                 {
-                    map.entry(module.to_string()).or_default().insert(group_id.to_string());
+                    map.entry(module_stem(module)).or_default().insert(group_id.to_string());
                 }
             }
         }
@@ -2343,7 +2355,7 @@ async fn list_symbols(
         let referenced_by = row
             .get("name")
             .and_then(|v| v.as_str())
-            .and_then(|name| module_groups.get(name))
+            .and_then(|name| module_groups.get(&module_stem(name)))
             .map(|groups| groups.len())
             .unwrap_or(0);
         if let Some(obj) = row.as_object_mut() {
