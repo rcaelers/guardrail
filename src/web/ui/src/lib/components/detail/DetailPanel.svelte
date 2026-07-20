@@ -174,8 +174,6 @@
           title={readOnly ? 'Read-only access' : ''}
         >{label}</button>
       {/each}
-      <button type="button" disabled={readOnly} class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink dark:text-ink-dark" class:cursor-pointer={!readOnly} class:cursor-not-allowed={readOnly} class:opacity-50={readOnly}>Assign…</button>
-      <button type="button" class="cursor-pointer rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink dark:text-ink-dark">Open in issue tracker</button>
       {#if !readOnly && onDeleteCrash}
         <button
           type="button"
