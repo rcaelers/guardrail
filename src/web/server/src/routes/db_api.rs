@@ -6,6 +6,7 @@
 // no session is present, an anonymous JWT is used, which grants access only to
 // public data.
 
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use crate::auth_user::AuthenticatedUser;
@@ -2280,6 +2281,47 @@ struct SymbolsQuery {
     sort: Option<String>,
 }
 
+/// Maps module name -> set of crash-group ids whose crashes have a stack
+/// frame in that module, for every grouped crash in the product. Used to
+/// derive `referencedBy` per symbol: a symbol resolves frames for a module,
+/// so any group with a frame in that module counts as "referencing" it.
+async fn symbol_module_group_counts(
+    db: &Surreal<Any>,
+    product_id: &str,
+) -> Result<HashMap<String, HashSet<String>>, (StatusCode, String)> {
+    let rows = run_value(
+        db,
+        "SELECT meta::id(group_id) AS groupId, report.threads AS threads
+         FROM crashes
+         WHERE product_id = type::record('products', $pid) AND group_id != NONE",
+        vec![("pid", Value::String(product_id.to_string()))],
+    )
+    .await?;
+
+    let mut map: HashMap<String, HashSet<String>> = HashMap::new();
+    for row in rows {
+        let Some(group_id) = row.get("groupId").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some(threads) = row.get("threads").and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for thread in threads {
+            let Some(frames) = thread.get("frames").and_then(|v| v.as_array()) else {
+                continue;
+            };
+            for frame in frames {
+                if let Some(module) =
+                    frame.get("module").and_then(|v| v.as_str()).filter(|m| !m.is_empty())
+                {
+                    map.entry(module.to_string()).or_default().insert(group_id.to_string());
+                }
+            }
+        }
+    }
+    Ok(map)
+}
+
 async fn list_symbols(
     State(s): State<AppState>,
     session: Session,
@@ -2287,15 +2329,27 @@ async fn list_symbols(
     Query(q): Query<SymbolsQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let db = s.user_db(&session).await?;
-    let mut rows = run_value(
-        &db,
-        &format!(
-            "SELECT {SYMBOL_PROJ} FROM symbols
-                  WHERE product_id = type::record('products', $pid)"
-        ),
-        vec![("pid", Value::String(pid))],
-    )
-    .await?;
+    let symbols_sql = format!(
+        "SELECT {SYMBOL_PROJ} FROM symbols
+              WHERE product_id = type::record('products', $pid)"
+    );
+    let (rows_res, module_groups_res) = tokio::join!(
+        run_value(&db, &symbols_sql, vec![("pid", Value::String(pid.clone()))]),
+        symbol_module_group_counts(&db, &pid),
+    );
+    let mut rows = rows_res?;
+    let module_groups = module_groups_res?;
+    for row in rows.iter_mut() {
+        let referenced_by = row
+            .get("name")
+            .and_then(|v| v.as_str())
+            .and_then(|name| module_groups.get(name))
+            .map(|groups| groups.len())
+            .unwrap_or(0);
+        if let Some(obj) = row.as_object_mut() {
+            obj.insert("referencedBy".into(), json!(referenced_by));
+        }
+    }
 
     if let Some(search) = q.search.as_deref().filter(|s| !s.trim().is_empty()) {
         let needle = search.to_lowercase();

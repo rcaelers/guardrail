@@ -268,3 +268,88 @@ async fn test_list_symbols_format_sort() {
     // Default sort (uploadedAt)
     assert_eq!(app.call("GET", &base, None, Some(&f.admin)).await, StatusCode::OK);
 }
+
+/// Like `create_test_crash_in_group`, but stamps a crashing-thread frame
+/// whose `module` matches a symbol's `module_id`, so `referencedBy` counts it.
+async fn create_test_crash_in_group_with_module(
+    db: &Db,
+    product_id: &str,
+    group_id: &str,
+    module: &str,
+) -> String {
+    let cid = uuid::Uuid::new_v4().to_string().replace('-', "");
+    db.query(
+        "CREATE type::record('crashes', $cid) CONTENT {
+            product_id: type::record('products', $pid),
+            group_id:   type::record('crash_groups', $gid),
+            fingerprint: 'test-fp',
+            report: {
+                title:    'Test crash',
+                topFrame: 'main()',
+                version:  '1.2.3',
+                platform: 'linux',
+                threads: [{ frames: [{ module: $module }] }]
+            },
+            created_at: time::now(),
+            updated_at: time::now()
+        }",
+    )
+    .bind(("cid", cid.clone()))
+    .bind(("pid", product_id.to_string()))
+    .bind(("gid", group_id.to_string()))
+    .bind(("module", module.to_string()))
+    .await
+    .expect("create_test_crash_in_group_with_module failed");
+    cid
+}
+
+// API calls:
+// | Method | Route                          |
+// | ------ | ------------------------------ |
+// | GET    | /products/{product_id}/symbols |
+// Verifies `referencedBy` reflects the number of distinct crash groups with
+// a stack frame in that symbol's module, not merely a hardcoded zero.
+#[tokio::test]
+async fn test_list_symbols_referenced_by() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[2].id; // maintainer product
+
+    app.call(
+        "POST",
+        &format!("/products/{pid}/symbols"),
+        Some(json!({"name": "app.pdb", "arch": "x86_64"})),
+        Some(&f.admin),
+    )
+    .await;
+    app.call(
+        "POST",
+        &format!("/products/{pid}/symbols"),
+        Some(json!({"name": "unused.pdb", "arch": "x86_64"})),
+        Some(&f.admin),
+    )
+    .await;
+
+    // Two distinct groups reference "app.pdb"; the second has two crashes,
+    // which must still count as one referencing group.
+    let g1 = create_test_crash_group(&app.db, pid).await;
+    create_test_crash_in_group_with_module(&app.db, pid, &g1, "app.pdb").await;
+
+    let g2 = create_test_crash_group(&app.db, pid).await;
+    create_test_crash_in_group_with_module(&app.db, pid, &g2, "app.pdb").await;
+    create_test_crash_in_group_with_module(&app.db, pid, &g2, "app.pdb").await;
+
+    let (status, symbols) =
+        app.call_json("GET", &format!("/products/{pid}/symbols"), None, Some(&f.admin)).await;
+    assert_eq!(status, StatusCode::OK);
+    let symbols = symbols.as_array().expect("symbols response should be an array");
+
+    let app_pdb = symbols.iter().find(|s| s["name"] == "app.pdb").expect("app.pdb symbol missing");
+    assert_eq!(app_pdb["referencedBy"], 2, "two distinct groups reference app.pdb");
+
+    let unused_pdb = symbols
+        .iter()
+        .find(|s| s["name"] == "unused.pdb")
+        .expect("unused.pdb symbol missing");
+    assert_eq!(unused_pdb["referencedBy"], 0, "no crashes reference unused.pdb");
+}
