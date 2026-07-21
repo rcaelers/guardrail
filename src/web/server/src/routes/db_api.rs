@@ -2281,53 +2281,51 @@ struct SymbolsQuery {
     sort: Option<String>,
 }
 
-/// A crash frame's `module` is the loaded binary's filename (e.g.
-/// `workrave.exe`), while a symbol's `module_id` is the debug file's name
-/// from its Breakpad MODULE record (e.g. `workrave.pdb` for a PDB-derived
-/// upload) -- same module, different extension, on PE/PDB targets. On
-/// Breakpad/ELF targets debug_file usually equals the binary name exactly,
-/// so this normalization is a no-op there. Comparing by lowercased stem
-/// (filename without its final extension) matches both cases without
-/// needing the build's debug_id, which isn't persisted per-frame.
-fn module_stem(name: &str) -> String {
-    name.rsplit_once('.').map_or(name, |(stem, _)| stem).to_lowercase()
+/// Key identifying one build of one module: its debug file name (e.g.
+/// `workrave.pdb`) plus its Breakpad debug id (e.g.
+/// `E69F6CFEB918EAB84C4C44205044422E1`). This is the exact pair a symbol row
+/// is uploaded under (`module_id` + `build_id`), and the exact pair
+/// minidump-processor reports per loaded module -- unlike a frame's
+/// `module` (the loaded *binary's* filename, e.g. `workrave.exe`, which
+/// differs from the debug file name on PE/PDB targets and carries no build
+/// identity), matching on this pair distinguishes different uploads of the
+/// same module instead of crediting every version of a symbol with every
+/// crash group that ever loaded any build of it.
+fn debug_key(debug_file: &str, debug_id: &str) -> (String, String) {
+    (debug_file.to_lowercase(), debug_id.to_uppercase())
 }
 
-/// Maps module stem -> set of crash-group ids whose crashes have a stack
-/// frame in that module, for every grouped crash in the product. Used to
-/// derive `referencedBy` per symbol: a symbol resolves frames for a module,
-/// so any group with a frame in that module counts as "referencing" it.
+/// Maps (debug_file, debug_id) -> set of crash-group ids whose crashes
+/// loaded that exact module build, for every grouped crash in the product.
+/// Used to derive `referencedBy` per symbol.
 async fn symbol_module_group_counts(
     db: &Surreal<Any>,
     product_id: &str,
-) -> Result<HashMap<String, HashSet<String>>, (StatusCode, String)> {
+) -> Result<HashMap<(String, String), HashSet<String>>, (StatusCode, String)> {
     let rows = run_value(
         db,
-        "SELECT meta::id(group_id) AS groupId, report.threads AS threads
+        "SELECT meta::id(group_id) AS groupId, report.modules AS modules
          FROM crashes
          WHERE product_id = type::record('products', $pid) AND group_id != NONE",
         vec![("pid", Value::String(product_id.to_string()))],
     )
     .await?;
 
-    let mut map: HashMap<String, HashSet<String>> = HashMap::new();
+    let mut map: HashMap<(String, String), HashSet<String>> = HashMap::new();
     for row in rows {
         let Some(group_id) = row.get("groupId").and_then(|v| v.as_str()) else {
             continue;
         };
-        let Some(threads) = row.get("threads").and_then(|v| v.as_array()) else {
+        let Some(modules) = row.get("modules").and_then(|v| v.as_array()) else {
             continue;
         };
-        for thread in threads {
-            let Some(frames) = thread.get("frames").and_then(|v| v.as_array()) else {
-                continue;
-            };
-            for frame in frames {
-                if let Some(module) =
-                    frame.get("module").and_then(|v| v.as_str()).filter(|m| !m.is_empty())
-                {
-                    map.entry(module_stem(module)).or_default().insert(group_id.to_string());
-                }
+        for module in modules {
+            let debug_file = module.get("debug_file").and_then(|v| v.as_str()).filter(|s| !s.is_empty());
+            let debug_id = module.get("debug_id").and_then(|v| v.as_str()).filter(|s| !s.is_empty());
+            if let (Some(debug_file), Some(debug_id)) = (debug_file, debug_id) {
+                map.entry(debug_key(debug_file, debug_id))
+                    .or_default()
+                    .insert(group_id.to_string());
             }
         }
     }
@@ -2352,10 +2350,11 @@ async fn list_symbols(
     let mut rows = rows_res?;
     let module_groups = module_groups_res?;
     for row in rows.iter_mut() {
-        let referenced_by = row
-            .get("name")
-            .and_then(|v| v.as_str())
-            .and_then(|name| module_groups.get(&module_stem(name)))
+        let name = row.get("name").and_then(|v| v.as_str());
+        let debug_id = row.get("debugId").and_then(|v| v.as_str());
+        let referenced_by = name
+            .zip(debug_id)
+            .and_then(|(name, debug_id)| module_groups.get(&debug_key(name, debug_id)))
             .map(|groups| groups.len())
             .unwrap_or(0);
         if let Some(obj) = row.as_object_mut() {

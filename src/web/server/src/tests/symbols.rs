@@ -269,13 +269,15 @@ async fn test_list_symbols_format_sort() {
     assert_eq!(app.call("GET", &base, None, Some(&f.admin)).await, StatusCode::OK);
 }
 
-/// Like `create_test_crash_in_group`, but stamps a crashing-thread frame
-/// whose `module` matches a symbol's `module_id`, so `referencedBy` counts it.
+/// Like `create_test_crash_in_group`, but stamps a `report.modules` entry
+/// (debug_file + debug_id, exactly as minidump-processor emits per loaded
+/// module) matching a specific symbol upload, so `referencedBy` counts it.
 async fn create_test_crash_in_group_with_module(
     db: &Db,
     product_id: &str,
     group_id: &str,
-    module: &str,
+    debug_file: &str,
+    debug_id: &str,
 ) -> String {
     let cid = uuid::Uuid::new_v4().to_string().replace('-', "");
     db.query(
@@ -288,7 +290,7 @@ async fn create_test_crash_in_group_with_module(
                 topFrame: 'main()',
                 version:  '1.2.3',
                 platform: 'linux',
-                threads: [{ frames: [{ module: $module }] }]
+                modules: [{ debug_file: $debug_file, debug_id: $debug_id }]
             },
             created_at: time::now(),
             updated_at: time::now()
@@ -297,7 +299,8 @@ async fn create_test_crash_in_group_with_module(
     .bind(("cid", cid.clone()))
     .bind(("pid", product_id.to_string()))
     .bind(("gid", group_id.to_string()))
-    .bind(("module", module.to_string()))
+    .bind(("debug_file", debug_file.to_string()))
+    .bind(("debug_id", debug_id.to_string()))
     .await
     .expect("create_test_crash_in_group_with_module failed");
     cid
@@ -307,25 +310,24 @@ async fn create_test_crash_in_group_with_module(
 // | Method | Route                          |
 // | ------ | ------------------------------ |
 // | GET    | /products/{product_id}/symbols |
-// Verifies `referencedBy` reflects the number of distinct crash groups with
-// a stack frame in that symbol's module, not merely a hardcoded zero. Frame
-// `module` is the loaded binary's filename ("app.exe"), while the symbol's
-// `module_id` is the debug file's name from its Breakpad MODULE record
-// ("app.pdb") -- the common case for PDB-derived uploads -- so the match has
-// to be extension-agnostic, not a literal string comparison.
+// Verifies `referencedBy` reflects the number of distinct crash groups whose
+// crashes loaded that exact (debug_file, debug_id) build, not merely a
+// hardcoded zero.
 #[tokio::test]
 async fn test_list_symbols_referenced_by() {
     let app = TestApp::new().await;
     let f = Fixture::setup(&app).await;
     let pid = &f.products[2].id; // maintainer product
 
-    app.call(
-        "POST",
-        &format!("/products/{pid}/symbols"),
-        Some(json!({"name": "app.pdb", "arch": "x86_64"})),
-        Some(&f.admin),
-    )
-    .await;
+    let (_, app_pdb) = app
+        .call_json(
+            "POST",
+            &format!("/products/{pid}/symbols"),
+            Some(json!({"name": "app.pdb", "arch": "x86_64"})),
+            Some(&f.admin),
+        )
+        .await;
+    let app_debug_id = app_pdb["debugId"].as_str().expect("app.pdb debugId").to_string();
     app.call(
         "POST",
         &format!("/products/{pid}/symbols"),
@@ -334,15 +336,14 @@ async fn test_list_symbols_referenced_by() {
     )
     .await;
 
-    // Two distinct groups reference "app.exe" (the loaded binary; the
-    // uploaded symbol is "app.pdb"); the second has two crashes, which must
-    // still count as one referencing group.
+    // Two distinct groups loaded this exact build of "app.pdb"; the second
+    // has two crashes, which must still count as one referencing group.
     let g1 = create_test_crash_group(&app.db, pid).await;
-    create_test_crash_in_group_with_module(&app.db, pid, &g1, "app.exe").await;
+    create_test_crash_in_group_with_module(&app.db, pid, &g1, "app.pdb", &app_debug_id).await;
 
     let g2 = create_test_crash_group(&app.db, pid).await;
-    create_test_crash_in_group_with_module(&app.db, pid, &g2, "app.exe").await;
-    create_test_crash_in_group_with_module(&app.db, pid, &g2, "app.exe").await;
+    create_test_crash_in_group_with_module(&app.db, pid, &g2, "app.pdb", &app_debug_id).await;
+    create_test_crash_in_group_with_module(&app.db, pid, &g2, "app.pdb", &app_debug_id).await;
 
     let (status, symbols) =
         app.call_json("GET", &format!("/products/{pid}/symbols"), None, Some(&f.admin)).await;
@@ -350,14 +351,65 @@ async fn test_list_symbols_referenced_by() {
     let symbols = symbols.as_array().expect("symbols response should be an array");
 
     let app_pdb = symbols.iter().find(|s| s["name"] == "app.pdb").expect("app.pdb symbol missing");
-    assert_eq!(
-        app_pdb["referencedBy"], 2,
-        "two distinct groups have a frame in app.exe, matching symbol app.pdb by stem"
-    );
+    assert_eq!(app_pdb["referencedBy"], 2, "two distinct groups loaded this build of app.pdb");
 
     let unused_pdb = symbols
         .iter()
         .find(|s| s["name"] == "unused.pdb")
         .expect("unused.pdb symbol missing");
     assert_eq!(unused_pdb["referencedBy"], 0, "no crashes reference unused.pdb");
+}
+
+// Regression test: two separate uploads can share the same module name
+// (e.g. rebuilding "workrave.pdb" without bumping the version) but get
+// distinct debug_ids. A crash that loaded only the first build must not be
+// counted against the second upload's row just because the names match.
+#[tokio::test]
+async fn test_list_symbols_referenced_by_distinguishes_same_name_different_build() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[2].id; // maintainer product
+
+    let (_, build_a) = app
+        .call_json(
+            "POST",
+            &format!("/products/{pid}/symbols"),
+            Some(json!({"name": "workrave.pdb", "arch": "x86_64"})),
+            Some(&f.admin),
+        )
+        .await;
+    let (_, build_b) = app
+        .call_json(
+            "POST",
+            &format!("/products/{pid}/symbols"),
+            Some(json!({"name": "workrave.pdb", "arch": "x86_64"})),
+            Some(&f.admin),
+        )
+        .await;
+    let debug_id_a = build_a["debugId"].as_str().expect("build_a debugId").to_string();
+    let debug_id_b = build_b["debugId"].as_str().expect("build_b debugId").to_string();
+    assert_ne!(debug_id_a, debug_id_b, "each upload gets its own build id");
+
+    // Only one group loaded build A; build B was never involved in any crash.
+    let g1 = create_test_crash_group(&app.db, pid).await;
+    create_test_crash_in_group_with_module(&app.db, pid, &g1, "workrave.pdb", &debug_id_a).await;
+
+    let (status, symbols) =
+        app.call_json("GET", &format!("/products/{pid}/symbols"), None, Some(&f.admin)).await;
+    assert_eq!(status, StatusCode::OK);
+    let symbols = symbols.as_array().expect("symbols response should be an array");
+
+    let row_a = symbols
+        .iter()
+        .find(|s| s["debugId"] == debug_id_a)
+        .expect("build_a symbol missing");
+    let row_b = symbols
+        .iter()
+        .find(|s| s["debugId"] == debug_id_b)
+        .expect("build_b symbol missing");
+    assert_eq!(row_a["referencedBy"], 1, "build_a was loaded by one crash group");
+    assert_eq!(
+        row_b["referencedBy"], 0,
+        "build_b shares a name with build_a but is a different build and was never loaded"
+    );
 }
