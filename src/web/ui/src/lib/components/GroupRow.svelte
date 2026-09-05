@@ -122,10 +122,17 @@
       <span class:text-ink={isActive} class:dark:text-ink-dark={isActive}>
         {c.id}  ·  {c.os}
         {#if c.hasUserText}
-          <span
-            class="ml-1.5 rounded-sm bg-accent-soft dark:bg-accent-softDark px-1 py-px font-sans text-[10px] text-accent"
-            title="The reporter described this crash"
-          >text</span>
+          {#if c.userTextAvailable === false}
+            <span
+              class="ml-1.5 rounded-sm border border-dashed border-amber-600/50 px-1 py-px font-sans text-[10px] text-amber-700 line-through dark:text-amber-500"
+              title="The reporter described this crash, but the stored text is no longer in storage"
+            >text</span>
+          {:else}
+            <span
+              class="ml-1.5 rounded-sm bg-accent-soft dark:bg-accent-softDark px-1 py-px font-sans text-[10px] text-accent"
+              title="The reporter described this crash"
+            >text</span>
+          {/if}
         {/if}
       </span>
       <span></span>

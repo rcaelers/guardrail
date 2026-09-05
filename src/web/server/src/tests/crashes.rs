@@ -1164,6 +1164,68 @@ async fn test_list_groups_has_user_text_filter() {
     assert_eq!(status, StatusCode::OK);
     assert!(group_ids(&body).len() >= 2);
 
+    // A description whose object was never stored is flagged unreadable, so the
+    // list can mark it rather than promise text that cannot be opened.
+    let listed_flag = |body: &serde_json::Value, gid: &str, cid: &str| -> Option<bool> {
+        body["groups"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|g| g["id"].as_str() == Some(gid))
+            .and_then(|g| g["crashes"].as_array())
+            .unwrap()
+            .iter()
+            .find(|c| c["id"].as_str() == Some(cid))
+            .and_then(|c| c["userTextAvailable"].as_bool())
+    };
+    assert_eq!(
+        listed_flag(&body, &group_a, &described),
+        Some(false),
+        "no object was stored for this description"
+    );
+
+    // Storing the object flips it, and crashes without a description are not
+    // probed or flagged at all.
+    {
+        use object_store::ObjectStore as _;
+        let path = app
+            .db
+            .query("SELECT VALUE storage_path FROM attachments WHERE name = 'user-text' LIMIT 1")
+            .await
+            .expect("query storage path")
+            .take::<Vec<String>>(0)
+            .expect("take storage path")
+            .into_iter()
+            .next()
+            .expect("a user-text attachment exists");
+        (*app.storage)
+            .put_opts(
+                &object_store::path::Path::from(path.as_str()),
+                object_store::PutPayload::from_static(b"the description"),
+                Default::default(),
+            )
+            .await
+            .expect("put user-text failed");
+    }
+    let (_, body) = app
+        .call_json(
+            "GET",
+            &format!("/crashes?productId={pid}&hasUserText=true"),
+            None,
+            Some(&f.admin),
+        )
+        .await;
+    assert_eq!(listed_flag(&body, &group_a, &described), Some(true));
+
+    let (_, body_all) = app
+        .call_json("GET", &format!("/crashes?productId={pid}"), None, Some(&f.admin))
+        .await;
+    assert_eq!(
+        listed_flag(&body_all, &group_a, &plain_a),
+        None,
+        "crashes without a description carry no availability flag"
+    );
+
     // The paged member list carries the same per-crash flag.
     let (status, body) = app
         .call_json("GET", &format!("/crashes/{group_a}/crashes"), None, Some(&f.admin))

@@ -290,6 +290,11 @@ export interface CrashSummary {
   productId: string;
   /** This crash carries a user description. */
   hasUserText?: boolean;
+  /**
+   * False when that description's stored object is gone, so the text cannot be
+   * read. Only set for crashes that have a description at all.
+   */
+  userTextAvailable?: boolean;
   version: string;
   os: string;
   at: string;

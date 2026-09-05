@@ -482,11 +482,11 @@ async fn user_text_crash_ids(
     db: &Surreal<Any>,
     scope_sql: &str,
     binds: Vec<(&'static str, Value)>,
-) -> Result<HashSet<String>, (StatusCode, String)> {
+) -> Result<HashMap<String, String>, (StatusCode, String)> {
     let rows = run_value(
         db,
         &format!(
-            "SELECT VALUE meta::id(crash_id) FROM attachments
+            "SELECT meta::id(crash_id) AS crash, storage_path AS path FROM attachments
              WHERE name = 'user-text' AND {scope_sql}"
         ),
         binds,
@@ -494,8 +494,51 @@ async fn user_text_crash_ids(
     .await?;
     Ok(rows
         .into_iter()
-        .filter_map(|v| v.as_str().map(extract_short_id))
+        .filter_map(|row| {
+            let crash = row.get("crash").and_then(|v| v.as_str())?;
+            let path = row.get("path").and_then(|v| v.as_str())?;
+            Some((extract_short_id(crash), path.to_string()))
+        })
         .collect())
+}
+
+/// Whether each object is still in storage, probed concurrently so a page costs
+/// one round trip rather than one per crash. Only a genuine NotFound counts as
+/// gone: a storage outage must not relabel readable descriptions as lost.
+async fn objects_present(storage: &Arc<dyn object_store::ObjectStore>, paths: &[String]) -> Vec<bool> {
+    let probes = paths.iter().map(|path| async move {
+        !matches!(
+            storage.head(&ObjectPath::from(path.as_str())).await,
+            Err(object_store::Error::NotFound { .. })
+        )
+    });
+    futures::future::join_all(probes).await
+}
+
+/// Flags each listed crash whose user description exists as a row but whose
+/// stored object is gone, so the list can mark it unreadable rather than
+/// promising text that cannot be opened. Probing covers only the crashes being
+/// returned that actually have a description — a handful per page.
+async fn mark_user_text_availability(
+    storage: &Arc<dyn object_store::ObjectStore>,
+    crashes: &mut [Value],
+    user_text: &HashMap<String, String>,
+) {
+    let targets: Vec<(usize, String)> = crashes
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| {
+            let id = c.get("id").and_then(|v| v.as_str())?;
+            user_text.get(id).map(|path| (i, path.clone()))
+        })
+        .collect();
+    let paths: Vec<String> = targets.iter().map(|(_, p)| p.clone()).collect();
+
+    for ((i, _), present) in targets.iter().zip(objects_present(storage, &paths).await) {
+        if let Some(obj) = crashes[*i].as_object_mut() {
+            obj.insert("userTextAvailable".into(), json!(present));
+        }
+    }
 }
 
 async fn load_attachment_rows(
@@ -532,19 +575,15 @@ async fn missing_attachment_objects(
     storage: &Arc<dyn object_store::ObjectStore>,
     rows: &[Value],
 ) -> HashSet<String> {
-    let probes = rows.iter().filter_map(|row| {
-        let path = row.get("storagePath").and_then(|v| v.as_str())?;
-        Some(async move {
-            match storage.head(&ObjectPath::from(path)).await {
-                Err(object_store::Error::NotFound { .. }) => Some(path.to_string()),
-                _ => None,
-            }
-        })
-    });
-    futures::future::join_all(probes)
-        .await
-        .into_iter()
-        .flatten()
+    let paths: Vec<String> = rows
+        .iter()
+        .filter_map(|row| row.get("storagePath").and_then(|v| v.as_str()).map(str::to_string))
+        .collect();
+    paths
+        .iter()
+        .zip(objects_present(storage, &paths).await)
+        .filter(|(_, present)| !present)
+        .map(|(path, _)| path.clone())
         .collect()
 }
 
@@ -1693,7 +1732,7 @@ async fn list_groups(
         let has_user_text = r
             .get("id")
             .and_then(|v| v.as_str())
-            .is_some_and(|id| user_text_crashes.contains(id));
+            .is_some_and(|id| user_text_crashes.contains_key(id));
         if has_user_text {
             groups_with_user_text.insert(gid.clone());
         }
@@ -1818,7 +1857,35 @@ async fn list_groups(
     let total = groups.len();
     let off = q.offset.unwrap_or(0);
     let lim = q.limit.unwrap_or(groups.len());
-    let slice: Vec<Value> = groups.into_iter().skip(off).take(lim).collect();
+    let mut slice: Vec<Value> = groups.into_iter().skip(off).take(lim).collect();
+
+    // Only the previews on this page are worth probing; everything filtered or
+    // paged away is never rendered. Collect across the whole page so the probes
+    // go out together instead of a round trip per group.
+    let mut targets: Vec<(usize, usize, String)> = Vec::new();
+    for (gi, group) in slice.iter().enumerate() {
+        let Some(preview) = group.get("crashes").and_then(|v| v.as_array()) else {
+            continue;
+        };
+        for (ci, crash) in preview.iter().enumerate() {
+            if let Some(id) = crash.get("id").and_then(|v| v.as_str())
+                && let Some(path) = user_text_crashes.get(id)
+            {
+                targets.push((gi, ci, path.clone()));
+            }
+        }
+    }
+    let paths: Vec<String> = targets.iter().map(|(_, _, p)| p.clone()).collect();
+    for ((gi, ci, _), present) in targets.iter().zip(objects_present(&s.storage, &paths).await) {
+        if let Some(obj) = slice[*gi]
+            .get_mut("crashes")
+            .and_then(|v| v.as_array_mut())
+            .and_then(|a| a.get_mut(*ci))
+            .and_then(|v| v.as_object_mut())
+        {
+            obj.insert("userTextAvailable".into(), json!(present));
+        }
+    }
     let versions: Vec<Value> = versions_list.into_iter().map(Value::String).collect();
 
     Ok(Json(json!({
@@ -1903,11 +1970,12 @@ async fn list_group_crashes(
         let has = crash
             .get("id")
             .and_then(|v| v.as_str())
-            .is_some_and(|cid| user_text_crashes.contains(cid));
+            .is_some_and(|cid| user_text_crashes.contains_key(cid));
         if let Some(obj) = crash.as_object_mut() {
             obj.insert("hasUserText".into(), json!(has));
         }
     }
+    mark_user_text_availability(&s.storage, &mut crashes, &user_text_crashes).await;
     let total = totals?
         .first()
         .and_then(|v| v.get("total"))
