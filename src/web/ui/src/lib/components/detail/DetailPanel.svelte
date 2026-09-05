@@ -111,6 +111,8 @@
     if (inlineBody) return;
     const attachmentId = crash.userText?.attachmentId;
     if (!attachmentId) return;
+    // The server already probed storage; don't fetch what it says is gone.
+    if (crash.userText?.available === false) return;
     // One attempt per crash; the Retry button re-runs it deliberately.
     if (userTextForId === crash.id) return;
     fetchUserText(crash.productId, attachmentId, crash.id);
@@ -230,7 +232,14 @@
     {#if tab === 'usertext'}
       {@const mine = userTextForId === crash.id}
       {@const displayBody = crash.userText?.body ?? crash.annotations?.['user-text'] ?? (mine ? userTextBody : null)}
-      {#if mine && userTextLoading}
+      {#if crash.userText?.available === false && !displayBody}
+        {@const submitted = crash.userText?.createdAt ? ` ${fmtDate(crash.userText.createdAt)}` : ''}
+        <div class="rounded border border-dashed border-line px-3 py-3 text-[12px] text-amber-700 dark:border-line-dark dark:text-amber-500">
+          The reporter wrote a description{submitted}, but the stored file is no longer in
+          storage, so the text itself is lost. The record is kept so the crash still shows
+          that something was submitted.
+        </div>
+      {:else if mine && userTextLoading}
         <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">Loading…</div>
       {:else if mine && userTextErrorStatus !== null}
         {@const attachmentId = crash.userText?.attachmentId}

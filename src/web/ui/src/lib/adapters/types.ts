@@ -82,6 +82,12 @@ export interface CrashAttachment {
   mimeType: string;
   size: number;
   createdAt: string;
+  /**
+   * False when the stored object is gone. The row is kept deliberately — it is
+   * the only remaining record that the reporter sent this file — so the UI says
+   * it was lost rather than offering a download that cannot succeed.
+   */
+  available?: boolean;
 }
 
 export interface CrashUserText {
@@ -89,6 +95,8 @@ export interface CrashUserText {
   body?: string; // not present in list view; fetched lazily via the attachment endpoint
   filename: string;
   createdAt: string;
+  /** False when the stored object is gone; see CrashAttachment.available. */
+  available?: boolean;
 }
 
 export interface RelatedRef {

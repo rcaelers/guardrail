@@ -6976,6 +6976,7 @@ dependencies = [
  "common",
  "data",
  "email",
+ "futures",
  "http",
  "jsonwebtoken 11.0.0",
  "log",

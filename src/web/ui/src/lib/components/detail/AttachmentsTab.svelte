@@ -22,11 +22,18 @@
             <div class="truncate text-[13px] font-medium text-ink dark:text-ink-dark">{attachment.name}</div>
             <div class="truncate font-mono text-[11px] text-ink-muted dark:text-ink-mutedDark">{attachment.filename}</div>
           </div>
-          <a
-            href={hrefFor(attachment.id)}
-            download={attachment.filename}
-            class="shrink-0 rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink dark:text-ink-dark"
-          >Download</a>
+          {#if attachment.available === false}
+            <span
+              class="shrink-0 rounded-md border border-dashed border-line dark:border-line-dark px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark"
+              title="The stored file is gone; only the record of it remains"
+            >Lost</span>
+          {:else}
+            <a
+              href={hrefFor(attachment.id)}
+              download={attachment.filename}
+              class="shrink-0 rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink dark:text-ink-dark"
+            >Download</a>
+          {/if}
         </div>
         <div class="grid gap-x-4 gap-y-1 text-[11px] text-ink-muted dark:text-ink-mutedDark" style:grid-template-columns="88px 1fr">
           <div>Size</div>
@@ -36,6 +43,12 @@
           <div>Created</div>
           <div class="font-mono">{fmtDate(attachment.createdAt)}</div>
         </div>
+        {#if attachment.available === false}
+          <div class="mt-2 text-[11.5px] text-amber-700 dark:text-amber-500">
+            This file is no longer in storage and cannot be downloaded. The record is
+            kept so the crash still shows what was submitted.
+          </div>
+        {/if}
       </div>
     {/each}
   {/if}

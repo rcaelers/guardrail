@@ -1200,3 +1200,94 @@ async fn test_list_groups_has_user_text_filter() {
         "attachments are invisible without a product role"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Tests: db_api – attachment availability
+// ---------------------------------------------------------------------------
+
+// API calls:
+// | Method | Route                        |
+// | ------ | ---------------------------- |
+// | GET    | /crashes/by-crash/{crash_id} |
+// Cases:
+// | Case                                     | Expected            |
+// | ---------------------------------------- | ------------------- |
+// | attachment whose object exists           | available = true    |
+// | attachment whose object was deleted      | available = false   |
+// | user-text whose object was deleted       | available = false   |
+#[tokio::test]
+async fn test_get_crash_reports_lost_attachments() {
+    use object_store::ObjectStore as _;
+
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+    let gid = create_test_crash_group(&app.db, pid).await;
+    let cid = create_test_crash_in_group(&app.db, pid, &gid).await;
+
+    // Present in storage.
+    let kept = create_test_attachment(
+        &app.db,
+        "workrave.log",
+        "text/plain",
+        4,
+        "workrave.log",
+        Some(pid.to_string()),
+        Some(cid.clone()),
+    )
+    .await;
+    (*app.storage)
+        .put_opts(
+            &object_store::path::Path::from(kept.storage_path.as_str()),
+            object_store::PutPayload::from_static(b"logs"),
+            Default::default(),
+        )
+        .await
+        .expect("put attachment failed");
+
+    // Rows whose objects were never stored — what the orphan cleaner used to
+    // leave behind. They must be reported as lost, not silently offered.
+    create_test_attachment(
+        &app.db,
+        "workrave.1.log",
+        "text/plain",
+        4,
+        "workrave.1.log",
+        Some(pid.to_string()),
+        Some(cid.clone()),
+    )
+    .await;
+    create_test_attachment(
+        &app.db,
+        "user-text",
+        "text/plain",
+        9,
+        "user-text.txt",
+        Some(pid.to_string()),
+        Some(cid.clone()),
+    )
+    .await;
+
+    let (status, body) = app
+        .call_json("GET", &format!("/crashes/by-crash/{cid}"), None, Some(&f.admin))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let available_for = |name: &str| -> Option<bool> {
+        body["crash"]["attachments"]
+            .as_array()
+            .expect("attachments")
+            .iter()
+            .find(|a| a["name"].as_str() == Some(name))
+            .and_then(|a| a["available"].as_bool())
+    };
+    assert_eq!(available_for("workrave.log"), Some(true));
+    assert_eq!(available_for("workrave.1.log"), Some(false));
+
+    // The user description is split out separately and carries the same flag.
+    assert_eq!(body["crash"]["userText"]["available"].as_bool(), Some(false));
+    assert!(
+        body["crash"]["userText"]["attachmentId"].is_string(),
+        "the row is kept so the crash still records that text was submitted"
+    );
+}

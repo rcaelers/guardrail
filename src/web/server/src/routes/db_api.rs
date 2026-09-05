@@ -523,12 +523,44 @@ async fn load_attachment_rows(
 // Returns attachment metadata for the crash. "user-text" attachments are split
 // out and returned as the second element (metadata only, no S3 fetch). Their
 // content is served on-demand via the download-attachment endpoint.
-fn split_crash_attachments(rows: Vec<Value>) -> (Vec<Value>, Option<Value>) {
+/// Storage paths whose object is gone. Rows are deliberately kept when the
+/// object is deleted — the row is the only surviving record that the reporter
+/// sent something — so the UI has to say the file was lost rather than offer a
+/// download that 404s. Only a genuine NotFound counts: a storage outage must
+/// not relabel every attachment as lost.
+async fn missing_attachment_objects(
+    storage: &Arc<dyn object_store::ObjectStore>,
+    rows: &[Value],
+) -> HashSet<String> {
+    let probes = rows.iter().filter_map(|row| {
+        let path = row.get("storagePath").and_then(|v| v.as_str())?;
+        Some(async move {
+            match storage.head(&ObjectPath::from(path)).await {
+                Err(object_store::Error::NotFound { .. }) => Some(path.to_string()),
+                _ => None,
+            }
+        })
+    });
+    futures::future::join_all(probes)
+        .await
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
+fn split_crash_attachments(
+    rows: Vec<Value>,
+    missing: &HashSet<String>,
+) -> (Vec<Value>, Option<Value>) {
     let mut attachments = Vec::new();
     let mut user_text = None;
 
     for row in rows {
         let name = row.get("name").and_then(|v| v.as_str()).unwrap_or_default();
+        let available = !row
+            .get("storagePath")
+            .and_then(|v| v.as_str())
+            .is_some_and(|path| missing.contains(path));
         if name == "user-text" {
             if user_text.is_none() {
                 user_text = Some(json!({
@@ -538,12 +570,14 @@ fn split_crash_attachments(rows: Vec<Value>) -> (Vec<Value>, Option<Value>) {
                         row.get("filename").and_then(|v| v.as_str())
                     ),
                     "createdAt": row.get("createdAt").cloned().unwrap_or(Value::Null),
+                    "available": available,
                 }));
             }
             continue;
         }
 
         attachments.push(json!({
+            "available": available,
             "id": row.get("id").and_then(|v| v.as_str()).map(extract_short_id).unwrap_or_default(),
             "name": name,
             "filename": attachment_filename(
@@ -1911,7 +1945,9 @@ async fn get_crash(
         ),
     );
 
-    let (attachments, user_text) = split_crash_attachments(attachment_rows?);
+    let attachment_rows = attachment_rows?;
+    let missing = missing_attachment_objects(&s.storage, &attachment_rows).await;
+    let (attachments, user_text) = split_crash_attachments(attachment_rows, &missing);
     let annotations = build_annotations_map(annotation_rows?);
 
     let mut crash_value = hydrate_crash(&row, attachments, user_text);
@@ -3046,12 +3082,24 @@ mod tests {
             }),
         ];
 
-        let (attachments, user_text) = split_crash_attachments(rows);
+        // Nothing reported missing: everything is available.
+        let (attachments, user_text) = split_crash_attachments(rows.clone(), &HashSet::new());
 
         assert_eq!(attachments.len(), 1);
         assert_eq!(attachments[0]["id"], "minidump");
+        assert_eq!(attachments[0]["available"], true);
         let user_text = user_text.expect("first user-text attachment should be present");
         assert_eq!(user_text["attachmentId"], "usertext1");
+        assert_eq!(user_text["available"], true);
         assert!(user_text.get("body").is_none(), "body must not be eagerly fetched");
+
+        // A storage path reported gone marks that row, and only that row.
+        let missing = HashSet::from(["user-text/one.txt".to_string()]);
+        let (attachments, user_text) = split_crash_attachments(rows, &missing);
+        assert_eq!(attachments[0]["available"], true);
+        assert_eq!(
+            user_text.expect("row is kept even when the object is gone")["available"],
+            false
+        );
     }
 }
