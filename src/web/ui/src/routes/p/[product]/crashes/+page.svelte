@@ -74,6 +74,27 @@
   const activeCrash = $derived(picked?.crash ?? data.selectedCrash);
   const activeGroup = $derived(picked?.group ?? data.selectedGroup);
 
+  // A pick belongs to the list it was made from. Changing a filter reloads the
+  // list and the server resolves a fresh default, but the picked crash may not
+  // even be in the new list — so hand the pane back to `data`. Selecting a
+  // crash moves the URL shallowly and leaves the filters alone, so this does
+  // not fire on selection.
+  const filterKey = $derived(
+    [
+      data.filters.version,
+      data.filters.status,
+      data.filters.search,
+      data.filters.sort,
+      data.filters.userText,
+      data.filters.page,
+      data.filters.limit
+    ].join('\u0000')
+  );
+  $effect(() => {
+    filterKey;
+    picked = null;
+  });
+
   async function showCrash(crashId: string, force = false) {
     if (!force && (activeCrash?.id === crashId || loadingCrashId === crashId)) return;
     loadingCrashId = crashId;
