@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { goto, invalidateAll } from '$app/navigation';
+  import { goto, invalidateAll, replaceState } from '$app/navigation';
   import { page } from '$app/stores';
   import type { PageData } from './$types';
-  import type { CrashSummary, Status } from '$lib/adapters/types';
+  import type { Crash, CrashGroup, CrashSummary, Status } from '$lib/adapters/types';
 
   import Select from '$lib/components/Select.svelte';
   import GroupRow from '$lib/components/GroupRow.svelte';
@@ -60,6 +60,37 @@
     }
   }
 
+  // ---- Selection ----
+  // Selecting a crash only changes the detail pane, but going through `goto`
+  // re-ran the page load, and with it the group-list query — a scan across
+  // every crash row in the product. Fetch the crash on its own and move the URL
+  // with shallow routing, which leaves the already-correct list untouched.
+  // `data` still supplies the selection on first render and after a reload, so
+  // deep links and the back button keep working.
+  let picked = $state<{ crash: Crash; group: CrashGroup } | null>(null);
+  let loadingCrashId = $state<string | null>(null);
+
+  const activeCrash = $derived(picked?.crash ?? data.selectedCrash);
+  const activeGroup = $derived(picked?.group ?? data.selectedGroup);
+
+  async function showCrash(crashId: string, force = false) {
+    if (!force && (activeCrash?.id === crashId || loadingCrashId === crashId)) return;
+    loadingCrashId = crashId;
+    const url = new URL($page.url);
+    url.searchParams.delete('id');
+    url.searchParams.set('crash', crashId);
+    replaceState(url, {});
+    try {
+      const r = await fetch(
+        `/p/${encodeURIComponent($page.params.product!)}/crashes/detail/${encodeURIComponent(crashId)}`
+      );
+      if (!r.ok) return;
+      picked = (await r.json()) as { crash: Crash; group: CrashGroup };
+    } finally {
+      if (loadingCrashId === crashId) loadingCrashId = null;
+    }
+  }
+
   // ---- URL-driven filters ----
   async function updateParam(key: string, value: string, reset = false) {
     const url = new URL($page.url);
@@ -91,25 +122,21 @@
     await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
   }
 
-  // Selecting a group selects its first crash for the detail pane and
-  // expands the row so the user can see the other crashes available to pick.
+  // Selecting a group shows its newest crash and expands the row so the other
+  // crashes are there to pick from. The preview shipped with the list already
+  // names that crash, so no lookup is needed to find it.
   async function selectGroup(id: string) {
-    const url = new URL($page.url);
-    url.searchParams.delete('crash');
-    url.searchParams.set('id', id);
     pane.open = true;
     if (!expanded.has(id)) toggleExpanded(id);
-    await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
+    const first = crashesFor({ id, crashes: data.list.groups.find((g) => g.id === id)?.crashes })[0];
+    if (first) await showCrash(first.id);
   }
 
   // Selecting a specific crash within an (expanded) group.
   async function selectCrash(crashId: string, groupId: string) {
-    const url = new URL($page.url);
-    url.searchParams.delete('id');
-    url.searchParams.set('crash', crashId);
     pane.open = true;
     if (!expanded.has(groupId)) toggleExpanded(groupId);
-    await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
+    await showCrash(crashId);
   }
 
   // ---- Resizable split-pane ----
@@ -137,30 +164,39 @@
   }
 
   // ---- Form actions ----
+  // invalidateAll refreshes the list; the detail pane is client-side state, so
+  // drop the pick and re-read it if the server load lands elsewhere.
+  async function refreshAfterMutation() {
+    const id = activeCrash?.id ?? null;
+    picked = null;
+    await invalidateAll();
+    if (id && data.selectedCrash?.id !== id) await showCrash(id, true);
+  }
+
   async function setStatus(s: Status) {
-    if (!data.selectedGroup) return;
+    if (!activeGroup) return;
     const body = new FormData();
-    body.set('id', data.selectedGroup.id);
+    body.set('id', activeGroup.id);
     body.set('status', s);
     await fetch('?/setStatus', { method: 'POST', body });
-    await invalidateAll();
+    await refreshAfterMutation();
   }
   async function addNote(noteBody: string) {
-    if (!data.selectedGroup) return;
+    if (!activeGroup) return;
     const body = new FormData();
-    body.set('id', data.selectedGroup.id);
+    body.set('id', activeGroup.id);
     body.set('body', noteBody);
     body.set('author', 'you');
     await fetch('?/addNote', { method: 'POST', body });
-    await invalidateAll();
+    await refreshAfterMutation();
   }
   async function merge(mergedId: string) {
-    if (!data.selectedGroup) return;
+    if (!activeGroup) return;
     const body = new FormData();
-    body.set('primaryId', data.selectedGroup.id);
+    body.set('primaryId', activeGroup.id);
     body.set('mergedId', mergedId);
     await fetch('?/merge', { method: 'POST', body });
-    await invalidateAll();
+    await refreshAfterMutation();
   }
 
   function confirmDeleteCrash(crashId: string, groupId?: string) {
@@ -184,9 +220,9 @@
     body.set('id', crashId);
     const r = await fetch('?/deleteCrash', { method: 'POST', body });
     if (!r.ok) return;
-    forgetLoaded(groupId ?? data.selectedCrash?.groupId ?? '');
+    forgetLoaded(groupId ?? activeCrash?.groupId ?? '');
     const url = new URL($page.url);
-    if (data.selectedCrash?.id === crashId) {
+    if (activeCrash?.id === crashId) {
       url.searchParams.delete('crash');
       url.searchParams.delete('id');
       pane.open = false;
@@ -205,7 +241,7 @@
     expanded = next;
     forgetLoaded(groupId);
     const url = new URL($page.url);
-    if (data.selectedGroup?.id === groupId || url.searchParams.get('id') === groupId) {
+    if (activeGroup?.id === groupId || url.searchParams.get('id') === groupId) {
       url.searchParams.delete('id');
       url.searchParams.delete('crash');
       pane.open = false;
@@ -299,12 +335,12 @@
       {#each data.list.groups as g (g.id)}
         <GroupRow
           {g}
-          selected={data.selectedGroup?.id === g.id}
+          selected={activeGroup?.id === g.id}
           expanded={expanded.has(g.id)}
           crashes={crashesFor(g)}
           total={g.count}
           loadingMore={loadingCrashes[g.id] ?? false}
-          selectedCrashId={data.selectedCrash?.id ?? null}
+          selectedCrashId={activeCrash?.id ?? null}
           {canDelete}
           onSelect={selectGroup}
           onToggle={toggleExpanded}
@@ -354,7 +390,7 @@
   </div>
 
   <!-- RESIZER -->
-  {#if pane.open && data.selectedGroup && data.selectedCrash}
+  {#if pane.open && activeGroup && activeCrash}
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
@@ -383,13 +419,13 @@
   <div
     bind:this={splitEl}
     class="min-w-0 shrink-0"
-    style:flex-basis={pane.open && data.selectedCrash ? `${pane.pct}%` : '0%'}
-    style:display={pane.open && data.selectedCrash ? 'block' : 'none'}
+    style:flex-basis={pane.open && activeCrash ? `${pane.pct}%` : '0%'}
+    style:display={pane.open && activeCrash ? 'block' : 'none'}
   >
-    {#if data.selectedGroup && data.selectedCrash}
+    {#if activeGroup && activeCrash}
       <DetailPanel
-        group={data.selectedGroup}
-        crash={data.selectedCrash}
+        group={activeGroup}
+        crash={activeCrash}
         onStatusChange={setStatus}
         onMerge={merge}
         onAddNote={addNote}
@@ -403,7 +439,7 @@
   </div>
 
   <!-- Collapsed detail rail -->
-  {#if !pane.open && data.selectedCrash}
+  {#if !pane.open && activeCrash}
     <button
       type="button"
       onclick={() => (pane.open = true)}
