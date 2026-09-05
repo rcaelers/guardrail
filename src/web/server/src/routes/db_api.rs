@@ -39,6 +39,7 @@ pub fn router() -> Router<AppState> {
         .route("/attachments/{id}/download", get(download_attachment))
         .route("/crashes", get(list_groups))
         .route("/crashes/{id}", get(get_group).delete(delete_group))
+        .route("/crashes/{id}/crashes", get(list_group_crashes))
         .route("/crashes/{id}/merge", post(merge_groups))
         .route("/crashes/{id}/notes", post(add_note))
         .route("/crashes/{id}/status", post(set_status))
@@ -381,6 +382,38 @@ const SYMBOL_PROJ: &str = "meta::id(id) AS id, meta::id(product_id) AS productId
     module_id AS name, version, arch, 'Breakpad' AS format, '' AS size, \
     build_id AS debugId, '' AS codeId, channel, commit, build_tag AS buildTag, \
     created_at AS uploadedAt, '' AS uploadedBy, 0 AS referencedBy";
+
+/// Member crashes shipped inline with each group in the list response, so the
+/// UI can expand a group row without a round trip.
+const GROUP_CRASH_PREVIEW: usize = 5;
+
+/// Lightweight member-crash projection (no minidump blob) shared by
+/// compose_group and the paged /crashes/{id}/crashes endpoint. Binds $gid.
+const GROUP_CRASHES_SELECT: &str = "
+    SELECT
+        created_at,
+        meta::id(id)             AS id,
+        meta::id(group_id)       AS groupId,
+        meta::id(product_id)     AS productId,
+        report.version           AS version,
+        report.os                AS os,
+        report.at                AS at,
+        report.user              AS user,
+        report.similarity        AS similarity,
+        report.commit            AS commit,
+        report.signal            AS signal,
+        report.title             AS title,
+        report.topFrame          AS topFrame,
+        report.file              AS file,
+        report.line              AS line,
+        report.address           AS address,
+        report.platform          AS platform,
+        report.build             AS build,
+        report.exceptionType     AS exceptionType,
+        report.exceptionTypeShort AS exceptionTypeShort
+    FROM crashes
+    WHERE group_id = type::record('crash_groups', $gid)
+";
 
 const GROUP_BASE_SELECT: &str = "
     SELECT
@@ -1527,10 +1560,16 @@ async fn list_groups(
         WHERE product_id = type::record('products', $pid)
         ORDER BY count DESC"
     );
+    // Projects the same per-crash fields as compose_group's member list, so the
+    // rows double as the expanded-row preview (`crashes`) on each group — the
+    // UI expands a group without a round trip.
     let reps_sql = "
         SELECT
             group_id,
             created_at,
+            meta::id(id)              AS id,
+            IF group_id != NONE THEN meta::id(group_id) ELSE NONE END AS groupId,
+            meta::id(product_id)      AS productId,
             report.title              AS title,
             report.topFrame           AS topFrame,
             report.file               AS file,
@@ -1539,6 +1578,11 @@ async fn list_groups(
             report.build              AS build,
             report.address            AS address,
             report.platform           AS platform,
+            report.os                 AS os,
+            report.at                 AS at,
+            report.user               AS user,
+            report.commit             AS commit,
+            report.signal             AS signal,
             (report.exceptionType     ?? report.crash_info.type) AS exceptionType,
             report.exceptionTypeShort AS exceptionTypeShort,
             report.similarity         AS similarity
@@ -1553,6 +1597,8 @@ async fn list_groups(
     let rep_rows = reps_res?;
 
     let mut reps: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
+    let mut previews: std::collections::HashMap<String, Vec<Value>> =
+        std::collections::HashMap::new();
     let mut counts: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
     let mut trends: std::collections::HashMap<String, [u64; 14]> = std::collections::HashMap::new();
     let mut versions_set = std::collections::BTreeSet::new();
@@ -1570,6 +1616,17 @@ async fn list_groups(
         let gid = extract_short_id(gid_raw);
 
         *counts.entry(gid.clone()).or_insert(0) += 1;
+
+        // Newest-first preview of the group's member crashes. The full list is
+        // available from /crashes/{id}/crashes when the user asks for more.
+        let preview = previews.entry(gid.clone()).or_default();
+        if preview.len() < GROUP_CRASH_PREVIEW {
+            let mut c = r.clone();
+            if let Some(obj) = c.as_object_mut() {
+                obj.remove("group_id");
+            }
+            preview.push(c);
+        }
 
         // 30D trend: 14 two-day buckets; bucket 0 = oldest, 13 = most recent
         if let Some(created_str) = r.get("created_at").and_then(|v| v.as_str())
@@ -1602,6 +1659,8 @@ async fn list_groups(
                     .map(|t| t.iter().map(|&c| json!(c)).collect::<Vec<_>>())
                     .unwrap_or_else(|| vec![json!(0u64); 14]);
                 obj.insert("trend".into(), json!(trend));
+                let preview = previews.remove(&gid).unwrap_or_default();
+                obj.insert("crashes".into(), Value::Array(preview));
             }
             merged
         })
@@ -1678,6 +1737,49 @@ async fn get_group(
         Some(v) => Ok(Json(v)),
         None => Err(not_found(&id)),
     }
+}
+
+#[derive(Deserialize)]
+struct GroupCrashesQuery {
+    limit: Option<usize>,
+    offset: Option<usize>,
+}
+
+/// Paged member crashes of one group. Cheaper than GET /crashes/{id}, which
+/// also composes notes, related groups and the representative crash — this is
+/// what the list view calls when a user expands past the inline preview.
+async fn list_group_crashes(
+    State(s): State<AppState>,
+    session: Session,
+    Path(id): Path<String>,
+    Query(q): Query<GroupCrashesQuery>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let db = s.user_db(&session).await?;
+
+    let offset = q.offset.unwrap_or(0);
+    let mut sql = format!("{GROUP_CRASHES_SELECT} ORDER BY created_at DESC");
+    if let Some(limit) = q.limit {
+        sql.push_str(&format!(" LIMIT {limit}"));
+    }
+    if offset > 0 {
+        sql.push_str(&format!(" START {offset}"));
+    }
+
+    let count_sql = "SELECT count() AS total FROM crashes
+         WHERE group_id = type::record('crash_groups', $gid)
+         GROUP ALL";
+    let (crashes, totals) = tokio::join!(
+        run_value(&db, &sql, vec![("gid", Value::String(id.clone()))]),
+        run_value(&db, count_sql, vec![("gid", Value::String(id.clone()))]),
+    );
+    let crashes = crashes?;
+    let total = totals?
+        .first()
+        .and_then(|v| v.get("total"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(crashes.len() as u64);
+
+    Ok(Json(json!({ "crashes": crashes, "total": total })))
 }
 
 async fn get_crash(
@@ -1943,30 +2045,7 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
 
     let crash_rows = run_value(
         db,
-        "SELECT
-            created_at,
-            meta::id(id)             AS id,
-            meta::id(group_id)       AS groupId,
-            meta::id(product_id)     AS productId,
-            report.version           AS version,
-            report.os                AS os,
-            report.at                AS at,
-            report.user              AS user,
-            report.similarity        AS similarity,
-            report.commit            AS commit,
-            report.signal            AS signal,
-            report.title             AS title,
-            report.topFrame          AS topFrame,
-            report.file              AS file,
-            report.line              AS line,
-            report.address           AS address,
-            report.platform          AS platform,
-            report.build             AS build,
-            report.exceptionType     AS exceptionType,
-            report.exceptionTypeShort AS exceptionTypeShort
-         FROM crashes
-         WHERE group_id = type::record('crash_groups', $gid)
-         ORDER BY created_at DESC",
+        &format!("{GROUP_CRASHES_SELECT} ORDER BY created_at DESC"),
         vec![("gid", Value::String(id.into()))],
     )
     .await?;

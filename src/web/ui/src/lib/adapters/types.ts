@@ -128,6 +128,12 @@ export interface CrashGroupSummary {
   assignee: string | null;
   firstSeen: string;
   lastSeen: string;
+  /**
+   * Newest-first preview of the group's member crashes, shipped inline by the
+   * list endpoint so the UI can expand a group row without a round trip. Capped
+   * server-side — use `listGroupCrashes` for the rest.
+   */
+  crashes?: CrashSummary[];
 }
 
 // ------------------------------------------------------------------
@@ -265,6 +271,8 @@ export interface Crash extends Partial<CrashReport> {
 // Lightweight crash summary used in the expanded group row.
 export interface CrashSummary {
   id: string;
+  groupId: string;
+  productId: string;
   version: string;
   os: string;
   at: string;
@@ -452,6 +460,12 @@ export interface ListResult {
   versions: string[];
 }
 
+export interface GroupCrashesResult {
+  crashes: CrashSummary[];
+  /** Member crashes in the group, ignoring limit/offset. */
+  total: number;
+}
+
 // ------------------------------------------------------------------
 // API tokens.
 // ------------------------------------------------------------------
@@ -546,6 +560,12 @@ export interface GuardrailAdapter {
   // --- crashes ---
   listGroups(q: ListQuery): Promise<ListResult>;
   getGroup(id: string): Promise<CrashGroup | null>;
+  /** Paged member crashes of a group — cheaper than getGroup, which also
+   *  composes notes, related groups and the representative crash. */
+  listGroupCrashes(
+    groupId: string,
+    opts?: { limit?: number; offset?: number }
+  ): Promise<GroupCrashesResult>;
   /** Returns a single crash plus its parent group, or null. */
   getCrash(id: string): Promise<{ crash: Crash; group: CrashGroup } | null>;
   downloadAttachment(id: string): Promise<Response | null>;

@@ -887,3 +887,106 @@ async fn test_list_groups_old_crash() {
         .await;
     assert_eq!(status, StatusCode::OK);
 }
+
+// ---------------------------------------------------------------------------
+// Tests: db_api – list_group_crashes + inline group preview
+// ---------------------------------------------------------------------------
+
+// API calls:
+// | Method | Route                       |
+// | ------ | --------------------------- |
+// | GET    | /crashes/{group_id}/crashes |
+// Cases:
+// | Case                                 | Expected                          |
+// | ------------------------------------ | --------------------------------- |
+// | admin, group with 7 crashes          | 200 with all 7 + total 7          |
+// | admin, limit=2                       | 200 with 2 rows, total still 7    |
+// | admin, limit=2&offset=6              | 200 with the 1 remaining row      |
+// | admin, nonexistent group             | 200 with empty list, total 0      |
+// | no_session on private product        | 200 with empty list (RLS)         |
+#[tokio::test]
+async fn test_list_group_crashes_handler() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+
+    let gid = create_test_crash_group(&app.db, pid).await;
+    for _ in 0..7 {
+        create_test_crash_in_group(&app.db, pid, &gid).await;
+    }
+    let uri = format!("/crashes/{gid}/crashes");
+
+    let (status, body) = app.call_json("GET", &uri, None, Some(&f.admin)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["total"].as_u64(), Some(7));
+    assert_eq!(body["crashes"].as_array().map(|a| a.len()), Some(7));
+    assert!(body["crashes"][0]["id"].is_string());
+    assert_eq!(body["crashes"][0]["groupId"].as_str(), Some(gid.as_str()));
+
+    // limit trims the page but not the reported total
+    let (status, body) = app
+        .call_json("GET", &format!("{uri}?limit=2"), None, Some(&f.admin))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["total"].as_u64(), Some(7));
+    assert_eq!(body["crashes"].as_array().map(|a| a.len()), Some(2));
+
+    // offset walks past the first page
+    let (status, body) = app
+        .call_json("GET", &format!("{uri}?limit=2&offset=6"), None, Some(&f.admin))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["crashes"].as_array().map(|a| a.len()), Some(1));
+
+    // Unknown group → empty, not an error
+    let (status, body) = app
+        .call_json("GET", "/crashes/nosuchgroup/crashes", None, Some(&f.admin))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["total"].as_u64(), Some(0));
+    assert_eq!(body["crashes"].as_array().map(|a| a.len()), Some(0));
+
+    // No session on a private product → RLS hides the rows
+    let (status, body) = app.call_json("GET", &uri, None, None).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["crashes"].as_array().map(|a| a.len()), Some(0));
+}
+
+// API calls:
+// | Method | Route                           |
+// | ------ | ------------------------------- |
+// | GET    | /crashes?productId={product_id} |
+// Cases:
+// | Case                              | Expected                              |
+// | --------------------------------- | ------------------------------------- |
+// | admin, group with 7 crashes       | 200, group carries 5-crash preview    |
+#[tokio::test]
+async fn test_list_groups_includes_crash_preview() {
+    // The list view expands a group row from this inline preview, so it must
+    // ship member crashes without a second request.
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+
+    let gid = create_test_crash_group(&app.db, pid).await;
+    for _ in 0..7 {
+        create_test_crash_in_group(&app.db, pid, &gid).await;
+    }
+
+    let (status, body) = app
+        .call_json("GET", &format!("/crashes?productId={pid}"), None, Some(&f.admin))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let group = body["groups"]
+        .as_array()
+        .expect("groups array")
+        .iter()
+        .find(|g| g["id"].as_str() == Some(gid.as_str()))
+        .expect("group in list");
+    assert_eq!(group["count"].as_u64(), Some(7));
+    let preview = group["crashes"].as_array().expect("crash preview");
+    assert_eq!(preview.len(), 5);
+    assert!(preview[0]["id"].is_string());
+    assert_eq!(preview[0]["version"].as_str(), Some("1.2.3"));
+    assert!(preview[0].get("group_id").is_none());
+}

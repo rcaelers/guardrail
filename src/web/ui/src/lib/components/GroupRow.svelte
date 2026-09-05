@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Crash, CrashGroupSummary } from '$lib/adapters/types';
+  import type { CrashSummary, CrashGroupSummary } from '$lib/adapters/types';
   import SignalChip from './SignalChip.svelte';
   import StatusPill from './StatusPill.svelte';
   import Sparkline from './Sparkline.svelte';
@@ -10,12 +10,17 @@
     selected: boolean;
     expanded: boolean;
     /** Member crashes shown under the group row when expanded. */
-    crashes?: Crash[];
+    crashes?: CrashSummary[];
+    /** Total member crashes in the group, of which `crashes` may be a prefix. */
+    total?: number;
+    /** True while the remaining member crashes are being fetched. */
+    loadingMore?: boolean;
     /** The crash id currently shown in the detail pane, if any. */
     selectedCrashId?: string | null;
     canDelete?: boolean;
     onSelect: (id: string) => void;
     onToggle: (id: string) => void;
+    onLoadMore: (id: string) => void;
     onSelectCrash: (crashId: string, groupId: string) => void;
     onDeleteGroup?: (id: string) => void;
     onDeleteCrash?: (crashId: string, groupId: string) => void;
@@ -25,25 +30,20 @@
     selected,
     expanded,
     crashes = [],
+    total,
+    loadingMore = false,
     selectedCrashId = null,
     canDelete = false,
     onSelect,
     onToggle,
+    onLoadMore,
     onSelectCrash,
     onDeleteGroup,
     onDeleteCrash
   }: Props = $props();
 
-  const INITIAL_VISIBLE = 5;
-  let visibleCount = $state(INITIAL_VISIBLE);
-
-  function loadMore() {
-    if (crashes.length === 0) {
-      onSelect(g.id);
-    } else {
-      visibleCount = crashes.length;
-    }
-  }
+  const crashTotal = $derived(total ?? g.count);
+  const remaining = $derived(Math.max(0, crashTotal - crashes.length));
 
   const COLS = '28px 1fr 260px 130px 80px 110px 90px 76px';
 
@@ -102,7 +102,7 @@
 </div>
 
 {#if expanded}
-  {#each crashes.slice(0, visibleCount) as c (c.id)}
+  {#each crashes as c (c.id)}
     {@const isActive = selectedCrashId === c.id}
     <div
       role="button"
@@ -136,16 +136,21 @@
       </div>
     </div>
   {/each}
-  {@const shown = Math.min(crashes.length, visibleCount)}
-  {#if g.count > shown}
+  {#if loadingMore}
+    <div
+      class="border-b border-line dark:border-line-dark bg-[#fbfbfc] dark:bg-[#18181a] py-2 pl-12 pr-5 text-[11px] text-ink-muted dark:text-ink-mutedDark"
+    >
+      Loading…
+    </div>
+  {:else if remaining > 0}
     <div
       role="button"
       tabindex="0"
-      onclick={(e) => { e.stopPropagation(); loadMore(); }}
-      onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); loadMore(); } }}
+      onclick={(e) => { e.stopPropagation(); onLoadMore(g.id); }}
+      onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onLoadMore(g.id); } }}
       class="border-b border-line dark:border-line-dark bg-[#fbfbfc] dark:bg-[#18181a] py-2 pl-12 pr-5 text-[11px] text-ink-muted dark:text-ink-mutedDark cursor-pointer hover:bg-[#f2f2f4] dark:hover:bg-[#212124] transition-colors"
     >
-      + {fmtInt(g.count - shown)} more · <span class="text-accent underline">Load more</span>
+      + {fmtInt(remaining)} more · <span class="text-accent underline">Load more</span>
     </div>
   {/if}
 {/if}

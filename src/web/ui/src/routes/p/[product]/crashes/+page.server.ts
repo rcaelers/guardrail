@@ -43,10 +43,9 @@ export const load: PageServerLoad = async ({ url, parent, request }) => {
 
   // Resolve the selected crash. If the URL gives us a crash id, fetch
   // the list and the crash in parallel. If only a group id (or nothing)
-  // is provided, we need the list first to pick a default group; then
-  // one getGroup to find its first crash id, then getCrash for the
-  // detail. Going through getCrash means getGroup can return lightweight
-  // crash summaries (no full minidump blob per member crash).
+  // is provided, we need the list first to pick a default group, then
+  // getCrash for the detail. Going through getCrash means the list can
+  // carry lightweight crash summaries (no full minidump blob per member).
   let selectedGroup = null;
   let selectedCrash = null;
 
@@ -59,8 +58,11 @@ export const load: PageServerLoad = async ({ url, parent, request }) => {
     list = await listPromise;
     const targetGroupId = groupId ?? list.groups[0]?.id ?? null;
     if (targetGroupId) {
-      const g = await adapter.getGroup(targetGroupId);
-      const targetCrashId = g?.crashes[0]?.id ?? null;
+      // The list ships a preview of each group's newest crashes, so the group
+      // is usually already resolvable without a getGroup round trip; only a
+      // group from another page of the list needs the extra fetch.
+      const preview = list.groups.find((g) => g.id === targetGroupId)?.crashes?.[0]?.id ?? null;
+      const targetCrashId = preview ?? (await adapter.getGroup(targetGroupId))?.crashes[0]?.id ?? null;
       if (targetCrashId) {
         const bundle = await adapter.getCrash(targetCrashId);
         if (bundle) { selectedGroup = bundle.group; selectedCrash = bundle.crash; }

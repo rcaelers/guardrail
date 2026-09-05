@@ -2,7 +2,7 @@
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/stores';
   import type { PageData } from './$types';
-  import type { Status } from '$lib/adapters/types';
+  import type { CrashSummary, Status } from '$lib/adapters/types';
 
   import Select from '$lib/components/Select.svelte';
   import GroupRow from '$lib/components/GroupRow.svelte';
@@ -17,12 +17,47 @@
   const canMerge = $derived(data.role === 'maintainer' || !!data.user?.isAdmin);
   let pendingConfirm = $state<{ message: string; confirmLabel: string; action: () => Promise<void> } | null>(null);
 
-  // Expanded-group state (per-row chevron) — local to session.
+  // Expanded-group state (per-row chevron) — local to session. Any number of
+  // groups can be open at once; expanding one never closes another.
   let expanded = $state<Set<string>>(new Set());
   function toggleExpanded(id: string) {
     const next = new Set(expanded);
     if (next.has(id)) next.delete(id); else next.add(id);
     expanded = next;
+  }
+
+  // Member crashes per group. Every group in the list arrives with a short
+  // inline preview, so expanding a row renders immediately with no request;
+  // this map only holds the full lists pulled by "load more".
+  let loadedCrashes = $state<Record<string, CrashSummary[]>>({});
+  let loadingCrashes = $state<Record<string, boolean>>({});
+
+  function crashesFor(g: { id: string; crashes?: CrashSummary[] }): CrashSummary[] {
+    return loadedCrashes[g.id] ?? g.crashes ?? [];
+  }
+
+  // Drops the full list so the row falls back to the (freshly loaded) preview.
+  function forgetLoaded(groupId: string) {
+    if (groupId in loadedCrashes) {
+      const next = { ...loadedCrashes };
+      delete next[groupId];
+      loadedCrashes = next;
+    }
+  }
+
+  async function loadAllCrashes(groupId: string) {
+    if (loadingCrashes[groupId]) return;
+    loadingCrashes[groupId] = true;
+    try {
+      const r = await fetch(
+        `/p/${encodeURIComponent($page.params.product!)}/crashes/${encodeURIComponent(groupId)}/events`
+      );
+      if (!r.ok) return;
+      const body = (await r.json()) as { crashes: CrashSummary[] };
+      loadedCrashes[groupId] = body.crashes;
+    } finally {
+      loadingCrashes[groupId] = false;
+    }
   }
 
   // ---- URL-driven filters ----
@@ -128,11 +163,11 @@
     await invalidateAll();
   }
 
-  function confirmDeleteCrash(crashId: string) {
+  function confirmDeleteCrash(crashId: string, groupId?: string) {
     pendingConfirm = {
       message: 'Permanently delete this crash event?',
       confirmLabel: 'Delete crash',
-      action: () => deleteCrash(crashId)
+      action: () => deleteCrash(crashId, groupId)
     };
   }
 
@@ -144,11 +179,12 @@
     };
   }
 
-  async function deleteCrash(crashId: string) {
+  async function deleteCrash(crashId: string, groupId?: string) {
     const body = new FormData();
     body.set('id', crashId);
     const r = await fetch('?/deleteCrash', { method: 'POST', body });
     if (!r.ok) return;
+    forgetLoaded(groupId ?? data.selectedCrash?.groupId ?? '');
     const url = new URL($page.url);
     if (data.selectedCrash?.id === crashId) {
       url.searchParams.delete('crash');
@@ -167,6 +203,7 @@
     const next = new Set(expanded);
     next.delete(groupId);
     expanded = next;
+    forgetLoaded(groupId);
     const url = new URL($page.url);
     if (data.selectedGroup?.id === groupId || url.searchParams.get('id') === groupId) {
       url.searchParams.delete('id');
@@ -264,13 +301,16 @@
           {g}
           selected={data.selectedGroup?.id === g.id}
           expanded={expanded.has(g.id)}
-          crashes={data.selectedGroup?.id === g.id ? data.selectedGroup.crashes : []}
+          crashes={crashesFor(g)}
+          total={g.count}
+          loadingMore={loadingCrashes[g.id] ?? false}
           selectedCrashId={data.selectedCrash?.id ?? null}
           {canDelete}
           onSelect={selectGroup}
           onToggle={toggleExpanded}
+          onLoadMore={loadAllCrashes}
           onSelectCrash={selectCrash}
-          onDeleteCrash={(id) => confirmDeleteCrash(id)}
+          onDeleteCrash={confirmDeleteCrash}
           onDeleteGroup={confirmDeleteGroup}
         />
       {/each}

@@ -19,6 +19,7 @@
 //   DEL  /products/:pid/members/:uid
 //   GET  /crashes?productId=…&…           -> ListResult
 //   GET  /crashes/:id                     -> CrashGroup | 404
+//   GET  /crashes/:id/crashes?limit&offset -> GroupCrashesResult
 //   POST /crashes/:id/status              { status }
 //   POST /crashes/:id/notes               { body, author } -> Note
 //   POST /crashes/:id/merge               { mergedId }
@@ -27,7 +28,7 @@
 //   DEL  /symbols/:id
 
 import type {
-  GuardrailAdapter, Crash, CrashGroup, ListQuery, ListResult, Note, Status,
+  GuardrailAdapter, Crash, CrashGroup, GroupCrashesResult, ListQuery, ListResult, Note, Status,
   User, Product, Role, MembershipWithUser, MembershipWithProduct,
   Symbol as SymbolRow, SymbolQuery,
   Invitation, CreateInvitationSpec, UpdateInvitationSpec,
@@ -305,6 +306,12 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
       const r = await req(`/crashes/${encodeURIComponent(id)}`);
       if (r.status === 404) return null;
       return json<CrashGroup>(r, 'getGroup');
+    },
+    async listGroupCrashes(groupId, opts): Promise<GroupCrashesResult> {
+      const query = qs({ limit: opts?.limit, offset: opts?.offset });
+      const suffix = query ? `?${query}` : '';
+      const r = await req(`/crashes/${encodeURIComponent(groupId)}/crashes${suffix}`);
+      return json<GroupCrashesResult>(r, 'listGroupCrashes');
     },
     async getCrash(id) {
       const r = await req(`/crashes/by-crash/${encodeURIComponent(id)}`);
