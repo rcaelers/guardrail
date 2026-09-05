@@ -179,8 +179,30 @@ jobs:
     runs-on: ubuntu-24.04
     needs: create-and-sign-manifests
     if: github.ref == 'refs/heads/dev'
+    permissions:
+      contents: read
     steps:
+      # Build times vary by an order of magnitude — a cache miss on the node
+      # layers can take 28 minutes against 6 for the next commit — so runs
+      # finish out of order. Whichever finishes last dispatches last and wins,
+      # which silently deploys an older commit over a newer one. Only the branch
+      # tip may define what is deployed.
+      - name: Skip if a newer commit has landed
+        id: guard
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tip="$(gh api "repos/${{ github.repository }}/commits/${{ github.ref_name }}" --jq .sha)"
+          if [ "${tip}" != "${{ github.sha }}" ]; then
+            echo "::notice::superseded by ${tip:0:7}; leaving workrave-infra pointing at the newer commit"
+            echo "skip=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "skip=false" >> "${GITHUB_OUTPUT}"
+          fi
+
       - name: Trigger workrave-infra image update
+        if: steps.guard.outputs.skip != 'true'
         env:
           INFRA_DISPATCH_TOKEN: ${{ secrets.INFRA_DISPATCH_TOKEN }}
         run: |
