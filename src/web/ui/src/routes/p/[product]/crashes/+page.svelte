@@ -49,8 +49,9 @@
     if (loadingCrashes[groupId]) return;
     loadingCrashes[groupId] = true;
     try {
+      const query = data.filters.userText ? '?hasUserText=true' : '';
       const r = await fetch(
-        `/p/${encodeURIComponent($page.params.product!)}/crashes/${encodeURIComponent(groupId)}/events`
+        `/p/${encodeURIComponent($page.params.product!)}/crashes/${encodeURIComponent(groupId)}/events${query}`
       );
       if (!r.ok) return;
       const body = (await r.json()) as { crashes: CrashSummary[] };
@@ -279,6 +280,18 @@
         onchange={(e) => updateParam('q', (e.currentTarget as HTMLInputElement).value, true)}
         class="w-[300px] rounded-md border border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-3 py-1.5 text-[13px] text-ink dark:text-ink-dark outline-none"
       />
+      <label
+        class="inline-flex cursor-pointer items-center gap-1.5 text-xs text-ink-muted dark:text-ink-mutedDark"
+        title="Show only crashes the reporter described"
+      >
+        <input
+          type="checkbox"
+          checked={data.filters.userText}
+          onchange={(e) => updateParam('userText', (e.currentTarget as HTMLInputElement).checked ? 'yes' : '', true)}
+          class="m-0"
+        />
+        <span>Has user text</span>
+      </label>
       <Select
         label="Version"
         value={data.filters.version}
@@ -290,12 +303,6 @@
         value={data.filters.status}
         options={[['all', 'All'], ['new', 'New'], ['triaged', 'Triaged'], ['resolved', 'Resolved']]}
         onChange={(v) => updateParam('status', v, true)}
-      />
-      <Select
-        label="User text"
-        value={data.filters.userText ? 'yes' : 'all'}
-        options={[['all', 'All'], ['yes', 'Has user text']]}
-        onChange={(v) => updateParam('userText', v, true)}
       />
       <Select
         label="Sort"
@@ -344,7 +351,7 @@
           selected={activeGroup?.id === g.id}
           expanded={expanded.has(g.id)}
           crashes={crashesFor(g)}
-          total={g.count}
+          total={g.matchingCount ?? g.count}
           loadingMore={loadingCrashes[g.id] ?? false}
           selectedCrashId={activeCrash?.id ?? null}
           {canDelete}

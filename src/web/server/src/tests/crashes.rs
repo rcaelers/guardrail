@@ -1088,8 +1088,20 @@ async fn test_list_groups_has_user_text_filter() {
     };
     assert!(preview_flag(&body, &group_a, &described));
     assert!(!preview_flag(&body, &group_a, &plain_a));
+    // Without the filter the preview still lists every member of the group.
+    assert_eq!(
+        body["groups"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|g| g["id"].as_str() == Some(group_a.as_str()))
+            .and_then(|g| g["crashes"].as_array())
+            .map(Vec::len),
+        Some(2)
+    );
 
-    // Filtered: only the group holding a user description.
+    // Filtered: only the group holding a user description, and within it only
+    // the matching crash — group A also holds `plain_a`, which must not appear.
     let (status, body) = app
         .call_json(
             "GET",
@@ -1100,6 +1112,45 @@ async fn test_list_groups_has_user_text_filter() {
         .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(group_ids(&body), vec![group_a.clone()]);
+    let filtered = &body["groups"][0];
+    let listed: Vec<&str> = filtered["crashes"]
+        .as_array()
+        .expect("crashes")
+        .iter()
+        .filter_map(|c| c["id"].as_str())
+        .collect();
+    assert_eq!(listed, vec![described.as_str()], "only the described crash is listed");
+    // `count` stays the group's real size; `matchingCount` drives "+N more".
+    assert_eq!(filtered["count"].as_u64(), Some(2));
+    assert_eq!(filtered["matchingCount"].as_u64(), Some(1));
+    // The sparkline is scaled by `count`, so the trend must keep counting every
+    // crash in the group — narrowing the member list must not narrow it too.
+    let trend_total: u64 = filtered["trend"]
+        .as_array()
+        .expect("trend")
+        .iter()
+        .filter_map(|v| v.as_u64())
+        .sum();
+    assert_eq!(trend_total, 2, "trend covers both crashes, not just the matching one");
+
+    // "Load more" stays inside the same subset.
+    let (status, body) = app
+        .call_json(
+            "GET",
+            &format!("/crashes/{group_a}/crashes?hasUserText=true"),
+            None,
+            Some(&f.admin),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["total"].as_u64(), Some(1));
+    let listed: Vec<&str> = body["crashes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|c| c["id"].as_str())
+        .collect();
+    assert_eq!(listed, vec![described.as_str()]);
 
     // hasUserText=false must not filter anything out.
     let (status, body) = app

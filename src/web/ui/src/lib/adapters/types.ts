@@ -136,6 +136,11 @@ export interface CrashGroupSummary {
   crashes?: CrashSummary[];
   /** At least one crash in the group carries a user description. */
   hasUserText?: boolean;
+  /**
+   * Member crashes matching the crash-level filters — what the expanded row
+   * lists. Equals `count` when nothing is filtering the members.
+   */
+  matchingCount?: number;
 }
 
 // ------------------------------------------------------------------
@@ -570,7 +575,7 @@ export interface GuardrailAdapter {
    *  composes notes, related groups and the representative crash. */
   listGroupCrashes(
     groupId: string,
-    opts?: { limit?: number; offset?: number }
+    opts?: { limit?: number; offset?: number; hasUserText?: boolean }
   ): Promise<GroupCrashesResult>;
   /** Returns a single crash plus its parent group, or null. */
   getCrash(id: string): Promise<{ crash: Crash; group: CrashGroup } | null>;

@@ -1636,6 +1636,11 @@ async fn list_groups(
     let mut trends: std::collections::HashMap<String, [u64; 14]> = std::collections::HashMap::new();
     let mut versions_set = std::collections::BTreeSet::new();
     let mut groups_with_user_text: HashSet<String> = HashSet::new();
+    // Member crashes matching the crash-level filters, which is what the
+    // expanded row lists — not the group's total, which stays in `count`.
+    let mut matching_counts: std::collections::HashMap<String, u64> =
+        std::collections::HashMap::new();
+    let only_user_text = q.has_user_text.unwrap_or(false);
     let now = Utc::now();
 
     for r in rep_rows {
@@ -1659,16 +1664,25 @@ async fn list_groups(
             groups_with_user_text.insert(gid.clone());
         }
 
-        // Newest-first preview of the group's member crashes. The full list is
-        // available from /crashes/{id}/crashes when the user asks for more.
-        let preview = previews.entry(gid.clone()).or_default();
-        if preview.len() < GROUP_CRASH_PREVIEW {
-            let mut c = r.clone();
-            if let Some(obj) = c.as_object_mut() {
-                obj.remove("group_id");
-                obj.insert("hasUserText".into(), json!(has_user_text));
+        // With the filter on, a group's member list is narrowed to the crashes
+        // that actually match, so expanding a row shows only those rather than
+        // every crash in the group. Only the member list narrows: `count` and
+        // the trend below stay the group's real activity, which is what the
+        // Events column and the sparkline report.
+        if !only_user_text || has_user_text {
+            *matching_counts.entry(gid.clone()).or_insert(0) += 1;
+
+            // Newest-first preview of the group's member crashes. The full list
+            // is available from /crashes/{id}/crashes when the user asks for more.
+            let preview = previews.entry(gid.clone()).or_default();
+            if preview.len() < GROUP_CRASH_PREVIEW {
+                let mut c = r.clone();
+                if let Some(obj) = c.as_object_mut() {
+                    obj.remove("group_id");
+                    obj.insert("hasUserText".into(), json!(has_user_text));
+                }
+                preview.push(c);
             }
-            preview.push(c);
         }
 
         // 30D trend: 14 two-day buckets; bucket 0 = oldest, 13 = most recent
@@ -1707,6 +1721,10 @@ async fn list_groups(
                 obj.insert(
                     "hasUserText".into(),
                     json!(groups_with_user_text.contains(&gid)),
+                );
+                obj.insert(
+                    "matchingCount".into(),
+                    json!(matching_counts.get(&gid).copied().unwrap_or(0)),
                 );
             }
             merged
@@ -1791,6 +1809,10 @@ async fn get_group(
 
 #[derive(Deserialize)]
 struct GroupCrashesQuery {
+    /// Mirrors the list filter, so "load more" stays within the same subset the
+    /// expanded row was showing.
+    #[serde(rename = "hasUserText")]
+    has_user_text: Option<bool>,
     limit: Option<usize>,
     offset: Option<usize>,
 }
@@ -1806,8 +1828,17 @@ async fn list_group_crashes(
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let db = s.user_db(&session).await?;
 
+    let only_user_text = q.has_user_text.unwrap_or(false);
+    // Narrowing has to happen in the query, or LIMIT/START would page over rows
+    // that are then filtered away and `total` would not match what is listed.
+    let user_text_clause = if only_user_text {
+        " AND id IN (SELECT VALUE crash_id FROM attachments WHERE name = 'user-text')"
+    } else {
+        ""
+    };
+
     let offset = q.offset.unwrap_or(0);
-    let mut sql = format!("{GROUP_CRASHES_SELECT} ORDER BY created_at DESC");
+    let mut sql = format!("{GROUP_CRASHES_SELECT}{user_text_clause} ORDER BY created_at DESC");
     if let Some(limit) = q.limit {
         sql.push_str(&format!(" LIMIT {limit}"));
     }
@@ -1815,12 +1846,14 @@ async fn list_group_crashes(
         sql.push_str(&format!(" START {offset}"));
     }
 
-    let count_sql = "SELECT count() AS total FROM crashes
-         WHERE group_id = type::record('crash_groups', $gid)
-         GROUP ALL";
+    let count_sql = format!(
+        "SELECT count() AS total FROM crashes
+         WHERE group_id = type::record('crash_groups', $gid){user_text_clause}
+         GROUP ALL"
+    );
     let (crashes, totals, user_text_res) = tokio::join!(
         run_value(&db, &sql, vec![("gid", Value::String(id.clone()))]),
-        run_value(&db, count_sql, vec![("gid", Value::String(id.clone()))]),
+        run_value(&db, &count_sql, vec![("gid", Value::String(id.clone()))]),
         user_text_crash_ids(
             &db,
             "crash_id IN (SELECT VALUE id FROM crashes

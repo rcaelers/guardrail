@@ -22,7 +22,11 @@ export const GET: RequestHandler = async ({ params, url, locals, request }) => {
   const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? Math.min(limitRaw, 500) : undefined;
   const offset = Number.isFinite(offsetRaw) && offsetRaw > 0 ? offsetRaw : undefined;
 
-  const result = await adapter.listGroupCrashes(params.id, { limit, offset });
+  const result = await adapter.listGroupCrashes(params.id, {
+    limit,
+    offset,
+    hasUserText: url.searchParams.get('hasUserText') === 'true' || undefined
+  });
 
   // The API scopes reads by RLS, but a group id from another product would
   // otherwise leak its crash list through this product's URL.
