@@ -51,6 +51,9 @@
   const COLS = '28px 1fr 260px 80px 110px 90px 76px';
 
   const groupName = $derived(g.fingerprint || g.title || g.id);
+  // Only UUIDs are abbreviated; readable ids are shown in full.
+  const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const shortId = $derived(UUID.test(g.id) ? g.id.slice(0, 8) : g.id);
   const exception = $derived(g.exceptionType || g.exceptionTypeShort || g.signal);
   const subtitle = $derived.by(() => {
     const parts: string[] = [];
@@ -84,9 +87,12 @@
   </button>
   <div class="min-w-0">
     <div class="mb-[3px] truncate text-[13.5px] font-medium text-ink dark:text-ink-dark">{groupName}</div>
-    {#if subtitle}
-      <div class="truncate font-mono text-[11px] text-ink-muted dark:text-ink-mutedDark">{subtitle}</div>
-    {/if}
+    <div class="flex min-w-0 items-center gap-2 font-mono text-[11px] text-ink-muted dark:text-ink-mutedDark">
+      <span class="shrink-0 text-ink-muted dark:text-ink-mutedDark" title="Crash group {g.id}">{shortId}</span>
+      {#if subtitle}
+        <span class="truncate">{subtitle}</span>
+      {/if}
+    </div>
   </div>
   <SignalChip signal={exception} />
   <div class="text-sm font-medium tabular-nums text-ink dark:text-ink-dark">{fmtInt(g.count)}</div>
