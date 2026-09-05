@@ -79,21 +79,38 @@ impl OrphanedAttachmentCleaner {
         Ok(db_attachment_storage_ids)
     }
 
+    /// Both staging prefixes an in-flight crash can occupy. A crash lives under
+    /// `crashes/` until the processor runs, then under `processed-crashes/`
+    /// until the curator imports it and writes the attachment rows.
+    ///
+    /// Scanning only `crashes/` left the second stage unguarded: the processor
+    /// deletes `crashes/{id}.json` as soon as it is done, so until the curator
+    /// commits the rows the attachment objects are referenced by nothing this
+    /// job could see, and the hourly run deleted them. The crash rows arrived
+    /// afterwards pointing at objects that no longer existed.
+    const CRASH_INFO_PREFIXES: [&'static str; 2] = ["crashes/", "processed-crashes/"];
+
     async fn get_crash_info_attachments(
         storage: &dyn ObjectStore,
     ) -> Result<HashSet<Uuid>, JobError> {
         let mut crash_info_attachment_storage_ids = HashSet::new();
-        let mut crash_info_stream = storage.list(Some(&Path::from("crashes/")));
 
-        while let Some(object_meta) = crash_info_stream.try_next().await? {
-            if object_meta.location.to_string().ends_with(".json")
-                && let Some(uuids) =
-                    Self::extract_attachment_uuids_from_crash_info(storage, &object_meta.location)
-                        .await
-            {
-                crash_info_attachment_storage_ids.extend(uuids);
+        for prefix in Self::CRASH_INFO_PREFIXES {
+            let mut crash_info_stream = storage.list(Some(&Path::from(prefix)));
+
+            while let Some(object_meta) = crash_info_stream.try_next().await? {
+                if object_meta.location.to_string().ends_with(".json")
+                    && let Some(uuids) = Self::extract_attachment_uuids_from_crash_info(
+                        storage,
+                        &object_meta.location,
+                    )
+                    .await
+                {
+                    crash_info_attachment_storage_ids.extend(uuids);
+                }
             }
         }
+
         info!(
             "Found {} attachment references in S3 crash_info files",
             crash_info_attachment_storage_ids.len()
@@ -124,9 +141,19 @@ impl OrphanedAttachmentCleaner {
             Ok(json_value) => {
                 let mut attachment_uuids = Vec::new();
 
-                if let Some(attachments_array) =
-                    json_value.get("attachments").and_then(|v| v.as_array())
-                {
+                // `crashes/` holds the raw crash_info, whose attachments sit at
+                // the top level; `processed-crashes/` wraps it as
+                // {crash_info, report}.
+                let attachments = json_value
+                    .get("attachments")
+                    .or_else(|| {
+                        json_value
+                            .get("crash_info")
+                            .and_then(|info| info.get("attachments"))
+                    })
+                    .and_then(|v| v.as_array());
+
+                if let Some(attachments_array) = attachments {
                     for attachment in attachments_array {
                         if let Some(storage_id_str) =
                             attachment.get("storage_id").and_then(|v| v.as_str())
@@ -284,6 +311,71 @@ mod tests {
             )
             .await
             .is_none()
+        );
+    }
+
+    /// A crash between the processor and the curator lives only under
+    /// `processed-crashes/`, and its attachments are in neither the database nor
+    /// `crashes/`. They must survive: the curator is about to write rows that
+    /// point at them.
+    #[tokio::test]
+    async fn keeps_attachments_of_crashes_awaiting_import() {
+        let storage = object_store::memory::InMemory::new();
+        let staged = Uuid::new_v4();
+        let truly_orphaned = Uuid::new_v4();
+
+        storage
+            .put(
+                &Path::from("processed-crashes/pending.json"),
+                PutPayload::from(
+                    serde_json::json!({
+                        "crash_info": {
+                            "attachments": [{"storage_id": staged.to_string()}]
+                        },
+                        "report": {}
+                    })
+                    .to_string()
+                    .into_bytes(),
+                ),
+            )
+            .await
+            .unwrap();
+        for id in [staged, truly_orphaned] {
+            storage
+                .put(
+                    &Path::from(format!("attachments/{id}")),
+                    PutPayload::from_static(b"body"),
+                )
+                .await
+                .unwrap();
+        }
+
+        let s3 = OrphanedAttachmentCleaner::get_s3_attachments(&storage).await.unwrap();
+        let referenced = OrphanedAttachmentCleaner::get_crash_info_attachments(&storage)
+            .await
+            .unwrap();
+        assert!(referenced.contains(&staged), "processed-crashes must count as a reference");
+
+        let deleted = OrphanedAttachmentCleaner::delete_orphaned_attachments(
+            &storage,
+            &s3,
+            &HashSet::new(),
+            &referenced,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(deleted, 1, "only the unreferenced attachment is removed");
+        assert!(
+            storage.get(&Path::from(format!("attachments/{staged}"))).await.is_ok(),
+            "attachment of a crash awaiting import was deleted"
+        );
+        assert!(
+            storage
+                .get(&Path::from(format!("attachments/{truly_orphaned}")))
+                .await
+                .is_err(),
+            "genuinely orphaned attachment should still be collected"
         );
     }
 
