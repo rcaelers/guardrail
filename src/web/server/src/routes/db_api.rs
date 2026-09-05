@@ -42,6 +42,7 @@ pub fn router() -> Router<AppState> {
         .route("/crashes/{id}/crashes", get(list_group_crashes))
         .route("/crashes/{id}/merge", post(merge_groups))
         .route("/crashes/{id}/notes", post(add_note))
+        .route("/crashes/notes/{note_id}", post(update_note).delete(delete_note))
         .route("/crashes/{id}/status", post(set_status))
         .route("/crashes/by-crash/{crash_id}", get(get_crash).delete(delete_crash))
         .route("/products", get(list_products).post(create_product))
@@ -238,6 +239,31 @@ fn storage_error(err: object_store::Error) -> (StatusCode, String) {
             (StatusCode::INTERNAL_SERVER_ERROR, "internal error".to_string())
         }
     }
+}
+
+async fn product_id_for_user_note(
+    db: &Surreal<Any>,
+    note_id: &str,
+) -> Result<String, (StatusCode, String)> {
+    let rows = run_value(
+        db,
+        "SELECT meta::id(product_id) AS productId, source
+         FROM ONLY type::record('annotations', $id)",
+        vec![("id", Value::String(note_id.to_string()))],
+    )
+    .await?;
+    let row = rows
+        .into_iter()
+        .next()
+        .filter(|v| !v.is_null())
+        .ok_or_else(|| not_found(note_id))?;
+    if row.get("source").and_then(|v| v.as_str()) != Some("user") {
+        return Err(not_found(note_id));
+    }
+    row.get("productId")
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .ok_or_else(|| not_found(note_id))
 }
 
 async fn product_id_for_crash_group(
@@ -2285,7 +2311,7 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
 
     let notes = run_value(
         db,
-        "SELECT author, value AS body, created_at AS at
+        "SELECT meta::id(id) AS id, author, value AS body, created_at AS at
          FROM annotations
          WHERE source = 'user' AND group_id = type::record('crash_groups', $gid)
          ORDER BY created_at",
@@ -2421,6 +2447,67 @@ async fn download_attachment(
         HeaderValue::from_static("nosniff"),
     );
     Ok(response)
+}
+
+#[derive(Deserialize)]
+struct UpdateNoteBody {
+    body: String,
+}
+
+async fn update_note(
+    State(s): State<AppState>,
+    session: Session,
+    Path(note_id): Path<String>,
+    Json(payload): Json<UpdateNoteBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_session(&session)
+        .await
+        .map_err(access_err)?;
+    let body = payload.body.trim();
+    if body.is_empty() {
+        return Err(bad("note body is empty"));
+    }
+    let product_id = product_id_for_user_note(&s.repo.db, &note_id).await?;
+    crate::access::require_session_product_role(&session, &s.repo.db, &product_id, "readwrite")
+        .await
+        .map_err(access_err)?;
+
+    let db = s.user_db(&session).await?;
+    run_value(
+        &db,
+        "UPDATE type::record('annotations', $id)
+         SET value = $body, updated_at = time::now()
+         WHERE source = 'user'",
+        vec![
+            ("id", Value::String(note_id)),
+            ("body", Value::String(body.to_string())),
+        ],
+    )
+    .await?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+async fn delete_note(
+    State(s): State<AppState>,
+    session: Session,
+    Path(note_id): Path<String>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_session(&session)
+        .await
+        .map_err(access_err)?;
+    let product_id = product_id_for_user_note(&s.repo.db, &note_id).await?;
+    crate::access::require_session_product_role(&session, &s.repo.db, &product_id, "readwrite")
+        .await
+        .map_err(access_err)?;
+
+    let db = s.user_db(&session).await?;
+    run_value(
+        &db,
+        "DELETE type::record('annotations', $id) WHERE source = 'user'",
+        vec![("id", Value::String(note_id))],
+    )
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[derive(Deserialize)]

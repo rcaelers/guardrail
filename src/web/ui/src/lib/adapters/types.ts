@@ -70,6 +70,7 @@ export interface UserDescription {
 }
 
 export interface Note {
+  id: string;
   author: string;
   at: string;
   body: string;
@@ -595,6 +596,9 @@ export interface GuardrailAdapter {
   downloadAttachment(id: string): Promise<Response | null>;
   setStatus(id: string, status: Status): Promise<void>;
   addNote(id: string, body: string, author: string): Promise<Note>;
+  /** Notes belong to a crash group; only user-authored ones can be changed. */
+  updateNote(noteId: string, body: string): Promise<void>;
+  deleteNote(noteId: string): Promise<void>;
   mergeGroups(primaryId: string, mergedId: string): Promise<void>;
   deleteCrash(id: string): Promise<void>;
   deleteGroup(id: string): Promise<void>;

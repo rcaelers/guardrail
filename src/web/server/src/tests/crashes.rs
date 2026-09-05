@@ -1462,3 +1462,117 @@ async fn test_list_groups_version_filter_spans_group_members() {
     assert_eq!(body["total"].as_u64(), Some(1));
     assert_eq!(body["crashes"][0]["id"].as_str(), Some(old_crash.as_str()));
 }
+
+// ---------------------------------------------------------------------------
+// Tests: db_api – editing and deleting notes
+// ---------------------------------------------------------------------------
+
+// API calls:
+// | Method | Route                    |
+// | ------ | ------------------------ |
+// | POST   | /crashes/notes/{note_id} |
+// | DELETE | /crashes/notes/{note_id} |
+// Cases:
+// | Case                                    | Expected              |
+// | --------------------------------------- | --------------------- |
+// | notes come back with an id              | id present            |
+// | edit a user note                        | 200, body replaced    |
+// | empty body                              | not 200               |
+// | edit a submission annotation            | 404 (not a note)      |
+// | delete a user note                      | 204, gone             |
+#[tokio::test]
+async fn test_update_and_delete_notes() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+    let gid = create_test_crash_group(&app.db, pid).await;
+    let cid = create_test_crash_in_group(&app.db, pid, &gid).await;
+
+    let (status, _) = app
+        .call_json(
+            "POST",
+            &format!("/crashes/{gid}/notes"),
+            Some(json!({"body": "first pass", "author": "tester"})),
+            Some(&f.admin),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // The group carries the note, and it now has an id to address it by.
+    let (_, body) = app
+        .call_json("GET", &format!("/crashes/{gid}"), None, Some(&f.admin))
+        .await;
+    let note = &body["notes"][0];
+    let note_id = note["id"].as_str().expect("note id is exposed").to_string();
+    assert_eq!(note["body"].as_str(), Some("first pass"));
+
+    // Edit.
+    let (status, _) = app
+        .call_json(
+            "POST",
+            &format!("/crashes/notes/{note_id}"),
+            Some(json!({"body": "  corrected  "})),
+            Some(&f.admin),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (_, body) = app
+        .call_json("GET", &format!("/crashes/{gid}"), None, Some(&f.admin))
+        .await;
+    assert_eq!(body["notes"][0]["body"].as_str(), Some("corrected"));
+
+    // An empty body is rejected rather than blanking the note.
+    let (status, _) = app
+        .call_json(
+            "POST",
+            &format!("/crashes/notes/{note_id}"),
+            Some(json!({"body": "   "})),
+            Some(&f.admin),
+        )
+        .await;
+    assert_ne!(status, StatusCode::OK);
+
+    // Annotations submitted with the crash are a record of what was reported,
+    // not commentary, so they are not reachable through the note endpoints.
+    app.db
+        .query(
+            "CREATE annotations CONTENT {
+                source: 'submission', key: 'guid', value: 'install-1',
+                crash_id: type::record('crashes', $cid),
+                product_id: type::record('products', $pid),
+                created_at: time::now(), updated_at: time::now()
+             }",
+        )
+        .bind(("cid", cid.clone()))
+        .bind(("pid", pid.to_string()))
+        .await
+        .expect("create submission annotation failed");
+    let submission_id: Vec<String> = app
+        .db
+        .query("SELECT VALUE meta::id(id) FROM annotations WHERE source = 'submission' LIMIT 1")
+        .await
+        .expect("query")
+        .take(0)
+        .expect("take");
+    let submission_id = submission_id.into_iter().next().expect("submission exists");
+    let (status, _) = app
+        .call_json(
+            "POST",
+            &format!("/crashes/notes/{submission_id}"),
+            Some(json!({"body": "tampered"})),
+            Some(&f.admin),
+        )
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Delete.
+    assert_eq!(
+        app.call("DELETE", &format!("/crashes/notes/{note_id}"), None, Some(&f.admin))
+            .await,
+        StatusCode::NO_CONTENT
+    );
+    let (_, body) = app
+        .call_json("GET", &format!("/crashes/{gid}"), None, Some(&f.admin))
+        .await;
+    assert_eq!(body["notes"].as_array().map(Vec::len), Some(0));
+}

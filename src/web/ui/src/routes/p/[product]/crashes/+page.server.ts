@@ -111,6 +111,29 @@ export const actions: Actions = {
     await adapter.addNote(id, body.trim(), locals.user.name);
     return { ok: true };
   },
+  updateNote: async ({ request, locals, params }) => {
+    if (!locals.user) throw error(401);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { role } = await requireProductAccess(locals.user, params.product, adapter);
+    if (!canWrite(role) && !locals.user.isAdmin) throw error(403, 'You are read-only on this product');
+    const form = await request.formData();
+    const noteId = String(form.get('noteId') ?? '');
+    const body = String(form.get('body') ?? '');
+    if (!noteId || !body.trim()) return fail(400, { error: 'missing noteId/body' });
+    await adapter.updateNote(noteId, body.trim());
+    return { ok: true };
+  },
+  deleteNote: async ({ request, locals, params }) => {
+    if (!locals.user) throw error(401);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { role } = await requireProductAccess(locals.user, params.product, adapter);
+    if (!canWrite(role) && !locals.user.isAdmin) throw error(403, 'You are read-only on this product');
+    const form = await request.formData();
+    const noteId = String(form.get('noteId') ?? '');
+    if (!noteId) return fail(400, { error: 'missing noteId' });
+    await adapter.deleteNote(noteId);
+    return { ok: true };
+  },
   merge: async ({ request, locals, params }) => {
     if (!locals.user) throw error(401);
     const adapter = createAdapter(request.headers.get('cookie') ?? '');

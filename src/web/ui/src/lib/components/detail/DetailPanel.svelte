@@ -29,6 +29,8 @@
     onStatusChange: (s: Status) => void;
     onMerge: (mergedId: string) => void;
     onAddNote: (body: string) => void;
+    onUpdateNote: (noteId: string, body: string) => void;
+    onDeleteNote: (noteId: string) => void;
     onDeleteCrash?: (id: string) => void;
     onDeleteGroup?: (id: string) => void;
     onClose?: () => void;
@@ -43,6 +45,8 @@
     onStatusChange,
     onMerge,
     onAddNote,
+    onUpdateNote,
+    onDeleteNote,
     onDeleteCrash,
     onDeleteGroup,
     onClose,
@@ -270,6 +274,13 @@
       {/if}
     {/if}
     {#if tab === 'related'}<RelatedTab related={group.related} {onMerge} canMerge={canMerge && !readOnly} />{/if}
-    {#if tab === 'notes'}<NotesTab notes={group.notes} onAdd={onAddNote} {readOnly} />{/if}
+    {#if tab === 'notes'}<NotesTab
+        notes={group.notes}
+        groupId={group.id}
+        onAdd={onAddNote}
+        onUpdate={onUpdateNote}
+        onDelete={onDeleteNote}
+        {readOnly}
+      />{/if}
   </div>
 </div>

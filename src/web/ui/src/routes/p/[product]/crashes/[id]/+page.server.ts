@@ -50,6 +50,29 @@ export const actions: Actions = {
     await adapter.addNote(params.id!, body.trim(), locals.user.name);
     return { ok: true };
   },
+  updateNote: async ({ request, params, locals }) => {
+    if (!locals.user) throw error(401);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { role } = await requireProductAccess(locals.user, params.product!, adapter);
+    if (!canWrite(role)) throw error(403, 'Read-only on this product');
+    const form = await request.formData();
+    const noteId = String(form.get('noteId') ?? '');
+    const body = String(form.get('body') ?? '');
+    if (!noteId || !body.trim()) return fail(400, { error: 'missing noteId/body' });
+    await adapter.updateNote(noteId, body.trim());
+    return { ok: true };
+  },
+  deleteNote: async ({ request, params, locals }) => {
+    if (!locals.user) throw error(401);
+    const adapter = createAdapter(request.headers.get('cookie') ?? '');
+    const { role } = await requireProductAccess(locals.user, params.product!, adapter);
+    if (!canWrite(role)) throw error(403, 'Read-only on this product');
+    const form = await request.formData();
+    const noteId = String(form.get('noteId') ?? '');
+    if (!noteId) return fail(400, { error: 'missing noteId' });
+    await adapter.deleteNote(noteId);
+    return { ok: true };
+  },
   merge: async ({ request, params, locals }) => {
     if (!locals.user) throw error(401);
     const adapter = createAdapter(request.headers.get('cookie') ?? '');
