@@ -174,14 +174,49 @@ async fn test_list_all_api_tokens() {
 // | ------------- | -------- |
 // | no_session    | 403      |
 // | admin         | 200      |
-// | non_admin     | 403      |
-// | imp_admin     | 200      |
-// | imp_non_admin | 403      |
+// | non_admin     | 200      |
+//
+// The registry is a static list of capability names, descriptions and scopes.
+// It was admin-only, which stopped a product maintainer from choosing
+// entitlements for a token on their own product; it carries no secrets and
+// nothing tenant-specific, so any signed-in user may read it. It still requires
+// a session — it is not public.
 #[tokio::test]
 async fn test_list_entitlements() {
     let app = TestApp::new().await;
     let f = Fixture::setup(&app).await;
-    assert_admin_only(&app, &f, "GET", "/api-tokens/entitlements", None, StatusCode::OK).await;
+
+    assert_eq!(
+        app.call("GET", "/api-tokens/entitlements", None, None).await,
+        StatusCode::FORBIDDEN,
+        "no session"
+    );
+    assert_eq!(
+        app.call("GET", "/api-tokens/entitlements", None, Some(&f.admin)).await,
+        StatusCode::OK,
+        "admin"
+    );
+    assert_eq!(
+        app.call("GET", "/api-tokens/entitlements", None, Some(&f.non_admin)).await,
+        StatusCode::OK,
+        "a maintainer needs this to pick entitlements for their product's tokens"
+    );
+
+    // The new crash entitlements are offered, and scoped to a product so the
+    // UI can gate them on a product being selected.
+    let (status, body) = app
+        .call_json("GET", "/api-tokens/entitlements", None, Some(&f.admin))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let defs = body.as_array().expect("entitlement list");
+    for name in ["crash-read", "crash-read-full", "crash-annotate"] {
+        let def = defs
+            .iter()
+            .find(|d| d["name"].as_str() == Some(name))
+            .unwrap_or_else(|| panic!("{name} must be offered in the UI"));
+        assert_eq!(def["scope"].as_str(), Some("product"));
+        assert!(def["description"].as_str().is_some_and(|d| !d.is_empty()));
+    }
 }
 
 // API calls:

@@ -8,6 +8,9 @@
   const canManage = $derived(data.role === 'maintainer' || data.user?.isAdmin === true);
 
   let description = $state('');
+  // Pre-selected so the common case — a CI token that uploads symbols — stays a
+  // one-field form, while anything else is now actually selectable.
+  let chosen = $state<string[]>(['symbol-upload']);
   let justCreated = $state<CreatedApiToken | null>(null);
   let copied = $state(false);
   let confirmDeleteId = $state<string | null>(null);
@@ -88,11 +91,36 @@
         </label>
         <button
           type="submit"
-          disabled={!description.trim()}
+          disabled={!description.trim() || chosen.length === 0}
           class="shrink-0 rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white disabled:opacity-50"
         >
           Create
         </button>
+      </div>
+      <div class="mt-3">
+        <div class="mb-1.5 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">
+          Entitlements
+        </div>
+        <div class="flex flex-wrap gap-2">
+          {#each data.entitlements as ent}
+            <label
+              class="flex cursor-pointer select-none items-center gap-1.5 rounded border border-line dark:border-line-dark px-2.5 py-1.5 text-[12px]"
+            >
+              <input
+                type="checkbox"
+                name="entitlement"
+                value={ent.name}
+                checked={chosen.includes(ent.name)}
+                onchange={(e) =>
+                  (chosen = e.currentTarget.checked
+                    ? [...chosen, ent.name]
+                    : chosen.filter((n) => n !== ent.name))}
+              />
+              <span class="font-mono text-[11px]">{ent.name}</span>
+              <span class="text-ink-muted dark:text-ink-mutedDark">— {ent.description}</span>
+            </label>
+          {/each}
+        </div>
       </div>
       {#if form?.error && !form?.created}
         <p class="mt-2 text-[12px] text-red-600 dark:text-red-400">{form.error}</p>

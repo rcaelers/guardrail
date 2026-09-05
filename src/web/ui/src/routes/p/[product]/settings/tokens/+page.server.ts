@@ -7,8 +7,13 @@ export const load: PageServerLoad = async ({ parent, request, locals }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
   const { product, role } = await parent();
   const canManage = role === 'maintainer' || (locals.user?.isAdmin ?? false);
-  const tokens = canManage ? await adapter.listApiTokens(product.id) : [];
-  return { tokens };
+  const [tokens, allEntitlements] = canManage
+    ? await Promise.all([adapter.listApiTokens(product.id), adapter.listEntitlements()])
+    : [[], []];
+  // A token created here is bound to this product, so only product-scoped
+  // capabilities can apply to it.
+  const entitlements = allEntitlements.filter((e) => e.scope === 'product');
+  return { tokens, entitlements };
 };
 
 export const actions: Actions = {

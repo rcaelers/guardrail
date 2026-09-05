@@ -2949,12 +2949,14 @@ const ENTITLEMENT_DEFS: &[(&str, &str, &str)] = &[
     ("token", "Generate JWT tokens as the bound user", "user"),
 ];
 
+/// The registry is a static list of capability names, descriptions and scopes —
+/// no secrets and nothing tenant-specific — so any signed-in user may read it.
+/// Product maintainers need it to choose entitlements for their own tokens, and
+/// they are not admins.
 async fn list_entitlements_handler(
-    State(s): State<AppState>,
     session: Session,
-    headers: HeaderMap,
 ) -> Result<Json<Value>, (StatusCode, String)> {
-    crate::access::require_admin(&session, &headers, &s.repo.db)
+    crate::access::require_session(&session)
         .await
         .map_err(access_err)?;
     let defs: Vec<Value> = ENTITLEMENT_DEFS
