@@ -119,7 +119,15 @@
       style:grid-template-columns={COLS}
     >
       <span></span>
-      <span class:text-ink={isActive} class:dark:text-ink-dark={isActive}>{c.id}  ·  {c.os}</span>
+      <span class:text-ink={isActive} class:dark:text-ink-dark={isActive}>
+        {c.id}  ·  {c.os}
+        {#if c.hasUserText}
+          <span
+            class="ml-1.5 rounded-sm bg-accent-soft dark:bg-accent-softDark px-1 py-px font-sans text-[10px] text-accent"
+            title="The reporter described this crash"
+          >text</span>
+        {/if}
+      </span>
       <span></span>
       <span>{c.version}</span>
       <span></span>

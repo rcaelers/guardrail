@@ -292,6 +292,12 @@
         onChange={(v) => updateParam('status', v, true)}
       />
       <Select
+        label="User text"
+        value={data.filters.userText ? 'yes' : 'all'}
+        options={[['all', 'All'], ['yes', 'Has user text']]}
+        onChange={(v) => updateParam('userText', v, true)}
+      />
+      <Select
         label="Sort"
         value={data.filters.sort}
         options={[['count', 'Most frequent'], ['recent', 'Recently seen'], ['similarity', 'Similarity'], ['version', 'Version']]}

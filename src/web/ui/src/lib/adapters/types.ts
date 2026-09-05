@@ -134,6 +134,8 @@ export interface CrashGroupSummary {
    * server-side — use `listGroupCrashes` for the rest.
    */
   crashes?: CrashSummary[];
+  /** At least one crash in the group carries a user description. */
+  hasUserText?: boolean;
 }
 
 // ------------------------------------------------------------------
@@ -273,6 +275,8 @@ export interface CrashSummary {
   id: string;
   groupId: string;
   productId: string;
+  /** This crash carries a user description. */
+  hasUserText?: boolean;
   version: string;
   os: string;
   at: string;
@@ -450,6 +454,8 @@ export interface ListQuery {
   status?: Status;
   search?: string;
   sort?: 'count' | 'recent' | 'similarity' | 'version';
+  /** Keep only groups with at least one crash carrying a user description. */
+  hasUserText?: boolean;
   limit?: number;
   offset?: number;
 }

@@ -990,3 +990,162 @@ async fn test_list_groups_includes_crash_preview() {
     assert_eq!(preview[0]["version"].as_str(), Some("1.2.3"));
     assert!(preview[0].get("group_id").is_none());
 }
+
+// ---------------------------------------------------------------------------
+// Tests: db_api – hasUserText filter and marker
+// ---------------------------------------------------------------------------
+
+// API calls:
+// | Method | Route                                        |
+// | ------ | -------------------------------------------- |
+// | GET    | /crashes?productId={id}&hasUserText=true      |
+// | GET    | /crashes/{group_id}/crashes                   |
+// Cases:
+// | Case                                       | Expected                        |
+// | ------------------------------------------ | ------------------------------- |
+// | unfiltered list                            | both groups, marked per group   |
+// | hasUserText=true                           | only the group with user text   |
+// | hasUserText=false                          | both groups (no filtering)      |
+// | inline preview                             | per-crash hasUserText flags     |
+// | paged member crashes                       | same per-crash flags            |
+#[tokio::test]
+async fn test_list_groups_has_user_text_filter() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+
+    // Group A: two crashes, only the second carries a user description.
+    let group_a = create_test_crash_group(&app.db, pid).await;
+    let plain_a = create_test_crash_in_group(&app.db, pid, &group_a).await;
+    let described = create_test_crash_in_group(&app.db, pid, &group_a).await;
+    create_test_attachment(
+        &app.db,
+        "user-text",
+        "text/plain",
+        15,
+        "user-text.txt",
+        Some(pid.to_string()),
+        Some(described.clone()),
+    )
+    .await;
+
+    // Group B: a crash with an ordinary attachment, which must not count.
+    let group_b = create_test_crash_group(&app.db, pid).await;
+    let plain_b = create_test_crash_in_group(&app.db, pid, &group_b).await;
+    create_test_attachment(
+        &app.db,
+        "minidump",
+        "application/octet-stream",
+        10,
+        "crash.dmp",
+        Some(pid.to_string()),
+        Some(plain_b.clone()),
+    )
+    .await;
+
+    let group_ids = |body: &serde_json::Value| -> Vec<String> {
+        body["groups"]
+            .as_array()
+            .expect("groups")
+            .iter()
+            .filter_map(|g| g["id"].as_str().map(str::to_string))
+            .collect()
+    };
+
+    // Unfiltered: both groups, each flagged according to its contents.
+    let (status, body) = app
+        .call_json("GET", &format!("/crashes?productId={pid}"), None, Some(&f.admin))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let ids = group_ids(&body);
+    assert!(ids.contains(&group_a));
+    assert!(ids.contains(&group_b));
+    let flag_for = |body: &serde_json::Value, gid: &str| -> bool {
+        body["groups"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|g| g["id"].as_str() == Some(gid))
+            .and_then(|g| g["hasUserText"].as_bool())
+            .unwrap_or(false)
+    };
+    assert!(flag_for(&body, &group_a), "group A has a user description");
+    assert!(!flag_for(&body, &group_b), "group B has none");
+
+    // The inline preview marks the individual crashes.
+    let preview_flag = |body: &serde_json::Value, gid: &str, cid: &str| -> bool {
+        body["groups"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|g| g["id"].as_str() == Some(gid))
+            .and_then(|g| g["crashes"].as_array())
+            .unwrap()
+            .iter()
+            .find(|c| c["id"].as_str() == Some(cid))
+            .and_then(|c| c["hasUserText"].as_bool())
+            .unwrap_or(false)
+    };
+    assert!(preview_flag(&body, &group_a, &described));
+    assert!(!preview_flag(&body, &group_a, &plain_a));
+
+    // Filtered: only the group holding a user description.
+    let (status, body) = app
+        .call_json(
+            "GET",
+            &format!("/crashes?productId={pid}&hasUserText=true"),
+            None,
+            Some(&f.admin),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(group_ids(&body), vec![group_a.clone()]);
+
+    // hasUserText=false must not filter anything out.
+    let (status, body) = app
+        .call_json(
+            "GET",
+            &format!("/crashes?productId={pid}&hasUserText=false"),
+            None,
+            Some(&f.admin),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(group_ids(&body).len() >= 2);
+
+    // The paged member list carries the same per-crash flag.
+    let (status, body) = app
+        .call_json("GET", &format!("/crashes/{group_a}/crashes"), None, Some(&f.admin))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let marked: Vec<&str> = body["crashes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|c| c["hasUserText"].as_bool() == Some(true))
+        .filter_map(|c| c["id"].as_str())
+        .collect();
+    assert_eq!(marked, vec![described.as_str()]);
+
+    // Anonymous callers never see the flag, even on a public product: the
+    // attachments table grants select only to a product role, unlike crashes
+    // and crash_groups which also allow product_id.public. Nothing leaks, but
+    // the filter necessarily comes back empty for them.
+    app.db
+        .query("UPDATE type::record('products', $pid) SET public = true")
+        .bind(("pid", pid.to_string()))
+        .await
+        .expect("publish product failed");
+    let (status, body) = app
+        .call_json("GET", &format!("/crashes?productId={pid}"), None, None)
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        !body["groups"]
+            .as_array()
+            .expect("groups")
+            .iter()
+            .any(|g| g["hasUserText"].as_bool() == Some(true)),
+        "attachments are invisible without a product role"
+    );
+}

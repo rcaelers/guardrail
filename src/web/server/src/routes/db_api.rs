@@ -474,6 +474,30 @@ fn quoted_header_value(prefix: &str, value: &str) -> Option<HeaderValue> {
     HeaderValue::from_str(&format!("{prefix}\"{sanitized}\"")).ok()
 }
 
+/// Crash ids with a user description attached. `user-text` is the reserved
+/// attachment name the ingest pipeline gives the reporter's own words, and
+/// `idx_attachments_unique` (name, crash_id) means there is at most one per
+/// crash. Scoped by whichever of product/crash/group the caller binds.
+async fn user_text_crash_ids(
+    db: &Surreal<Any>,
+    scope_sql: &str,
+    binds: Vec<(&'static str, Value)>,
+) -> Result<HashSet<String>, (StatusCode, String)> {
+    let rows = run_value(
+        db,
+        &format!(
+            "SELECT VALUE meta::id(crash_id) FROM attachments
+             WHERE name = 'user-text' AND {scope_sql}"
+        ),
+        binds,
+    )
+    .await?;
+    Ok(rows
+        .into_iter()
+        .filter_map(|v| v.as_str().map(extract_short_id))
+        .collect())
+}
+
 async fn load_attachment_rows(
     db: &Surreal<Any>,
     crash_id: &str,
@@ -1545,6 +1569,9 @@ struct ListGroupsQuery {
     status: Option<String>,
     search: Option<String>,
     sort: Option<String>,
+    /// Keep only groups with at least one crash carrying a user description.
+    #[serde(rename = "hasUserText")]
+    has_user_text: Option<bool>,
     limit: Option<usize>,
     offset: Option<usize>,
 }
@@ -1589,12 +1616,18 @@ async fn list_groups(
         FROM crashes
         WHERE product_id = type::record('products', $pid)
         ORDER BY created_at DESC";
-    let (base_res, reps_res) = tokio::join!(
+    let (base_res, reps_res, user_text_res) = tokio::join!(
         run_value(&db, &base_sql, vec![("pid", Value::String(q.product_id.clone()))]),
         run_value(&db, reps_sql, vec![("pid", Value::String(q.product_id.clone()))]),
+        user_text_crash_ids(
+            &db,
+            "product_id = type::record('products', $pid)",
+            vec![("pid", Value::String(q.product_id.clone()))],
+        ),
     );
     let base = base_res?;
     let rep_rows = reps_res?;
+    let user_text_crashes = user_text_res?;
 
     let mut reps: std::collections::HashMap<String, Value> = std::collections::HashMap::new();
     let mut previews: std::collections::HashMap<String, Vec<Value>> =
@@ -1602,6 +1635,7 @@ async fn list_groups(
     let mut counts: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
     let mut trends: std::collections::HashMap<String, [u64; 14]> = std::collections::HashMap::new();
     let mut versions_set = std::collections::BTreeSet::new();
+    let mut groups_with_user_text: HashSet<String> = HashSet::new();
     let now = Utc::now();
 
     for r in rep_rows {
@@ -1617,6 +1651,14 @@ async fn list_groups(
 
         *counts.entry(gid.clone()).or_insert(0) += 1;
 
+        let has_user_text = r
+            .get("id")
+            .and_then(|v| v.as_str())
+            .is_some_and(|id| user_text_crashes.contains(id));
+        if has_user_text {
+            groups_with_user_text.insert(gid.clone());
+        }
+
         // Newest-first preview of the group's member crashes. The full list is
         // available from /crashes/{id}/crashes when the user asks for more.
         let preview = previews.entry(gid.clone()).or_default();
@@ -1624,6 +1666,7 @@ async fn list_groups(
             let mut c = r.clone();
             if let Some(obj) = c.as_object_mut() {
                 obj.remove("group_id");
+                obj.insert("hasUserText".into(), json!(has_user_text));
             }
             preview.push(c);
         }
@@ -1661,6 +1704,10 @@ async fn list_groups(
                 obj.insert("trend".into(), json!(trend));
                 let preview = previews.remove(&gid).unwrap_or_default();
                 obj.insert("crashes".into(), Value::Array(preview));
+                obj.insert(
+                    "hasUserText".into(),
+                    json!(groups_with_user_text.contains(&gid)),
+                );
             }
             merged
         })
@@ -1675,6 +1722,9 @@ async fn list_groups(
     }
     if let Some(st) = q.status.as_deref().filter(|x| *x != "all" && !x.is_empty()) {
         groups.retain(|g| g.get("status").and_then(|v| v.as_str()) == Some(st));
+    }
+    if q.has_user_text.unwrap_or(false) {
+        groups.retain(|g| g.get("hasUserText").and_then(|v| v.as_bool()).unwrap_or(false));
     }
     if let Some(search) = q.search.as_deref().filter(|s| !s.trim().is_empty()) {
         let needle = search.to_lowercase();
@@ -1768,11 +1818,29 @@ async fn list_group_crashes(
     let count_sql = "SELECT count() AS total FROM crashes
          WHERE group_id = type::record('crash_groups', $gid)
          GROUP ALL";
-    let (crashes, totals) = tokio::join!(
+    let (crashes, totals, user_text_res) = tokio::join!(
         run_value(&db, &sql, vec![("gid", Value::String(id.clone()))]),
         run_value(&db, count_sql, vec![("gid", Value::String(id.clone()))]),
+        user_text_crash_ids(
+            &db,
+            "crash_id IN (SELECT VALUE id FROM crashes
+                          WHERE group_id = type::record('crash_groups', $gid))",
+            vec![("gid", Value::String(id.clone()))],
+        ),
     );
-    let crashes = crashes?;
+    let mut crashes = crashes?;
+    let user_text_crashes = user_text_res?;
+    // Same marker the list response puts on its inline previews, so a row keeps
+    // its user-description flag after "load more" replaces the preview.
+    for crash in &mut crashes {
+        let has = crash
+            .get("id")
+            .and_then(|v| v.as_str())
+            .is_some_and(|cid| user_text_crashes.contains(cid));
+        if let Some(obj) = crash.as_object_mut() {
+            obj.insert("hasUserText".into(), json!(has));
+        }
+    }
     let total = totals?
         .first()
         .and_then(|v| v.get("total"))
