@@ -1353,3 +1353,112 @@ async fn test_get_crash_reports_lost_attachments() {
         "the row is kept so the crash still records that text was submitted"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Tests: db_api – version filtering across a group's crashes
+// ---------------------------------------------------------------------------
+
+// API calls:
+// | Method | Route                                     |
+// | ------ | ----------------------------------------- |
+// | GET    | /crashes?productId={id}&version={version} |
+// | GET    | /crashes/{group_id}/crashes?version={v}   |
+// Cases:
+// | Case                                          | Expected                       |
+// | --------------------------------------------- | ------------------------------ |
+// | group holds 1.0 and 2.0, filter on the older   | group listed, only 1.0 members |
+// | group holds only 2.0, filter on 1.0           | group not listed               |
+// | "load more" with the same filter               | only 1.0 members, total 1      |
+#[tokio::test]
+async fn test_list_groups_version_filter_spans_group_members() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+
+    let mixed = create_test_crash_group(&app.db, pid).await;
+    let old_crash = create_test_crash_in_group(&app.db, pid, &mixed).await;
+    let new_crash = create_test_crash_in_group(&app.db, pid, &mixed).await;
+    // The newest crash carries the newer version, so matching on the group's
+    // representative crash would hide this group when filtering on 1.0.0.
+    for (cid, version) in [(&old_crash, "1.0.0"), (&new_crash, "2.0.0")] {
+        app.db
+            .query("UPDATE type::record('crashes', $cid) SET report.version = $v")
+            .bind(("cid", cid.clone()))
+            .bind(("v", version.to_string()))
+            .await
+            .expect("set version failed");
+    }
+
+    let newer_only = create_test_crash_group(&app.db, pid).await;
+    let newer_crash = create_test_crash_in_group(&app.db, pid, &newer_only).await;
+    app.db
+        .query("UPDATE type::record('crashes', $cid) SET report.version = '2.0.0'")
+        .bind(("cid", newer_crash.clone()))
+        .await
+        .expect("set version failed");
+
+    let (status, body) = app
+        .call_json(
+            "GET",
+            &format!("/crashes?productId={pid}&version=1.0.0"),
+            None,
+            Some(&f.admin),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let listed: Vec<&str> = body["groups"]
+        .as_array()
+        .expect("groups")
+        .iter()
+        .filter_map(|g| g["id"].as_str())
+        .collect();
+    assert!(
+        listed.contains(&mixed.as_str()),
+        "a group holding a 1.0.0 crash must be listed even though its newest crash is 2.0.0"
+    );
+    assert!(
+        !listed.contains(&newer_only.as_str()),
+        "a group with no 1.0.0 crash must not be listed"
+    );
+
+    // Members are narrowed to the requested version, and `count` still reports
+    // the group's real size.
+    let group = body["groups"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|g| g["id"].as_str() == Some(mixed.as_str()))
+        .expect("mixed group listed");
+    let members: Vec<&str> = group["crashes"]
+        .as_array()
+        .expect("crashes")
+        .iter()
+        .filter_map(|c| c["id"].as_str())
+        .collect();
+    assert_eq!(members, vec![old_crash.as_str()]);
+    assert_eq!(group["count"].as_u64(), Some(2));
+    assert_eq!(group["matchingCount"].as_u64(), Some(1));
+
+    // The version dropdown still offers every version in the product.
+    let versions: Vec<&str> = body["versions"]
+        .as_array()
+        .expect("versions")
+        .iter()
+        .filter_map(|v| v.as_str())
+        .collect();
+    assert!(versions.contains(&"1.0.0") && versions.contains(&"2.0.0"));
+
+    // "Load more" stays inside the same subset.
+    let (status, body) = app
+        .call_json(
+            "GET",
+            &format!("/crashes/{mixed}/crashes?version=1.0.0"),
+            None,
+            Some(&f.admin),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["total"].as_u64(), Some(1));
+    assert_eq!(body["crashes"][0]["id"].as_str(), Some(old_crash.as_str()));
+}

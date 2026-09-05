@@ -45,7 +45,10 @@
   const crashTotal = $derived(total ?? g.count);
   const remaining = $derived(Math.max(0, crashTotal - crashes.length));
 
-  const COLS = '28px 1fr 260px 130px 80px 110px 90px 76px';
+  // No version column: a group's crashes can span several versions, so a single
+  // value on the group row would be arbitrary. Individual crashes still show
+  // theirs, in the column the group uses for its exception.
+  const COLS = '28px 1fr 260px 80px 110px 90px 76px';
 
   const groupName = $derived(g.fingerprint || g.title || g.id);
   const exception = $derived(g.exceptionType || g.exceptionTypeShort || g.signal);
@@ -86,7 +89,6 @@
     {/if}
   </div>
   <SignalChip signal={exception} />
-  <div class="font-mono text-xs text-ink-muted dark:text-ink-mutedDark">{g.version}</div>
   <div class="text-sm font-medium tabular-nums text-ink dark:text-ink-dark">{fmtInt(g.count)}</div>
   <Sparkline trend={g.trend} count={g.count} />
   <StatusPill status={g.status} />
@@ -120,7 +122,7 @@
     >
       <span></span>
       <span class:text-ink={isActive} class:dark:text-ink-dark={isActive}>
-        {c.id}  ·  {c.os}
+        {c.id}{#if c.os}  ·  {c.os}{/if}
         {#if c.hasUserText}
           {#if c.userTextAvailable === false}
             <span
@@ -135,7 +137,6 @@
           {/if}
         {/if}
       </span>
-      <span></span>
       <span>{c.version}</span>
       <span></span>
       <span>{fmtDate(c.at)}</span>

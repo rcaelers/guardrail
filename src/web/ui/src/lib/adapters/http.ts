@@ -308,7 +308,7 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
       return json<CrashGroup>(r, 'getGroup');
     },
     async listGroupCrashes(groupId, opts): Promise<GroupCrashesResult> {
-      const query = qs({ limit: opts?.limit, offset: opts?.offset, hasUserText: opts?.hasUserText });
+      const query = qs({ limit: opts?.limit, offset: opts?.offset, hasUserText: opts?.hasUserText, version: opts?.version });
       const suffix = query ? `?${query}` : '';
       const r = await req(`/crashes/${encodeURIComponent(groupId)}/crashes${suffix}`);
       return json<GroupCrashesResult>(r, 'listGroupCrashes');

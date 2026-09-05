@@ -1712,6 +1712,15 @@ async fn list_groups(
     let mut matching_counts: std::collections::HashMap<String, u64> =
         std::collections::HashMap::new();
     let only_user_text = q.has_user_text.unwrap_or(false);
+    // Crash-level filters select individual crashes; a group survives when it
+    // holds at least one match. A group's crashes can span several versions —
+    // matching on the group's representative crash used to hide a group that
+    // genuinely contains crashes of the requested version.
+    let version_filter = q
+        .version
+        .as_deref()
+        .filter(|v| *v != "all" && !v.is_empty());
+    let crash_level_filter = only_user_text || version_filter.is_some();
     let now = Utc::now();
 
     for r in rep_rows {
@@ -1740,7 +1749,9 @@ async fn list_groups(
         // every crash in the group. Only the member list narrows: `count` and
         // the trend below stay the group's real activity, which is what the
         // Events column and the sparkline report.
-        if !only_user_text || has_user_text {
+        let matches_version = version_filter
+            .is_none_or(|want| r.get("version").and_then(|v| v.as_str()) == Some(want));
+        if (!only_user_text || has_user_text) && matches_version {
             *matching_counts.entry(gid.clone()).or_insert(0) += 1;
 
             // Newest-first preview of the group's member crashes. The full list
@@ -1802,18 +1813,15 @@ async fn list_groups(
         })
         .collect();
 
-    if let Some(v) = q
-        .version
-        .as_deref()
-        .filter(|x| *x != "all" && !x.is_empty())
-    {
-        groups.retain(|g| g.get("version").and_then(|v| v.as_str()) == Some(v));
+    if crash_level_filter {
+        groups.retain(|g| {
+            g.get("matchingCount")
+                .and_then(|v| v.as_u64())
+                .is_some_and(|n| n > 0)
+        });
     }
     if let Some(st) = q.status.as_deref().filter(|x| *x != "all" && !x.is_empty()) {
         groups.retain(|g| g.get("status").and_then(|v| v.as_str()) == Some(st));
-    }
-    if q.has_user_text.unwrap_or(false) {
-        groups.retain(|g| g.get("hasUserText").and_then(|v| v.as_bool()).unwrap_or(false));
     }
     if let Some(search) = q.search.as_deref().filter(|s| !s.trim().is_empty()) {
         let needle = search.to_lowercase();
@@ -1908,10 +1916,11 @@ async fn get_group(
 
 #[derive(Deserialize)]
 struct GroupCrashesQuery {
-    /// Mirrors the list filter, so "load more" stays within the same subset the
-    /// expanded row was showing.
+    /// Mirror the list's crash-level filters, so "load more" stays within the
+    /// same subset the expanded row was showing.
     #[serde(rename = "hasUserText")]
     has_user_text: Option<bool>,
+    version: Option<String>,
     limit: Option<usize>,
     offset: Option<usize>,
 }
@@ -1930,11 +1939,19 @@ async fn list_group_crashes(
     let only_user_text = q.has_user_text.unwrap_or(false);
     // Narrowing has to happen in the query, or LIMIT/START would page over rows
     // that are then filtered away and `total` would not match what is listed.
-    let user_text_clause = if only_user_text {
-        " AND id IN (SELECT VALUE crash_id FROM attachments WHERE name = 'user-text')"
-    } else {
-        ""
-    };
+    let mut filter_clause = String::new();
+    if only_user_text {
+        filter_clause
+            .push_str(" AND id IN (SELECT VALUE crash_id FROM attachments WHERE name = 'user-text')");
+    }
+    let version_filter = q
+        .version
+        .as_deref()
+        .filter(|v| *v != "all" && !v.is_empty());
+    if version_filter.is_some() {
+        filter_clause.push_str(" AND report.version = $version");
+    }
+    let user_text_clause = filter_clause.as_str();
 
     let offset = q.offset.unwrap_or(0);
     let mut sql = format!("{GROUP_CRASHES_SELECT}{user_text_clause} ORDER BY created_at DESC");
@@ -1950,9 +1967,13 @@ async fn list_group_crashes(
          WHERE group_id = type::record('crash_groups', $gid){user_text_clause}
          GROUP ALL"
     );
+    let mut binds = vec![("gid", Value::String(id.clone()))];
+    if let Some(version) = version_filter {
+        binds.push(("version", Value::String(version.to_string())));
+    }
     let (crashes, totals, user_text_res) = tokio::join!(
-        run_value(&db, &sql, vec![("gid", Value::String(id.clone()))]),
-        run_value(&db, &count_sql, vec![("gid", Value::String(id.clone()))]),
+        run_value(&db, &sql, binds.clone()),
+        run_value(&db, &count_sql, binds.clone()),
         user_text_crash_ids(
             &db,
             "crash_id IN (SELECT VALUE id FROM crashes

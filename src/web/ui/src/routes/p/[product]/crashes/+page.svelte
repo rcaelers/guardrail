@@ -49,7 +49,11 @@
     if (loadingCrashes[groupId]) return;
     loadingCrashes[groupId] = true;
     try {
-      const query = data.filters.userText ? '?hasUserText=true' : '';
+      const params = new URLSearchParams();
+      if (data.filters.userText) params.set('hasUserText', 'true');
+      if (data.filters.version && data.filters.version !== 'all')
+        params.set('version', data.filters.version);
+      const query = params.size ? `?${params}` : '';
       const r = await fetch(
         `/p/${encodeURIComponent($page.params.product!)}/crashes/${encodeURIComponent(groupId)}/events${query}`
       );
@@ -352,12 +356,11 @@
     <!-- Column header -->
     <div
       class="grid shrink-0 items-center gap-4 border-b border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-5 py-2 text-[10.5px] font-medium uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark"
-      style:grid-template-columns="28px 1fr 260px 130px 80px 110px 90px 76px"
+      style:grid-template-columns="28px 1fr 260px 80px 110px 90px 76px"
     >
       <span></span>
       <span>Crash group</span>
       <span>Exception</span>
-      <span>Version</span>
       <span>Events</span>
       <span>30d trend</span>
       <span>Status</span>

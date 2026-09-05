@@ -588,7 +588,7 @@ export interface GuardrailAdapter {
    *  composes notes, related groups and the representative crash. */
   listGroupCrashes(
     groupId: string,
-    opts?: { limit?: number; offset?: number; hasUserText?: boolean }
+    opts?: { limit?: number; offset?: number; hasUserText?: boolean; version?: string }
   ): Promise<GroupCrashesResult>;
   /** Returns a single crash plus its parent group, or null. */
   getCrash(id: string): Promise<{ crash: Crash; group: CrashGroup } | null>;

@@ -25,7 +25,8 @@ export const GET: RequestHandler = async ({ params, url, locals, request }) => {
   const result = await adapter.listGroupCrashes(params.id, {
     limit,
     offset,
-    hasUserText: url.searchParams.get('hasUserText') === 'true' || undefined
+    hasUserText: url.searchParams.get('hasUserText') === 'true' || undefined,
+    version: url.searchParams.get('version') ?? undefined
   });
 
   // The API scopes reads by RLS, but a group id from another product would
