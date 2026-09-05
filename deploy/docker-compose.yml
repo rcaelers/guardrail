@@ -191,7 +191,9 @@ services:
       POCKET_ID_PUBLIC_URL: https://guardrail.home.krandor.org:1443
       POCKET_ID_API_KEY: ${POCKET_ID_STATIC_API_KEY}
       POCKET_ID_ADMIN_USERNAME: admin
-      POCKET_ID_ADMIN_EMAIL: admin@localhost
+      # Pocket ID v2 validates this as a real address; a TLD-less
+      # "admin@localhost" is rejected and the admin never gets created.
+      POCKET_ID_ADMIN_EMAIL: admin@guardrail.home.krandor.org
       POCKET_ID_ADMIN_FIRST_NAME: Guardrail
       POCKET_ID_ADMIN_LAST_NAME: Admin
       GUARDRAIL_AUTH_OIDC_CLIENT_ID: guardrail

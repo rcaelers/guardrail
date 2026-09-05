@@ -142,18 +142,38 @@ until request_json GET "$POCKET_ID_URL/api/users" >/dev/null 2>&1; do
   sleep 2
 done
 
+# The user backing STATIC_API_KEY is an admin as well, and Pocket ID v2 names it
+# "static-api-user-<random>" rather than the "Static API User" this script used to
+# exclude. Matching it makes the bootstrap believe the admin already exists: no
+# real admin is created, and the one-time login code is minted for the API user,
+# whose OIDC `sub` maps to no Guardrail account ("Your account has not been
+# granted access"). It carries a sentinel all-zero id, which is the sturdiest
+# way to tell it apart; the name checks are a backstop.
+STATIC_API_USER_ID="00000000-0000-0000-0000-000000000000"
+
+# Sets admin_id/admin_username from $users_json, preferring the configured admin
+# username and otherwise falling back to any other admin, so an existing Pocket
+# ID with a differently named admin still bootstraps.
+find_admin() {
+  admin_row=$(printf '%s' "$users_json" | jq -r \
+    --arg username "$POCKET_ID_ADMIN_USERNAME" \
+    --arg static_id "$STATIC_API_USER_ID" '
+      [ .data[]
+        | select(.id != $static_id)
+        | select((.username | startswith("static-api-user-")) | not)
+        | select(.username != "Static API User")
+      ]
+      | ( map(select(.username == $username)) + map(select(.isAdmin == true)) )
+      | first
+      | if . then [.id, .username] | @tsv else empty end
+    ')
+  admin_id=$(printf '%s' "$admin_row" | cut -f1)
+  admin_username=$(printf '%s' "$admin_row" | cut -f2)
+}
+
 log "Ensuring initial admin user exists..."
 users_json=$(request_json GET "$POCKET_ID_URL/api/users")
-admin_id=$(printf '%s' "$users_json" | jq -r --arg username "$POCKET_ID_ADMIN_USERNAME" '
-  .data[]
-  | select(.username == $username or (.isAdmin == true and .username != "Static API User"))
-  | .id
-' | head -n 1)
-admin_username=$(printf '%s' "$users_json" | jq -r --arg username "$POCKET_ID_ADMIN_USERNAME" '
-  .data[]
-  | select(.username == $username or (.isAdmin == true and .username != "Static API User"))
-  | .username
-' | head -n 1)
+find_admin
 
 if [ -z "$admin_id" ]; then
   setup_payload=$(jq -nc \
@@ -170,16 +190,7 @@ if [ -z "$admin_id" ]; then
   request_noauth_json POST "$POCKET_ID_URL/api/signup/setup" "$setup_payload" >/dev/null
 
   users_json=$(request_json GET "$POCKET_ID_URL/api/users")
-  admin_id=$(printf '%s' "$users_json" | jq -r --arg username "$POCKET_ID_ADMIN_USERNAME" '
-    .data[]
-    | select(.username == $username or (.isAdmin == true and .username != "Static API User"))
-    | .id
-  ' | head -n 1)
-  admin_username=$(printf '%s' "$users_json" | jq -r --arg username "$POCKET_ID_ADMIN_USERNAME" '
-    .data[]
-    | select(.username == $username or (.isAdmin == true and .username != "Static API User"))
-    | .username
-  ' | head -n 1)
+  find_admin
 fi
 
 if [ -z "$admin_id" ]; then
@@ -243,23 +254,64 @@ case "$client_status" in
 esac
 rm -f "$client_tmp"
 
+# Pocket ID v2 keeps a *list* of client secrets under /secrets (v1 had a single
+# rotating one under /secret): POST adds a secret and is the only response that
+# ever discloses its value, GET lists the existing ones without values.
+#
+# The pocket-id volume and this bind mount have independent lifetimes, so either
+# side can come back empty. Rather than minting a new secret whenever they
+# disagree — which silently invalidates the client_secret guardrail-web already
+# has — converge on the one we hold on file, importing it into Pocket ID when it
+# is no longer registered there.
+secrets_url="$POCKET_ID_URL/api/oidc/clients/$GUARDRAIL_AUTH_OIDC_CLIENT_ID/secrets"
+
 existing_secret=""
 if [ -f "$OIDC_ENV_FILE" ]; then
   existing_secret=$(grep '^GUARDRAIL_AUTH_OIDC_CLIENT_SECRET=' "$OIDC_ENV_FILE" | cut -d= -f2- || true)
 fi
 
-if [ -n "$existing_secret" ] && [ "$client_status" = "200" ]; then
-  log "Reusing existing OIDC client secret from $OIDC_ENV_FILE"
-  client_secret="$existing_secret"
-else
-  log "Generating Guardrail OIDC client secret..."
-  secret_json=$(request_json POST "$POCKET_ID_URL/api/oidc/clients/$GUARDRAIL_AUTH_OIDC_CLIENT_ID/secret")
-  client_secret=$(printf '%s' "$secret_json" | jq -r '.secret // empty')
+client_secret=""
+if [ -n "$existing_secret" ]; then
+  # `prefix` holds each stored secret's leading characters in clear text, which
+  # is enough to tell whether the one we hold is still registered. It is empty
+  # for secrets migrated from v1's single-secret column, so skip those instead
+  # of treating an empty prefix as a match for everything.
+  secrets_json=$(request_json GET "$secrets_url" 2>/dev/null || true)
+  known_prefixes=$(printf '%s' "$secrets_json" \
+    | jq -r '.[]? | select(.isActive == true) | select(.prefix != null and .prefix != "") | .prefix' \
+      2>/dev/null || true)
+  for prefix in $known_prefixes; do
+    case "$existing_secret" in
+      "$prefix"*)
+        client_secret="$existing_secret"
+        break
+        ;;
+    esac
+  done
 
-  if [ -z "$client_secret" ]; then
-    log "Pocket ID did not return a client secret for $GUARDRAIL_AUTH_OIDC_CLIENT_ID"
-    exit 1
+  if [ -n "$client_secret" ]; then
+    log "Reusing the OIDC client secret already registered with Pocket ID"
+  else
+    log "Re-importing the OIDC client secret from $OIDC_ENV_FILE..."
+    import_payload=$(jq -nc --arg secret "$existing_secret" '{secret: $secret}')
+    if secret_json=$(request_json POST "$secrets_url" "$import_payload"); then
+      client_secret=$(printf '%s' "$secret_json" | jq -r '.secret // empty')
+    else
+      # Pocket ID enforces min=16 printable-ASCII on caller-supplied secrets.
+      log "Pocket ID rejected the stored secret; generating a fresh one instead"
+    fi
   fi
+fi
+
+if [ -z "$client_secret" ]; then
+  log "Generating Guardrail OIDC client secret..."
+  secret_json=$(request_json POST "$secrets_url")
+  client_secret=$(printf '%s' "$secret_json" | jq -r '.secret // empty')
+fi
+
+if [ -z "$client_secret" ]; then
+  log "Pocket ID did not return a client secret for $GUARDRAIL_AUTH_OIDC_CLIENT_ID"
+  exit 1
 fi
 
 oidc_env_tmp=$(mktemp)
