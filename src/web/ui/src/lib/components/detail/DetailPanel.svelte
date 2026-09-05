@@ -79,23 +79,28 @@
   });
 
   // Lazy-fetch user text body when the tab is first opened for this crash.
-  let userTextFetchedForId = $state<string | null>(null);
-  let userTextFetchedBody = $state<string | null>(null);
+  // The crash this result belongs to, set when a fetch STARTS rather than when
+  // it succeeds. Marking only on success left this null after a failure while
+  // userTextLoading flipped back to false, which re-triggered the effect below
+  // and refetched forever: the error branch never rendered, so a missing
+  // attachment showed as a permanent "Loading…" behind a loop of requests.
+  let userTextForId = $state<string | null>(null);
+  let userTextBody = $state<string | null>(null);
   let userTextLoading = $state(false);
   let userTextErrorStatus = $state<number | null>(null);
 
   function fetchUserText(productId: string, attachmentId: string, crashId: string) {
+    userTextForId = crashId;
     userTextLoading = true;
     userTextErrorStatus = null;
-    userTextFetchedBody = null;
-    userTextFetchedForId = null;
+    userTextBody = null;
     fetch(`/p/${encodeURIComponent(productId)}/crashes/attachments/${encodeURIComponent(attachmentId)}`)
       .then((r) => {
         if (r.ok) return r.text();
         userTextErrorStatus = r.status;
         return Promise.reject(new Error(`user-text fetch ${r.status}`));
       })
-      .then((text) => { userTextFetchedBody = text; userTextFetchedForId = crashId; })
+      .then((text) => { userTextBody = text; })
       .catch((e) => { console.error('user-text load failed:', e); })
       .finally(() => { userTextLoading = false; });
   }
@@ -106,8 +111,8 @@
     if (inlineBody) return;
     const attachmentId = crash.userText?.attachmentId;
     if (!attachmentId) return;
-    if (userTextFetchedForId === crash.id) return;
-    if (userTextLoading) return;
+    // One attempt per crash; the Retry button re-runs it deliberately.
+    if (userTextForId === crash.id) return;
     fetchUserText(crash.productId, attachmentId, crash.id);
   });
 </script>
@@ -223,10 +228,11 @@
     {#if tab === 'annotations'}<AnnotationsTab annotations={crash.annotations} />{/if}
     {#if tab === 'attachments'}<AttachmentsTab attachments={crash.attachments ?? []} productId={crash.productId} />{/if}
     {#if tab === 'usertext'}
-      {@const displayBody = crash.userText?.body ?? crash.annotations?.['user-text'] ?? userTextFetchedBody}
-      {#if userTextLoading}
+      {@const mine = userTextForId === crash.id}
+      {@const displayBody = crash.userText?.body ?? crash.annotations?.['user-text'] ?? (mine ? userTextBody : null)}
+      {#if mine && userTextLoading}
         <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">Loading…</div>
-      {:else if userTextErrorStatus !== null}
+      {:else if mine && userTextErrorStatus !== null}
         {@const attachmentId = crash.userText?.attachmentId}
         <div class="rounded border border-dashed border-line px-3 py-3 text-[12px] text-red-600 dark:border-line-dark dark:text-red-400">
           Failed to load user text
