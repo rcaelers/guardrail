@@ -2942,6 +2942,9 @@ async fn list_all_api_tokens(
 
 const ENTITLEMENT_DEFS: &[(&str, &str, &str)] = &[
     ("symbol-upload", "Upload debug symbols", "product"),
+    ("crash-read", "Read crashes (report redacted)", "product"),
+    ("crash-read-full", "Read crashes including the full report", "product"),
+    ("crash-annotate", "Add notes and set crash group status", "product"),
     ("invitation-create", "Create user invitations", "general"),
     ("token", "Generate JWT tokens as the bound user", "user"),
 ];

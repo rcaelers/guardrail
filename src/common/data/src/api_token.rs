@@ -4,6 +4,16 @@ use uuid::Uuid;
 
 pub const ENTITLEMENT_INVITATION_CREATE: &str = "invitation-create";
 
+/// Read crash data through the token API, with the report redacted: stack
+/// frames, modules, threads and build metadata, but no `guid`, handles or
+/// reporter-submitted text.
+pub const ENTITLEMENT_CRASH_READ: &str = "crash-read";
+/// Read the report unredacted. Separate from `crash-read` so widening what an
+/// integration sees is a deliberate grant rather than a code change.
+pub const ENTITLEMENT_CRASH_READ_FULL: &str = "crash-read-full";
+/// Add notes and set the triage status of a crash group.
+pub const ENTITLEMENT_CRASH_ANNOTATE: &str = "crash-annotate";
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ApiToken {
     pub id: String,
