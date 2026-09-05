@@ -55,7 +55,15 @@ services:
     # unlike the guardrail/garage images, which are already the target user
     # at container start and never call setuid themselves.
     healthcheck:
-      test: ['CMD', 'valkey-cli', '-a', '${VALKEY_PASSWORD}', '--no-auth-warning', 'ping']
+      test:
+        [
+          'CMD',
+          'valkey-cli',
+          '-a',
+          '${VALKEY_PASSWORD}',
+          '--no-auth-warning',
+          'ping',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -112,7 +120,12 @@ services:
     volumes:
       - garage-meta:/mnt/meta
       - garage-data:/mnt/data
-    command: ['sh', '-ec', 'chown -R 1000:1000 /mnt/meta /mnt/data && chmod 700 /mnt/meta /mnt/data']
+    command:
+      [
+        'sh',
+        '-ec',
+        'chown -R 1000:1000 /mnt/meta /mnt/data && chmod 700 /mnt/meta /mnt/data',
+      ]
     restart: 'no'
 
   garage:
@@ -245,7 +258,11 @@ services:
     mem_limit: 512m
     cpus: 0.5
     healthcheck:
-      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:80/api/ready || exit 1']
+      test:
+        [
+          'CMD-SHELL',
+          'wget -q -O /dev/null http://127.0.0.1:80/api/ready || exit 1',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -271,7 +288,11 @@ services:
     mem_limit: 256m
     cpus: 0.5
     healthcheck:
-      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:80/api/ready || exit 1']
+      test:
+        [
+          'CMD-SHELL',
+          'wget -q -O /dev/null http://127.0.0.1:80/api/ready || exit 1',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -310,7 +331,11 @@ services:
     mem_limit: 512m
     cpus: 0.5
     healthcheck:
-      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:80/ready || exit 1']
+      test:
+        [
+          'CMD-SHELL',
+          'wget -q -O /dev/null http://127.0.0.1:80/ready || exit 1',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -342,7 +367,11 @@ services:
     mem_limit: 256m
     cpus: 0.5
     healthcheck:
-      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:9090/ready || exit 1']
+      test:
+        [
+          'CMD-SHELL',
+          'wget -q -O /dev/null http://127.0.0.1:9090/ready || exit 1',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -369,7 +398,11 @@ services:
     mem_limit: 512m
     cpus: 1.0
     healthcheck:
-      test: ['CMD-SHELL', 'wget -q -O /dev/null http://127.0.0.1:9090/ready || exit 1']
+      test:
+        [
+          'CMD-SHELL',
+          'wget -q -O /dev/null http://127.0.0.1:9090/ready || exit 1',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
