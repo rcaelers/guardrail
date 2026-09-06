@@ -13,6 +13,11 @@ use crate::utils::{get_product_by_product_token, validate_api_token_for_product}
 use crate::utils::{peek_line, stream_to_s3};
 use data::product::Product;
 
+#[derive(Debug, Serialize)]
+pub struct DeleteResponse {
+    deleted: usize,
+}
+
 #[derive(Default, Debug, Serialize)]
 struct SymbolsHeader {
     os: String,
@@ -352,6 +357,71 @@ impl SymbolsApi {
             })?;
 
         Ok(())
+    }
+
+    /// Removes every stored symbol file for one module build of the token's
+    /// product, both the rows and the objects behind them. An upload creates a
+    /// row rather than replacing one, so a module build can accumulate several.
+    #[instrument(skip(state, headers))]
+    pub async fn delete(
+        State(state): State<AppState>,
+        AxumPath((product_token, module_id, build_id)): AxumPath<(String, String, String)>,
+        headers: HeaderMap,
+    ) -> Result<Json<DeleteResponse>, ApiError> {
+        let db = &state.repo.db;
+
+        let product = get_product_by_product_token(db, &product_token)
+            .await?
+            .ok_or_else(|| ApiError::InvalidToken("invalid product token".into()))?;
+
+        // Deleting symbols is gated on the same entitlement as replacing them:
+        // a token that can overwrite a symbol file can already make it useless.
+        let api_token =
+            crate::access::require_entitlement(&headers, None, db, "symbol-upload").await?;
+        validate_api_token_for_product(&api_token, &product, &product.name)?;
+
+        Self::validate_module_id(&module_id)?;
+        Self::validate_build_id(&build_id)?;
+
+        let found = repos::symbols::SymbolsRepo::get_all_by_module_and_build_id(
+            db, &product.id, &build_id, &module_id,
+        )
+        .await
+        .map_err(|e| {
+            error!(error = ?e, "Failed to look up symbols for deletion");
+            ApiError::InternalFailure()
+        })?;
+
+        let mut deleted = 0;
+        for symbol in &found {
+            match repos::symbols::SymbolsRepo::remove(db, &symbol.id).await {
+                Ok(()) => deleted += 1,
+                Err(e) => error!(id = %symbol.id, error = ?e, "Failed to delete symbol row"),
+            }
+        }
+
+        // Storage paths carry no product, so another product may be using the
+        // same file. Drop it only once nothing points at it any more.
+        let mut paths: Vec<&str> = found.iter().map(|s| s.storage_path.as_str()).collect();
+        paths.sort_unstable();
+        paths.dedup();
+        for path in paths {
+            match repos::symbols::SymbolsRepo::count_by_storage_path(db, path).await {
+                Ok(0) => {
+                    if let Err(e) = state.storage.delete(&Path::from(path)).await {
+                        error!(path, error = ?e, "Failed to delete symbol object");
+                    }
+                }
+                Ok(n) => info!(path, remaining = n, "Keeping symbol object, still referenced"),
+                Err(e) => error!(path, error = ?e, "Failed to count references; keeping object"),
+            }
+        }
+
+        info!(
+            product = %product.name, module_id, build_id, deleted,
+            "Deleted symbols"
+        );
+        Ok(Json(DeleteResponse { deleted }))
     }
 
     #[instrument(skip(state, headers, multipart), fields(crash_id))]

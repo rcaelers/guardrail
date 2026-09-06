@@ -39,6 +39,48 @@ impl SymbolsRepo {
         Ok(symbols.into_iter().next())
     }
 
+    /// Every row for one module build within a product. Unlike
+    /// `get_by_module_and_build_id` this is scoped to the product and returns
+    /// all matches, because an upload creates a row rather than replacing one.
+    pub async fn get_all_by_module_and_build_id(
+        db: &Surreal<Any>,
+        product_id: &str,
+        build_id: &str,
+        module_id: &str,
+    ) -> Result<Vec<Symbols>, RepoError> {
+        let mut result = db
+            .query(
+                "SELECT *, meta::id(id) as id, meta::id(product_id) as product_id FROM symbols \
+                 WHERE product_id = type::record('products', $product_id) \
+                 AND build_id = $build_id AND module_id = $module_id",
+            )
+            .bind(("product_id", product_id.to_owned()))
+            .bind(("build_id", build_id.to_owned()))
+            .bind(("module_id", module_id.to_owned()))
+            .await
+            .map_err(handle_surreal_error)?;
+        crate::take_many(&mut result, 0)
+    }
+
+    /// How many rows still point at one stored object. Storage paths carry no
+    /// product, so two products shipping the same module build share a file.
+    pub async fn count_by_storage_path(
+        db: &Surreal<Any>,
+        storage_path: &str,
+    ) -> Result<i64, RepoError> {
+        let mut result = db
+            .query("SELECT count() AS count FROM symbols WHERE storage_path = $storage_path GROUP ALL")
+            .bind(("storage_path", storage_path.to_owned()))
+            .await
+            .map_err(handle_surreal_error)?;
+        let counts: Vec<serde_json::Value> = crate::take_many(&mut result, 0)?;
+        Ok(counts
+            .first()
+            .and_then(|v| v.get("count"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0))
+    }
+
     pub async fn get_all(
         db: &Surreal<Any>,
         params: QueryParams,

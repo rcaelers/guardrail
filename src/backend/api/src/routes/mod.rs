@@ -13,6 +13,10 @@ use symbols::SymbolsApi;
 pub async fn routes(_app_state: AppState) -> Router<AppState> {
     Router::new()
         .route("/symbols/{token}/upload", post(SymbolsApi::upload))
+        .route(
+            "/symbols/{token}/{module_id}/{build_id}",
+            axum::routing::delete(SymbolsApi::delete),
+        )
         // Token-authenticated crash access for analysis integrations. Scoped to
         // the token's product; reports redacted unless crash-read-full.
         .route("/crashes", get(crashes::list_groups))
