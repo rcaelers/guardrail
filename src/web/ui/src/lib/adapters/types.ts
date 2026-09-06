@@ -6,7 +6,7 @@
 //   - Product-scoped reads (crashes, symbols, members)
 //   - Admin writes (users, products)
 
-export type Status = 'new' | 'triaged' | 'resolved';
+export type Status = 'new' | 'triaged' | 'resolved' | 'wontfix' | 'regressed';
 export type Signal = 'SIGSEGV' | 'SIGABRT' | 'panic' | 'SIGBUS' | 'OOM' | 'assertion' | string;
 export type Role = 'readonly' | 'readwrite' | 'maintainer';
 
@@ -134,6 +134,8 @@ export interface CrashGroupSummary {
   trend?: number[];
   similarity: number;
   status: Status;
+  /** The release a fix went into; a crash from at or above it reopens the group. */
+  fixedInVersion?: string | null;
   assignee: string | null;
   firstSeen: string;
   lastSeen: string;
@@ -596,7 +598,7 @@ export interface GuardrailAdapter {
   /** Returns a single crash plus its parent group, or null. */
   getCrash(id: string): Promise<{ crash: Crash; group: CrashGroup } | null>;
   downloadAttachment(id: string): Promise<Response | null>;
-  setStatus(id: string, status: Status): Promise<void>;
+  setStatus(id: string, status: Status, fixedInVersion?: string | null): Promise<void>;
   addNote(id: string, body: string, author: string): Promise<Note>;
   /** Notes belong to a crash group; only user-authored ones can be changed. */
   updateNote(noteId: string, body: string): Promise<void>;

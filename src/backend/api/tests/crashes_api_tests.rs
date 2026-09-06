@@ -256,7 +256,31 @@ async fn crash_api_enforces_entitlements_scope_and_redaction() {
     );
     assert_eq!(body["crashes"][0]["id"].as_str(), Some(cid.as_str()));
 
-    // --- rejected input ---
+    // --- closing a group records the release the fix goes into ---
+    let (status, body) = call(
+        &app,
+        "POST",
+        &format!("/api/crashes/{gid}/status"),
+        Some(&annotator),
+        Some(json!({"productId": pid, "status": "resolved", "fixedInVersion": "1.11.2"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["fixedInVersion"].as_str(), Some("1.11.2"));
+
+    let (status, body) = call(
+        &app,
+        "GET",
+        &format!("/api/crashes/{gid}?productId={pid}"),
+        Some(&reader),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["group"]["fixedInVersion"].as_str(), Some("1.11.2"));
+
+    // Reopening without a version clears it, so a stale one cannot reopen the
+    // group a second time.
     let (status, _) = call(
         &app,
         "POST",
@@ -265,7 +289,45 @@ async fn crash_api_enforces_entitlements_scope_and_redaction() {
         Some(json!({"productId": pid, "status": "wontfix"})),
     )
     .await;
+    assert_eq!(status, StatusCode::OK, "wontfix is a valid state");
+
+    let (_, body) = call(
+        &app,
+        "GET",
+        &format!("/api/crashes/{gid}?productId={pid}"),
+        Some(&reader),
+        None,
+    )
+    .await;
+    assert!(
+        body["group"]["fixedInVersion"].is_null(),
+        "omitting the version clears it rather than leaving a stale one"
+    );
+
+    // --- rejected input ---
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/api/crashes/{gid}/status"),
+        Some(&annotator),
+        Some(json!({"productId": pid, "status": "banana"})),
+    )
+    .await;
     assert_ne!(status, StatusCode::OK, "unknown status must be rejected");
+
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/api/crashes/{gid}/status"),
+        Some(&annotator),
+        Some(json!({"productId": pid, "status": "resolved", "fixedInVersion": "1.11.2.0"})),
+    )
+    .await;
+    assert_ne!(
+        status,
+        StatusCode::OK,
+        "a version the importer could not compare must be refused at the door"
+    );
 
     let (status, _) = call(
         &app,

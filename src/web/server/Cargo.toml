@@ -12,6 +12,7 @@ name = "guardrailctl"
 path = "src/bin/tool.rs"
 
 [dependencies]
+semver.workspace = true
 repos = { path = "../../common/repos" }
 data = { path = "../../common/data" }
 common = { path = "../../common/common" }

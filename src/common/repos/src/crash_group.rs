@@ -80,6 +80,21 @@ impl CrashGroupRepo {
 
     /// Increment the crash count and push `last_seen` forward.
     /// Called for every crash that joins an existing group.
+    /// Reopens a group whose fix did not hold. Only ever moves away from a
+    /// closed state, so a group somebody has since re-triaged is left alone.
+    pub async fn mark_regressed(db: &Surreal<Any>, id: &str) -> Result<(), RepoError> {
+        db.query(
+            "UPDATE type::record('crash_groups', $id) SET \
+                status = 'regressed', \
+                updated_at = time::now() \
+             WHERE status IN ['resolved', 'wontfix']",
+        )
+        .bind(("id", record_key(id)))
+        .await
+        .map_err(handle_surreal_error)?;
+        Ok(())
+    }
+
     pub async fn touch(db: &Surreal<Any>, id: &str) -> Result<(), RepoError> {
         db.query(
             "UPDATE type::record('crash_groups', $id) SET \

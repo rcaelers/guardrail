@@ -199,11 +199,12 @@
     if (id && data.selectedCrash?.id !== id) await showCrash(id, true);
   }
 
-  async function setStatus(s: Status) {
+  async function setStatus(s: Status, fixedInVersion?: string | null) {
     if (!activeGroup) return;
     const body = new FormData();
     body.set('id', activeGroup.id);
     body.set('status', s);
+    body.set('fixedInVersion', fixedInVersion ?? '');
     await fetch('?/setStatus', { method: 'POST', body });
     await refreshAfterMutation();
   }

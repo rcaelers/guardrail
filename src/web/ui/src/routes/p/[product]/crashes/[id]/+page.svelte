@@ -13,9 +13,10 @@
   const backHref = $derived(`/p/${$page.params.product}/crashes`);
   let pendingDeleteNote = $state<string | null>(null);
 
-  async function setStatus(s: Status) {
+  async function setStatus(s: Status, fixedInVersion?: string | null) {
     const body = new FormData();
     body.set('status', s);
+    body.set('fixedInVersion', fixedInVersion ?? '');
     await fetch('?/setStatus', { method: 'POST', body });
     await invalidateAll();
   }

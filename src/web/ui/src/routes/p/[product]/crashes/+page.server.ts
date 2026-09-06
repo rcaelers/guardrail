@@ -95,8 +95,10 @@ export const actions: Actions = {
     const form = await request.formData();
     const id = String(form.get('id') ?? '');
     const status = String(form.get('status') ?? '') as Status;
+    const fixedRaw = String(form.get('fixedInVersion') ?? '').trim();
+    const fixedInVersion = fixedRaw.length > 0 ? fixedRaw : null;
     if (!id || !status) return fail(400, { error: 'missing id/status' });
-    await adapter.setStatus(id, status);
+    await adapter.setStatus(id, status, fixedInVersion);
     return { ok: true };
   },
   addNote: async ({ request, locals, params }) => {

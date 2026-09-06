@@ -26,7 +26,7 @@
   interface Props {
     group: CrashGroup;
     crash: Crash;
-    onStatusChange: (s: Status) => void;
+    onStatusChange: (s: Status, fixedInVersion?: string | null) => void;
     onMerge: (mergedId: string) => void;
     onAddNote: (body: string) => void;
     onUpdateNote: (noteId: string, body: string) => void;
@@ -53,6 +53,13 @@
     readOnly = false,
     canMerge = true
   }: Props = $props();
+
+  // Recorded when a group is closed so a later crash from a build that carries
+  // the fix reopens it.
+  let fixedIn = $state('');
+  $effect(() => {
+    fixedIn = group.fixedInVersion ?? '';
+  });
 
   type TabKey =
     | 'stack'
@@ -164,12 +171,12 @@
 
     <!-- Actions -->
     <div class="mt-4 flex flex-wrap gap-1.5">
-      {#each [['new', 'Mark new'], ['triaged', 'Triage'], ['resolved', 'Resolve']] as [s, label]}
+      {#each [['new', 'Mark new'], ['triaged', 'Triage'], ['resolved', 'Resolve'], ['wontfix', "Won't fix"]] as [s, label]}
         {@const active = group.status === s}
         <button
           type="button"
           disabled={readOnly}
-          onclick={() => onStatusChange(s as Status)}
+          onclick={() => onStatusChange(s as Status, fixedIn.trim() || null)}
           class="rounded-md border px-2.5 py-1 font-sans text-[11.5px]"
           class:cursor-pointer={!readOnly}
           class:cursor-not-allowed={readOnly}
@@ -185,6 +192,23 @@
           title={readOnly ? 'Read-only access' : ''}
         >{label}</button>
       {/each}
+      {#if !readOnly}
+        <span class="flex items-center gap-1.5">
+          <input
+            type="text"
+            bind:value={fixedIn}
+            placeholder="fixed in e.g. 1.11.2"
+            title="A crash from this version or later reopens the group"
+            class="w-[150px] rounded-md border border-line dark:border-line-dark bg-transparent px-2 py-1 text-[11.5px] text-ink dark:text-ink-dark outline-none focus:ring-1 focus:ring-accent"
+          />
+          <button
+            type="button"
+            onclick={() => onStatusChange(group.status, fixedIn.trim() || null)}
+            disabled={(group.fixedInVersion ?? '') === fixedIn.trim()}
+            class="cursor-pointer rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink dark:text-ink-dark disabled:opacity-40"
+          >Save</button>
+        </span>
+      {/if}
       {#if !readOnly && onDeleteCrash}
         <button
           type="button"

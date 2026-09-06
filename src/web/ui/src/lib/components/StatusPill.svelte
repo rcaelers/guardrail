@@ -5,7 +5,10 @@
   const color: Record<Status, string> = {
     new: 'bg-signal-danger dark:bg-signal-dangerDark',
     triaged: 'bg-signal-warn dark:bg-signal-warnDark',
-    resolved: 'bg-signal-ok dark:bg-signal-okDark'
+    resolved: 'bg-signal-ok dark:bg-signal-okDark',
+    wontfix: 'bg-ink-muted dark:bg-ink-mutedDark',
+    // A fix that did not hold needs to read as loudly as a new crash.
+    regressed: 'bg-signal-danger dark:bg-signal-dangerDark'
   };
 </script>
 

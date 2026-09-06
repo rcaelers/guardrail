@@ -35,8 +35,10 @@ export const actions: Actions = {
     if (!canWrite(role)) throw error(403, 'Read-only on this product');
     const form = await request.formData();
     const status = String(form.get('status') ?? '') as Status;
+    const fixedRaw = String(form.get('fixedInVersion') ?? '').trim();
+    const fixedInVersion = fixedRaw.length > 0 ? fixedRaw : null;
     if (!status) return fail(400, { error: 'missing status' });
-    await adapter.setStatus(params.id!, status);
+    await adapter.setStatus(params.id!, status, fixedInVersion);
     return { ok: true };
   },
   addNote: async ({ request, params, locals }) => {

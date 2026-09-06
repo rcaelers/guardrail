@@ -135,6 +135,7 @@ pub async fn list_groups(
     let offset = q.offset.unwrap_or(0);
     let mut sql = String::from(
         "SELECT meta::id(id) AS id, fingerprint, signal, count, status,
+                fixed_in_version AS fixedInVersion,
                 first_seen AS firstSeen, last_seen AS lastSeen
          FROM crash_groups
          WHERE product_id = type::record('products', $pid)",
@@ -168,6 +169,7 @@ pub async fn get_group(
     let groups = run(
         db,
         "SELECT meta::id(id) AS id, fingerprint, signal, count, status,
+                fixed_in_version AS fixedInVersion,
                 first_seen AS firstSeen, last_seen AS lastSeen
          FROM crash_groups
          WHERE meta::id(id) = $gid AND product_id = type::record('products', $pid)",
@@ -349,6 +351,10 @@ pub struct StatusBody {
     #[serde(rename = "productId")]
     product_id: String,
     status: String,
+    /// The release the fix goes into. Recorded when resolving so a later crash
+    /// from a build that carries it reopens the group.
+    #[serde(rename = "fixedInVersion")]
+    fixed_in_version: Option<String>,
 }
 
 /// Sets a crash group's triage status. Status lives on the group, not on
@@ -359,10 +365,18 @@ pub async fn set_group_status(
     Path(group_id): Path<String>,
     Json(body): Json<StatusBody>,
 ) -> Result<Json<Value>, ApiError> {
-    if !matches!(body.status.as_str(), "new" | "triaged" | "resolved") {
+    if !matches!(body.status.as_str(), "new" | "triaged" | "resolved" | "wontfix" | "regressed") {
         return Err(ApiError::Failure(format!(
-            "invalid status '{}': expected new, triaged or resolved",
+            "invalid status '{}': expected new, triaged, resolved, wontfix or regressed",
             body.status
+        )));
+    }
+    let fixed_in_version = body.fixed_in_version.as_deref().map(str::trim).filter(|s| !s.is_empty());
+    if let Some(version) = fixed_in_version
+        && semver::Version::parse(version).is_err()
+    {
+        return Err(ApiError::Failure(format!(
+            "invalid fixedInVersion '{version}': expected a semantic version such as 1.11.2"
         )));
     }
     let db = &state.repo.db;
@@ -371,20 +385,34 @@ pub async fn set_group_status(
     let product = get_product_by_id(db, &body.product_id).await?;
     validate_api_token_for_product(&token, &product, &product.name)?;
 
+    // An explicit value is always recorded; leaving it out when reopening
+    // clears it, so a stale version cannot reopen the group again.
+    let fixed_value = match fixed_in_version {
+        Some(version) => Value::String(version.to_string()),
+        None => Value::Null,
+    };
     let rows = run(
         db,
-        "UPDATE crash_groups SET status = $status, updated_at = time::now()
+        "UPDATE crash_groups
+         SET status = $status,
+             fixed_in_version = IF $fixed = NULL THEN NONE ELSE $fixed END,
+             updated_at = time::now()
          WHERE meta::id(id) = $gid AND product_id = type::record('products', $pid)
          RETURN meta::id(id) AS id",
         vec![
             ("gid", Value::String(group_id.clone())),
             ("pid", Value::String(product.id)),
             ("status", Value::String(body.status.clone())),
+            ("fixed", fixed_value),
         ],
     )
     .await?;
     if rows.is_empty() {
         return Err(ApiError::Failure(format!("crash group {group_id} not found")));
     }
-    Ok(Json(json!({ "ok": true, "status": body.status })))
+    Ok(Json(json!({
+        "ok": true,
+        "status": body.status,
+        "fixedInVersion": fixed_in_version
+    })))
 }

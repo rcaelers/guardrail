@@ -5,7 +5,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
-use tracing::{error, info, instrument};
+use tracing::{debug, error, info, instrument, warn};
 
 use crate::error::JobError;
 use crate::jobs::ImportCrashJob;
@@ -22,6 +22,26 @@ use repos::{
 pub struct ImportCrashProcessor {
     storage: Arc<dyn ObjectStore>,
     repo: Repo,
+}
+
+/// True when a crash from `crash_version` proves a fix released in
+/// `fixed_in_version` did not hold.
+///
+/// Deliberately conservative: an unparseable version on either side means no
+/// answer, so a group is left closed. A wrong reopen is noise on every later
+/// crash, while a missed one costs only the automatic signal.
+fn is_regression(crash_version: Option<&str>, fixed_in_version: Option<&str>) -> bool {
+    let (Some(crash_version), Some(fixed)) = (crash_version, fixed_in_version) else {
+        return false;
+    };
+    let (Ok(crash_version), Ok(fixed)) = (
+        semver::Version::parse(crash_version.trim()),
+        semver::Version::parse(fixed.trim()),
+    ) else {
+        debug!(crash_version, fixed, "Version not comparable; not treating as a regression");
+        return false;
+    };
+    crash_version >= fixed
 }
 
 impl ImportCrashProcessor {
@@ -114,8 +134,13 @@ impl ImportCrashProcessor {
             .map(shorten_exception_type)
             .unwrap_or_else(|| fingerprint.clone().unwrap_or_default());
 
+        let crash_version = report["version"]
+            .as_str()
+            .or_else(|| crash_info["version"].as_str())
+            .filter(|s| !s.is_empty());
+
         let group_id = if let Some(fp) = fingerprint.as_deref() {
-            match Self::find_or_create_crash_group(db, &product.id, fp, &signal).await {
+            match Self::find_or_create_crash_group(db, &product.id, fp, &signal, crash_version).await {
                 Ok(id) => Some(id),
                 Err(e) => {
                     error!(fingerprint = %fp, error = ?e, "Failed to assign crash group; crash will be stored without one");
@@ -164,6 +189,7 @@ impl ImportCrashProcessor {
         product_id: &str,
         fingerprint: &str,
         signal: &str,
+        crash_version: Option<&str>,
     ) -> Result<String, JobError> {
         if let Some(group) = CrashGroupRepo::find_by_fingerprint(db, product_id, fingerprint)
             .await
@@ -172,6 +198,21 @@ impl ImportCrashProcessor {
             CrashGroupRepo::touch(db, &group.id)
                 .await
                 .map_err(|e| JobError::Failure(format!("failed to update crash group: {e}")))?;
+
+            if is_regression(crash_version, group.fixed_in_version.as_deref()) {
+                warn!(
+                    group_id = %group.id,
+                    crash_version = crash_version.unwrap_or_default(),
+                    fixed_in_version = group.fixed_in_version.as_deref().unwrap_or_default(),
+                    "Crash from a version that should carry the fix; reopening the group"
+                );
+                if let Err(e) = CrashGroupRepo::mark_regressed(db, &group.id).await {
+                    // The crash itself is already stored; failing to reopen the
+                    // group loses a signal, not data.
+                    error!(group_id = %group.id, error = ?e, "Failed to mark crash group regressed");
+                }
+            }
+
             return Ok(group.id);
         }
 
@@ -199,6 +240,11 @@ impl ImportCrashProcessor {
                 CrashGroupRepo::touch(db, &group.id)
                     .await
                     .map_err(|e| JobError::Failure(format!("failed to update crash group: {e}")))?;
+                if is_regression(crash_version, group.fixed_in_version.as_deref())
+                    && let Err(e) = CrashGroupRepo::mark_regressed(db, &group.id).await
+                {
+                    error!(group_id = %group.id, error = ?e, "Failed to mark crash group regressed");
+                }
                 Ok(group.id)
             }
         }
@@ -474,6 +520,37 @@ fn derive_platform(os_name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn regression_needs_both_versions_to_parse_and_compare() {
+        // A build that carries the fix and still crashes: the fix did not hold.
+        assert!(super::is_regression(Some("1.11.2"), Some("1.11.2")));
+        assert!(super::is_regression(Some("1.11.3"), Some("1.11.2")));
+        assert!(super::is_regression(Some("2.0.0"), Some("1.11.2")));
+
+        // An older build crashing is expected and must not reopen anything.
+        assert!(!super::is_regression(Some("1.11.1"), Some("1.11.2")));
+        assert!(!super::is_regression(Some("1.10.52"), Some("1.11.2")));
+
+        // A prerelease sorts below its release, so rc.4 does not carry a fix
+        // that went into the final 1.11.2.
+        assert!(!super::is_regression(Some("1.11.2-rc.4"), Some("1.11.2")));
+        assert!(super::is_regression(Some("1.11.2"), Some("1.11.2-rc.4")));
+
+        // Nothing recorded, nothing to compare against.
+        assert!(!super::is_regression(Some("1.11.2"), None));
+        assert!(!super::is_regression(None, Some("1.11.2")));
+        assert!(!super::is_regression(None, None));
+
+        // Unparseable on either side: stay quiet rather than reopen wrongly. A
+        // four-part Windows file version is the case that turns up in practice.
+        assert!(!super::is_regression(Some("1.11.2.0"), Some("1.11.2")));
+        assert!(!super::is_regression(Some("1.11.2"), Some("not a version")));
+        assert!(!super::is_regression(Some(""), Some("1.11.2")));
+
+        // Surrounding whitespace should not defeat the comparison.
+        assert!(super::is_regression(Some(" 1.11.2 "), Some("1.11.2")));
+    }
+
     use super::*;
     use object_store::{PutPayload, path::Path};
     use serde_json::json;

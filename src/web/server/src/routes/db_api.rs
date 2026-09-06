@@ -436,6 +436,7 @@ const GROUP_BASE_SELECT: &str = "
         signal,
         count,
         status,
+        fixed_in_version     AS fixedInVersion,
         IF assignee != NONE THEN meta::id(assignee) ELSE NONE END AS assignee,
         first_seen           AS firstSeen,
         last_seen            AS lastSeen
@@ -2518,6 +2519,8 @@ async fn delete_note(
 #[derive(Deserialize)]
 struct SetStatusBody {
     status: String,
+    #[serde(rename = "fixedInVersion")]
+    fixed_in_version: Option<String>,
 }
 
 async fn set_status(
@@ -2533,13 +2536,36 @@ async fn set_status(
     crate::access::require_session_product_role(&session, &s.repo.db, &product_id, "readwrite")
         .await
         .map_err(access_err)?;
+    if !matches!(
+        body.status.as_str(),
+        "new" | "triaged" | "resolved" | "wontfix" | "regressed"
+    ) {
+        return Err(bad("unknown status"));
+    }
+    let fixed = body.fixed_in_version.as_deref().map(str::trim).filter(|v| !v.is_empty());
+    if let Some(version) = fixed
+        && semver::Version::parse(version).is_err()
+    {
+        return Err(bad("fixedInVersion must be a semantic version such as 1.11.2"));
+    }
+
     let db = s.user_db(&session).await?;
+    // Recorded unconditionally: reopening without a version clears it, so a
+    // stale value cannot reopen the group again.
+    let fixed_value = match fixed {
+        Some(version) => Value::String(version.to_string()),
+        None => Value::Null,
+    };
     run_value(
         &db,
-        "UPDATE type::record('crash_groups', $id) SET status = $st, updated_at = time::now()",
+        "UPDATE type::record('crash_groups', $id)
+         SET status = $st,
+             fixed_in_version = IF $fixed = NULL THEN NONE ELSE $fixed END,
+             updated_at = time::now()",
         vec![
             ("id", Value::String(id)),
             ("st", Value::String(body.status)),
+            ("fixed", fixed_value),
         ],
     )
     .await?;

@@ -11,6 +11,7 @@ pub struct CrashGroup {
     pub first_seen: DateTime<Utc>,
     pub last_seen: DateTime<Utc>,
     pub status: String,
+    pub fixed_in_version: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

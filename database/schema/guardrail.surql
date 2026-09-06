@@ -166,10 +166,13 @@ DEFINE FIELD count ON TABLE crash_groups TYPE int ASSERT $value != NONE DEFAULT 
 DEFINE FIELD first_seen ON TABLE crash_groups TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 DEFINE FIELD last_seen ON TABLE crash_groups TYPE datetime ASSERT $value != NONE DEFAULT time::now();
 
--- Workflow state
+-- Workflow state. `regressed` is set by the importer, not by hand: a crash from
+-- a version at or above `fixed_in_version` means the fix did not hold.
 DEFINE FIELD status ON TABLE crash_groups TYPE string
-    ASSERT $value != NONE AND $value INSIDE ["new", "triaged", "resolved"]
+    ASSERT $value != NONE AND $value INSIDE ["new", "triaged", "resolved", "wontfix", "regressed"]
     DEFAULT "new";
+-- The release the fix went into, so a later crash can be told from an older one.
+DEFINE FIELD fixed_in_version ON TABLE crash_groups TYPE option<string>;
 DEFINE FIELD assignee ON TABLE crash_groups TYPE option<record<users>>;
 
 DEFINE FIELD created_at ON TABLE crash_groups TYPE datetime ASSERT $value != NONE DEFAULT time::now();

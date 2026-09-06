@@ -324,8 +324,11 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
       await assertOk(r, 'downloadAttachment');
       return r;
     },
-    async setStatus(id, status: Status) {
-      const r = await jpost(`/crashes/${encodeURIComponent(id)}/status`, { status });
+    async setStatus(id, status: Status, fixedInVersion?: string | null) {
+      const r = await jpost(`/crashes/${encodeURIComponent(id)}/status`, {
+        status,
+        fixedInVersion: fixedInVersion ?? null
+      });
       await assertOk(r, 'setStatus');
     },
     async addNote(id, body, author): Promise<Note> {
