@@ -86,9 +86,12 @@ impl SymbolsApi {
             return Err(ApiError::Failure("invalid module_id format".to_string()));
         }
 
+        // '+' is here for libc++.dll and libstdc++-6.dll. The traversal check
+        // above is what keeps this safe; this set only has to admit real module
+        // names, and rejecting one means its symbols can never be stored.
         if !module_id
             .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '-' || c == '_')
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_' | '+'))
         {
             error!("Invalid module_id format: {}", module_id);
             return Err(ApiError::Failure("invalid module_id format".to_string()));
@@ -528,6 +531,13 @@ mod tests {
         ));
 
         assert!(SymbolsApi::validate_module_id("app.pdb").is_ok());
+        // Real module names from the MinGW runtime we ship.
+        assert!(SymbolsApi::validate_module_id("libc++.dll").is_ok());
+        assert!(SymbolsApi::validate_module_id("libstdc++-6.dll").is_ok());
+        assert!(SymbolsApi::validate_module_id("libabsl_base-2605.0.0.dll").is_ok());
+        // Traversal stays rejected even though '.' and '+' are allowed.
+        assert!(SymbolsApi::validate_module_id("..").is_err());
+        assert!(SymbolsApi::validate_module_id("a/../b").is_err());
         assert!(matches!(
             SymbolsApi::validate_module_id(""),
             Err(ApiError::Failure(message)) if message == "invalid module_id length"
