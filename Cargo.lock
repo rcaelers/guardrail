@@ -4255,6 +4255,7 @@ dependencies = [
  "bytes",
  "clap",
  "common",
+ "debugid",
  "fancy-regex",
  "log",
  "minidump",

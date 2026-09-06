@@ -54,14 +54,40 @@ fn is_safe_path_segment(s: &str) -> bool {
     !s.is_empty() && s != "." && s != ".." && !s.contains('/') && !s.contains('\\')
 }
 
+/// A PE with no CodeView record reports a nil debug id, which every build of
+/// that DLL shares. The MSYS2/MinGW GTK libraries are all like this, so the
+/// code id -- the PE timestamp and image size -- is the only thing that tells
+/// their builds apart. Prefer it, and keep the nil id as a fallback so symbols
+/// uploaded under it are still found.
+fn code_id_of(module: &(dyn Module + Sync)) -> Option<String> {
+    let code_id = module.code_identifier()?;
+    let code_id = code_id.to_string().to_uppercase();
+    (!code_id.is_empty()).then_some(code_id)
+}
+
+impl S3SymbolSupplier {
+    fn lookup_ids(module: &(dyn Module + Sync)) -> Vec<String> {
+        match module.debug_identifier() {
+            Some(debug_id) if !debug_id.is_nil() => vec![debug_id.breakpad().to_string()],
+            Some(debug_id) => code_id_of(module)
+                .into_iter()
+                .chain(std::iter::once(debug_id.breakpad().to_string()))
+                .collect(),
+            None => code_id_of(module).into_iter().collect(),
+        }
+    }
+}
+
 #[async_trait]
 impl SymbolSupplier for S3SymbolSupplier {
     async fn locate_symbols(
         &self,
         module: &(dyn Module + Sync),
     ) -> Result<LocateSymbolsResult, SymbolError> {
-        let build_id = module.debug_identifier().ok_or(SymbolError::NotFound)?;
-        let build_id = build_id.breakpad().to_string();
+        let build_ids = Self::lookup_ids(module);
+        if build_ids.is_empty() {
+            return Err(SymbolError::NotFound);
+        }
         let module_id = module.debug_file().ok_or(SymbolError::NotFound)?;
         let module_id = std::path::Path::new(convert(module_id.as_ref()))
             .file_name()
@@ -69,46 +95,47 @@ impl SymbolSupplier for S3SymbolSupplier {
             .ok_or(SymbolError::NotFound)?
             .to_string();
 
-        if !is_safe_path_segment(&module_id) || !is_safe_path_segment(&build_id) {
+        if !is_safe_path_segment(&module_id) {
             error!(
                 module_id = %module_id,
-                build_id = %build_id,
                 "Rejecting unsafe symbol path segment from minidump"
             );
             return Err(SymbolError::NotFound);
         }
 
-        info!("Searching symbols for module_id: {}, build_id: {}", module_id, build_id);
-
-        // Try standard Breakpad symbol path structure: symbols/{module_id}/{build_id}/{module_id}.sym
-        let symbol_path = format!("symbols/{}/{}/{}.sym", module_id, build_id, module_id);
-
-        match self.get_symbols_object(&symbol_path).await {
-            Ok(data) => {
-                let symbols = self.parse_symbols(&data).await?;
-                info!("S3SymbolSupplier parsed file from: {}", symbol_path);
-                Ok(LocateSymbolsResult {
-                    symbols,
-                    extra_debug_info: None,
-                })
-            }
-            Err(_) => {
-                // Fallback: try alternate path format used by guardrail
-                let alt_path = format!("symbols/{}-{}", module_id, build_id);
-                debug!(
-                    "Standard path {} not found, trying alternate path: {}",
-                    symbol_path, alt_path
+        for build_id in &build_ids {
+            if !is_safe_path_segment(build_id) {
+                error!(
+                    module_id = %module_id,
+                    build_id = %build_id,
+                    "Rejecting unsafe symbol path segment from minidump"
                 );
+                continue;
+            }
 
-                let data = self.get_symbols_object(&alt_path).await?;
-                let symbols = self.parse_symbols(&data).await?;
-                info!("S3SymbolSupplier parsed file from alternate path: {}", alt_path);
-                Ok(LocateSymbolsResult {
-                    symbols,
-                    extra_debug_info: None,
-                })
+            info!("Searching symbols for module_id: {}, build_id: {}", module_id, build_id);
+
+            // Standard Breakpad layout first, then the flat one guardrail also writes.
+            let paths = [
+                format!("symbols/{}/{}/{}.sym", module_id, build_id, module_id),
+                format!("symbols/{}-{}", module_id, build_id),
+            ];
+            for path in &paths {
+                match self.get_symbols_object(path).await {
+                    Ok(data) => {
+                        let symbols = self.parse_symbols(&data).await?;
+                        info!("S3SymbolSupplier parsed file from: {}", path);
+                        return Ok(LocateSymbolsResult {
+                            symbols,
+                            extra_debug_info: None,
+                        });
+                    }
+                    Err(_) => debug!("No symbols at {}", path),
+                }
             }
         }
+
+        Err(SymbolError::NotFound)
     }
 
     async fn locate_file(
@@ -169,6 +196,82 @@ mod test {
             .parse_symbols(b"MODULE Linux x86 ABCDEF test\n")
             .await
             .expect("minimal symbol file should parse");
+    }
+
+    /// A stand-in for a MinGW DLL: no CodeView record, so a nil debug id.
+    struct FakeModule {
+        debug_id: Option<debugid::DebugId>,
+        code_id: Option<debugid::CodeId>,
+    }
+
+    impl minidump::Module for FakeModule {
+        fn base_address(&self) -> u64 { 0 }
+        fn size(&self) -> u64 { 0x1000 }
+        fn code_file(&self) -> std::borrow::Cow<'_, str> { "libglib-2.0-0.dll".into() }
+        fn code_identifier(&self) -> Option<debugid::CodeId> { self.code_id.clone() }
+        fn debug_file(&self) -> Option<std::borrow::Cow<'_, str>> { Some("libglib-2.0-0.dll".into()) }
+        fn debug_identifier(&self) -> Option<debugid::DebugId> { self.debug_id }
+        fn version(&self) -> Option<std::borrow::Cow<'_, str>> { None }
+    }
+
+    #[test]
+    fn a_nil_debug_id_falls_back_to_the_code_id() {
+        let nil = debugid::DebugId::nil();
+        let code = debugid::CodeId::new("6a3f7c5516c000".to_string());
+
+        // A real debug id is used on its own; the code id must not shadow it.
+        let real = debugid::DebugId::from_breakpad("94A7D9F01A528C944C4C44205044422E1").unwrap();
+        assert_eq!(
+            S3SymbolSupplier::lookup_ids(&FakeModule { debug_id: Some(real), code_id: Some(code.clone()) }),
+            vec!["94A7D9F01A528C944C4C44205044422E1".to_string()]
+        );
+
+        // A nil debug id: try the code id first, then the nil id so anything
+        // already uploaded under it is still found.
+        assert_eq!(
+            S3SymbolSupplier::lookup_ids(&FakeModule { debug_id: Some(nil), code_id: Some(code.clone()) }),
+            vec![
+                "6A3F7C5516C000".to_string(),
+                "000000000000000000000000000000000".to_string()
+            ],
+            "the code id is uppercased to match how build ids are stored"
+        );
+
+        // Nil debug id and no code id at all: only the nil id is left.
+        assert_eq!(
+            S3SymbolSupplier::lookup_ids(&FakeModule { debug_id: Some(nil), code_id: None }),
+            vec!["000000000000000000000000000000000".to_string()]
+        );
+
+        // No debug id recorded at all.
+        assert_eq!(
+            S3SymbolSupplier::lookup_ids(&FakeModule { debug_id: None, code_id: Some(code) }),
+            vec!["6A3F7C5516C000".to_string()]
+        );
+        assert!(S3SymbolSupplier::lookup_ids(&FakeModule { debug_id: None, code_id: None }).is_empty());
+    }
+
+    #[tokio::test]
+    async fn symbols_are_found_under_the_code_id() {
+        let store = Arc::new(object_store::memory::InMemory::new());
+        let sym = b"MODULE windows x86_64 6A3F7C5516C000 libglib-2.0-0.dll\nPUBLIC 1330 0 g_mem_chunk_new\n";
+        store
+            .put(
+                &object_store::path::Path::from(
+                    "symbols/libglib-2.0-0.dll/6A3F7C5516C000/libglib-2.0-0.dll.sym",
+                ),
+                sym.to_vec().into(),
+            )
+            .await
+            .unwrap();
+
+        let supplier = S3SymbolSupplier::new(store);
+        let module = FakeModule {
+            debug_id: Some(debugid::DebugId::nil()),
+            code_id: Some(debugid::CodeId::new("6a3f7c5516c000".to_string())),
+        };
+        let found = supplier.locate_symbols(&module).await.expect("code id lookup must resolve");
+        assert_eq!(found.symbols.publics.len(), 1);
     }
 
     #[tokio::test]

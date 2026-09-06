@@ -36,3 +36,6 @@ log.workspace = true
 object_store.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+debugid.workspace = true
