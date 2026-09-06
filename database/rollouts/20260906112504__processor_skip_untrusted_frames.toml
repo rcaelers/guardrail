@@ -1,0 +1,24 @@
+id = "20260906112504__processor_skip_untrusted_frames"
+name = "processor_skip_untrusted_frames"
+source_schema_hash = "b7e8c919f78570d879710657c5b6e1f13a999818a043052f80fef25054ffbc1d"
+target_schema_hash = "72bd321610ed24a4dc543d48c67bed9fb53a66acd8c8f81283d6c4912e105db0"
+compatibility = "phased"
+renames = []
+
+[[steps]]
+id = "apply_expand_schema"
+phase = "start"
+kind = "apply_schema"
+files = ["database/schema/guardrail.surql"]
+entities = []
+
+[[steps]]
+id = "rollback_expand_schema"
+phase = "rollback"
+kind = "remove_entities"
+files = []
+
+[[steps.entities]]
+kind = "field"
+scope = "product_settings"
+name = "processor.skip_untrusted_frames"
