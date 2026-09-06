@@ -37,6 +37,7 @@ async fn build_product_info(db: &Surreal<Any>, product: &Product) -> ProductInfo
         end_patterns: settings.processor.end_patterns,
         delimiter: settings.processor.delimiter,
         maximum_frame_count: settings.processor.maximum_frame_count.map(|n| n as usize),
+        skip_untrusted_frames: settings.processor.skip_untrusted_frames,
     });
 
     let cached_scripts: Vec<CachedValidationScript> = scripts

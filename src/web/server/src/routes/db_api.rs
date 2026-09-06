@@ -1259,10 +1259,12 @@ async fn get_product_processor_settings(
         "end_patterns": p.end_patterns,
         "delimiter": p.delimiter,
         "maximum_frame_count": p.maximum_frame_count,
+        "skip_untrusted_frames": p.skip_untrusted_frames,
         "default_skip_patterns": d.skip_patterns,
         "default_end_patterns": d.end_patterns,
         "default_delimiter": d.delimiter.clone().unwrap_or_else(|| "|".to_string()),
         "default_maximum_frame_count": d.maximum_frame_count.unwrap_or(20),
+        "default_skip_untrusted_frames": d.skip_untrusted_frames.unwrap_or(false),
     })))
 }
 
@@ -1272,6 +1274,7 @@ struct UpdateProcessorSettingsBody {
     end_patterns: Option<Vec<String>>,
     delimiter: Option<String>,
     maximum_frame_count: Option<u64>,
+    skip_untrusted_frames: Option<bool>,
 }
 
 async fn update_product_processor_settings(
@@ -1291,6 +1294,7 @@ async fn update_product_processor_settings(
         end_patterns: body.end_patterns,
         delimiter: body.delimiter.filter(|s| !s.is_empty()),
         maximum_frame_count: body.maximum_frame_count,
+        skip_untrusted_frames: body.skip_untrusted_frames,
     };
     let saved = repos::product_settings::ProductSettingsRepo::upsert_processor(&db, &id, processor)
         .await
@@ -1301,6 +1305,7 @@ async fn update_product_processor_settings(
         "end_patterns": p.end_patterns,
         "delimiter": p.delimiter,
         "maximum_frame_count": p.maximum_frame_count,
+        "skip_untrusted_frames": p.skip_untrusted_frames,
     })))
 }
 

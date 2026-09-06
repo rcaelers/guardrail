@@ -63,6 +63,7 @@ impl ProductSettingsRepo {
                  processor.end_patterns = $end_patterns, \
                  processor.delimiter = $delimiter, \
                  processor.maximum_frame_count = $maximum_frame_count, \
+                 processor.skip_untrusted_frames = $skip_untrusted_frames, \
                  created_at = created_at OR time::now(), \
                  updated_at = time::now() \
                  RETURN *, meta::id(id) AS id, meta::id(product_id) AS product_id",
@@ -72,6 +73,7 @@ impl ProductSettingsRepo {
             .bind(("end_patterns", processor.end_patterns))
             .bind(("delimiter", processor.delimiter))
             .bind(("maximum_frame_count", processor.maximum_frame_count))
+            .bind(("skip_untrusted_frames", processor.skip_untrusted_frames))
             .await
             .map_err(handle_surreal_error)?;
         crate::take_one::<ProductSettings>(&mut result, 0)?

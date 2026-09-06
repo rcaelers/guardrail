@@ -6,6 +6,7 @@ pub struct CachedProcessorSettings {
     pub end_patterns: Option<Vec<String>>,
     pub delimiter: Option<String>,
     pub maximum_frame_count: Option<usize>,
+    pub skip_untrusted_frames: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -4,12 +4,16 @@ use serde::Deserialize;
 use crate::error::JobError;
 use crate::utils::JsonHelpers;
 
+/// Breakpad trust levels that mean the frame was guessed rather than unwound.
+const UNTRUSTED_TRUST_LEVELS: &[&str] = &["scan", "cfi_scan"];
+
 #[derive(Debug, Deserialize)]
 pub struct SignatureGeneratorConfig {
     pub skip_patterns: Vec<String>,
     pub end_patterns: Vec<String>,
     pub delimiter: String,
     pub maximum_frame_count: usize,
+    pub skip_untrusted_frames: bool,
 }
 
 impl Default for SignatureGeneratorConfig {
@@ -19,6 +23,7 @@ impl Default for SignatureGeneratorConfig {
             end_patterns: vec![],
             delimiter: "|".into(),
             maximum_frame_count: 10,
+            skip_untrusted_frames: false,
         }
     }
 }
@@ -30,6 +35,7 @@ impl SignatureGeneratorConfig {
             end_patterns,
             delimiter: "|".into(),
             maximum_frame_count: 10,
+            skip_untrusted_frames: false,
         }
     }
 }
@@ -42,6 +48,7 @@ pub struct SignatureGenerator {
     template_parameters_pattern_regex: Regex,
     delimiter: String,
     maximum_frame_count: usize,
+    skip_untrusted_frames: bool,
 }
 
 impl SignatureGenerator {
@@ -60,6 +67,7 @@ impl SignatureGenerator {
             template_parameters_pattern_regex,
             delimiter: config.delimiter,
             maximum_frame_count: config.maximum_frame_count,
+            skip_untrusted_frames: config.skip_untrusted_frames,
         })
     }
 
@@ -210,11 +218,20 @@ impl SignatureGenerator {
                 Self::transfer_missing_field(&mut new_frame, frame, "module");
                 Self::transfer_missing_field(&mut new_frame, frame, "module_offset");
                 Self::transfer_missing_field(&mut new_frame, frame, "offset");
+                Self::transfer_missing_field(&mut new_frame, frame, "trust");
                 flattened_frame_list.push(new_frame);
             }
             flattened_frame_list.push(frame.clone());
         }
         flattened_frame_list
+    }
+
+    /// A frame with no trust recorded is kept: inline frames inherit their parent's.
+    fn is_trusted_frame(frame: &serde_json::Value) -> bool {
+        match JsonHelpers::get_string(frame, "trust") {
+            Some(trust) => !UNTRUSTED_TRUST_LEVELS.contains(&trust.as_str()),
+            None => true,
+        }
     }
 
     fn collapse_consecutive_duplicates(signatures: Vec<String>) -> Vec<String> {
@@ -236,7 +253,17 @@ impl SignatureGenerator {
     }
 
     pub fn generate(&self, crashing_thread: &serde_json::Value) -> Result<String, JobError> {
-        let frames = self.flatten_frame_list(crashing_thread);
+        let mut frames = self.flatten_frame_list(crashing_thread);
+
+        if self.skip_untrusted_frames {
+            let trusted: Vec<serde_json::Value> =
+                frames.iter().filter(|f| Self::is_trusted_frame(f)).cloned().collect();
+            // A stack of nothing but guesses still has to group somehow.
+            if !trusted.is_empty() {
+                frames = trusted;
+            }
+        }
+
         let signatures = self.generate_signatures(frames);
 
         let mut relevant_signatures = Vec::new();
@@ -817,6 +844,114 @@ mod tests {
         let result =
             generator.condense_function_name("void MyClass::virtualMethod() override final");
         assert_eq!(result, "MyClass::virtualMethod");
+    }
+
+    #[test]
+    fn test_untrusted_frames_are_skipped() {
+        // The shape of crash group 7f7cfd32: an abort whose unwind chain is lost,
+        // leaving scanned guesses between the real top and the real bottom.
+        let thread_data = serde_json::json!({
+            "frames": [
+                { "module": "Workrave.exe", "function": "crashpad_handler", "trust": "context" },
+                { "module": "ucrtbase.dll", "trust": "cfi" },
+                { "module": "libglib-2.0-0.dll", "trust": "scan" },
+                { "module": "Workrave.exe", "function": "Toolkit::attach_menu(Gtk::Menu*)", "trust": "scan" },
+                { "module": "libglib-2.0-0.dll", "trust": "scan" },
+                { "module": "Workrave.exe", "function": "Toolkit::attach_menu(Gtk::Menu*)", "trust": "scan" },
+                { "module": "Workrave.exe", "function": "run(int, char**)", "trust": "cfi" },
+                { "module": "Workrave.exe", "function": "WinMain", "trust": "cfi" }
+            ]
+        });
+
+        let generator = SignatureGenerator::new(SignatureGeneratorConfig::default()).unwrap();
+        let with_guesses = generator.generate(&thread_data).unwrap();
+        assert!(
+            with_guesses.contains("attach_menu"),
+            "the current behaviour keeps scanned frames: {with_guesses}"
+        );
+
+        let config = SignatureGeneratorConfig {
+            skip_untrusted_frames: true,
+            ..SignatureGeneratorConfig::default()
+        };
+        let generator = SignatureGenerator::new(config).unwrap();
+        let result = generator.generate(&thread_data).unwrap();
+        assert_eq!(
+            result,
+            "Workrave.exe!crashpad_handler|ucrtbase.dll!|Workrave.exe!run|Workrave.exe!WinMain"
+        );
+    }
+
+    #[test]
+    fn test_trusted_frames_below_a_scan_run_are_kept() {
+        // The most common shape in production: context, a run of scans, then real cfi frames.
+        let thread_data = serde_json::json!({
+            "frames": [
+                { "module": "a.exe", "function": "top", "trust": "context" },
+                { "module": "b.dll", "function": "guess_one", "trust": "scan" },
+                { "module": "b.dll", "function": "guess_two", "trust": "cfi_scan" },
+                { "module": "a.exe", "function": "real_one", "trust": "cfi" },
+                { "module": "a.exe", "function": "real_two", "trust": "frame_pointer" }
+            ]
+        });
+
+        let config = SignatureGeneratorConfig {
+            skip_untrusted_frames: true,
+            ..SignatureGeneratorConfig::default()
+        };
+        let generator = SignatureGenerator::new(config).unwrap();
+        assert_eq!(
+            generator.generate(&thread_data).unwrap(),
+            "a.exe!top|a.exe!real_one|a.exe!real_two",
+            "cfi_scan is a guess too, but frames below the scan run must survive"
+        );
+    }
+
+    #[test]
+    fn test_all_untrusted_frames_are_kept_rather_than_none() {
+        let thread_data = serde_json::json!({
+            "frames": [
+                { "module": "a.exe", "function": "guess_one", "trust": "scan" },
+                { "module": "a.exe", "function": "guess_two", "trust": "scan" }
+            ]
+        });
+
+        let config = SignatureGeneratorConfig {
+            skip_untrusted_frames: true,
+            ..SignatureGeneratorConfig::default()
+        };
+        let generator = SignatureGenerator::new(config).unwrap();
+        assert_eq!(
+            generator.generate(&thread_data).unwrap(),
+            "a.exe!guess_one|a.exe!guess_two",
+            "dropping every frame would put unrelated crashes in one group"
+        );
+    }
+
+    #[test]
+    fn test_inline_frames_inherit_the_trust_of_their_parent() {
+        let thread_data = serde_json::json!({
+            "frames": [
+                { "module": "a.exe", "function": "top", "trust": "context" },
+                {
+                    "module": "a.exe",
+                    "function": "guessed_outer",
+                    "trust": "scan",
+                    "inlines": [ { "function": "guessed_inline" } ]
+                }
+            ]
+        });
+
+        let config = SignatureGeneratorConfig {
+            skip_untrusted_frames: true,
+            ..SignatureGeneratorConfig::default()
+        };
+        let generator = SignatureGenerator::new(config).unwrap();
+        assert_eq!(
+            generator.generate(&thread_data).unwrap(),
+            "a.exe!top",
+            "an inline frame is only as trustworthy as the frame it was inlined into"
+        );
     }
 
     #[test]

@@ -391,10 +391,12 @@ export interface ProcessorSettings {
   end_patterns: string[] | null;
   delimiter: string | null;
   maximum_frame_count: number | null;
+  skip_untrusted_frames: boolean | null;
   default_skip_patterns: string[];
   default_end_patterns: string[];
   default_delimiter: string;
   default_maximum_frame_count: number;
+  default_skip_untrusted_frames: boolean;
 }
 
 export interface MinidumpSettings {
@@ -559,7 +561,7 @@ export interface GuardrailAdapter {
   updateProductEmailSettings(id: string, settings: ProductEmailSettings): Promise<ProductEmailSettings>;
   updateProductToken(id: string, token?: string): Promise<Product>;
   getProcessorSettings(id: string): Promise<ProcessorSettings>;
-  updateProcessorSettings(id: string, settings: Pick<ProcessorSettings, 'skip_patterns' | 'end_patterns' | 'delimiter' | 'maximum_frame_count'>): Promise<ProcessorSettings>;
+  updateProcessorSettings(id: string, settings: Pick<ProcessorSettings, 'skip_patterns' | 'end_patterns' | 'delimiter' | 'maximum_frame_count' | 'skip_untrusted_frames'>): Promise<ProcessorSettings>;
   getMinidumpSettings(id: string): Promise<MinidumpSettings>;
   updateMinidumpSettings(id: string, settings: MinidumpSettings): Promise<MinidumpSettings>;
   listValidationScripts(id: string): Promise<ValidationScript[]>;

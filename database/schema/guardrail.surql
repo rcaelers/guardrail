@@ -44,6 +44,7 @@ DEFINE FIELD processor.skip_patterns ON TABLE product_settings TYPE option<array
 DEFINE FIELD processor.end_patterns ON TABLE product_settings TYPE option<array<string>>;
 DEFINE FIELD processor.delimiter ON TABLE product_settings TYPE option<string>;
 DEFINE FIELD processor.maximum_frame_count ON TABLE product_settings TYPE option<int>;
+DEFINE FIELD processor.skip_untrusted_frames ON TABLE product_settings TYPE option<bool>;
 
 -- Minidump ingestion settings (overrides global config per product)
 DEFINE FIELD minidump ON TABLE product_settings TYPE object DEFAULT {};

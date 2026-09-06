@@ -18,6 +18,11 @@ use crate::{
     symbol_supplier::S3SymbolSupplier,
 };
 
+/// Scanned frames are guesses, and a guessed symbol splits one bug across groups.
+/// Turning this on changes every fingerprint, so new crashes stop matching the
+/// groups they used to land in; it is opt-in per product until a product is ready.
+const DEFAULT_SKIP_UNTRUSTED_FRAMES: bool = false;
+
 pub struct MinidumpProcessor {
     storage: Arc<dyn ObjectStore>,
     signature_generator: SignatureGenerator,
@@ -47,6 +52,9 @@ impl MinidumpProcessor {
             maximum_frame_count: product_settings
                 .and_then(|p| p.maximum_frame_count)
                 .unwrap_or(20),
+            skip_untrusted_frames: product_settings
+                .and_then(|p| p.skip_untrusted_frames)
+                .unwrap_or(DEFAULT_SKIP_UNTRUSTED_FRAMES),
         };
 
         let signature_generator = SignatureGenerator::new(config).unwrap();

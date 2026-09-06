@@ -10,12 +10,14 @@
   let endPatterns = $state('');
   let delimiter = $state('');
   let maximumFrameCount = $state('');
+  let skipUntrustedFrames = $state(false);
 
   $effect(() => {
     skipPatterns = (s.skip_patterns ?? []).join('\n');
     endPatterns = (s.end_patterns ?? []).join('\n');
     delimiter = s.delimiter ?? '';
     maximumFrameCount = s.maximum_frame_count?.toString() ?? '';
+    skipUntrustedFrames = s.skip_untrusted_frames ?? s.default_skip_untrusted_frames;
   });
 </script>
 
@@ -74,6 +76,35 @@
           min="1"
           class="w-40 rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-3 py-1.5 text-[13px] outline-none focus:ring-1 focus:ring-accent"
         />
+      </div>
+    </div>
+
+    <!-- Skip untrusted frames -->
+    <div class="rounded-md border border-line dark:border-line-dark overflow-hidden">
+      <div class="bg-surface-panel dark:bg-surface-panelDark px-4 py-3 border-b border-line dark:border-line-dark">
+        <div class="text-[13px] font-medium">Ignore guessed stack frames</div>
+        <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
+          Leave out frames the unwinder found by scanning the stack rather than by
+          following it. Those frames are guesses, and a wrongly attributed symbol in
+          one splits a single bug across several groups.
+        </div>
+      </div>
+      <div class="px-4 py-3 bg-surface dark:bg-surface-dark">
+        <label class="flex cursor-pointer items-start gap-2.5 text-[13px]">
+          <input
+            type="checkbox"
+            name="skip_untrusted_frames"
+            bind:checked={skipUntrustedFrames}
+            class="mt-0.5 cursor-pointer"
+          />
+          <span>
+            Ignore guessed frames
+            <span class="block text-[12px] text-ink-muted dark:text-ink-mutedDark">
+              Changes every new signature, so incoming crashes stop matching the groups
+              they used to land in. Existing crashes keep the signature they were given.
+            </span>
+          </span>
+        </label>
       </div>
     </div>
 

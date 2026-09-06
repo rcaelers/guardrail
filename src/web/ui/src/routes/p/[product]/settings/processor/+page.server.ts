@@ -32,6 +32,7 @@ export const actions: Actions = {
     const endRaw = (form.get('end_patterns') as string) ?? '';
     const delimiterRaw = ((form.get('delimiter') as string) ?? '').trim();
     const frameCountRaw = ((form.get('maximum_frame_count') as string) ?? '').trim();
+    const skip_untrusted_frames = form.get('skip_untrusted_frames') === 'on';
 
     const skip_patterns = parsePatterns(skipRaw);
     const end_patterns = parsePatterns(endRaw);
@@ -49,6 +50,7 @@ export const actions: Actions = {
         end_patterns: end_patterns.length > 0 ? end_patterns : null,
         delimiter,
         maximum_frame_count,
+        skip_untrusted_frames,
       });
       return { ok: true };
     } catch (e) {

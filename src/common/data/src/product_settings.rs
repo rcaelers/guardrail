@@ -14,6 +14,7 @@ pub struct ProcessorSettings {
     pub end_patterns: Option<Vec<String>>,
     pub delimiter: Option<String>,
     pub maximum_frame_count: Option<u64>,
+    pub skip_untrusted_frames: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
