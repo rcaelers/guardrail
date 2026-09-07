@@ -15,6 +15,7 @@ pub struct ProcessorSettings {
     pub delimiter: Option<String>,
     pub maximum_frame_count: Option<u64>,
     pub skip_untrusted_frames: Option<bool>,
+    pub fold_module_case: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]

@@ -11,6 +11,7 @@
   let delimiter = $state('');
   let maximumFrameCount = $state('');
   let skipUntrustedFrames = $state(false);
+  let foldModuleCase = $state(false);
 
   $effect(() => {
     skipPatterns = (s.skip_patterns ?? []).join('\n');
@@ -18,6 +19,7 @@
     delimiter = s.delimiter ?? '';
     maximumFrameCount = s.maximum_frame_count?.toString() ?? '';
     skipUntrustedFrames = s.skip_untrusted_frames ?? s.default_skip_untrusted_frames;
+    foldModuleCase = s.fold_module_case ?? s.default_fold_module_case;
   });
 </script>
 
@@ -99,6 +101,35 @@
           />
           <span>
             Ignore guessed frames
+            <span class="block text-[12px] text-ink-muted dark:text-ink-mutedDark">
+              Changes every new signature, so incoming crashes stop matching the groups
+              they used to land in. Existing crashes keep the signature they were given.
+            </span>
+          </span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Fold module case -->
+    <div class="rounded-md border border-line dark:border-line-dark overflow-hidden">
+      <div class="bg-surface-panel dark:bg-surface-panelDark px-4 py-3 border-b border-line dark:border-line-dark">
+        <div class="text-[13px] font-medium">Ignore the case of module names</div>
+        <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
+          Windows records whichever spelling was used to start the process, so the
+          same binary arrives as Workrave.exe or workrave.exe. Left alone that puts
+          one crash in two groups.
+        </div>
+      </div>
+      <div class="px-4 py-3 bg-surface dark:bg-surface-dark">
+        <label class="flex cursor-pointer items-start gap-2.5 text-[13px]">
+          <input
+            type="checkbox"
+            name="fold_module_case"
+            bind:checked={foldModuleCase}
+            class="mt-0.5 cursor-pointer"
+          />
+          <span>
+            Fold module names to lower case
             <span class="block text-[12px] text-ink-muted dark:text-ink-mutedDark">
               Changes every new signature, so incoming crashes stop matching the groups
               they used to land in. Existing crashes keep the signature they were given.

@@ -33,6 +33,7 @@ export const actions: Actions = {
     const delimiterRaw = ((form.get('delimiter') as string) ?? '').trim();
     const frameCountRaw = ((form.get('maximum_frame_count') as string) ?? '').trim();
     const skip_untrusted_frames = form.get('skip_untrusted_frames') === 'on';
+    const fold_module_case = form.get('fold_module_case') === 'on';
 
     const skip_patterns = parsePatterns(skipRaw);
     const end_patterns = parsePatterns(endRaw);
@@ -51,6 +52,7 @@ export const actions: Actions = {
         delimiter,
         maximum_frame_count,
         skip_untrusted_frames,
+        fold_module_case,
       });
       return { ok: true };
     } catch (e) {

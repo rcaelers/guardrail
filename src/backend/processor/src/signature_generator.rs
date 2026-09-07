@@ -14,6 +14,7 @@ pub struct SignatureGeneratorConfig {
     pub delimiter: String,
     pub maximum_frame_count: usize,
     pub skip_untrusted_frames: bool,
+    pub fold_module_case: bool,
 }
 
 impl Default for SignatureGeneratorConfig {
@@ -24,6 +25,7 @@ impl Default for SignatureGeneratorConfig {
             delimiter: "|".into(),
             maximum_frame_count: 10,
             skip_untrusted_frames: false,
+            fold_module_case: false,
         }
     }
 }
@@ -36,6 +38,7 @@ impl SignatureGeneratorConfig {
             delimiter: "|".into(),
             maximum_frame_count: 10,
             skip_untrusted_frames: false,
+            fold_module_case: false,
         }
     }
 }
@@ -49,6 +52,7 @@ pub struct SignatureGenerator {
     delimiter: String,
     maximum_frame_count: usize,
     skip_untrusted_frames: bool,
+    fold_module_case: bool,
 }
 
 impl SignatureGenerator {
@@ -68,6 +72,7 @@ impl SignatureGenerator {
             delimiter: config.delimiter,
             maximum_frame_count: config.maximum_frame_count,
             skip_untrusted_frames: config.skip_untrusted_frames,
+            fold_module_case: config.fold_module_case,
         })
     }
 
@@ -148,19 +153,24 @@ impl SignatureGenerator {
         self.collapse_template_parameters(&function)
     }
 
-    fn get_module_prefix_from_frame(frame: &serde_json::Value) -> String {
+    fn get_module_prefix_from_frame(&self, frame: &serde_json::Value) -> String {
         let module = JsonHelpers::get_string(frame, "module").unwrap_or_default();
         let module = module.split(['/', '\\']).next_back().unwrap_or_default();
 
         if module.is_empty() {
             String::new()
+        } else if self.fold_module_case {
+            // Windows records whatever case the loader used, so the same binary
+            // reaches us as Workrave.exe or workrave.exe depending on how it was
+            // started. Left alone that splits one crash across two groups.
+            format!("{}!", module.to_lowercase())
         } else {
             format!("{module}!")
         }
     }
 
     fn generate_frame_signature(&self, frame: &serde_json::Value) -> String {
-        let module_prefix = Self::get_module_prefix_from_frame(frame);
+        let module_prefix = self.get_module_prefix_from_frame(frame);
 
         if let Some(function) = JsonHelpers::get_string(frame, "function")
             && !function.is_empty()
@@ -951,6 +961,43 @@ mod tests {
             generator.generate(&thread_data).unwrap(),
             "a.exe!top",
             "an inline frame is only as trustworthy as the frame it was inlined into"
+        );
+    }
+
+    #[test]
+    fn module_case_can_be_folded() {
+        // Windows records whichever spelling started the process, so the same
+        // binary reaches us both ways and must not produce two signatures.
+        let upper = serde_json::json!({
+            "frames": [
+                { "module": "Workrave.exe", "function": "ExerciseCollection::parse_exercises" },
+                { "module": "KERNEL32.DLL", "function": "BaseThreadInitThunk" }
+            ]
+        });
+        let lower = serde_json::json!({
+            "frames": [
+                { "module": "workrave.exe", "function": "ExerciseCollection::parse_exercises" },
+                { "module": "kernel32.dll", "function": "BaseThreadInitThunk" }
+            ]
+        });
+
+        let off = SignatureGenerator::new(SignatureGeneratorConfig::default()).unwrap();
+        assert_ne!(
+            off.generate(&upper).unwrap(),
+            off.generate(&lower).unwrap(),
+            "the current behaviour splits them"
+        );
+
+        let cfg = SignatureGeneratorConfig {
+            fold_module_case: true,
+            ..SignatureGeneratorConfig::default()
+        };
+        let on = SignatureGenerator::new(cfg).unwrap();
+        assert_eq!(on.generate(&upper).unwrap(), on.generate(&lower).unwrap());
+        assert_eq!(
+            on.generate(&upper).unwrap(),
+            "workrave.exe!ExerciseCollection::parse_exercises|kernel32.dll!BaseThreadInitThunk",
+            "only the module is folded; the function keeps its case"
         );
     }
 

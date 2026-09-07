@@ -23,6 +23,12 @@ use crate::{
 /// groups they used to land in; it is opt-in per product until a product is ready.
 const DEFAULT_SKIP_UNTRUSTED_FRAMES: bool = false;
 
+/// Windows records whatever case the loader used for a module, so the same
+/// binary can arrive as Workrave.exe or workrave.exe and split one crash across
+/// two groups. Folding fixes that but changes every fingerprint, so like
+/// skip_untrusted_frames it is opt-in per product.
+const DEFAULT_FOLD_MODULE_CASE: bool = false;
+
 pub struct MinidumpProcessor {
     storage: Arc<dyn ObjectStore>,
     signature_generator: SignatureGenerator,
@@ -55,6 +61,9 @@ impl MinidumpProcessor {
             skip_untrusted_frames: product_settings
                 .and_then(|p| p.skip_untrusted_frames)
                 .unwrap_or(DEFAULT_SKIP_UNTRUSTED_FRAMES),
+            fold_module_case: product_settings
+                .and_then(|p| p.fold_module_case)
+                .unwrap_or(DEFAULT_FOLD_MODULE_CASE),
         };
 
         let signature_generator = SignatureGenerator::new(config).unwrap();

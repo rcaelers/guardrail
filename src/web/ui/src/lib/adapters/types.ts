@@ -102,8 +102,13 @@ export interface CrashUserText {
 
 export interface RelatedRef {
   id: string;
+  /** The group's fingerprint, which is what says whether it is the same bug. */
   title: string;
   count: number;
+  status?: Status;
+  signal?: string | null;
+  /** 0..1, how much of the stack matches the group being viewed. */
+  similarity?: number;
 }
 
 export interface Environment {
@@ -394,11 +399,13 @@ export interface ProcessorSettings {
   delimiter: string | null;
   maximum_frame_count: number | null;
   skip_untrusted_frames: boolean | null;
+  fold_module_case: boolean | null;
   default_skip_patterns: string[];
   default_end_patterns: string[];
   default_delimiter: string;
   default_maximum_frame_count: number;
   default_skip_untrusted_frames: boolean;
+  default_fold_module_case: boolean;
 }
 
 export interface MinidumpSettings {
@@ -563,7 +570,7 @@ export interface GuardrailAdapter {
   updateProductEmailSettings(id: string, settings: ProductEmailSettings): Promise<ProductEmailSettings>;
   updateProductToken(id: string, token?: string): Promise<Product>;
   getProcessorSettings(id: string): Promise<ProcessorSettings>;
-  updateProcessorSettings(id: string, settings: Pick<ProcessorSettings, 'skip_patterns' | 'end_patterns' | 'delimiter' | 'maximum_frame_count' | 'skip_untrusted_frames'>): Promise<ProcessorSettings>;
+  updateProcessorSettings(id: string, settings: Pick<ProcessorSettings, 'skip_patterns' | 'end_patterns' | 'delimiter' | 'maximum_frame_count' | 'skip_untrusted_frames' | 'fold_module_case'>): Promise<ProcessorSettings>;
   getMinidumpSettings(id: string): Promise<MinidumpSettings>;
   updateMinidumpSettings(id: string, settings: MinidumpSettings): Promise<MinidumpSettings>;
   listValidationScripts(id: string): Promise<ValidationScript[]>;

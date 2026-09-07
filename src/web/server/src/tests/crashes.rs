@@ -1576,3 +1576,43 @@ async fn test_update_and_delete_notes() {
         .await;
     assert_eq!(body["notes"].as_array().map(Vec::len), Some(0));
 }
+
+/// The case of a module name depends on how Windows was asked to start the
+/// process, not on which binary ran, so it must not separate two crashes.
+#[test]
+fn fingerprint_similarity_ignores_module_case() {
+    use crate::routes::db_api::fingerprint_similarity;
+
+    let upper = "Workrave.exe!<T>|Workrave.exe!ExerciseCollection::parse_exercises|Workrave.exe!main";
+    let lower = "workrave.exe!<T>|workrave.exe!ExerciseCollection::parse_exercises|workrave.exe!main";
+    assert_eq!(
+        fingerprint_similarity(upper, lower),
+        1.0,
+        "the same stack in a different case is the same crash"
+    );
+
+    assert_eq!(fingerprint_similarity("", "a"), 0.0);
+    assert_eq!(fingerprint_similarity("a", ""), 0.0);
+    assert_eq!(fingerprint_similarity("a.dll!x", "b.dll!y"), 0.0, "nothing shared scores zero");
+}
+
+/// The frames above our own code are exception-unwinding noise that differs
+/// between dumps of one bug, so a shared leading run cannot be the only signal.
+#[test]
+fn fingerprint_similarity_survives_a_differing_stack_top() {
+    use crate::routes::db_api::fingerprint_similarity;
+
+    // Both are the exercises crash; only the unwinding frames differ.
+    let a = "KERNELBASE.dll!(x2)|libc++.dll!(x3)|Workrave.exe!read_xml|Workrave.exe!parse_exercises|Workrave.exe!load|Workrave.exe!main";
+    let b = "KERNELBASE.dll!(x2)|ucrtbase.dll!|libc++.dll!(x2)|Workrave.exe!read_xml|Workrave.exe!parse_exercises|Workrave.exe!load|Workrave.exe!main";
+    // An unrelated crash that happens to share the same first frame.
+    let unrelated = "KERNELBASE.dll!(x2)|Workrave.exe!get_value|Workrave.exe!lexical_cast|Workrave.exe!other";
+
+    let same_bug = fingerprint_similarity(a, b);
+    let different_bug = fingerprint_similarity(a, unrelated);
+    assert!(
+        same_bug > different_bug,
+        "the duplicate must outrank the unrelated crash, got {same_bug} vs {different_bug}"
+    );
+    assert!(same_bug > 0.5, "expected a strong score for the duplicate, got {same_bug}");
+}

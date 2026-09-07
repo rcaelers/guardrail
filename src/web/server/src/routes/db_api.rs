@@ -1261,11 +1261,13 @@ async fn get_product_processor_settings(
         "delimiter": p.delimiter,
         "maximum_frame_count": p.maximum_frame_count,
         "skip_untrusted_frames": p.skip_untrusted_frames,
+        "fold_module_case": p.fold_module_case,
         "default_skip_patterns": d.skip_patterns,
         "default_end_patterns": d.end_patterns,
         "default_delimiter": d.delimiter.clone().unwrap_or_else(|| "|".to_string()),
         "default_maximum_frame_count": d.maximum_frame_count.unwrap_or(20),
         "default_skip_untrusted_frames": d.skip_untrusted_frames.unwrap_or(false),
+        "default_fold_module_case": d.fold_module_case.unwrap_or(false),
     })))
 }
 
@@ -1276,6 +1278,7 @@ struct UpdateProcessorSettingsBody {
     delimiter: Option<String>,
     maximum_frame_count: Option<u64>,
     skip_untrusted_frames: Option<bool>,
+    fold_module_case: Option<bool>,
 }
 
 async fn update_product_processor_settings(
@@ -1296,6 +1299,7 @@ async fn update_product_processor_settings(
         delimiter: body.delimiter.filter(|s| !s.is_empty()),
         maximum_frame_count: body.maximum_frame_count,
         skip_untrusted_frames: body.skip_untrusted_frames,
+        fold_module_case: body.fold_module_case,
     };
     let saved = repos::product_settings::ProductSettingsRepo::upsert_processor(&db, &id, processor)
         .await
@@ -1307,6 +1311,7 @@ async fn update_product_processor_settings(
         "delimiter": p.delimiter,
         "maximum_frame_count": p.maximum_frame_count,
         "skip_untrusted_frames": p.skip_untrusted_frames,
+        "fold_module_case": p.fold_module_case,
     })))
 }
 
@@ -2266,6 +2271,51 @@ fn hydrate_crash(row: &Value, attachments: Vec<Value>, user_text: Option<Value>)
     Value::Object(out)
 }
 
+/// How many of the two crash groups the UI offers as related.
+const RELATED_LIMIT: usize = 10;
+
+/// How alike two fingerprints are, from 0.0 to 1.0.
+///
+/// Two measures, and the better of the two wins.
+///
+/// The leading run of identical frames says the two crashes happened in the
+/// same place. That alone is not enough here: an uncaught C++ exception unwinds
+/// through KERNELBASE and libc++ before it reaches our code, and those frames
+/// vary between dumps of the same bug, so the run often breaks at the first
+/// frame. Measured against production, the exercises crash scored 6% against
+/// its own duplicate that way, below an unrelated configuration crash at 31%.
+///
+/// Sharing frames anywhere is the more robust signal when the top of the stack
+/// is noise, so the second measure is how much of the two frame sets overlap.
+/// The same pair scores 88% that way, and all three exercises groups sort above
+/// everything unrelated.
+///
+/// Frames are compared case-insensitively. Windows records whatever case the
+/// loader used for a module, so Workrave.exe and workrave.exe are the same
+/// binary and must not read as different crashes.
+pub(crate) fn fingerprint_similarity(a: &str, b: &str) -> f64 {
+    if a.is_empty() || b.is_empty() {
+        return 0.0;
+    }
+    let a: Vec<String> = a.split('|').map(|f| f.to_lowercase()).collect();
+    let b: Vec<String> = b.split('|').map(|f| f.to_lowercase()).collect();
+
+    let longest = a.len().max(b.len()) as f64;
+    let shared_prefix = a.iter().zip(b.iter()).take_while(|(x, y)| x == y).count();
+    let prefix_score = shared_prefix as f64 / longest;
+
+    let set_a: std::collections::HashSet<&String> = a.iter().collect();
+    let set_b: std::collections::HashSet<&String> = b.iter().collect();
+    let union = set_a.union(&set_b).count();
+    let overlap_score = if union == 0 {
+        0.0
+    } else {
+        set_a.intersection(&set_b).count() as f64 / union as f64
+    };
+
+    prefix_score.max(overlap_score)
+}
+
 async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (StatusCode, String)> {
     let rows = run_value(
         db,
@@ -2336,43 +2386,48 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
         .and_then(|v| v.as_str())
         .unwrap_or_default()
         .to_string();
-    let related_base = run_value(
+    let _ = signal;
+    let own_fingerprint = group_obj
+        .get("fingerprint")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    // Every group in the product, ranked by how much of its stack matches this
+    // one. Products hold tens of groups, not thousands, so this stays cheap.
+    let candidates = run_value(
         db,
-        "SELECT meta::id(id) AS id, count FROM crash_groups
+        "SELECT meta::id(id) AS id, count, status, signal, fingerprint FROM crash_groups
          WHERE product_id = type::record('products', $pid)
-           AND signal = $signal
-           AND meta::id(id) != $gid
-         ORDER BY count DESC LIMIT 3",
+           AND meta::id(id) != $gid",
         vec![
             ("pid", Value::String(product_id.clone())),
-            ("signal", Value::String(signal)),
             ("gid", Value::String(id.into())),
         ],
     )
     .await?;
-    let mut related: Vec<Value> = Vec::with_capacity(related_base.len());
-    for g in related_base {
-        let gid = g
-            .get("id")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .to_string();
-        let count = g.get("count").cloned().unwrap_or(Value::Null);
-        let title_rows = run_value(
-            db,
-            "SELECT created_at, report.title AS title FROM crashes
-             WHERE group_id = type::record('crash_groups', $gid)
-             ORDER BY created_at DESC LIMIT 1",
-            vec![("gid", Value::String(gid.clone()))],
-        )
-        .await?;
-        let title = title_rows
-            .into_iter()
-            .next()
-            .and_then(|r| r.get("title").cloned())
-            .unwrap_or(Value::Null);
-        related.push(json!({ "id": gid, "title": title, "count": count }));
+
+    let mut scored: Vec<(f64, Value)> = Vec::new();
+    for g in candidates {
+        let other = g.get("fingerprint").and_then(|v| v.as_str()).unwrap_or_default();
+        let similarity = fingerprint_similarity(&own_fingerprint, other);
+        if similarity <= 0.0 {
+            continue;
+        }
+        scored.push((
+            similarity,
+            json!({
+                "id": g.get("id").and_then(|v| v.as_str()).unwrap_or_default(),
+                "title": g.get("fingerprint").cloned().unwrap_or(Value::Null),
+                "count": g.get("count").cloned().unwrap_or(Value::Null),
+                "status": g.get("status").cloned().unwrap_or(Value::Null),
+                "signal": g.get("signal").cloned().unwrap_or(Value::Null),
+                "similarity": similarity,
+            }),
+        ));
     }
+    scored.sort_by(|a, b| b.0.total_cmp(&a.0));
+    let related: Vec<Value> = scored.into_iter().take(RELATED_LIMIT).map(|(_, v)| v).collect();
     group_obj.insert("related".into(), Value::Array(related));
 
     Ok(Some(group))
