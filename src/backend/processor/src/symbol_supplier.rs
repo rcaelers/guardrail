@@ -38,8 +38,16 @@ impl S3SymbolSupplier {
     }
 }
 
-fn convert(s: &str) -> &str {
-    s
+/// The final component of a path that may use either separator.
+///
+/// `debug_file` comes from the minidump. Windows modules often report a full
+/// path, `C:\Program Files\Workrave\bin\libglib-2.0-0.dll`, and
+/// `Path::file_name` only splits on `/` when this runs on Linux, so the
+/// backslashes survived and the name was then rejected as an unsafe path
+/// segment. Every module whose debug_file carried a path was dropped before its
+/// symbols were ever looked up.
+fn basename(s: &str) -> &str {
+    s.rsplit(['/', '\\']).next().unwrap_or(s)
 }
 
 /// `module_id` and `build_id` come from the attacker-controlled minidump and are
@@ -89,11 +97,7 @@ impl SymbolSupplier for S3SymbolSupplier {
             return Err(SymbolError::NotFound);
         }
         let module_id = module.debug_file().ok_or(SymbolError::NotFound)?;
-        let module_id = std::path::Path::new(convert(module_id.as_ref()))
-            .file_name()
-            .and_then(|f| f.to_str())
-            .ok_or(SymbolError::NotFound)?
-            .to_string();
+        let module_id = basename(module_id.as_ref()).to_string();
 
         if !is_safe_path_segment(&module_id) {
             error!(
@@ -202,6 +206,13 @@ mod test {
     struct FakeModule {
         debug_id: Option<debugid::DebugId>,
         code_id: Option<debugid::CodeId>,
+        debug_file: String,
+    }
+
+    impl FakeModule {
+        fn new(debug_id: Option<debugid::DebugId>, code_id: Option<debugid::CodeId>) -> Self {
+            Self { debug_id, code_id, debug_file: "libglib-2.0-0.dll".to_string() }
+        }
     }
 
     impl minidump::Module for FakeModule {
@@ -209,7 +220,7 @@ mod test {
         fn size(&self) -> u64 { 0x1000 }
         fn code_file(&self) -> std::borrow::Cow<'_, str> { "libglib-2.0-0.dll".into() }
         fn code_identifier(&self) -> Option<debugid::CodeId> { self.code_id.clone() }
-        fn debug_file(&self) -> Option<std::borrow::Cow<'_, str>> { Some("libglib-2.0-0.dll".into()) }
+        fn debug_file(&self) -> Option<std::borrow::Cow<'_, str>> { Some(self.debug_file.as_str().into()) }
         fn debug_identifier(&self) -> Option<debugid::DebugId> { self.debug_id }
         fn version(&self) -> Option<std::borrow::Cow<'_, str>> { None }
     }
@@ -222,14 +233,14 @@ mod test {
         // A real debug id is used on its own; the code id must not shadow it.
         let real = debugid::DebugId::from_breakpad("94A7D9F01A528C944C4C44205044422E1").unwrap();
         assert_eq!(
-            S3SymbolSupplier::lookup_ids(&FakeModule { debug_id: Some(real), code_id: Some(code.clone()) }),
+            S3SymbolSupplier::lookup_ids(&FakeModule::new(Some(real), Some(code.clone()))),
             vec!["94A7D9F01A528C944C4C44205044422E1".to_string()]
         );
 
         // A nil debug id: try the code id first, then the nil id so anything
         // already uploaded under it is still found.
         assert_eq!(
-            S3SymbolSupplier::lookup_ids(&FakeModule { debug_id: Some(nil), code_id: Some(code.clone()) }),
+            S3SymbolSupplier::lookup_ids(&FakeModule::new(Some(nil), Some(code.clone()))),
             vec![
                 "6A3F7C5516C000".to_string(),
                 "000000000000000000000000000000000".to_string()
@@ -239,16 +250,16 @@ mod test {
 
         // Nil debug id and no code id at all: only the nil id is left.
         assert_eq!(
-            S3SymbolSupplier::lookup_ids(&FakeModule { debug_id: Some(nil), code_id: None }),
+            S3SymbolSupplier::lookup_ids(&FakeModule::new(Some(nil), None)),
             vec!["000000000000000000000000000000000".to_string()]
         );
 
         // No debug id recorded at all.
         assert_eq!(
-            S3SymbolSupplier::lookup_ids(&FakeModule { debug_id: None, code_id: Some(code) }),
+            S3SymbolSupplier::lookup_ids(&FakeModule::new(None, Some(code))),
             vec!["6A3F7C5516C000".to_string()]
         );
-        assert!(S3SymbolSupplier::lookup_ids(&FakeModule { debug_id: None, code_id: None }).is_empty());
+        assert!(S3SymbolSupplier::lookup_ids(&FakeModule::new(None, None)).is_empty());
     }
 
     #[tokio::test]
@@ -266,11 +277,52 @@ mod test {
             .unwrap();
 
         let supplier = S3SymbolSupplier::new(store);
-        let module = FakeModule {
-            debug_id: Some(debugid::DebugId::nil()),
-            code_id: Some(debugid::CodeId::new("6a3f7c5516c000".to_string())),
-        };
+        let module = FakeModule::new(
+            Some(debugid::DebugId::nil()),
+            Some(debugid::CodeId::new("6a3f7c5516c000".to_string())),
+        );
         let found = supplier.locate_symbols(&module).await.expect("code id lookup must resolve");
+        assert_eq!(found.symbols.publics.len(), 1);
+    }
+
+    #[test]
+    fn basename_handles_windows_paths() {
+        // What the minidump actually reports for the bundled GTK libraries.
+        assert_eq!(
+            super::basename(r"C:\Program Files\Workrave\bin\libglib-2.0-0.dll"),
+            "libglib-2.0-0.dll"
+        );
+        assert_eq!(super::basename("/usr/lib/libfoo.so"), "libfoo.so");
+        assert_eq!(super::basename("workrave.pdb"), "workrave.pdb");
+        assert_eq!(super::basename(""), "");
+    }
+
+    /// A debug_file carrying a full Windows path used to be rejected as an
+    /// unsafe path segment, because Path::file_name does not split on `\` when
+    /// this runs on Linux. Every bundled library was dropped that way.
+    #[tokio::test]
+    async fn a_windows_path_in_debug_file_still_resolves() {
+        let store = Arc::new(object_store::memory::InMemory::new());
+        let sym = b"MODULE windows x86_64 6A3F7C5516C000 libglib-2.0-0.dll\nPUBLIC 1330 0 g_mem_chunk_new\n";
+        store
+            .put(
+                &object_store::path::Path::from("symbols/libglib-2.0-0.dll-6A3F7C5516C000"),
+                sym.to_vec().into(),
+            )
+            .await
+            .unwrap();
+
+        let supplier = S3SymbolSupplier::new(store);
+        let mut module = FakeModule::new(
+            Some(debugid::DebugId::nil()),
+            Some(debugid::CodeId::new("6a3f7c5516c000".to_string())),
+        );
+        module.debug_file = r"C:\Program Files\Workrave\bin\libglib-2.0-0.dll".to_string();
+
+        let found = supplier
+            .locate_symbols(&module)
+            .await
+            .expect("a full path in debug_file must not stop the lookup");
         assert_eq!(found.symbols.publics.len(), 1);
     }
 
