@@ -5,7 +5,12 @@
 -- ============================================================
 -- Products
 -- ============================================================
-DEFINE TABLE products SCHEMAFULL;
+DEFINE TABLE products SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE public = true OR fn::auth::has_product_role(id, "readonly")
+		FOR create WHERE fn::auth::is_admin()
+		FOR update WHERE fn::auth::is_admin() OR fn::auth::is_product_admin(id)
+		FOR delete WHERE fn::auth::is_admin();
 
 DEFINE FIELD name ON TABLE products TYPE string ASSERT $value != NONE AND $value != "";
 DEFINE FIELD slug ON TABLE products TYPE string ASSERT $value != NONE AND $value != "";
@@ -28,7 +33,10 @@ DEFINE INDEX idx_products_product_token ON TABLE products COLUMNS product_token 
 -- Per-product configuration. One record per product; the record ID mirrors
 -- the product ID so upserts are lock-free.  Each top-level field is a
 -- settings category (email, …); add new categories here as the product grows.
-DEFINE TABLE product_settings SCHEMAFULL;
+DEFINE TABLE product_settings SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE fn::auth::is_product_admin(product_id)
+		FOR create, update, delete WHERE fn::auth::is_product_admin(product_id);
 
 DEFINE FIELD product_id ON TABLE product_settings TYPE record<products> ASSERT $value != NONE;
 
@@ -59,7 +67,9 @@ DEFINE FIELD updated_at ON TABLE product_settings TYPE datetime ASSERT $value !=
 -- ============================================================
 -- Global application configuration. One record: app_settings:main.
 -- Use UPSERT to create or update. Admin-only access.
-DEFINE TABLE app_settings SCHEMAFULL;
+DEFINE TABLE app_settings SCHEMAFULL
+	PERMISSIONS
+		FOR select, create, update, delete WHERE fn::auth::is_admin();
 
 -- Email settings
 DEFINE FIELD email ON TABLE app_settings TYPE object DEFAULT {};
@@ -75,7 +85,19 @@ DEFINE FIELD updated_at ON TABLE app_settings TYPE datetime ASSERT $value != NON
 -- ============================================================
 -- `username` is the JWT subject and the auth identity used by fn::auth::*.
 -- `email` is the human-friendly sign-in identifier surfaced by the website.
-DEFINE TABLE users SCHEMAFULL;
+DEFINE TABLE users SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE fn::auth::is_admin()
+			OR username = fn::auth::username()
+			OR fn::auth::shares_admin_product_with_user(id)
+		-- Only admins may create users through an RLS-scoped connection. Just-in-time
+		-- provisioning (OIDC login / invitations) runs on the root connection, which
+		-- bypasses RLS, so it is unaffected. The previous `OR is_admin = false` let
+		-- any principal — including the anonymous role — insert non-admin user rows.
+		FOR create WHERE fn::auth::is_admin()
+		FOR update WHERE fn::auth::is_admin()
+			OR (id = fn::auth::user_id() AND is_admin = false)
+		FOR delete WHERE fn::auth::is_admin();
 
 DEFINE FIELD username ON TABLE users TYPE string ASSERT $value != NONE AND $value != "";
 DEFINE FIELD email ON TABLE users TYPE string ASSERT $value != NONE AND $value != "";
@@ -105,7 +127,12 @@ DEFINE INDEX idx_users_sub ON TABLE users COLUMNS sub;
 --   readonly   - view crashes & symbols
 --   readwrite  - + change crash status, add notes, upload symbols
 --   maintainer - + merge groups, manage members, delete the product
-DEFINE TABLE user_access SCHEMAFULL;
+DEFINE TABLE user_access SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE fn::auth::is_admin()
+			OR user_id = fn::auth::user_id()
+			OR fn::auth::is_product_admin(product_id)
+		FOR create, update, delete WHERE fn::auth::is_product_admin(product_id);
 
 DEFINE FIELD user_id ON TABLE user_access TYPE record<users> ASSERT $value != NONE;
 DEFINE FIELD product_id ON TABLE user_access TYPE record<products> ASSERT $value != NONE;
@@ -127,7 +154,10 @@ DEFINE INDEX idx_user_access_pk ON TABLE user_access COLUMNS user_id, product_id
 -- a group: all crashes with the same fingerprint (within a product) belong
 -- to the same `crash_groups` row. `group_id` denormalizes that link for
 -- fast lookup; the processor writes both.
-DEFINE TABLE crashes SCHEMAFULL;
+DEFINE TABLE crashes SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
+		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE FIELD product_id ON TABLE crashes TYPE record<products> ASSERT $value != NONE;
 DEFINE FIELD group_id ON TABLE crashes TYPE option<record<crash_groups>>;
@@ -155,7 +185,10 @@ DEFINE INDEX idx_crashes_fingerprint ON TABLE crashes COLUMNS product_id, finger
 -- `signal` is duplicated from the crashes for fast list filtering; it's
 -- expected to be identical across all crashes in the group (same fingerprint
 -- = same crash kind).
-DEFINE TABLE crash_groups SCHEMAFULL;
+DEFINE TABLE crash_groups SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
+		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE FIELD product_id ON TABLE crash_groups TYPE record<products> ASSERT $value != NONE;
 DEFINE FIELD fingerprint ON TABLE crash_groups TYPE string
@@ -197,7 +230,10 @@ DEFINE INDEX idx_crash_groups_last_seen ON TABLE crash_groups COLUMNS product_id
 --
 -- Either `crash_id` (raw crash) or `group_id` (aggregated group) must be set.
 -- `product_id` is always set so permission checks stay cheap.
-DEFINE TABLE annotations SCHEMAFULL;
+DEFINE TABLE annotations SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
+		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE FIELD source ON TABLE annotations TYPE string
     ASSERT $value != NONE AND $value INSIDE ["submission", "script", "user"];
@@ -227,7 +263,10 @@ DEFINE INDEX idx_annotations_source ON TABLE annotations COLUMNS source;
 -- ============================================================
 -- Attachments
 -- ============================================================
-DEFINE TABLE attachments SCHEMAFULL;
+DEFINE TABLE attachments SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
+		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE FIELD name ON TABLE attachments TYPE string ASSERT $value != NONE AND $value != "";
 DEFINE FIELD mime_type ON TABLE attachments TYPE string ASSERT $value != NONE;
@@ -247,7 +286,10 @@ DEFINE INDEX idx_attachments_unique ON TABLE attachments COLUMNS name, crash_id 
 -- Symbols are populated by the ingest pipeline from the parsed Breakpad header
 -- plus the object storage location. Do not add UI-only fields here unless the
 -- upload pipeline can actually provide them.
-DEFINE TABLE symbols SCHEMAFULL;
+DEFINE TABLE symbols SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
+		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
 
 DEFINE FIELD product_id ON TABLE symbols TYPE record<products> ASSERT $value != NONE;
 DEFINE FIELD os ON TABLE symbols TYPE string ASSERT $value != NONE DEFAULT "";
@@ -268,7 +310,10 @@ DEFINE INDEX idx_symbols_module_build ON TABLE symbols COLUMNS module_id, build_
 -- ============================================================
 -- Validation scripts (per-product Rhai scripts run during crash ingestion)
 -- ============================================================
-DEFINE TABLE validation_scripts SCHEMAFULL;
+DEFINE TABLE validation_scripts SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE fn::auth::is_product_admin(product_id)
+		FOR create, update, delete WHERE fn::auth::is_product_admin(product_id);
 
 DEFINE FIELD product_id ON TABLE validation_scripts TYPE record<products> ASSERT $value != NONE;
 DEFINE FIELD name ON TABLE validation_scripts TYPE string ASSERT $value != NONE AND $value != "";
@@ -281,7 +326,13 @@ DEFINE INDEX idx_validation_scripts_product ON TABLE validation_scripts COLUMNS 
 -- ============================================================
 -- API Tokens
 -- ============================================================
-DEFINE TABLE api_tokens SCHEMAFULL;
+DEFINE TABLE api_tokens SCHEMAFULL
+	PERMISSIONS
+		FOR select WHERE fn::auth::is_admin()
+			OR user_id = fn::auth::user_id()
+			OR (product_id != NONE AND fn::auth::is_product_admin(product_id))
+		FOR create, update, delete WHERE fn::auth::is_admin()
+			OR (product_id != NONE AND fn::auth::is_product_admin(product_id));
 
 DEFINE FIELD description ON TABLE api_tokens TYPE string ASSERT $value != NONE;
 DEFINE FIELD token_id ON TABLE api_tokens TYPE uuid ASSERT $value != NONE;
@@ -345,7 +396,7 @@ DEFINE INDEX idx_pending_access_invitation ON TABLE pending_access COLUMNS invit
 -- ============================================================
 -- Sessions (tower-sessions)
 -- ============================================================
-DEFINE TABLE sessions SCHEMAFULL;
+DEFINE TABLE sessions SCHEMAFULL PERMISSIONS NONE;
 
 DEFINE FIELD expires_at ON TABLE sessions TYPE option<datetime>;
 DEFINE FIELD data ON TABLE sessions TYPE bytes ASSERT $value != NONE;
@@ -426,88 +477,3 @@ DEFINE FUNCTION OVERWRITE fn::auth::shares_admin_product_with_user($user_id: rec
 			LIMIT 1
 		)) > 0;
 };
-
--- ============================================================
--- Table permissions
--- ============================================================
-
-DEFINE TABLE OVERWRITE products SCHEMAFULL
-	PERMISSIONS
-		FOR select WHERE public = true OR fn::auth::has_product_role(id, "readonly")
-		FOR create WHERE fn::auth::is_admin()
-		FOR update WHERE fn::auth::is_admin() OR fn::auth::is_product_admin(id)
-		FOR delete WHERE fn::auth::is_admin();
-
-DEFINE TABLE OVERWRITE product_settings SCHEMAFULL
-	PERMISSIONS
-		FOR select WHERE fn::auth::is_product_admin(product_id)
-		FOR create, update, delete WHERE fn::auth::is_product_admin(product_id);
-
-DEFINE TABLE OVERWRITE users SCHEMAFULL
-	PERMISSIONS
-		FOR select WHERE fn::auth::is_admin()
-			OR username = fn::auth::username()
-			OR fn::auth::shares_admin_product_with_user(id)
-		-- Only admins may create users through an RLS-scoped connection. Just-in-time
-		-- provisioning (OIDC login / invitations) runs on the root connection, which
-		-- bypasses RLS, so it is unaffected. The previous `OR is_admin = false` let
-		-- any principal — including the anonymous role — insert non-admin user rows.
-		FOR create WHERE fn::auth::is_admin()
-		FOR update WHERE fn::auth::is_admin()
-			OR (id = fn::auth::user_id() AND is_admin = false)
-		FOR delete WHERE fn::auth::is_admin();
-
-DEFINE TABLE OVERWRITE user_access SCHEMAFULL
-	PERMISSIONS
-		FOR select WHERE fn::auth::is_admin()
-			OR user_id = fn::auth::user_id()
-			OR fn::auth::is_product_admin(product_id)
-		FOR create, update, delete WHERE fn::auth::is_product_admin(product_id);
-
-DEFINE TABLE OVERWRITE crashes SCHEMAFULL
-	PERMISSIONS
-		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
-		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
-
-DEFINE TABLE OVERWRITE crash_groups SCHEMAFULL
-	PERMISSIONS
-		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
-		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
-
--- Annotations and attachments can hold user-submitted PII (memory dumps, URLs,
--- comments), so they are NOT exposed for public products: reading them requires
--- at least the `readonly` product role. Public products still expose crash
--- groups/signatures/counts (crash_groups, crashes, symbols) for anonymous view.
-DEFINE TABLE OVERWRITE annotations SCHEMAFULL
-	PERMISSIONS
-		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
-		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
-
-DEFINE TABLE OVERWRITE attachments SCHEMAFULL
-	PERMISSIONS
-		FOR select WHERE fn::auth::has_product_role(product_id, "readonly")
-		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
-
-DEFINE TABLE OVERWRITE symbols SCHEMAFULL
-	PERMISSIONS
-		FOR select WHERE product_id.public = true OR fn::auth::has_product_role(product_id, "readonly")
-		FOR create, update, delete WHERE fn::auth::has_product_role(product_id, "readwrite");
-
-DEFINE TABLE OVERWRITE validation_scripts SCHEMAFULL
-	PERMISSIONS
-		FOR select WHERE fn::auth::is_product_admin(product_id)
-		FOR create, update, delete WHERE fn::auth::is_product_admin(product_id);
-
-DEFINE TABLE OVERWRITE api_tokens SCHEMAFULL
-	PERMISSIONS
-		FOR select WHERE fn::auth::is_admin()
-			OR user_id = fn::auth::user_id()
-			OR (product_id != NONE AND fn::auth::is_product_admin(product_id))
-		FOR create, update, delete WHERE fn::auth::is_admin()
-			OR (product_id != NONE AND fn::auth::is_product_admin(product_id));
-
-DEFINE TABLE OVERWRITE app_settings SCHEMAFULL
-	PERMISSIONS
-		FOR select, create, update, delete WHERE fn::auth::is_admin();
-
-DEFINE TABLE OVERWRITE sessions SCHEMAFULL PERMISSIONS NONE;

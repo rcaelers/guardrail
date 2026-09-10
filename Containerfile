@@ -69,7 +69,7 @@ RUN curl -L --proto '=https' --tlsv1.2 -sSf \
     https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
     | sh
 
-RUN /root/.cargo/bin/cargo-binstall --no-confirm --version 0.5.8 surrealkit
+RUN /root/.cargo/bin/cargo-binstall --no-confirm --version 0.7.0 surrealkit
 
 ##
 ## Runtime: server — unified image for all backend roles

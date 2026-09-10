@@ -1,34 +1,37 @@
 # Moving surrealkit from 0.5.8 to 0.7.0
 
-Status: **not started.** Investigated 2026-09-07, nothing committed beyond this
-directory. The Containerfile is still pinned to 0.5.8 and every rollout manifest
-is still in 0.5.8 format.
+Status: **change made, rehearsed against a copy of production, not yet
+deployed.** The repository now holds the consolidated schema, a fresh
+`rollout baseline` snapshot, no rollout manifests, and a `Containerfile` pinned
+to 0.7.0. Deploying needs the one manual step in "Production cutover" below.
 
-## Why we are stuck on 0.5.8
+## Why we were stuck on 0.5.8
 
-`Containerfile` pins `cargo-binstall --version 0.5.8 surrealkit`. Bumping it
-breaks the production schema deployment, for two independent reasons.
+`Containerfile` pinned `cargo-binstall --version 0.5.8 surrealkit`. Bumping it
+broke the production schema deployment, for two independent reasons.
 
 ### 1. The manifest format changed
 
-0.7.0 cannot parse any of the 12 manifests in `database/rollouts/`:
+0.7.0 cannot parse any of the 12 manifests that were in `database/rollouts/`:
 
 ```
 TOML parse error at line 8 -- missing field `sql`
 ```
 
-0.6.3 reads 1 of 12. The break is between 0.5.8 and 0.6.x.
+0.6.3 reads 1 of 12. The break is between 0.5.8 and 0.6.x. In 0.7.0 the apply
+step is `kind = "apply_files"` and carries no `entities` key; 0.5.8 wrote
+`kind = "apply_schema"` with `entities = []`.
 
-Converting is mechanical -- `kind = "apply_schema"` becomes
-`kind = "apply_files"`, and the `entities = []` line on that step goes away --
-and all 12 then parse under 0.7.0. It is one-way: **0.5.8 cannot read the
-converted manifests**, so the manifests and the image pin must change together.
+This is a safe failure rather than a dangerous one: both rollout jobs run
+`surrealkit rollout lint` first under `set -eu`, so a manifest the deployed
+binary cannot parse aborts the job before it touches the database. Verified
+against a copy of production.
 
-### 2. Every table is defined twice
+### 2. Every table was defined twice
 
-This is the real blocker, and it is our schema, not a surrealkit bug.
+This was the real blocker, and it was our schema, not a surrealkit bug.
 
-`database/schema/guardrail.surql` defines each table once for its structure and
+`database/schema/guardrail.surql` defined each table once for its structure and
 again at the bottom to attach permissions:
 
 ```surql
@@ -38,115 +41,137 @@ DEFINE TABLE OVERWRITE annotations SCHEMAFULL        -- permissions
     PERMISSIONS FOR select WHERE ...;
 ```
 
-All 13 tables follow that pattern. 0.7.0 added a unique index on its entity
-catalog, so the second definition collides:
+All 13 tables followed that pattern. 0.7.0 added a unique index on its entity
+catalog, so seeding a baseline from that schema tried to write
+`table::annotations` twice:
 
 ```
 Error: Database index `by_ns_key` already contains ['schema', 'table::annotations']
 ```
 
-This happens on a **completely fresh database**, so it is not leftover 0.5.8
-state. Reduced to a minimum:
+Note what this is and is not. It is a *write* collision, triggered by
+`rollout baseline` reading the schema file. Production's existing `__entity`
+table is **not** corrupt: it holds 182 rows with unique keys, and 0.7.0 reads
+it fine (`rollout status` works against it unchanged). Only the schema file had
+to change.
 
-| schema | 0.7.0 `rollout baseline` |
-| --- | --- |
-| define, then `DEFINE TABLE OVERWRITE` | collision |
-| single definition carrying `PERMISSIONS` | works |
+## What was done
 
-Under 0.7.0 `sync` still works, but `rollout baseline` and `rollout complete`
-both fail. Production runs `ops/surrealkit-rollout-start.sh` and
-`ops/surrealkit-rollout-complete.sh`, so a bump would apply the schema in
-`start` and then wedge the rollout in `running_complete` on every change.
+`database/schema/guardrail.surql` is now the consolidated form: each table
+defined once, carrying its own `PERMISSIONS`, and the trailing "Table
+permissions" block removed. 196 statements become 183, the difference being the
+13 duplicate `DEFINE TABLE OVERWRITE` statements -- and 183 is also the number
+of objects `rollout baseline` seeds. The standalone
+`guardrail.consolidated.surql.txt` that used to sit in this directory is gone:
+it is now the schema file itself, and a second copy would only go stale.
 
-## What is already done
+Equivalence was verified, not eyeballed, twice -- once when the consolidation
+was written and again on 2026-09-10 against the schema as it stands. Both forms
+were applied to separate fresh SurrealDB 3.2.4 instances and compared:
 
-`guardrail.consolidated.surql.txt` in this directory is the consolidated
-schema: each table defined once, carrying its own `PERMISSIONS`, and the
-trailing "Table permissions" block removed. 202 statements become 189.
-
-It was verified equivalent, not just eyeballed. Both schemas were applied to
-separate fresh SurrealDB instances and the results compared:
-
+- 0 statement errors on either side
 - `INFO FOR DB` identical
-- `INFO FOR TABLE` identical for all 13 tables, permissions included
+- `INFO FOR TABLE` identical for all 15 tables, permissions included
 
-and with it, 0.7.0 does everything it could not before:
+and separately, against a copy of the live production database:
+
+- production's live `INFO FOR DB` is identical to what the consolidated file
+  produces, so **nothing needs applying in production**; the change is
+  bookkeeping only.
+
+The 12 historical manifests were deleted rather than converted. They were all
+applied in production long ago and their only remaining job was the hash chain,
+which a fresh baseline replaces. Their text is still in git history
+(`git show fc58812:database/rollouts/`).
+
+`database/snapshots/*.json` were regenerated by `surrealkit rollout baseline`,
+not by hand.
+
+## Rehearsal against a copy of production
+
+Production was exported and imported into a throwaway SurrealDB (241 crashes,
+34 crash groups, 182 `__entity` rows, 5 `__rollout` records), and the whole
+cutover plus one follow-up schema change was run end to end with 0.7.0:
+
+| step | result |
+| --- | --- |
+| `DELETE __rollout` | ok |
+| `setup` | ok |
+| `rollout baseline` | Seeded 183 managed objects |
+| data after baseline | 241 crashes, 34 groups -- unchanged |
+| edit schema, `rollout plan` | generated an `apply_files` manifest |
+| `ops/surrealkit-rollout-start.sh` | linted, started, ready_to_complete |
+| `ops/surrealkit-rollout-complete.sh` | completed; field present in `INFO FOR TABLE` |
+
+That sequence is how a *fresh* database gets set up. It is not what production
+needs -- see "Production cutover" below -- but two details are worth keeping:
+
+- **`__entity` does not need clearing.** `rollout baseline` overwrites it.
+  Clearing `__rollout` alone is enough, and produces exactly the same 184-row
+  catalog as clearing both.
+- **`rollout baseline` refuses while any `__rollout` record exists**
+  ("baseline can only be run once"), which is why the delete has to come first.
+
+The same cutover was then run against the local compose stack on a fresh
+production sync: 0.7.0 image built, `setup && sync` applied the schema,
+`rollout baseline` seeded 183 objects, all five services came back healthy with
+no errors, and the data was untouched (241 crashes, 34 groups, 111 symbols).
+
+## Production cutover: two pushes, no manual steps
+
+Neither `DELETE __rollout` nor `rollout baseline` is needed in production.
+Rehearsed on an untouched copy of production, 0.7.0 plans, starts and completes
+a new rollout straight onto the catalog 0.5.8 left behind, and `__entity`
+self-heals through the normal `apply_files` step. The catalog was never the
+problem.
+
+What *was* blocking is one stranded rollout:
+`__rollout:20260907193005__processor_fold_module_case` has been at
+`ready_to_complete` since 2026-09-08, and a rollout stuck there refuses to let
+any later rollout start:
 
 ```
-setup                        ok
-sync                         applied
-rollout baseline             Seeded 183 managed objects
-rollout plan/start/complete  completed
+Error: rollout '...' cannot start while rollout
+'__rollout:20260907193005__processor_fold_module_case' is active
 ```
 
-It is saved as `.surql.txt` on purpose: anything named `*.surql` under
-`database/schema/` is picked up by `surrealkit sync`, and a second schema file
-there would be applied to the database.
+That is the race fixed in `ops/surrealkit-rollout-complete.sh`, and it has to
+land *before* the manifests are deleted -- once the manifest is gone, nothing
+can finish that rollout: `rollout repair` answers "unable to find rollout".
+Hence two pushes:
 
-**It is a snapshot from 2026-09-07 and tracks `guardrail.surql` at commit
-8e77fd7.** If the schema has moved on, regenerate rather than trusting it; the
-transformation is in the "Regenerating" section below.
+1. **The race fix alone.** Still a 0.5.8 image, still carrying all 12
+   manifests. Flux recreates both Jobs; the start Job sees
+   `[ready_to_complete]` and skips, the complete Job finishes the rollout.
+   Production's `__rollout` chain is then clean.
+2. **The 0.7.0 upgrade.** With no manifests in the repository both Jobs log
+   "No rollout manifests found ... skipping" and exit 0, so the deploy changes
+   nothing in the database -- correct here, because production's live schema
+   already equals the consolidated file.
 
-## Remaining work
+Check between the two that
+`SELECT id, status FROM __rollout` shows no record left outside `completed`.
 
-Do it in one change; the pieces are not independently deployable.
-
-1. **Consolidate the schema.** Replace `database/schema/guardrail.surql` with
-   the consolidated form. Re-verify equivalence against the then-current schema
-   using the two-database diff above -- this is the RLS layer and a mistake
-   silently widens access.
-
-2. **Decide manifests: convert or start fresh.**
-   - *Start fresh* (recommended). The 12 historical rollouts are all applied in
-     production; their only remaining job is the hash chain. Delete them, take a
-     fresh `rollout baseline` on the consolidated schema, and let 0.7.0 generate
-     everything from then on.
-   - *Convert.* Rewrite all 12 to `apply_files`. Keeps history readable and
-     nothing else. The schema hashes are unaffected either way: 0.5.8 and 0.7.0
-     compute the same values (both produced `0ce597b5...` -> `ad0fc70a...` for
-     the same change), and `__rollout` records store schema hashes rather than
-     manifest checksums, so recorded state stays valid.
-
-3. **Bump the pin** in `Containerfile` to 0.7.0.
-
-4. **Production cutover.** Prod's `__entity` catalog was written by 0.5.8 and
-   holds the duplicate rows, so it has to be cleared and re-baselined in the
-   same window as the image bump. This is the only step that cannot simply be
-   rolled back, and the one to rehearse against a copy of the production
-   database first.
-
-5. **Check the jobs still behave.** Both scripts select the lexicographically
-   last manifest (`find | sort | tail -n 1`) and run `surrealkit rollout lint`
-   first under `set -eu`, so a manifest the deployed binary cannot parse aborts
-   the job before it touches anything. After a fresh baseline there may be no
-   manifest at all; both scripts already handle that ("No rollout manifests
-   found ... skipping").
-
-## Regenerating the consolidated schema
-
-The permissions block is a self-contained run of `DEFINE TABLE OVERWRITE`
-statements at the end of the file. For each, move the text after the table name
-into that table's earlier `DEFINE TABLE <name> SCHEMAFULL;`, then delete the
-block and its heading.
-
-To re-verify equivalence, apply the old and new schema to two fresh SurrealDB
-containers and diff `INFO FOR DB` and `INFO FOR TABLE <t>` for every table.
-They must be identical.
+Rolling back means putting the 0.5.8 pin and the 12 manifests back; the
+database itself is never migrated by any of this, so no data is at risk.
 
 ## Traps worth remembering
 
-- **Generate manifests with the deployed binary, not the local one.** The local
-  `surrealkit` is 0.7.0 and emits `apply_files`, which today's deployed 0.5.8
-  cannot read. Until the bump lands, use the deployed image:
-  `docker run --rm -v "$PWD:/repo" -w /repo --entrypoint surrealkit \
-  ghcr.io/rcaelers/guardrail-schema-sync:<deployed-tag> rollout plan --name X`
 - **`--folder` is ignored when it follows the subcommand.** `rollout lint X
   --folder /somewhere` silently reads `./database` instead. Run from the
   directory whose `database/` you mean.
-- **`rollout plan` refuses whenever the snapshot is stale**, naming entities
-  that have nothing to do with your change. Refresh it by running
-  `setup`/`sync`/`rollout baseline` against a throwaway database and copying
-  `database/snapshots/*.json` back. `baseline` is one-shot per database, which
-  is why it has to be a fresh one.
-- **A hand-written manifest leaves the snapshot stale**, so the next `plan`
-  refuses again for the same reason.
+- **`rollout plan` refuses non-additive changes**, naming every modified
+  entity: "Author a manual rollout manifest for non-additive changes." Changing
+  a `DEFINE TABLE` statement counts, so the consolidation itself could not be
+  planned -- it had to go through a fresh baseline.
+- **`rollout baseline` is one-shot per database** and refuses while `__rollout`
+  holds anything.
+- **`sync` adds a `last_sync` row to `__entity`** on top of the managed
+  entities. A catalog of 185 after `sync` + `baseline` and 184 after `baseline`
+  alone is the same catalog.
+- **The rollout jobs never run `sync`.** In production the schema is applied by
+  a manifest's `apply_files` step, so with no manifests nothing is applied.
+- **A rollout left in `ready_to_complete` blocks every later rollout**, and
+  `rollout repair` only heals `running_complete` / `running_rollback` -- and
+  only while the manifest is still in the repository. Never delete a manifest
+  whose rollout has not reached `completed`.
