@@ -5,6 +5,7 @@ set -eu
 ROLLOUT_DIR="${SURREALKIT_ROLLOUT_DIR:-/app/database/rollouts}"
 DATABASE_WAIT_TIMEOUT_SECONDS="${DATABASE_WAIT_TIMEOUT_SECONDS:-120}"
 DATABASE_WAIT_INTERVAL_SECONDS="${DATABASE_WAIT_INTERVAL_SECONDS:-5}"
+ROLLOUT_START_WAIT_TIMEOUT_SECONDS="${ROLLOUT_START_WAIT_TIMEOUT_SECONDS:-300}"
 
 latest_rollout() {
     find "$ROLLOUT_DIR" -maxdepth 1 -type f -name '*.toml' | sort | tail -n 1
@@ -37,6 +38,39 @@ wait_for_database() {
     done
 }
 
+# Flux creates the start and complete Jobs together, so this one can reach the
+# database before the start Job has written the rollout record. Returning early
+# then leaves the rollout in ready_to_complete with nothing left to finish it,
+# and a rollout stuck there blocks every later rollout from starting.
+wait_for_rollout_started() {
+    remaining_start_timeout="$ROLLOUT_START_WAIT_TIMEOUT_SECONDS"
+
+    while true; do
+        wait_for_database
+        STATUS_LINE="$(printf '%s\n' "$STATUS_OUTPUT" | grep "$ROLLOUT_ID " | head -n 1 || true)"
+
+        case "$STATUS_LINE" in
+            *"[ready_to_complete]"*|*"[completed]"*|*"[running_complete]"*|*"[failed]"*|*"[rolled_back]"*|*"[running_rollback]"*)
+                return 0
+                ;;
+        esac
+
+        # An unreadable status is a real error, not something waiting will fix.
+        if [ -z "$STATUS_LINE" ] \
+            && ! printf '%s\n' "$STATUS_OUTPUT" | grep -q "No rollout records found."; then
+            return 0
+        fi
+
+        if [ "$remaining_start_timeout" -le 0 ]; then
+            return 0
+        fi
+
+        echo "Waiting for the start Job to begin rollout $ROLLOUT_ID..."
+        sleep "$DATABASE_WAIT_INTERVAL_SECONDS"
+        remaining_start_timeout=$((remaining_start_timeout-DATABASE_WAIT_INTERVAL_SECONDS))
+    done
+}
+
 ROLLOUT_PATH="$(latest_rollout)"
 
 if [ -z "$ROLLOUT_PATH" ]; then
@@ -49,12 +83,11 @@ ROLLOUT_ID="$(basename "$ROLLOUT_PATH" .toml)"
 echo "Selected rollout manifest: $ROLLOUT_ID"
 surrealkit rollout lint "$ROLLOUT_ID"
 
-wait_for_database
-STATUS_LINE="$(printf '%s\n' "$STATUS_OUTPUT" | grep "$ROLLOUT_ID " | head -n 1 || true)"
+wait_for_rollout_started
 
 if [ -z "$STATUS_LINE" ]; then
     if printf '%s\n' "$STATUS_OUTPUT" | grep -q "No rollout records found."; then
-        echo "Rollout $ROLLOUT_ID has not been started; skipping rollout complete."
+        echo "Rollout $ROLLOUT_ID was never started; skipping rollout complete."
         exit 0
     fi
 
