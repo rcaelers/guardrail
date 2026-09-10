@@ -8,6 +8,9 @@ DATABASE_WAIT_INTERVAL_SECONDS="${DATABASE_WAIT_INTERVAL_SECONDS:-5}"
 ROLLOUT_START_WAIT_TIMEOUT_SECONDS="${ROLLOUT_START_WAIT_TIMEOUT_SECONDS:-300}"
 
 latest_rollout() {
+    # git carries no empty directories, so a repo with no manifests ships an
+    # image with no rollout directory at all.
+    [ -d "$ROLLOUT_DIR" ] || return 0
     find "$ROLLOUT_DIR" -maxdepth 1 -type f -name '*.toml' | sort | tail -n 1
 }
 
