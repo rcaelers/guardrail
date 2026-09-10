@@ -398,12 +398,23 @@ pub(super) async fn api_create_invitation(
 /// Uses a no-hyphen alphanumeric ID so that SurrealDB's meta::id() returns it
 /// without backtick escaping, which would break `WHERE meta::id(id) = $id`.
 pub(super) async fn create_test_crash_group(db: &Db, product_id: &str) -> String {
+    // A unique fingerprint per group, to satisfy UNIQUE(product_id, fingerprint).
+    let fingerprint = Uuid::new_v4().to_string().replace('-', "");
+    create_test_crash_group_with_fingerprint(db, product_id, &fingerprint).await
+}
+
+/// As `create_test_crash_group`, but with a fingerprint the caller controls, for
+/// tests that care how alike two groups are.
+pub(super) async fn create_test_crash_group_with_fingerprint(
+    db: &Db,
+    product_id: &str,
+    fingerprint: &str,
+) -> String {
     let gid = Uuid::new_v4().to_string().replace('-', "");
-    // Use the gid as fingerprint to satisfy the UNIQUE(product_id, fingerprint) index.
     db.query(
         "CREATE type::record('crash_groups', $gid) CONTENT {
             product_id: type::record('products', $pid),
-            fingerprint: $gid,
+            fingerprint: $fingerprint,
             signal: 'SIGSEGV',
             count: 0,
             status: 'new',
@@ -416,6 +427,7 @@ pub(super) async fn create_test_crash_group(db: &Db, product_id: &str) -> String
     )
     .bind(("gid", gid.clone()))
     .bind(("pid", product_id.to_string()))
+    .bind(("fingerprint", fingerprint.to_string()))
     .await
     .expect("create_test_crash_group failed");
     gid

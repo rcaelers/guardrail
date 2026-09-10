@@ -543,21 +543,33 @@ async fn test_get_group_with_related() {
     let f = Fixture::setup(&app).await;
     let pid = &f.products[0].id;
 
-    // Two groups with the same signal → compose_group's related query finds them
-    let gid1 = create_test_crash_group(&app.db, pid).await;
-    let gid2 = create_test_crash_group(&app.db, pid).await;
+    // Related is ranked by stack similarity, so the two have to share frames;
+    // a group that shares none is deliberately left out of the array.
+    let gid1 =
+        create_test_crash_group_with_fingerprint(&app.db, pid, "mod!a|mod!b|mod!c|mod!d").await;
+    let gid2 =
+        create_test_crash_group_with_fingerprint(&app.db, pid, "mod!a|mod!b|mod!c|mod!e").await;
+    let unrelated =
+        create_test_crash_group_with_fingerprint(&app.db, pid, "other!x|other!y|other!z").await;
     // Link a crash to gid2 so it appears in the related query (needs count > 0)
     create_test_crash_in_group(&app.db, pid, &gid2).await;
 
     let uri = format!("/crashes/{gid1}");
     let (status, body) = app.call_json("GET", &uri, None, Some(&f.admin)).await;
     assert_eq!(status, StatusCode::OK);
-    // "related" key should be present and contain gid2
     let related = body
         .get("related")
         .and_then(|v| v.as_array())
         .expect("related array missing");
-    assert!(!related.is_empty(), "related should contain gid2; body={body}");
+    let ids: Vec<&str> = related
+        .iter()
+        .filter_map(|r| r.get("id")?.as_str())
+        .collect();
+    assert!(ids.contains(&gid2.as_str()), "related should contain gid2; body={body}");
+    assert!(
+        !ids.contains(&unrelated.as_str()),
+        "related should leave out a group that shares no frames; body={body}"
+    );
 }
 
 // ---------------------------------------------------------------------------
