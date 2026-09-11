@@ -59,7 +59,7 @@ async fn deleting_symbols_is_scoped_and_removes_the_object() {
     let db = &TestSetup::create_db().await;
     let storage: Arc<dyn ObjectStore> = Arc::new(object_store::memory::InMemory::new());
     let state = AppState {
-        repo: Repo::new(db.clone()),
+        repo: Arc::new(Repo::new(db.clone())),
         settings: Arc::new(api::settings::Settings::default()),
         storage: storage.clone(),
         worker: Arc::new(TestWorker::new()),
@@ -144,7 +144,7 @@ async fn a_shared_object_survives_until_the_last_row_goes() {
     let db = &TestSetup::create_db().await;
     let storage: Arc<dyn ObjectStore> = Arc::new(object_store::memory::InMemory::new());
     let state = AppState {
-        repo: Repo::new(db.clone()),
+        repo: Arc::new(Repo::new(db.clone())),
         settings: Arc::new(api::settings::Settings::default()),
         storage: storage.clone(),
         worker: Arc::new(TestWorker::new()),

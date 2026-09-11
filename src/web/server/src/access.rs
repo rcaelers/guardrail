@@ -384,10 +384,15 @@ async fn verify_and_touch_token(
         .map_err(AppError::internal)?
         .ok_or_else(AppError::forbidden)?;
 
-    let verified = verify_api_secret(&token_secret, &token.token_hash).map_err(|err| {
-        tracing::warn!("failed to verify API token: {err}");
-        AppError::forbidden()
-    })?;
+    // Argon2 is CPU-bound by design; keep it off the async workers.
+    let hash = token.token_hash.clone();
+    let verified = tokio::task::spawn_blocking(move || verify_api_secret(&token_secret, &hash))
+        .await
+        .map_err(AppError::internal)?
+        .map_err(|err| {
+            tracing::warn!("failed to verify API token: {err}");
+            AppError::forbidden()
+        })?;
 
     if !verified || !token.is_valid() {
         return Err(AppError::forbidden());

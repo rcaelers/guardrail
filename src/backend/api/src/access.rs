@@ -74,7 +74,13 @@ async fn load_and_verify(
         .map_err(|_| ApiError::InternalFailure())?
         .ok_or_else(|| ApiError::InvalidToken("invalid API token".into()))?;
 
-    let verified = verify_api_secret(token_secret, &api_token.token_hash)
+    // Argon2 is CPU-bound by design; keep it off the async workers so a burst of
+    // requests cannot starve the runtime (and the database socket with it).
+    let secret = token_secret.to_vec();
+    let hash = api_token.token_hash.clone();
+    let verified = tokio::task::spawn_blocking(move || verify_api_secret(&secret, &hash))
+        .await
+        .map_err(|_| ApiError::InternalFailure())?
         .map_err(|_| ApiError::InvalidToken("invalid API token".into()))?;
 
     if !verified {

@@ -25,7 +25,7 @@ fn test_settings() -> api::settings::Settings {
 
 async fn setup(db: &surrealdb::Surreal<surrealdb::engine::any::Any>) -> Router {
     let settings = test_settings();
-    let repo = Repo::new(db.clone());
+    let repo = Arc::new(Repo::new(db.clone()));
     let store = Arc::new(object_store::memory::InMemory::new());
     let worker = Arc::new(TestWorker::new());
 

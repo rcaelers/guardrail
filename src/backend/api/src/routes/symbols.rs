@@ -507,7 +507,7 @@ mod tests {
         let db = surrealdb::engine::any::connect("mem://").await.unwrap();
         db.use_ns("test").use_db("test").await.unwrap();
         AppState {
-            repo: Repo::new(db),
+            repo: Arc::new(Repo::new(db)),
             settings: Arc::new(crate::settings::Settings::default()),
             storage: Arc::new(InMemory::new()),
             worker: Arc::new(TestWorker::new()),

@@ -34,7 +34,7 @@ async fn setup(
 ) -> (Router, Arc<dyn ObjectStore>, String, String, String, String, String) {
     let settings = test_settings();
 
-    let repo = Repo::new(db.clone());
+    let repo = Arc::new(Repo::new(db.clone()));
     let store = Arc::new(object_store::memory::InMemory::new());
     let worker = Arc::new(TestWorker::new());
 

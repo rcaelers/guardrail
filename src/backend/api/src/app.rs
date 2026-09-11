@@ -70,7 +70,7 @@ impl GuardrailApiApp {
 
         let store = common::init_s3_object_store(&settings.object_storage).await;
 
-        let repo = Repo::new(db);
+        let repo = Arc::new(Repo::new(db));
 
         let redis_symbol =
             RedisStorage::new_with_config(redis_conn.clone(), RedisConfig::new(queue::SYMBOL_JOBS));
@@ -179,7 +179,7 @@ mod tests {
         let db = surrealdb::engine::any::connect("mem://").await.unwrap();
         db.use_ns("test").use_db("test").await.unwrap();
         AppState {
-            repo: Repo::new(db),
+            repo: Arc::new(Repo::new(db)),
             settings: Arc::new(crate::settings::Settings::default()),
             storage: Arc::new(InMemory::new()),
             worker: Arc::new(TestWorker::new()),

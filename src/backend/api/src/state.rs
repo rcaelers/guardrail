@@ -8,7 +8,10 @@ use repos::Repo;
 
 #[derive(FromRef, Debug, Clone)]
 pub struct AppState {
-    pub repo: Repo,
+    // Shared, not cloned per request: cloning a Surreal handle opens a new
+    // server-side session whose signin and use are replayed without waiting,
+    // so a request's first query could run before they land.
+    pub repo: Arc<Repo>,
     pub settings: Arc<Settings>,
     pub storage: Arc<dyn ObjectStore>,
     pub worker: Arc<dyn Worker>,

@@ -23,7 +23,7 @@ use testware::{create_test_product_with_details, create_test_token};
 
 async fn app_for(db: &Surreal<Any>) -> Router {
     let state = AppState {
-        repo: Repo::new(db.clone()),
+        repo: Arc::new(Repo::new(db.clone())),
         settings: Arc::new(api::settings::Settings::default()),
         storage: Arc::new(object_store::memory::InMemory::new()) as Arc<dyn ObjectStore>,
         worker: Arc::new(TestWorker::new()),
