@@ -1,9 +1,10 @@
 # Moving surrealkit from 0.5.8 to 0.7.0
 
-Status: **change made, rehearsed against a copy of production, not yet
-deployed.** The repository now holds the consolidated schema, a fresh
-`rollout baseline` snapshot, no rollout manifests, and a `Containerfile` pinned
-to 0.7.0. Deploying needs the one manual step in "Production cutover" below.
+Status: **deployed 2026-09-11.** The pin lives in two places: `Containerfile`
+(the local compose stack's schema-sync) and `Containerfile.schema-sync` (the
+image CI ships to production). The first bump only changed the former, which
+went unnoticed until the first 0.7.0-format manifest arrived and production's
+0.5.8 refused it at `rollout lint` -- before touching anything, as designed.
 
 ## Why we were stuck on 0.5.8
 
