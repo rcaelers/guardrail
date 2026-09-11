@@ -89,8 +89,10 @@ jobs:
             CARGO_BUILD_OUTPUT_DIR=release
           push: true
           tags: ${{ env.GHCR }}-${{ matrix.name }}:${{ matrix.arch }}-${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.name }}-${{ matrix.arch }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}-${{ matrix.arch }}
+          # In the registry, not the 10 GB Actions cache, which kept evicting
+          # the ~800 MB dependency layer between pushes.
+          cache-from: type=registry,ref=${{ env.GHCR }}-cache:${{ matrix.name }}-${{ matrix.arch }}
+          cache-to: type=registry,ref=${{ env.GHCR }}-cache:${{ matrix.name }}-${{ matrix.arch }},mode=max
 
   create-and-sign-manifests:
     name: Create & Sign Multiarch Image Manifests
