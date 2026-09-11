@@ -2726,25 +2726,42 @@ async fn merge_groups(
         vec![("pid", pid.clone()), ("mid", mid.clone())],
     )
     .await?;
-    // Fetch the merged group's count separately — SurrealDB loses $token context in
+    // Fetch the merged group separately — SurrealDB loses $token context in
     // UPDATE subqueries, causing RLS to filter out the subquery result as NONE.
-    let merged_count_rows = run_value(
+    let merged_rows = run_value(
         &db,
-        "SELECT VALUE count FROM ONLY type::record('crash_groups', $mid)",
+        "SELECT count, first_seen, last_seen FROM ONLY type::record('crash_groups', $mid)",
         vec![("mid", mid.clone())],
     )
     .await?;
-    let merged_count = merged_count_rows
-        .into_iter()
-        .next()
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0);
+    let merged = merged_rows.into_iter().next().unwrap_or(Value::Null);
+    let merged_count = merged.get("count").and_then(|v| v.as_i64()).unwrap_or(0);
+    let merged_first_seen = merged
+        .get("first_seen")
+        .and_then(|v| v.as_str())
+        .map(|s| Value::String(s.to_string()))
+        .unwrap_or(Value::Null);
+    let merged_last_seen = merged
+        .get("last_seen")
+        .and_then(|v| v.as_str())
+        .map(|s| Value::String(s.to_string()))
+        .unwrap_or(Value::Null);
+    // The surviving group now spans both, so its seen range widens to match.
     run_value(
         &db,
         "UPDATE type::record('crash_groups', $pid) SET
            count = count + $c,
+           first_seen = IF $fs != NULL AND type::datetime($fs) < first_seen
+                        THEN type::datetime($fs) ELSE first_seen END,
+           last_seen = IF $ls != NULL AND type::datetime($ls) > last_seen
+                       THEN type::datetime($ls) ELSE last_seen END,
            updated_at = time::now()",
-        vec![("pid", pid), ("c", Value::Number(merged_count.into()))],
+        vec![
+            ("pid", pid),
+            ("c", Value::Number(merged_count.into())),
+            ("fs", merged_first_seen),
+            ("ls", merged_last_seen),
+        ],
     )
     .await?;
     run_value(&db, "DELETE type::record('crash_groups', $mid)", vec![("mid", mid)]).await?;

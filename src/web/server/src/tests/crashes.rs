@@ -660,6 +660,82 @@ async fn test_merge_groups_success() {
     );
 }
 
+// API calls:
+// | Method | Route                     |
+// | ------ | ------------------------- |
+// | POST   | /crashes/{group_id}/merge |
+// Cases:
+// | Case                                        | Expected                                  |
+// | ------------------------------------------- | ----------------------------------------- |
+// | merged group seen earlier and later than it | primary's range widens to cover both      |
+// | merged group seen inside primary's range    | primary's range unchanged                 |
+#[tokio::test]
+async fn test_merge_groups_widens_seen_range() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+
+    async fn set_range(db: &Db, gid: &str, first: &str, last: &str) {
+        db.query(
+            "UPDATE type::record('crash_groups', $gid)
+             SET first_seen = type::datetime($first), last_seen = type::datetime($last), count = 1",
+        )
+        .bind(("gid", gid.to_string()))
+        .bind(("first", first.to_string()))
+        .bind(("last", last.to_string()))
+        .await
+        .expect("set_range failed");
+    }
+    async fn range(app: &TestApp, gid: &str, admin: &str) -> (String, String) {
+        let (status, body) = app
+            .call_json("GET", &format!("/crashes/{gid}"), None, Some(admin))
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        (
+            body["firstSeen"].as_str().unwrap().to_string(),
+            body["lastSeen"].as_str().unwrap().to_string(),
+        )
+    }
+
+    // Merged group spans wider on both ends than the primary.
+    let primary = create_test_crash_group(&app.db, pid).await;
+    let merged = create_test_crash_group(&app.db, pid).await;
+    set_range(&app.db, &primary, "2026-03-10T00:00:00Z", "2026-03-20T00:00:00Z").await;
+    set_range(&app.db, &merged, "2026-03-01T00:00:00Z", "2026-03-30T00:00:00Z").await;
+    assert_eq!(
+        app.call(
+            "POST",
+            &format!("/crashes/{primary}/merge"),
+            Some(json!({"mergedId": merged})),
+            Some(&f.admin),
+        )
+        .await,
+        StatusCode::NO_CONTENT,
+    );
+    let (first, last) = range(&app, &primary, &f.admin).await;
+    assert!(first.starts_with("2026-03-01"), "first_seen should widen; got {first}");
+    assert!(last.starts_with("2026-03-30"), "last_seen should widen; got {last}");
+
+    // Merged group lies inside the primary's range: nothing moves.
+    let primary = create_test_crash_group(&app.db, pid).await;
+    let merged = create_test_crash_group(&app.db, pid).await;
+    set_range(&app.db, &primary, "2026-03-01T00:00:00Z", "2026-03-30T00:00:00Z").await;
+    set_range(&app.db, &merged, "2026-03-10T00:00:00Z", "2026-03-20T00:00:00Z").await;
+    assert_eq!(
+        app.call(
+            "POST",
+            &format!("/crashes/{primary}/merge"),
+            Some(json!({"mergedId": merged})),
+            Some(&f.admin),
+        )
+        .await,
+        StatusCode::NO_CONTENT,
+    );
+    let (first, last) = range(&app, &primary, &f.admin).await;
+    assert!(first.starts_with("2026-03-01"), "first_seen should not move; got {first}");
+    assert!(last.starts_with("2026-03-30"), "last_seen should not move; got {last}");
+}
+
 // ---------------------------------------------------------------------------
 // Tests: db_api – get_crash with user-text attachment and annotations
 // ---------------------------------------------------------------------------
