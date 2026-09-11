@@ -1704,3 +1704,241 @@ fn fingerprint_similarity_survives_a_differing_stack_top() {
     );
     assert!(same_bug > 0.5, "expected a strong score for the duplicate, got {same_bug}");
 }
+
+// ---------------------------------------------------------------------------
+// Tests: merge rules (pure)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn merge_rules_are_symmetric_and_refuse_conflicting_decisions() {
+    use crate::routes::db_api::{MergeSide, merge_blocker, merged_status};
+
+    let side = |status: &str, fixed: Option<&str>, assignee: Option<&str>| MergeSide {
+        status: status.into(),
+        fixed_in_version: fixed.map(String::from),
+        assignee: assignee.map(String::from),
+    };
+
+    // Status: the side that says more wins, whichever side it is on.
+    for (a, b, want) in [
+        ("new", "triaged", "triaged"),
+        ("new", "resolved", "resolved"),
+        ("triaged", "resolved", "resolved"),
+        ("new", "wontfix", "wontfix"),
+        ("resolved", "regressed", "regressed"),
+        ("wontfix", "regressed", "regressed"),
+        ("new", "new", "new"),
+    ] {
+        assert_eq!(merged_status(a, b), want, "{a} + {b}");
+        assert_eq!(merged_status(b, a), want, "{b} + {a}");
+    }
+
+    // Blocked pairs, in both directions.
+    let blocked = [
+        (side("resolved", Some("1.11.2"), None), side("resolved", Some("1.11.3"), None)),
+        (side("resolved", Some("1.11.2"), None), side("new", Some("1.11.3"), None)),
+        (side("resolved", None, None), side("wontfix", None, None)),
+        (side("new", None, Some("alice")), side("triaged", None, Some("bob"))),
+    ];
+    for (a, b) in &blocked {
+        assert!(merge_blocker(a, b).is_some(), "{a:?} + {b:?} should be blocked");
+        assert_eq!(merge_blocker(a, b), merge_blocker(b, a));
+    }
+
+    // Allowed pairs: one side has the version or assignee, or both agree.
+    let allowed = [
+        (side("resolved", Some("1.11.2"), None), side("new", None, None)),
+        (side("resolved", Some("1.11.2"), None), side("regressed", Some("1.11.2"), None)),
+        (side("new", None, Some("alice")), side("new", None, Some("alice"))),
+        (side("new", None, Some("alice")), side("triaged", None, None)),
+        (side("wontfix", None, None), side("triaged", None, None)),
+    ];
+    for (a, b) in &allowed {
+        assert_eq!(merge_blocker(a, b), None, "{a:?} + {b:?}");
+        assert_eq!(merge_blocker(b, a), None);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests: merge — what the surviving group ends up with
+// ---------------------------------------------------------------------------
+
+/// The merged state of two groups, seen through the API.
+async fn merged_state(app: &TestApp, gid: &str, admin: &str) -> serde_json::Value {
+    let (status, body) = app
+        .call_json("GET", &format!("/crashes/{gid}"), None, Some(admin))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    json!({
+        "status": body["status"],
+        "fixedInVersion": body["fixedInVersion"],
+        "assignee": body["assignee"],
+        "notes": body["notes"].as_array().map(|n| n.len()).unwrap_or(0),
+    })
+}
+
+async fn set_group(db: &Db, gid: &str, status: &str, fixed: Option<&str>) {
+    db.query(
+        "UPDATE type::record('crash_groups', $gid)
+         SET status = $status,
+             fixed_in_version = IF $fixed = NULL THEN NONE ELSE $fixed END",
+    )
+    .bind(("gid", gid.to_string()))
+    .bind(("status", status.to_string()))
+    .bind(("fixed", fixed.map(String::from)))
+    .await
+    .expect("set_group failed");
+}
+
+async fn merge(app: &TestApp, primary: &str, merged: &str, admin: &str) -> StatusCode {
+    app.call(
+        "POST",
+        &format!("/crashes/{primary}/merge"),
+        Some(json!({"mergedId": merged})),
+        Some(admin),
+    )
+    .await
+}
+
+// Cases:
+// | Case                                        | Expected                                   |
+// | ------------------------------------------- | ------------------------------------------ |
+// | resolved 1.11.2 + new, either direction     | resolved, 1.11.2, both groups' notes kept  |
+// | resolved 1.11.2 + resolved 1.11.3           | 409, nothing changes                       |
+// | resolved + wontfix                          | 409                                        |
+// | resolved 1.2.0 + new with a 1.2.3 crash     | regressed — the union contradicts the fix  |
+// | merged group's fingerprint                  | recorded on the survivor                   |
+#[tokio::test]
+async fn test_merge_state_is_symmetric() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+
+    // Same pair, both directions, must give the same state on the survivor.
+    for primary_is_resolved in [true, false] {
+        let a = create_test_crash_group(&app.db, pid).await;
+        let b = create_test_crash_group(&app.db, pid).await;
+        set_group(&app.db, &a, "resolved", Some("1.11.2")).await;
+        set_group(&app.db, &b, "new", None).await;
+        for (g, text) in [(&a, "note on a"), (&b, "note on b")] {
+            assert_eq!(
+                app.call(
+                    "POST",
+                    &format!("/crashes/{g}/notes"),
+                    Some(json!({"body": text, "author": "t"})),
+                    Some(&f.admin)
+                )
+                .await,
+                StatusCode::OK
+            );
+        }
+        let (primary, merged) = if primary_is_resolved {
+            (&a, &b)
+        } else {
+            (&b, &a)
+        };
+        assert_eq!(merge(&app, primary, merged, &f.admin).await, StatusCode::NO_CONTENT);
+        let got = merged_state(&app, primary, &f.admin).await;
+        assert_eq!(got["status"], "resolved", "primary_is_resolved={primary_is_resolved}");
+        assert_eq!(got["fixedInVersion"], "1.11.2");
+        // both notes, plus the one recording the merge
+        assert_eq!(got["notes"], 3, "primary_is_resolved={primary_is_resolved}");
+    }
+}
+
+#[tokio::test]
+async fn test_merge_refuses_conflicting_decisions() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+
+    let a = create_test_crash_group(&app.db, pid).await;
+    let b = create_test_crash_group(&app.db, pid).await;
+    set_group(&app.db, &a, "resolved", Some("1.11.2")).await;
+    set_group(&app.db, &b, "resolved", Some("1.11.3")).await;
+    assert_eq!(merge(&app, &a, &b, &f.admin).await, StatusCode::CONFLICT);
+    assert_eq!(merge(&app, &b, &a, &f.admin).await, StatusCode::CONFLICT);
+    // nothing moved
+    assert_eq!(merged_state(&app, &b, &f.admin).await["fixedInVersion"], "1.11.3");
+
+    let c = create_test_crash_group(&app.db, pid).await;
+    let d = create_test_crash_group(&app.db, pid).await;
+    set_group(&app.db, &c, "resolved", None).await;
+    set_group(&app.db, &d, "wontfix", None).await;
+    assert_eq!(merge(&app, &c, &d, &f.admin).await, StatusCode::CONFLICT);
+    assert_eq!(merge(&app, &d, &c, &f.admin).await, StatusCode::CONFLICT);
+
+    // The Related tab is told why.
+    let (_, body) = app
+        .call_json("GET", &format!("/crashes/{a}"), None, Some(&f.admin))
+        .await;
+    let _ = body; // related is ranked by fingerprint similarity; random ones share nothing
+    let e = create_test_crash_group_with_fingerprint(&app.db, pid, "m!a|m!b|m!c").await;
+    let g = create_test_crash_group_with_fingerprint(&app.db, pid, "m!a|m!b|m!d").await;
+    set_group(&app.db, &e, "resolved", Some("2.0.0")).await;
+    set_group(&app.db, &g, "resolved", Some("2.1.0")).await;
+    let (_, body) = app
+        .call_json("GET", &format!("/crashes/{e}"), None, Some(&f.admin))
+        .await;
+    let related = body["related"].as_array().expect("related");
+    let entry = related
+        .iter()
+        .find(|r| r["id"] == g)
+        .expect("g should be related to e");
+    assert_eq!(entry["mergeBlocker"], "fixed in different versions (2.0.0 and 2.1.0)");
+}
+
+#[tokio::test]
+async fn test_merge_reopens_when_the_union_contradicts_the_fix() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+
+    // Test crashes carry report.version 1.2.3. A group fixed in 1.2.0 that
+    // absorbs one has evidence the fix did not hold.
+    let a = create_test_crash_group(&app.db, pid).await;
+    let b = create_test_crash_group(&app.db, pid).await;
+    set_group(&app.db, &a, "resolved", Some("1.2.0")).await;
+    create_test_crash_in_group(&app.db, pid, &b).await;
+    assert_eq!(merge(&app, &a, &b, &f.admin).await, StatusCode::NO_CONTENT);
+    let got = merged_state(&app, &a, &f.admin).await;
+    assert_eq!(got["status"], "regressed");
+    assert_eq!(got["fixedInVersion"], "1.2.0");
+
+    // Fixed in a later release than the crashes: stays resolved.
+    let c = create_test_crash_group(&app.db, pid).await;
+    let d = create_test_crash_group(&app.db, pid).await;
+    set_group(&app.db, &c, "resolved", Some("1.3.0")).await;
+    create_test_crash_in_group(&app.db, pid, &d).await;
+    assert_eq!(merge(&app, &c, &d, &f.admin).await, StatusCode::NO_CONTENT);
+    assert_eq!(merged_state(&app, &c, &f.admin).await["status"], "resolved");
+}
+
+#[tokio::test]
+async fn test_merge_records_the_merged_fingerprint() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+
+    let a = create_test_crash_group_with_fingerprint(&app.db, pid, "fp-a").await;
+    let b = create_test_crash_group_with_fingerprint(&app.db, pid, "fp-b").await;
+    let c = create_test_crash_group_with_fingerprint(&app.db, pid, "fp-c").await;
+    // c into b, then b into a: a must remember both.
+    assert_eq!(merge(&app, &b, &c, &f.admin).await, StatusCode::NO_CONTENT);
+    assert_eq!(merge(&app, &a, &b, &f.admin).await, StatusCode::NO_CONTENT);
+
+    for fp in ["fp-a", "fp-b", "fp-c"] {
+        let found = repos::crash_group::CrashGroupRepo::find_by_fingerprint(&app.db, pid, fp)
+            .await
+            .expect("lookup")
+            .expect("a group for the fingerprint");
+        assert_eq!(found.id, a, "{fp} should route to the survivor");
+    }
+    let found = repos::crash_group::CrashGroupRepo::find_by_fingerprint(&app.db, pid, "fp-a")
+        .await
+        .unwrap()
+        .unwrap();
+    let mut aliases = found.merged_fingerprints.clone();
+    aliases.sort();
+    assert_eq!(aliases, vec!["fp-b", "fp-c"]);
+}

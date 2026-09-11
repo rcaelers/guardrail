@@ -145,7 +145,13 @@ export const actions: Actions = {
     const primaryId = String(form.get('primaryId') ?? '');
     const mergedId = String(form.get('mergedId') ?? '');
     if (!primaryId || !mergedId) return fail(400, { error: 'missing ids' });
-    await adapter.mergeGroups(primaryId, mergedId);
+    try {
+      await adapter.mergeGroups(primaryId, mergedId);
+    } catch (e) {
+      // The server refuses pairs that disagree on a decision (fixed version,
+      // wontfix vs resolved, assignee); the Related tab already says why.
+      return fail(409, { error: e instanceof Error ? e.message : 'merge refused' });
+    }
     throw redirect(303, `/p/${params.product}/crashes?id=${encodeURIComponent(primaryId)}`);
   },
   deleteCrash: async ({ request, locals, params }) => {

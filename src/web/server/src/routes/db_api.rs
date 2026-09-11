@@ -2381,12 +2381,21 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
         .and_then(|v| v.as_str())
         .unwrap_or_default()
         .to_string();
-    let signal = group_obj
-        .get("signal")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .to_string();
-    let _ = signal;
+    let own_side = MergeSide {
+        status: group_obj
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("new")
+            .to_string(),
+        fixed_in_version: group_obj
+            .get("fixedInVersion")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+        assignee: group_obj
+            .get("assignee")
+            .and_then(|v| v.as_str())
+            .map(String::from),
+    };
     let own_fingerprint = group_obj
         .get("fingerprint")
         .and_then(|v| v.as_str())
@@ -2397,7 +2406,9 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
     // one. Products hold tens of groups, not thousands, so this stays cheap.
     let candidates = run_value(
         db,
-        "SELECT meta::id(id) AS id, count, status, signal, fingerprint FROM crash_groups
+        "SELECT meta::id(id) AS id, count, status, signal, fingerprint, fixed_in_version,
+                IF assignee != NONE THEN meta::id(assignee) ELSE NONE END AS assignee
+         FROM crash_groups
          WHERE product_id = type::record('products', $pid)
            AND meta::id(id) != $gid",
         vec![
@@ -2414,6 +2425,9 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
         if similarity <= 0.0 {
             continue;
         }
+        // Why the two cannot be merged, so the UI can say so instead of
+        // offering a button that the server would refuse.
+        let merge_blocker = merge_blocker(&own_side, &merge_side_from(&g));
         scored.push((
             similarity,
             json!({
@@ -2423,6 +2437,7 @@ async fn compose_group(db: &Surreal<Any>, id: &str) -> Result<Option<Value>, (St
                 "status": g.get("status").cloned().unwrap_or(Value::Null),
                 "signal": g.get("signal").cloned().unwrap_or(Value::Null),
                 "similarity": similarity,
+                "mergeBlocker": merge_blocker,
             }),
         ));
     }
@@ -2694,15 +2709,93 @@ struct MergeBody {
     merged_id: String,
 }
 
+/// What a merge needs to know about one side.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct MergeSide {
+    pub(crate) status: String,
+    pub(crate) fixed_in_version: Option<String>,
+    pub(crate) assignee: Option<String>,
+}
+
+/// Why two groups cannot be merged, or `None` when they can. Symmetric: the
+/// answer does not depend on which side is the survivor.
+///
+/// A merge combines evidence about one bug, so it is refused where the two
+/// records disagree about a human decision rather than about facts: fixed in
+/// two different releases, one fixed while the other is not to be fixed, or
+/// two different people assigned.
+pub(crate) fn merge_blocker(a: &MergeSide, b: &MergeSide) -> Option<String> {
+    if let (Some(x), Some(y)) = (&a.fixed_in_version, &b.fixed_in_version)
+        && x != y
+    {
+        let (lo, hi) = if x <= y { (x, y) } else { (y, x) };
+        return Some(format!("fixed in different versions ({lo} and {hi})"));
+    }
+    let statuses = (a.status.as_str(), b.status.as_str());
+    if matches!(statuses, ("resolved", "wontfix") | ("wontfix", "resolved")) {
+        return Some("one is resolved, the other won't be fixed".into());
+    }
+    if let (Some(x), Some(y)) = (&a.assignee, &b.assignee)
+        && x != y
+    {
+        return Some("assigned to different people".into());
+    }
+    None
+}
+
+/// The status the merged group takes: the one that says more. A regression is
+/// evidence and beats everything; resolved and wontfix are decisions and beat
+/// triage; triage beats new. Resolved against wontfix never gets here, since
+/// `merge_blocker` refuses that pair.
+pub(crate) fn merged_status<'a>(a: &'a str, b: &'a str) -> &'a str {
+    fn rank(status: &str) -> u8 {
+        match status {
+            "regressed" => 3,
+            "resolved" | "wontfix" => 2,
+            "triaged" => 1,
+            _ => 0,
+        }
+    }
+    if rank(b) > rank(a) { b } else { a }
+}
+
+fn merge_side_from(row: &Value) -> MergeSide {
+    let text = |k: &str| row.get(k).and_then(|v| v.as_str()).map(String::from);
+    MergeSide {
+        status: text("status").unwrap_or_else(|| "new".into()),
+        fixed_in_version: text("fixed_in_version").filter(|v| !v.is_empty()),
+        assignee: text("assignee").filter(|v| !v.is_empty()),
+    }
+}
+
+async fn fetch_merge_row(db: &Surreal<Any>, id: &str) -> Result<Value, (StatusCode, String)> {
+    let rows = run_value(
+        db,
+        "SELECT status, fixed_in_version, fingerprint, count, first_seen, last_seen,
+                merged_fingerprints ?? [] AS merged_fingerprints,
+                IF assignee != NONE THEN meta::id(assignee) ELSE NONE END AS assignee
+         FROM ONLY type::record('crash_groups', $id)",
+        vec![("id", Value::String(id.into()))],
+    )
+    .await?;
+    rows.into_iter()
+        .next()
+        .filter(|v| v.is_object())
+        .ok_or_else(|| not_found(id))
+}
+
 async fn merge_groups(
     State(s): State<AppState>,
     session: Session,
     Path(primary_id): Path<String>,
     Json(body): Json<MergeBody>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    crate::access::require_session(&session)
+    let user = crate::access::require_session(&session)
         .await
         .map_err(access_err)?;
+    if primary_id == body.merged_id {
+        return Err(bad("Cannot merge a crash group with itself."));
+    }
     let primary_product_id = product_id_for_crash_group(&s.repo.db, &primary_id).await?;
     let merged_product_id = product_id_for_crash_group(&s.repo.db, &body.merged_id).await?;
     if merged_product_id != primary_product_id {
@@ -2718,7 +2811,48 @@ async fn merge_groups(
     .map_err(access_err)?;
     let db = s.user_db(&session).await?;
     let pid = Value::String(primary_id.clone());
-    let mid = Value::String(body.merged_id);
+    let mid = Value::String(body.merged_id.clone());
+
+    // Fetch both up front — SurrealDB loses $token context in UPDATE
+    // subqueries, so RLS would filter a subquery on the other group to NONE.
+    let primary = fetch_merge_row(&db, &primary_id).await?;
+    let merged = fetch_merge_row(&db, &body.merged_id).await?;
+    let primary_side = merge_side_from(&primary);
+    let merged_side = merge_side_from(&merged);
+    if let Some(why) = merge_blocker(&primary_side, &merged_side) {
+        return Err((StatusCode::CONFLICT, format!("Cannot merge: {why}.")));
+    }
+
+    let status = merged_status(&primary_side.status, &merged_side.status).to_string();
+    let fixed_in_version = primary_side
+        .fixed_in_version
+        .clone()
+        .or(merged_side.fixed_in_version.clone());
+    let assignee = primary_side
+        .assignee
+        .clone()
+        .or(merged_side.assignee.clone());
+    let merged_fingerprint = merged
+        .get("fingerprint")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let mut aliases: Vec<Value> = merged
+        .get("merged_fingerprints")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    aliases.push(Value::String(merged_fingerprint.clone()));
+    let merged_count = merged.get("count").and_then(|v| v.as_i64()).unwrap_or(0);
+    let text = |row: &Value, k: &str| {
+        row.get(k)
+            .and_then(|v| v.as_str())
+            .map(|s| Value::String(s.to_string()))
+            .unwrap_or(Value::Null)
+    };
+    let merged_first_seen = text(&merged, "first_seen");
+    let merged_last_seen = text(&merged, "last_seen");
+
     run_value(
         &db,
         "UPDATE crashes SET group_id = type::record('crash_groups', $pid)
@@ -2726,48 +2860,99 @@ async fn merge_groups(
         vec![("pid", pid.clone()), ("mid", mid.clone())],
     )
     .await?;
-    // Fetch the merged group separately — SurrealDB loses $token context in
-    // UPDATE subqueries, causing RLS to filter out the subquery result as NONE.
-    let merged_rows = run_value(
+    // The merged group's notes are part of the bug's history; keep them.
+    run_value(
         &db,
-        "SELECT count, first_seen, last_seen FROM ONLY type::record('crash_groups', $mid)",
-        vec![("mid", mid.clone())],
+        "UPDATE annotations SET group_id = type::record('crash_groups', $pid)
+         WHERE group_id = type::record('crash_groups', $mid)",
+        vec![("pid", pid.clone()), ("mid", mid.clone())],
     )
     .await?;
-    let merged = merged_rows.into_iter().next().unwrap_or(Value::Null);
-    let merged_count = merged.get("count").and_then(|v| v.as_i64()).unwrap_or(0);
-    let merged_first_seen = merged
-        .get("first_seen")
-        .and_then(|v| v.as_str())
-        .map(|s| Value::String(s.to_string()))
-        .unwrap_or(Value::Null);
-    let merged_last_seen = merged
-        .get("last_seen")
-        .and_then(|v| v.as_str())
-        .map(|s| Value::String(s.to_string()))
-        .unwrap_or(Value::Null);
+
+    // A resolved group now holding crashes from the fixed release is a
+    // regression, exactly as it would be had those crashes arrived later.
+    let status = if status == "resolved" && fixed_in_version.is_some() {
+        let versions = run_value(
+            &db,
+            "SELECT VALUE report.version FROM crashes
+             WHERE group_id = type::record('crash_groups', $pid)",
+            vec![("pid", pid.clone())],
+        )
+        .await?;
+        let regressed = versions
+            .iter()
+            .any(|v| common::version::is_regression(v.as_str(), fixed_in_version.as_deref()));
+        if regressed {
+            "regressed".to_string()
+        } else {
+            status
+        }
+    } else {
+        status
+    };
+
     // The surviving group now spans both, so its seen range widens to match.
     run_value(
         &db,
         "UPDATE type::record('crash_groups', $pid) SET
            count = count + $c,
+           status = $status,
+           fixed_in_version = IF $fixed = NULL THEN NONE ELSE $fixed END,
+           assignee = IF $assignee = NULL THEN NONE ELSE type::record('users', $assignee) END,
+           merged_fingerprints = array::union(merged_fingerprints ?? [], $aliases),
            first_seen = IF $fs != NULL AND type::datetime($fs) < first_seen
                         THEN type::datetime($fs) ELSE first_seen END,
            last_seen = IF $ls != NULL AND type::datetime($ls) > last_seen
                        THEN type::datetime($ls) ELSE last_seen END,
            updated_at = time::now()",
         vec![
-            ("pid", pid),
+            ("pid", pid.clone()),
             ("c", Value::Number(merged_count.into())),
+            ("status", Value::String(status)),
+            ("fixed", fixed_in_version.map(Value::String).unwrap_or(Value::Null)),
+            ("assignee", assignee.map(Value::String).unwrap_or(Value::Null)),
+            ("aliases", Value::Array(aliases)),
             ("fs", merged_first_seen),
             ("ls", merged_last_seen),
         ],
     )
     .await?;
+
+    let author = user.user.map(|u| u.name).unwrap_or_else(|| "system".into());
+    let note = format!(
+        "Merged crash group {} ({} {}) into this one.\n{}",
+        &body.merged_id[..body.merged_id.len().min(8)],
+        merged_count,
+        if merged_count == 1 {
+            "crash"
+        } else {
+            "crashes"
+        },
+        merged_fingerprint
+    );
+    run_value(
+        &db,
+        "CREATE annotations CONTENT {
+            source: 'user',
+            value: $body,
+            author: $author,
+            group_id: type::record('crash_groups', $pid),
+            product_id: type::record('products', $product),
+            created_at: time::now(),
+            updated_at: time::now()
+         }",
+        vec![
+            ("body", Value::String(note)),
+            ("author", Value::String(author)),
+            ("pid", pid),
+            ("product", Value::String(primary_product_id)),
+        ],
+    )
+    .await?;
+
     run_value(&db, "DELETE type::record('crash_groups', $mid)", vec![("mid", mid)]).await?;
     Ok(StatusCode::NO_CONTENT)
 }
-
 // --------------------------------------------------------------------
 // symbols
 // --------------------------------------------------------------------

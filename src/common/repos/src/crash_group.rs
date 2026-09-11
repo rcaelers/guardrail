@@ -25,6 +25,9 @@ impl CrashGroupRepo {
         crate::take_one(&mut result, 0)
     }
 
+    /// The group a fingerprint belongs to: its own, or the one it was merged
+    /// into. A group's own fingerprint wins over an alias, so a group that was
+    /// merged away and later re-created still takes precedence for new crashes.
     pub async fn find_by_fingerprint(
         db: &Surreal<Any>,
         product_id: &str,
@@ -32,10 +35,13 @@ impl CrashGroupRepo {
     ) -> Result<Option<CrashGroup>, RepoError> {
         let mut result = db
             .query(
-                "SELECT *, meta::id(id) as id, meta::id(product_id) as product_id \
+                "SELECT *, meta::id(id) as id, meta::id(product_id) as product_id, \
+                        fingerprint = $fingerprint AS exact \
                  FROM crash_groups \
                  WHERE product_id = type::record('products', $product_id) \
-                   AND fingerprint = $fingerprint \
+                   AND (fingerprint = $fingerprint \
+                        OR $fingerprint IN (merged_fingerprints ?? [])) \
+                 ORDER BY exact DESC \
                  LIMIT 1",
             )
             .bind(("product_id", record_key(product_id)))

@@ -109,6 +109,8 @@ export interface RelatedRef {
   signal?: string | null;
   /** 0..1, how much of the stack matches the group being viewed. */
   similarity?: number;
+  /** Why this group cannot be merged with the one being viewed, if it cannot. */
+  mergeBlocker?: string | null;
 }
 
 export interface Environment {

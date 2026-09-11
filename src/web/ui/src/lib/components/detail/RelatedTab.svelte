@@ -39,7 +39,9 @@
         {/if}
         <span class="flex-1"></span>
         <span class="shrink-0 text-[11px] text-ink-muted dark:text-ink-mutedDark">{fmtInt(r.count)} events</span>
-        {#if canMerge}
+        {#if canMerge && r.mergeBlocker}
+          <span class="shrink-0 rounded border border-line dark:border-line-dark px-2.5 py-1 text-[11px] text-ink-muted dark:text-ink-mutedDark" title="Cannot merge: {r.mergeBlocker}">Merge</span>
+        {:else if canMerge}
           <button
             type="button"
             onclick={() => onMerge(r.id)}
@@ -49,6 +51,10 @@
           <span class="shrink-0 rounded border border-line dark:border-line-dark px-2.5 py-1 text-[11px] text-ink-muted dark:text-ink-mutedDark" title="Only maintainers can merge">Merge</span>
         {/if}
       </div>
+
+      {#if r.mergeBlocker}
+        <div class="mb-1.5 text-[11px] text-ink-muted dark:text-ink-mutedDark">Cannot merge: {r.mergeBlocker}.</div>
+      {/if}
 
       <!-- The fingerprint decides whether this is the same bug, so it is shown
            in full rather than truncated to one line. -->

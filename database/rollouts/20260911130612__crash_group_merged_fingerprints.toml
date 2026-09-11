@@ -1,0 +1,22 @@
+id = "20260911130612__crash_group_merged_fingerprints"
+name = "crash_group_merged_fingerprints"
+source_schema_hash = "2d145271e2b30c1c8912a27bd30ab55afd2958f4aa41d0ab1a8cd83068e6f24c"
+target_schema_hash = "da7ce280161b4a032fb55edaedf7014bcc945a338c6cd1804382f791ee7bb386"
+compatibility = "phased"
+renames = []
+
+[[steps]]
+id = "apply_expand_schema"
+phase = "start"
+kind = "apply_files"
+files = ["database/schema/guardrail.surql"]
+
+[[steps]]
+id = "rollback_expand_schema"
+phase = "rollback"
+kind = "remove_entities"
+
+[[steps.entities]]
+kind = "field"
+scope = "crash_groups"
+name = "merged_fingerprints"

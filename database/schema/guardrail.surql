@@ -207,6 +207,9 @@ DEFINE FIELD status ON TABLE crash_groups TYPE string
     DEFAULT "new";
 -- The release the fix went into, so a later crash can be told from an older one.
 DEFINE FIELD fixed_in_version ON TABLE crash_groups TYPE option<string>;
+-- Fingerprints of groups merged into this one, so a later crash carrying one
+-- of them lands here instead of re-creating the group that was merged away.
+DEFINE FIELD merged_fingerprints ON TABLE crash_groups TYPE array<string> DEFAULT [];
 DEFINE FIELD assignee ON TABLE crash_groups TYPE option<record<users>>;
 
 DEFINE FIELD created_at ON TABLE crash_groups TYPE datetime ASSERT $value != NONE DEFAULT time::now();

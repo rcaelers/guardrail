@@ -47,4 +47,6 @@ uuid.workspace = true
 fancy-regex.workspace = true
 # minidump.workspace = true
 # minidump-processor.workspace = true
-semver.workspace = true
+
+[dev-dependencies]
+testware = { path = "../testware" }

@@ -12,6 +12,8 @@ pub struct CrashGroup {
     pub last_seen: DateTime<Utc>,
     pub status: String,
     pub fixed_in_version: Option<String>,
+    #[serde(default)]
+    pub merged_fingerprints: Vec<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
