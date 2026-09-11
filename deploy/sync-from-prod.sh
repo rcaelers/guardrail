@@ -401,24 +401,28 @@ if [ "$DO_USERS" = 1 ] && [ "$DO_DB" = 1 ]; then
     skipped=0
     kept_ids="$STATIC_API_USER_ID"
 
-    while IFS="$(printf '\t')" read -r pid username email first last display is_admin disabled; do
-      [ -n "$pid" ] || continue
+    # One JSON object per line. Not TSV: tab is IFS whitespace, so `read`
+    # collapses adjacent tabs and an account with an empty field (no last
+    # name, no email) shifts every column after it.
+    while IFS= read -r row; do
+      [ -n "$row" ] || continue
+      pid="$(printf '%s' "$row" | jq -r '.id')"
       [ "$pid" = "$STATIC_API_USER_ID" ] && continue
+      username="$(printf '%s' "$row" | jq -r '.username')"
+      email="$(printf '%s' "$row" | jq -r '.email // ""')"
+      is_admin="$(printf '%s' "$row" | jq -r '.isAdmin // false')"
 
-      payload="$(jq -nc \
-        --arg id "$pid" --arg username "$username" --arg email "$email" \
-        --arg first "$first" --arg last "$last" --arg display "$display" \
-        --argjson is_admin "$is_admin" --argjson disabled "$disabled" '
+      payload="$(printf '%s' "$row" | jq -c '
         {
-          id: $id,
-          username: $username,
-          email: (if $email == "" then null else $email end),
+          id,
+          username,
+          email: (if (.email // "") == "" then null else .email end),
           emailVerified: true,
-          firstName: $first,
-          lastName: $last,
-          displayName: (if $display == "" then $username else $display end),
-          isAdmin: $is_admin,
-          disabled: $disabled
+          firstName: (.firstName // ""),
+          lastName: (.lastName // ""),
+          displayName: (if (.displayName // "") == "" then .username else .displayName end),
+          isAdmin: (.isAdmin // false),
+          disabled: (.disabled // false)
         }')"
 
       # Same id, else same username or email: updating in place keeps any
@@ -466,11 +470,7 @@ if [ "$DO_USERS" = 1 ] && [ "$DO_DB" = 1 ]; then
       log "  $action: $username${email:+ <$email>}$([ "$is_admin" = "true" ] && echo ' (admin)')"
       mirrored=$((mirrored + 1))
     done <<EOF
-$(printf '%s' "$prod_users" | jq -r '
-  .data[]
-  | [ .id, .username, (.email // ""), (.firstName // ""), (.lastName // ""),
-      (.displayName // ""), (.isAdmin | tostring), (.disabled // false | tostring) ]
-  | @tsv')
+$(printf '%s' "$prod_users" | jq -c '.data[]')
 EOF
 
     # Whatever is left is local-only -- a leftover from an earlier sync or a
