@@ -1711,7 +1711,7 @@ fn fingerprint_similarity_survives_a_differing_stack_top() {
 
 #[test]
 fn merge_rules_are_symmetric_and_refuse_conflicting_decisions() {
-    use crate::routes::db_api::{MergeSide, merge_blocker, merged_status};
+    use data::crash_group::{MergeSide, merge_blocker, merged_status};
 
     let side = |status: &str, fixed: Option<&str>, assignee: Option<&str>| MergeSide {
         status: status.into(),

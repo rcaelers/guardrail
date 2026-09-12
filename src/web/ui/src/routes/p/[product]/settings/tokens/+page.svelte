@@ -15,6 +15,23 @@
   let copied = $state(false);
   let confirmDeleteId = $state<string | null>(null);
 
+  // ── edit form ──
+  let editingId = $state<string | null>(null);
+  let editDescription = $state('');
+  let editIsActive = $state(true);
+  let editEntitlements = $state<string[]>([]);
+
+  function startEdit(token: PageData['tokens'][number]) {
+    if (editingId === token.id) { editingId = null; return; }
+    editingId = token.id;
+    editDescription = token.description;
+    editIsActive = token.isActive;
+    editEntitlements = [...token.entitlements];
+  }
+  function toggleEnt(list: string[], name: string, on: boolean): string[] {
+    return on ? (list.includes(name) ? list : [...list, name]) : list.filter((e) => e !== name);
+  }
+
   $effect(() => {
     if (form?.created) {
       justCreated = form.created as CreatedApiToken;
@@ -186,6 +203,13 @@
             {:else}
               <button
                 type="button"
+                onclick={() => startEdit(token)}
+                class="rounded-md border border-line dark:border-line-dark px-2.5 py-1 text-[12px]"
+              >
+                {editingId === token.id ? 'Close' : 'Edit'}
+              </button>
+              <button
+                type="button"
                 onclick={() => (confirmDeleteId = token.id)}
                 class="rounded-md border border-line dark:border-line-dark px-2.5 py-1 text-[12px] text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
               >
@@ -194,6 +218,65 @@
             {/if}
           {/if}
         </div>
+
+        {#if canManage && editingId === token.id}
+          <div class="border-t border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-4 py-3">
+            <form
+              method="POST"
+              action="?/update"
+              use:enhance={() => async ({ update, result }) => {
+                await update();
+                if (result.type === 'success') editingId = null;
+              }}
+            >
+              <input type="hidden" name="id" value={token.id} />
+              <div class="grid gap-3 sm:grid-cols-3">
+                <label class="flex flex-col sm:col-span-2">
+                  <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Description</span>
+                  <input
+                    name="description"
+                    bind:value={editDescription}
+                    required
+                    class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1.5 text-[13px] outline-none"
+                  />
+                </label>
+                <label class="flex flex-col">
+                  <span class="mb-1 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Status</span>
+                  <select
+                    name="isActive"
+                    bind:value={editIsActive}
+                    class="rounded-md border border-line dark:border-line-dark bg-surface dark:bg-surface-dark px-2 py-1.5 text-[13px] outline-none"
+                  >
+                    <option value={true}>Active</option>
+                    <option value={false}>Revoked</option>
+                  </select>
+                </label>
+              </div>
+              <div class="mt-3">
+                <div class="mb-1.5 text-[11px] uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark">Entitlements</div>
+                <div class="flex flex-wrap gap-2">
+                  {#each data.entitlements as ent}
+                    <label class="flex cursor-pointer items-center gap-1.5 rounded border border-line dark:border-line-dark px-2.5 py-1.5 text-[12px] select-none">
+                      <input
+                        type="checkbox"
+                        name="entitlement"
+                        value={ent.name}
+                        checked={editEntitlements.includes(ent.name)}
+                        onchange={(e) => (editEntitlements = toggleEnt(editEntitlements, ent.name, e.currentTarget.checked))}
+                      />
+                      <span class="font-mono text-[11px]">{ent.name}</span>
+                      <span class="text-ink-muted dark:text-ink-mutedDark">— {ent.description}</span>
+                    </label>
+                  {/each}
+                </div>
+              </div>
+              <div class="mt-3 flex justify-end gap-2">
+                <button type="button" onclick={() => (editingId = null)} class="rounded-md border border-line dark:border-line-dark bg-transparent px-3 py-1.5 text-[13px]">Cancel</button>
+                <button type="submit" class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white">Save</button>
+              </div>
+            </form>
+          </div>
+        {/if}
       {/each}
     </div>
   {/if}

@@ -339,3 +339,105 @@ async fn crash_api_enforces_entitlements_scope_and_redaction() {
     .await;
     assert_ne!(status, StatusCode::OK, "an empty note must be rejected");
 }
+
+async fn seed_group(
+    db: &Surreal<Any>,
+    product_id: &str,
+    fingerprint: &str,
+    status: &str,
+) -> String {
+    let gid = uuid::Uuid::new_v4().to_string();
+    db.query(
+        "CREATE type::record('crash_groups', $gid) CONTENT {
+            product_id: type::record('products', $pid), fingerprint: $fp,
+            signal: 'SIGSEGV', count: 1, status: $status,
+            first_seen: time::now(), last_seen: time::now(),
+            created_at: time::now(), updated_at: time::now()
+         }",
+    )
+    .bind(("gid", gid.clone()))
+    .bind(("pid", product_id.to_string()))
+    .bind(("fp", fingerprint.to_string()))
+    .bind(("status", status.to_string()))
+    .await
+    .expect("seed_group");
+    gid
+}
+
+// Cases:
+// | Case                                          | Expected                          |
+// | --------------------------------------------- | --------------------------------- |
+// | crash-annotate token merges                   | 403                               |
+// | crash-merge token merges                      | 200, merged group gone, alias set |
+// | crash-merge token, group of another product   | 404                               |
+// | crash-merge token, resolved vs wontfix        | 409 with the reason               |
+#[tokio::test]
+async fn crash_api_merge_requires_crash_merge_and_follows_the_rules() {
+    let db = &TestSetup::create_db().await;
+    let app = app_for(db).await;
+
+    let product = create_test_product_with_details(db, "Merged", "merge me").await;
+    let other = create_test_product_with_details(db, "Other", "not yours").await;
+    let a = seed_group(db, &product.id, "fp-a", "new").await;
+    let b = seed_group(db, &product.id, "fp-b", "triaged").await;
+    let foreign = seed_group(db, &other.id, "fp-x", "new").await;
+
+    let (annotator, _) = create_test_token(
+        db,
+        "annotator",
+        Some(product.id.clone()),
+        None,
+        &["crash-read", "crash-annotate"],
+    )
+    .await;
+    let (merger, _) =
+        create_test_token(db, "merger", Some(product.id.clone()), None, &["crash-merge"]).await;
+
+    let body = |merged: &str| json!({"productId": product.id, "mergedId": merged});
+
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/api/crashes/{a}/merge"),
+        Some(&annotator),
+        Some(body(&b)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN, "crash-annotate must not merge");
+
+    let (status, _) = call(
+        &app,
+        "POST",
+        &format!("/api/crashes/{a}/merge"),
+        Some(&merger),
+        Some(body(&foreign)),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "another product's group is invisible");
+
+    let (status, resp) =
+        call(&app, "POST", &format!("/api/crashes/{a}/merge"), Some(&merger), Some(body(&b))).await;
+    assert_eq!(status, StatusCode::OK, "{resp}");
+    let survivor = repos::crash_group::CrashGroupRepo::get_by_id(db, &a)
+        .await
+        .unwrap()
+        .expect("survivor");
+    assert_eq!(survivor.status, "triaged");
+    assert_eq!(survivor.merged_fingerprints, vec!["fp-b"]);
+    assert!(
+        repos::crash_group::CrashGroupRepo::get_by_id(db, &b)
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    let c = seed_group(db, &product.id, "fp-c", "resolved").await;
+    let d = seed_group(db, &product.id, "fp-d", "wontfix").await;
+    let (status, resp) =
+        call(&app, "POST", &format!("/api/crashes/{c}/merge"), Some(&merger), Some(body(&d))).await;
+    assert_eq!(status, StatusCode::CONFLICT, "{resp}");
+    assert!(
+        resp.to_string().contains("won't be fixed"),
+        "the reason should be in the response: {resp}"
+    );
+}

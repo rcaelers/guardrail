@@ -411,6 +411,14 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
       const r = await jpost(`/products/${encodeURIComponent(productId)}/api-tokens`, spec);
       return json<CreatedApiToken>(r, 'createApiToken');
     },
+    async updateApiToken(productId, id, spec) {
+      const r = await req(`/products/${encodeURIComponent(productId)}/api-tokens/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(spec)
+      });
+      await assertOk(r, 'updateApiToken');
+    },
     async deleteApiToken(productId, id) {
       const r = await jdel(`/products/${encodeURIComponent(productId)}/api-tokens/${encodeURIComponent(id)}`);
       await assertOk(r, 'deleteApiToken');

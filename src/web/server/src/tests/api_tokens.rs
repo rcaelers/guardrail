@@ -483,3 +483,79 @@ async fn test_admin_api_tokens_reject_deleted_session_user() {
 
     assert_eq!(app.call("GET", "/api-tokens", None, Some(&ghost)).await, StatusCode::FORBIDDEN);
 }
+
+// API calls:
+// | Method | Route                                        |
+// | ------ | -------------------------------------------- |
+// | PATCH  | /products/{product_id}/api-tokens/{token_id} |
+// Cases:
+// | Case                                            | Expected                        |
+// | ----------------------------------------------- | ------------------------------- |
+// | no session                                      | 403                             |
+// | non-maintainer                                  | 403                             |
+// | maintainer changes description/active/entitlem. | 204, stored                     |
+// | maintainer grants a non-product entitlement     | 400, nothing changes            |
+// | maintainer, token of another product            | 404                             |
+#[tokio::test]
+async fn test_update_product_api_token() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let maintained = f
+        .products
+        .iter()
+        .find(|p| p.non_admin_maintainer)
+        .expect("a product the non-admin maintains");
+    let other = f
+        .products
+        .iter()
+        .find(|p| !p.non_admin_maintainer)
+        .expect("a product the non-admin does not maintain");
+
+    let (_, tok) =
+        create_test_token(&app.db, "before", Some(maintained.id.clone()), None, &["symbol-upload"])
+            .await;
+    let uri = format!("/products/{}/api-tokens/{}", maintained.id, tok.id);
+    let body = json!({
+        "description": "after",
+        "isActive": false,
+        "entitlements": ["crash-read", "crash-merge"]
+    });
+
+    assert_eq!(app.call("PATCH", &uri, Some(body.clone()), None).await, StatusCode::FORBIDDEN);
+    assert_eq!(
+        app.call("PATCH", &uri, Some(body.clone()), Some(&f.non_admin))
+            .await,
+        StatusCode::NO_CONTENT
+    );
+    let stored = repos::api_token::ApiTokenRepo::get_by_token_id(&app.db, tok.token_id)
+        .await
+        .unwrap()
+        .expect("token");
+    assert_eq!(stored.description, "after");
+    assert!(!stored.is_active);
+    assert_eq!(stored.entitlements, vec!["crash-read", "crash-merge"]);
+
+    // Not a product entitlement: refused, and the token is left as it was.
+    let bad = json!({"description": "x", "isActive": true, "entitlements": ["invitation-create"]});
+    assert_eq!(
+        app.call("PATCH", &uri, Some(bad), Some(&f.non_admin)).await,
+        StatusCode::BAD_REQUEST
+    );
+    let stored = repos::api_token::ApiTokenRepo::get_by_token_id(&app.db, tok.token_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(stored.description, "after");
+
+    // A token of another product is not reachable through this product, even
+    // for an admin, who could reach it through its own product.
+    let (_, foreign) =
+        create_test_token(&app.db, "foreign", Some(other.id.clone()), None, &["symbol-upload"])
+            .await;
+    let wrong_uri = format!("/products/{}/api-tokens/{}", maintained.id, foreign.id);
+    assert_eq!(
+        app.call("PATCH", &wrong_uri, Some(body), Some(&f.admin))
+            .await,
+        StatusCode::NOT_FOUND
+    );
+}

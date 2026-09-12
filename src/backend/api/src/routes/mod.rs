@@ -23,6 +23,7 @@ pub async fn routes(_app_state: AppState) -> Router<AppState> {
         .route("/crashes/{group_id}", get(crashes::get_group))
         .route("/crashes/{group_id}/notes", post(crashes::add_group_note))
         .route("/crashes/{group_id}/status", post(crashes::set_group_status))
+        .route("/crashes/{group_id}/merge", post(crashes::merge_groups))
         .route("/crashes/by-crash/{crash_id}", get(crashes::get_crash))
         .route("/live", get(health::live))
         .route("/ready", get(health::ready))

@@ -21,6 +21,12 @@ pub enum ApiError {
     #[error("{0}")]
     Forbidden(String),
 
+    #[error("{0}")]
+    Conflict(String),
+
+    #[error("{0}")]
+    NotFound(String),
+
     #[error("access denied for product {0}")]
     ProductAccessDenied(String),
 
@@ -55,6 +61,8 @@ impl IntoResponse for ApiError {
             ApiError::Failure(err) => (StatusCode::BAD_REQUEST, format!("general failure: {err}")),
             ApiError::InvalidToken(msg) => (StatusCode::UNAUTHORIZED, msg.to_string()),
             ApiError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg.to_string()),
+            ApiError::Conflict(msg) => (StatusCode::CONFLICT, msg.to_string()),
+            ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.to_string()),
             ApiError::ProductAccessDenied(product) => {
                 (StatusCode::FORBIDDEN, format!("access denied for product {product}"))
             }

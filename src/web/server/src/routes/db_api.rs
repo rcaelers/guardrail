@@ -20,6 +20,8 @@ use axum::{
 };
 use chrono::Utc;
 use object_store::{ObjectStoreExt, path::Path as ObjectPath};
+use data::crash_group::{MergeSide, merge_blocker};
+use repos::crash_group::{CrashGroupRepo, MergeError};
 use repos::user::avatar_initials;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -69,7 +71,10 @@ pub fn router() -> Router<AppState> {
         )
         .route("/products/{id}/product-token", post(update_product_token))
         .route("/products/{pid}/api-tokens", get(list_api_tokens).post(create_api_token))
-        .route("/products/{pid}/api-tokens/{id}", delete(delete_api_token))
+        .route(
+            "/products/{pid}/api-tokens/{id}",
+            patch(update_api_token).delete(delete_api_token),
+        )
         .route("/products/{pid}/members", get(list_members))
         .route("/products/{pid}/members/{uid}", post(grant_access).delete(revoke_access))
         .route("/products/{pid}/symbols", get(list_symbols).post(upload_symbol))
@@ -2709,58 +2714,6 @@ struct MergeBody {
     merged_id: String,
 }
 
-/// What a merge needs to know about one side.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct MergeSide {
-    pub(crate) status: String,
-    pub(crate) fixed_in_version: Option<String>,
-    pub(crate) assignee: Option<String>,
-}
-
-/// Why two groups cannot be merged, or `None` when they can. Symmetric: the
-/// answer does not depend on which side is the survivor.
-///
-/// A merge combines evidence about one bug, so it is refused where the two
-/// records disagree about a human decision rather than about facts: fixed in
-/// two different releases, one fixed while the other is not to be fixed, or
-/// two different people assigned.
-pub(crate) fn merge_blocker(a: &MergeSide, b: &MergeSide) -> Option<String> {
-    if let (Some(x), Some(y)) = (&a.fixed_in_version, &b.fixed_in_version)
-        && x != y
-    {
-        let (lo, hi) = if x <= y { (x, y) } else { (y, x) };
-        return Some(format!("fixed in different versions ({lo} and {hi})"));
-    }
-    let statuses = (a.status.as_str(), b.status.as_str());
-    if matches!(statuses, ("resolved", "wontfix") | ("wontfix", "resolved")) {
-        return Some("one is resolved, the other won't be fixed".into());
-    }
-    if let (Some(x), Some(y)) = (&a.assignee, &b.assignee)
-        && x != y
-    {
-        return Some("assigned to different people".into());
-    }
-    None
-}
-
-/// The status the merged group takes: the one that says more. A regression is
-/// evidence and beats everything; resolved and wontfix are decisions and beat
-/// triage; triage beats new; obsolete says nothing about the bug at all -- its
-/// fingerprint can no longer occur -- so it yields even to new. Resolved
-/// against wontfix never gets here, since `merge_blocker` refuses that pair.
-pub(crate) fn merged_status<'a>(a: &'a str, b: &'a str) -> &'a str {
-    fn rank(status: &str) -> i8 {
-        match status {
-            "regressed" => 3,
-            "resolved" | "wontfix" => 2,
-            "triaged" => 1,
-            "obsolete" => -1,
-            _ => 0,
-        }
-    }
-    if rank(b) > rank(a) { b } else { a }
-}
-
 fn merge_side_from(row: &Value) -> MergeSide {
     let text = |k: &str| row.get(k).and_then(|v| v.as_str()).map(String::from);
     MergeSide {
@@ -2768,22 +2721,6 @@ fn merge_side_from(row: &Value) -> MergeSide {
         fixed_in_version: text("fixed_in_version").filter(|v| !v.is_empty()),
         assignee: text("assignee").filter(|v| !v.is_empty()),
     }
-}
-
-async fn fetch_merge_row(db: &Surreal<Any>, id: &str) -> Result<Value, (StatusCode, String)> {
-    let rows = run_value(
-        db,
-        "SELECT status, fixed_in_version, fingerprint, count, first_seen, last_seen,
-                merged_fingerprints ?? [] AS merged_fingerprints,
-                IF assignee != NONE THEN meta::id(assignee) ELSE NONE END AS assignee
-         FROM ONLY type::record('crash_groups', $id)",
-        vec![("id", Value::String(id.into()))],
-    )
-    .await?;
-    rows.into_iter()
-        .next()
-        .filter(|v| v.is_object())
-        .ok_or_else(|| not_found(id))
 }
 
 async fn merge_groups(
@@ -2812,147 +2749,14 @@ async fn merge_groups(
     .await
     .map_err(access_err)?;
     let db = s.user_db(&session).await?;
-    let pid = Value::String(primary_id.clone());
-    let mid = Value::String(body.merged_id.clone());
-
-    // Fetch both up front — SurrealDB loses $token context in UPDATE
-    // subqueries, so RLS would filter a subquery on the other group to NONE.
-    let primary = fetch_merge_row(&db, &primary_id).await?;
-    let merged = fetch_merge_row(&db, &body.merged_id).await?;
-    let primary_side = merge_side_from(&primary);
-    let merged_side = merge_side_from(&merged);
-    if let Some(why) = merge_blocker(&primary_side, &merged_side) {
-        return Err((StatusCode::CONFLICT, format!("Cannot merge: {why}.")));
-    }
-
-    let status = merged_status(&primary_side.status, &merged_side.status).to_string();
-    let fixed_in_version = primary_side
-        .fixed_in_version
-        .clone()
-        .or(merged_side.fixed_in_version.clone());
-    let assignee = primary_side
-        .assignee
-        .clone()
-        .or(merged_side.assignee.clone());
-    let merged_fingerprint = merged
-        .get("fingerprint")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .to_string();
-    let mut aliases: Vec<Value> = merged
-        .get("merged_fingerprints")
-        .and_then(|v| v.as_array())
-        .cloned()
-        .unwrap_or_default();
-    aliases.push(Value::String(merged_fingerprint.clone()));
-    let merged_count = merged.get("count").and_then(|v| v.as_i64()).unwrap_or(0);
-    let text = |row: &Value, k: &str| {
-        row.get(k)
-            .and_then(|v| v.as_str())
-            .map(|s| Value::String(s.to_string()))
-            .unwrap_or(Value::Null)
-    };
-    let merged_first_seen = text(&merged, "first_seen");
-    let merged_last_seen = text(&merged, "last_seen");
-
-    run_value(
-        &db,
-        "UPDATE crashes SET group_id = type::record('crash_groups', $pid)
-         WHERE group_id = type::record('crash_groups', $mid)",
-        vec![("pid", pid.clone()), ("mid", mid.clone())],
-    )
-    .await?;
-    // The merged group's notes are part of the bug's history; keep them.
-    run_value(
-        &db,
-        "UPDATE annotations SET group_id = type::record('crash_groups', $pid)
-         WHERE group_id = type::record('crash_groups', $mid)",
-        vec![("pid", pid.clone()), ("mid", mid.clone())],
-    )
-    .await?;
-
-    // A resolved group now holding crashes from the fixed release is a
-    // regression, exactly as it would be had those crashes arrived later.
-    let status = if status == "resolved" && fixed_in_version.is_some() {
-        let versions = run_value(
-            &db,
-            "SELECT VALUE report.version FROM crashes
-             WHERE group_id = type::record('crash_groups', $pid)",
-            vec![("pid", pid.clone())],
-        )
-        .await?;
-        let regressed = versions
-            .iter()
-            .any(|v| common::version::is_regression(v.as_str(), fixed_in_version.as_deref()));
-        if regressed {
-            "regressed".to_string()
-        } else {
-            status
-        }
-    } else {
-        status
-    };
-
-    // The surviving group now spans both, so its seen range widens to match.
-    run_value(
-        &db,
-        "UPDATE type::record('crash_groups', $pid) SET
-           count = count + $c,
-           status = $status,
-           fixed_in_version = IF $fixed = NULL THEN NONE ELSE $fixed END,
-           assignee = IF $assignee = NULL THEN NONE ELSE type::record('users', $assignee) END,
-           merged_fingerprints = array::union(merged_fingerprints ?? [], $aliases),
-           first_seen = IF $fs != NULL AND type::datetime($fs) < first_seen
-                        THEN type::datetime($fs) ELSE first_seen END,
-           last_seen = IF $ls != NULL AND type::datetime($ls) > last_seen
-                       THEN type::datetime($ls) ELSE last_seen END,
-           updated_at = time::now()",
-        vec![
-            ("pid", pid.clone()),
-            ("c", Value::Number(merged_count.into())),
-            ("status", Value::String(status)),
-            ("fixed", fixed_in_version.map(Value::String).unwrap_or(Value::Null)),
-            ("assignee", assignee.map(Value::String).unwrap_or(Value::Null)),
-            ("aliases", Value::Array(aliases)),
-            ("fs", merged_first_seen),
-            ("ls", merged_last_seen),
-        ],
-    )
-    .await?;
-
     let author = user.user.map(|u| u.name).unwrap_or_else(|| "system".into());
-    let note = format!(
-        "Merged crash group {} ({} {}) into this one.\n{}",
-        &body.merged_id[..body.merged_id.len().min(8)],
-        merged_count,
-        if merged_count == 1 {
-            "crash"
-        } else {
-            "crashes"
-        },
-        merged_fingerprint
-    );
-    run_value(
-        &db,
-        "CREATE annotations CONTENT {
-            source: 'user',
-            value: $body,
-            author: $author,
-            group_id: type::record('crash_groups', $pid),
-            product_id: type::record('products', $product),
-            created_at: time::now(),
-            updated_at: time::now()
-         }",
-        vec![
-            ("body", Value::String(note)),
-            ("author", Value::String(author)),
-            ("pid", pid),
-            ("product", Value::String(primary_product_id)),
-        ],
-    )
-    .await?;
-
-    run_value(&db, "DELETE type::record('crash_groups', $mid)", vec![("mid", mid)]).await?;
+    CrashGroupRepo::merge(&db, &primary_product_id, &primary_id, &body.merged_id, &author)
+        .await
+        .map_err(|e| match e {
+            MergeError::Conflict(why) => (StatusCode::CONFLICT, format!("Cannot merge: {why}.")),
+            MergeError::NotFound => not_found(&body.merged_id),
+            MergeError::Repo(e) => server_error(e),
+        })?;
     Ok(StatusCode::NO_CONTENT)
 }
 // --------------------------------------------------------------------
@@ -3228,9 +3032,10 @@ async fn create_api_token(
     if description.is_empty() {
         return Err(bad("description required"));
     }
-    let entitlements = body
-        .entitlements
-        .unwrap_or_else(|| vec!["symbol-upload".into()]);
+    let entitlements = product_entitlements(
+        body.entitlements
+            .unwrap_or_else(|| vec!["symbol-upload".into()]),
+    )?;
 
     let (token_id, token, token_hash) = common::token::generate_api_token()
         .map_err(|e| server_error(format!("token generation failed: {e}")))?;
@@ -3271,6 +3076,80 @@ async fn create_api_token(
     })))
 }
 
+/// Entitlements a product maintainer may hand out: the product-scoped ones
+/// from the registry, nothing general or user-bound. Unknown names are refused
+/// rather than stored, so a typo cannot become a silent no-op grant.
+fn product_entitlements(requested: Vec<String>) -> Result<Vec<String>, (StatusCode, String)> {
+    let mut out = Vec::with_capacity(requested.len());
+    for name in requested {
+        let known = ENTITLEMENT_DEFS
+            .iter()
+            .find(|(n, _, _)| *n == name)
+            .ok_or_else(|| bad(format!("unknown entitlement '{name}'")))?;
+        if known.2 != "product" {
+            return Err(bad(format!("'{name}' is not a product entitlement")));
+        }
+        if !out.contains(&name) {
+            out.push(name);
+        }
+    }
+    Ok(out)
+}
+
+#[derive(Deserialize)]
+struct UpdateApiTokenBody {
+    description: String,
+    #[serde(rename = "isActive")]
+    is_active: bool,
+    entitlements: Vec<String>,
+}
+
+async fn update_api_token(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path((pid, id)): Path<(String, String)>,
+    Json(body): Json<UpdateApiTokenBody>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
+        .await
+        .map_err(access_err)?;
+    let db = s.user_db(&session).await?;
+
+    let description = body.description.trim().to_string();
+    if description.is_empty() {
+        return Err(bad("description required"));
+    }
+    let entitlements = product_entitlements(body.entitlements)?;
+
+    // Only this product's tokens: a maintainer of one product must not be able
+    // to reach another's by id, whatever RLS would say.
+    let rows = run_value(
+        &db,
+        "UPDATE api_tokens SET
+            description = $description,
+            is_active = $is_active,
+            entitlements = $entitlements,
+            updated_at = time::now()
+         WHERE meta::id(id) = $id AND product_id = type::record('products', $pid)
+         RETURN meta::id(id) AS id",
+        vec![
+            ("id", Value::String(id.clone())),
+            ("pid", Value::String(pid)),
+            ("description", Value::String(description)),
+            ("is_active", Value::Bool(body.is_active)),
+            (
+                "entitlements",
+                Value::Array(entitlements.into_iter().map(Value::String).collect()),
+            ),
+        ],
+    )
+    .await?;
+    if rows.is_empty() {
+        return Err(not_found(&id));
+    }
+    Ok(StatusCode::NO_CONTENT)
+}
 async fn delete_api_token(
     State(s): State<AppState>,
     session: Session,
@@ -3322,6 +3201,7 @@ const ENTITLEMENT_DEFS: &[(&str, &str, &str)] = &[
     ("crash-read", "Read crashes (report redacted)", "product"),
     ("crash-read-full", "Read crashes including the full report", "product"),
     ("crash-annotate", "Add notes and set crash group status", "product"),
+    ("crash-merge", "Merge crash groups", "product"),
     ("invitation-create", "Create user invitations", "general"),
     ("token", "Generate JWT tokens as the bound user", "user"),
 ];

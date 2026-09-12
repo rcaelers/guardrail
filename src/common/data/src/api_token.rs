@@ -13,6 +13,8 @@ pub const ENTITLEMENT_CRASH_READ: &str = "crash-read";
 pub const ENTITLEMENT_CRASH_READ_FULL: &str = "crash-read-full";
 /// Add notes and set the triage status of a crash group.
 pub const ENTITLEMENT_CRASH_ANNOTATE: &str = "crash-annotate";
+/// Merge one crash group into another.
+pub const ENTITLEMENT_CRASH_MERGE: &str = "crash-merge";
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ApiToken {

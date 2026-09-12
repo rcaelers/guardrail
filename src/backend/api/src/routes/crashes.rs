@@ -19,7 +19,8 @@ use axum::{
     http::HeaderMap,
 };
 use data::api_token::{
-    ENTITLEMENT_CRASH_ANNOTATE, ENTITLEMENT_CRASH_READ, ENTITLEMENT_CRASH_READ_FULL,
+    ENTITLEMENT_CRASH_ANNOTATE, ENTITLEMENT_CRASH_MERGE, ENTITLEMENT_CRASH_READ,
+    ENTITLEMENT_CRASH_READ_FULL,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -418,4 +419,64 @@ pub async fn set_group_status(
         "status": body.status,
         "fixedInVersion": fixed_in_version
     })))
+}
+
+#[derive(Deserialize)]
+pub struct MergeBody {
+    #[serde(rename = "productId")]
+    product_id: String,
+    #[serde(rename = "mergedId")]
+    merged_id: String,
+}
+
+/// Merges `mergedId` into `{group_id}`, which survives. Both groups must
+/// belong to the token's product. The outcome follows the same rules as the
+/// web UI's merge; a pair that disagrees on a decision (fixed version, resolved
+/// versus wontfix, assignee) is refused with 409 and the reason.
+pub async fn merge_groups(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(group_id): Path<String>,
+    Json(body): Json<MergeBody>,
+) -> Result<Json<Value>, ApiError> {
+    if group_id == body.merged_id {
+        return Err(ApiError::Failure("cannot merge a crash group with itself".into()));
+    }
+    let db = &state.repo.db;
+    let token =
+        crate::access::require_entitlement(&headers, None, db, ENTITLEMENT_CRASH_MERGE).await?;
+    let product = get_product_by_id(db, &body.product_id).await?;
+    validate_api_token_for_product(&token, &product, &product.name)?;
+
+    // Root connection, so the product binding is the whole access check:
+    // both groups must be the token's product's.
+    for gid in [&group_id, &body.merged_id] {
+        let rows = run(
+            db,
+            "SELECT meta::id(id) AS id FROM crash_groups
+             WHERE meta::id(id) = $gid AND product_id = type::record('products', $pid)",
+            vec![
+                ("gid", Value::String(gid.clone())),
+                ("pid", Value::String(product.id.clone())),
+            ],
+        )
+        .await?;
+        if rows.is_empty() {
+            return Err(ApiError::NotFound(format!("crash group {gid} not found")));
+        }
+    }
+
+    let author = format!("token:{}", token.description);
+    repos::crash_group::CrashGroupRepo::merge(db, &product.id, &group_id, &body.merged_id, &author)
+        .await
+        .map_err(|e| match e {
+            repos::crash_group::MergeError::Conflict(why) => {
+                ApiError::Conflict(format!("cannot merge: {why}"))
+            }
+            repos::crash_group::MergeError::NotFound => {
+                ApiError::NotFound(format!("crash group {} not found", body.merged_id))
+            }
+            repos::crash_group::MergeError::Repo(e) => ApiError::RepoError(e),
+        })?;
+    Ok(Json(json!({ "ok": true, "survivor": group_id })))
 }

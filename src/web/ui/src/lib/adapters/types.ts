@@ -639,6 +639,7 @@ export interface GuardrailAdapter {
   // --- api tokens ---
   listApiTokens(productId: string): Promise<ApiToken[]>;
   createApiToken(productId: string, spec: CreateApiTokenSpec): Promise<CreatedApiToken>;
+  updateApiToken(productId: string, id: string, spec: UpdateApiTokenSpec): Promise<void>;
   deleteApiToken(productId: string, id: string): Promise<void>;
 
   // --- admin api tokens (product-optional) ---
@@ -651,6 +652,12 @@ export interface GuardrailAdapter {
   // --- global app email settings ---
   getAppEmailSettings(): Promise<AppEmailSettings>;
   updateAppEmailSettings(settings: AppEmailSettings): Promise<AppEmailSettings>;
+}
+
+export interface UpdateApiTokenSpec {
+  description: string;
+  isActive: boolean;
+  entitlements: string[];
 }
 
 export interface UpdateAdminApiTokenSpec {
