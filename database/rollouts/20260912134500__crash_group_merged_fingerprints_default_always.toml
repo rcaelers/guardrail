@@ -1,0 +1,24 @@
+id = "20260912134500__crash_group_merged_fingerprints_default_always"
+name = "crash_group_merged_fingerprints_default_always"
+source_schema_hash = "ce3760de86a6d4cc4b5fc8d9c606b06463a6bd24763d10cae46655731cd3f534"
+target_schema_hash = "0fc4957a0b3c6a840004c008ee0a4f337595d16f317cbd7b7149b67119b7aec7"
+compatibility = "phased"
+renames = []
+
+# Authored by hand, as for the obsolete status: a changed DEFAULT modifies
+# field:merged_fingerprints, which `rollout plan` refuses. Hashes from
+# surrealkit (rollout baseline + plan on each schema).
+
+[[steps]]
+id = "apply_expand_schema"
+phase = "start"
+kind = "apply_files"
+files = ["database/schema/guardrail.surql"]
+
+[[steps]]
+id = "rollback_expand_schema"
+phase = "rollback"
+kind = "run_sql"
+sql = """
+DEFINE FIELD OVERWRITE merged_fingerprints ON TABLE crash_groups TYPE array<string> DEFAULT [];
+"""
