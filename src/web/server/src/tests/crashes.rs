@@ -1728,6 +1728,10 @@ fn merge_rules_are_symmetric_and_refuse_conflicting_decisions() {
         ("resolved", "regressed", "regressed"),
         ("wontfix", "regressed", "regressed"),
         ("new", "new", "new"),
+        // Obsolete says nothing about the bug, so anything else wins.
+        ("obsolete", "new", "new"),
+        ("obsolete", "resolved", "resolved"),
+        ("obsolete", "obsolete", "obsolete"),
     ] {
         assert_eq!(merged_status(a, b), want, "{a} + {b}");
         assert_eq!(merged_status(b, a), want, "{b} + {a}");

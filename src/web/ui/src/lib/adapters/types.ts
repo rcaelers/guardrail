@@ -6,7 +6,7 @@
 //   - Product-scoped reads (crashes, symbols, members)
 //   - Admin writes (users, products)
 
-export type Status = 'new' | 'triaged' | 'resolved' | 'wontfix' | 'regressed';
+export type Status = 'new' | 'triaged' | 'resolved' | 'wontfix' | 'regressed' | 'obsolete';
 export type Signal = 'SIGSEGV' | 'SIGABRT' | 'panic' | 'SIGBUS' | 'OOM' | 'assertion' | string;
 export type Role = 'readonly' | 'readwrite' | 'maintainer';
 

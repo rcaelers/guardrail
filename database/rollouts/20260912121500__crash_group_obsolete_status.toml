@@ -1,0 +1,25 @@
+id = "20260912121500__crash_group_obsolete_status"
+name = "crash_group_obsolete_status"
+source_schema_hash = "da7ce280161b4a032fb55edaedf7014bcc945a338c6cd1804382f791ee7bb386"
+target_schema_hash = "ce3760de86a6d4cc4b5fc8d9c606b06463a6bd24763d10cae46655731cd3f534"
+compatibility = "phased"
+renames = []
+
+# Authored by hand: `rollout plan` refuses a modified entity, and widening the
+# status ASSERT modifies field:status. The hashes come from surrealkit itself
+# (rollout baseline + plan on each schema), not from hand computation.
+
+[[steps]]
+id = "apply_expand_schema"
+phase = "start"
+kind = "apply_files"
+files = ["database/schema/guardrail.surql"]
+
+[[steps]]
+id = "rollback_expand_schema"
+phase = "rollback"
+kind = "run_sql"
+sql = """
+DEFINE FIELD OVERWRITE status ON TABLE crash_groups TYPE string
+    ASSERT $value != NONE AND $value INSIDE ["new", "triaged", "resolved", "wontfix", "regressed"];
+"""

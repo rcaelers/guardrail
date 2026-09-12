@@ -2608,7 +2608,7 @@ async fn set_status(
         .map_err(access_err)?;
     if !matches!(
         body.status.as_str(),
-        "new" | "triaged" | "resolved" | "wontfix" | "regressed"
+        "new" | "triaged" | "resolved" | "wontfix" | "regressed" | "obsolete"
     ) {
         return Err(bad("unknown status"));
     }
@@ -2745,14 +2745,16 @@ pub(crate) fn merge_blocker(a: &MergeSide, b: &MergeSide) -> Option<String> {
 
 /// The status the merged group takes: the one that says more. A regression is
 /// evidence and beats everything; resolved and wontfix are decisions and beat
-/// triage; triage beats new. Resolved against wontfix never gets here, since
-/// `merge_blocker` refuses that pair.
+/// triage; triage beats new; obsolete says nothing about the bug at all -- its
+/// fingerprint can no longer occur -- so it yields even to new. Resolved
+/// against wontfix never gets here, since `merge_blocker` refuses that pair.
 pub(crate) fn merged_status<'a>(a: &'a str, b: &'a str) -> &'a str {
-    fn rank(status: &str) -> u8 {
+    fn rank(status: &str) -> i8 {
         match status {
             "regressed" => 3,
             "resolved" | "wontfix" => 2,
             "triaged" => 1,
+            "obsolete" => -1,
             _ => 0,
         }
     }

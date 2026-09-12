@@ -365,9 +365,12 @@ pub async fn set_group_status(
     Path(group_id): Path<String>,
     Json(body): Json<StatusBody>,
 ) -> Result<Json<Value>, ApiError> {
-    if !matches!(body.status.as_str(), "new" | "triaged" | "resolved" | "wontfix" | "regressed") {
+    if !matches!(
+        body.status.as_str(),
+        "new" | "triaged" | "resolved" | "wontfix" | "regressed" | "obsolete"
+    ) {
         return Err(ApiError::Failure(format!(
-            "invalid status '{}': expected new, triaged, resolved, wontfix or regressed",
+            "invalid status '{}': expected new, triaged, resolved, wontfix, regressed or obsolete",
             body.status
         )));
     }

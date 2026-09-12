@@ -8,7 +8,9 @@
     resolved: 'bg-signal-ok dark:bg-signal-okDark',
     wontfix: 'bg-ink-muted dark:bg-ink-mutedDark',
     // A fix that did not hold needs to read as loudly as a new crash.
-    regressed: 'bg-signal-danger dark:bg-signal-dangerDark'
+    regressed: 'bg-signal-danger dark:bg-signal-dangerDark',
+    // A fingerprint that can no longer occur; nothing to act on.
+    obsolete: 'bg-ink-muted/40 dark:bg-ink-mutedDark/40'
   };
 </script>
 

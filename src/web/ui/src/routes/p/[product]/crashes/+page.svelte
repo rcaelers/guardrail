@@ -347,7 +347,7 @@
       <Select
         label="Status"
         value={data.filters.status}
-        options={[['all', 'All'], ['new', 'New'], ['triaged', 'Triaged'], ['resolved', 'Resolved']]}
+        options={[['all', 'All'], ['new', 'New'], ['triaged', 'Triaged'], ['resolved', 'Resolved'], ['wontfix', "Won't fix"], ['regressed', 'Regressed'], ['obsolete', 'Obsolete']]}
         onChange={(v) => updateParam('status', v, true)}
       />
       <Select

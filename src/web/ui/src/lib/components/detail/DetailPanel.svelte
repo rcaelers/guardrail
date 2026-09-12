@@ -171,7 +171,7 @@
 
     <!-- Actions -->
     <div class="mt-4 flex flex-wrap gap-1.5">
-      {#each [['new', 'Mark new'], ['triaged', 'Triage'], ['resolved', 'Resolve'], ['wontfix', "Won't fix"]] as [s, label]}
+      {#each [['new', 'Mark new'], ['triaged', 'Triage'], ['resolved', 'Resolve'], ['wontfix', "Won't fix"], ['obsolete', 'Obsolete']] as [s, label]}
         {@const active = group.status === s}
         <button
           type="button"
