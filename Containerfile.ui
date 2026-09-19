@@ -2,7 +2,7 @@
 ## Builder
 ##
 
-FROM oven/bun:1-alpine AS builder
+FROM docker.io/oven/bun:1-alpine AS builder
 
 WORKDIR /build
 
@@ -16,7 +16,7 @@ RUN bun run build
 # Development
 #
 
-FROM oven/bun:1-alpine AS dev
+FROM docker.io/oven/bun:1-alpine AS dev
 
 WORKDIR /app
 
@@ -36,7 +36,7 @@ CMD ["sh", "-c", "while true; do bun run dev -- --host 0.0.0.0 --port 3000; echo
 # Runtime
 #
 
-FROM oven/bun:1-alpine
+FROM docker.io/oven/bun:1-alpine
 
 WORKDIR /app
 

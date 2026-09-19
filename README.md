@@ -129,6 +129,48 @@ GUARDRAIL_CARGO_BUILD_RUSTFLAGS='' \
   --parallel 1 -f deploy/docker-compose.yml up -d --build
 ```
 
+### Remote Podman
+
+The stack supports `podman compose` from a remote client, including macOS.
+Select a default Podman connection and use the Docker Compose provider. The
+engine host needs a running Podman API socket; for SSH connections, its
+non-interactive SSH environment must also provide `docker system dial-stdio`
+through Podman's Docker CLI compatibility package or a `docker` symlink to
+Podman. No Docker daemon is required.
+
+Keep the deployment files, generated secrets, and UI source on the engine
+host. In the **gitignored `deploy/.env`**, put the same credentials
+as that deployment's `deploy/.env`, then append the settings from
+`deploy/podman-compose.env.example`. Set `GUARDRAIL_DEPLOY_DIR` and
+`GUARDRAIL_UI_DIR` to their absolute paths on the engine host. Connection names,
+hostnames, and actual paths belong in local configuration, not tracked files.
+The secret generator preserves these Compose settings on subsequent runs.
+
+To also run from the repository root, create a gitignored root `.env` containing
+only this entry point; Compose loads the remaining settings from `deploy/.env`:
+
+```dotenv
+COMPOSE_FILE=deploy/docker-compose.yml:deploy/podman-compose.yml
+```
+
+From either the repository root or `deploy/`:
+
+```sh
+podman compose up -d --build
+podman compose ps
+podman compose logs -f
+podman compose down
+```
+
+Compose sends build contexts from the client checkout to the engine. Bind
+mounts still read files on the engine host, so update that copy when changing
+mounted configuration, setup scripts, or UI source. Named volumes and remote
+secrets are retained across `down`; `down -v` deletes the named volumes.
+
+The Podman overlay supplies rootless UID mappings and permits the unprivileged
+HTTP services to listen on port 80. Without the path overrides, the standard
+Compose file retains its original relative bind mounts for local Docker use.
+
 ## Web UI
 
 The SvelteKit UI under `src/web/ui/` talks to the backend through

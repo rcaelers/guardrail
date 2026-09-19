@@ -2,7 +2,7 @@
 ## Chef — Rust build image with cargo-chef installed
 ##
 
-FROM --platform=$BUILDPLATFORM rust:alpine3.23 AS chef
+FROM --platform=$BUILDPLATFORM docker.io/library/rust:alpine3.23 AS chef
 
 ARG CARGO_BUILD_JOBS=2
 ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
@@ -61,7 +61,7 @@ RUN --mount=type=cache,id=cargo-registry,target=/usr/local/cargo/registry,sharin
 ## SurrealKit — download pre-built binary via cargo-binstall
 ##
 
-FROM --platform=$BUILDPLATFORM alpine:3.23 AS surrealkit-downloader
+FROM --platform=$BUILDPLATFORM docker.io/library/alpine:3.23 AS surrealkit-downloader
 
 RUN apk add --no-cache ca-certificates curl
 
@@ -75,7 +75,7 @@ RUN /root/.cargo/bin/cargo-binstall --no-confirm --version 0.7.0 surrealkit
 ## Runtime: server — unified image for all backend roles
 ##
 
-FROM alpine:latest AS server
+FROM docker.io/library/alpine:latest AS server
 
 RUN apk add --no-cache openssl ca-certificates tzdata tini && \
     rm -rf /var/cache/apk/*
@@ -103,7 +103,7 @@ CMD ["/app/guardrail", "--help"]
 ## Runtime: schema sync
 ##
 
-FROM alpine:latest AS schema-sync
+FROM docker.io/library/alpine:latest AS schema-sync
 
 RUN apk add --no-cache openssl ca-certificates tzdata tini && \
     rm -rf /var/cache/apk/*

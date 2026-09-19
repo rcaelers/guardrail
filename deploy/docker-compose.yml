@@ -41,7 +41,7 @@ x-guardrail-service: &guardrail-service
 services:
   valkey:
     container_name: valkey
-    image: valkey/valkey:latest
+    image: docker.io/valkey/valkey:latest
     command: ['valkey-server', '--requirepass', '${VALKEY_PASSWORD}']
     ports:
       - 6379:6379
@@ -70,7 +70,7 @@ services:
 
   surrealdb:
     container_name: surrealdb
-    image: surrealdb/surrealdb:latest
+    image: docker.io/surrealdb/surrealdb:latest
     user: '0:0'
     ports:
       - 8000:8000
@@ -115,7 +115,7 @@ services:
   # something chowns them, and garage itself runs as uid 1000.
   garage-init:
     container_name: garage-init
-    image: busybox:stable
+    image: docker.io/library/busybox:stable
     user: '0:0'
     volumes:
       - garage-meta:/mnt/meta
@@ -130,7 +130,7 @@ services:
 
   garage:
     container_name: garage
-    image: dxflrs/garage:v2.3.0
+    image: docker.io/dxflrs/garage:v2.3.0
     user: '1000:1000'
     depends_on:
       garage-init:
@@ -138,10 +138,10 @@ services:
     volumes:
       - garage-meta:/var/lib/garage/meta
       - garage-data:/var/lib/garage/data
-      - ./garage.toml:/etc/garage.toml:ro
-      - ./_private/garage/rpc_secret:/etc/garage/secrets/rpc_secret:ro
-      - ./_private/garage/admin_token:/etc/garage/secrets/admin_token:ro
-      - ./_private/garage/metrics_token:/etc/garage/secrets/metrics_token:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/garage.toml:/etc/garage.toml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/garage/rpc_secret:/etc/garage/secrets/rpc_secret:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/garage/admin_token:/etc/garage/secrets/admin_token:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/garage/metrics_token:/etc/garage/secrets/metrics_token:ro
     ports:
       - '3900:3900' # S3 API
       - '3903:3903' # Admin API
@@ -158,7 +158,7 @@ services:
 
   garage-setup:
     container_name: garage-setup
-    image: curlimages/curl:8.22.0
+    image: docker.io/curlimages/curl:8.22.0
     depends_on:
       garage:
         condition: service_started
@@ -167,7 +167,7 @@ services:
       GARAGE_ACCESS_KEY: ${GARAGE_ACCESS_KEY}
       GARAGE_SECRET_KEY: ${GARAGE_SECRET_KEY}
     volumes:
-      - ./garage-setup.sh:/garage-setup.sh:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/garage-setup.sh:/garage-setup.sh:ro
     entrypoint: ['/bin/sh', '/garage-setup.sh']
     restart: 'no'
 
@@ -194,7 +194,7 @@ services:
     restart: unless-stopped
 
   pocket-id-setup:
-    image: alpine:3.24
+    image: docker.io/library/alpine:3.24
     container_name: pocket-id-setup
     depends_on:
       pocket-id:
@@ -219,9 +219,9 @@ services:
       # see dev/guardrail-auth-setup.sh.
       GUARDRAIL_OIDC_SECRET_FILE: /config-secrets/04-oidc-secret.yaml
     volumes:
-      - ./guardrail-auth-setup.sh:/guardrail-auth-setup.sh:ro
-      - ./_private/pocket-id:/bootstrap-output
-      - ./_private/config:/config-secrets
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/guardrail-auth-setup.sh:/guardrail-auth-setup.sh:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/pocket-id:/bootstrap-output
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config:/config-secrets
     entrypoint:
       - /bin/sh
       - -c
@@ -244,15 +244,15 @@ services:
     environment:
       RUST_LOG: info
     volumes:
-      - ./config/01-ingress.yaml:/config/01-ingress.yaml:ro
-      - ./config/01-database.yaml:/config/01-database.yaml:ro
-      - ./config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
-      - ./_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
-      - ./_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
-      - ./_private/config/04-jwk-secret.yaml:/config/04-jwk-secret.yaml:ro
-      - ./_private/config/04-oidc-secret.yaml:/config/04-oidc-secret.yaml:ro
-      - ./_private/config/05-provisioner-secret.yaml:/config/05-provisioner-secret.yaml:ro
-      - ./_private/config/06-database-secret.yaml:/config/06-database-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/config/01-ingress.yaml:/config/01-ingress.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/config/01-database.yaml:/config/01-database.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/04-jwk-secret.yaml:/config/04-jwk-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/04-oidc-secret.yaml:/config/04-oidc-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/05-provisioner-secret.yaml:/config/05-provisioner-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/06-database-secret.yaml:/config/06-database-secret.yaml:ro
     ports:
       - '8080:80'
     mem_limit: 512m
@@ -279,10 +279,10 @@ services:
     environment:
       RUST_LOG: info
     volumes:
-      - ./config/01-ingress.yaml:/config/01-ingress.yaml:ro
-      - ./config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
-      - ./_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
-      - ./_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/config/01-ingress.yaml:/config/01-ingress.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
     ports:
       - '8083:80'
     mem_limit: 256m
@@ -315,17 +315,17 @@ services:
     environment:
       RUST_LOG: info
     volumes:
-      - ./config/01-ingress.yaml:/config/01-ingress.yaml:ro
-      - ./config/01-database.yaml:/config/01-database.yaml:ro
-      - ./config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
-      - ./config/01-web.yaml:/config/01-web.yaml:ro
-      - ./_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
-      - ./_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
-      - ./_private/config/04-jwk-secret.yaml:/config/04-jwk-secret.yaml:ro
-      - ./_private/config/04-oidc-secret.yaml:/config/04-oidc-secret.yaml:ro
-      - ./_private/config/05-provisioner-secret.yaml:/config/05-provisioner-secret.yaml:ro
-      - ./_private/config/06-database-secret.yaml:/config/06-database-secret.yaml:ro
-      - ./_private/config/07-email-secret.yaml:/config/07-email-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/config/01-ingress.yaml:/config/01-ingress.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/config/01-database.yaml:/config/01-database.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/config/01-web.yaml:/config/01-web.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/04-jwk-secret.yaml:/config/04-jwk-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/04-oidc-secret.yaml:/config/04-oidc-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/05-provisioner-secret.yaml:/config/05-provisioner-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/06-database-secret.yaml:/config/06-database-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/07-email-secret.yaml:/config/07-email-secret.yaml:ro
     ports:
       - '8082:80'
     mem_limit: 512m
@@ -356,12 +356,12 @@ services:
     environment:
       RUST_LOG: 'guardrail=debug,apalis=debug,apalis_redis=debug'
     volumes:
-      - ./config/01-database.yaml:/config/01-database.yaml:ro
-      - ./config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
-      - ./_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
-      - ./_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
-      - ./_private/config/04-jwk-secret.yaml:/config/04-jwk-secret.yaml:ro
-      - ./_private/config/06-database-secret.yaml:/config/06-database-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/config/01-database.yaml:/config/01-database.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/04-jwk-secret.yaml:/config/04-jwk-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/06-database-secret.yaml:/config/06-database-secret.yaml:ro
     ports:
       - '9095:9090'
     mem_limit: 256m
@@ -388,11 +388,11 @@ services:
     environment:
       RUST_LOG: 'guardrail=debug,apalis=debug,apalis_redis=debug'
     volumes:
-      - ./config/01-database.yaml:/config/01-database.yaml:ro
-      - ./config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
-      - ./_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
-      - ./_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
-      - ./_private/config/06-database-secret.yaml:/config/06-database-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/config/01-database.yaml:/config/01-database.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/config/01-object-storage.yaml:/config/01-object-storage.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/02-valkey-secret.yaml:/config/02-valkey-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/03-object-storage-secret.yaml:/config/03-object-storage-secret.yaml:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/config/06-database-secret.yaml:/config/06-database-secret.yaml:ro
     ports:
       - '9096:9090'
     mem_limit: 512m
@@ -408,7 +408,7 @@ services:
       retries: 5
 
   caddy:
-    image: caddy:2
+    image: docker.io/library/caddy:2
     container_name: caddy
     depends_on:
       pocket-id:
@@ -425,9 +425,9 @@ services:
       - '1443:1443'
       - '4433:4433'
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./_private/certs/guardrail.home.krandor.org.crt:/certs/guardrail.home.krandor.org.crt:ro
-      - ./_private/certs/guardrail.home.krandor.org.key:/certs/guardrail.home.krandor.org.key:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/certs/guardrail.home.krandor.org.crt:/certs/guardrail.home.krandor.org.crt:ro
+      - ${GUARDRAIL_DEPLOY_DIR:-.}/_private/certs/guardrail.home.krandor.org.key:/certs/guardrail.home.krandor.org.key:ro
       - caddy-data:/data
       - caddy-config:/config
     restart: unless-stopped
@@ -449,7 +449,7 @@ services:
       # changes reliable on Docker Desktop filesystems.
       CHOKIDAR_USEPOLLING: 'true'
     volumes:
-      - ../src/web/ui:/app
+      - ${GUARDRAIL_UI_DIR:-../src/web/ui}:/app
       - svelte-node-modules:/app/node_modules
       - svelte-kit:/app/.svelte-kit
     restart: unless-stopped

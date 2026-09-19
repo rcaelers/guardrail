@@ -1,0 +1,27 @@
+# Rootless Podman overlay for the standard Compose stack.
+# Map the invoking user to the service UID so mode-0600 bind-mounted secrets
+# remain readable without changing their ownership or opening permissions.
+x-guardrail-user: &guardrail-user
+  userns_mode: keep-id:uid=1000,gid=1000
+  user: '1000:1000'
+  image: localhost/guardrail-dev-server
+  # Docker sets this automatically; Podman defaults to 1024. The HTTP roles
+  # listen on port 80 as UID 1000 with all capabilities dropped.
+  sysctls:
+    net.ipv4.ip_unprivileged_port_start: '0'
+
+services:
+  guardrail-api:
+    <<: *guardrail-user
+  guardrail-web:
+    <<: *guardrail-user
+  guardrail-ingestion:
+    <<: *guardrail-user
+  guardrail-curator:
+    <<: *guardrail-user
+  guardrail-processor:
+    <<: *guardrail-user
+  garage-init:
+    userns_mode: keep-id:uid=1000,gid=1000
+  garage:
+    userns_mode: keep-id:uid=1000,gid=1000
