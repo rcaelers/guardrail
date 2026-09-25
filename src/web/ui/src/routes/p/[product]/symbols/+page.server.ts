@@ -53,9 +53,30 @@ export const actions: Actions = {
     const { role } = await requireProductAccess(locals.user, params.product!, adapter);
     if (role !== 'maintainer') throw error(403, 'Only maintainers can delete symbols');
     const form = await request.formData();
-    const id = String(form.get('id') ?? '');
-    if (!id) return fail(400, { error: 'missing id' });
-    await adapter.deleteSymbol(id);
-    return { ok: true };
+    const ids = [...new Set([
+      ...form.getAll('symbol').map((value) => String(value)),
+      String(form.get('id') ?? '')
+    ].filter(Boolean))];
+    if (ids.length === 0) return fail(400, { error: 'Select at least one symbol.' });
+
+    let deleted = 0;
+    const failures: string[] = [];
+    const concurrency = 16;
+    for (let offset = 0; offset < ids.length; offset += concurrency) {
+      const chunk = ids.slice(offset, offset + concurrency);
+      const results = await Promise.allSettled(chunk.map((id) => adapter.deleteSymbol(id)));
+      for (let index = 0; index < results.length; index += 1) {
+        if (results[index].status === 'fulfilled') deleted += 1;
+        else failures.push(chunk[index]);
+      }
+    }
+
+    if (failures.length > 0) {
+      return fail(502, {
+        error: `Deleted ${deleted} symbol${deleted === 1 ? '' : 's'}, but ${failures.length} could not be deleted.`,
+        deleted
+      });
+    }
+    return { ok: true, deleted };
   }
 };

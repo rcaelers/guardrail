@@ -2,18 +2,33 @@
   import { enhance } from '$app/forms';
   import { goto } from '$app/navigation';
   import { page } from '$app/stores';
-  import type { PageData } from './$types';
+  import type { PageProps } from './$types';
   import Select from '$lib/components/Select.svelte';
   import { fmtDate } from '$lib/utils/format';
   import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+  import RowSelectionMenu from '$lib/components/RowSelectionMenu.svelte';
 
-  let { data }: { data: PageData } = $props();
+  let { data, form }: PageProps = $props();
 
   const canUpload = $derived(data.role === 'readwrite' || data.role === 'maintainer');
   const canDelete = $derived(data.role === 'maintainer');
-  let pendingConfirm = $state<{ message: string; confirmLabel: string; form: HTMLFormElement } | null>(null);
+  let selected = $state<string[]>([]);
+  let lastSelectedIndex = $state<number | null>(null);
+  let dragging = $state(false);
+  let dragChecked = $state(false);
+  let selectionMenu = $state<{ x: number; y: number; index: number } | null>(null);
+  let deleteIds = $state<string[]>([]);
+  let deleteForm = $state<HTMLFormElement>();
+  let deleting = $state(false);
+  let pendingConfirm = $state<{ message: string; confirmLabel: string } | null>(null);
+
+  const selectedSet = $derived(new Set(selected));
+  const allSelected = $derived(data.symbols.length > 0 && data.symbols.every((symbol) => selected.includes(symbol.id)));
 
   async function updateParam(key: string, value: string) {
+    selected = [];
+    lastSelectedIndex = null;
+    selectionMenu = null;
     const url = new URL($page.url);
     if (!value || value === 'all' || value === '') url.searchParams.delete(key);
     else url.searchParams.set(key, value);
@@ -29,13 +44,148 @@
   function uploaderName(id: string) {
     return data.uploaders.find((u) => u.id === id)?.name ?? id;
   }
+
+  function updateSelection(values: string[], checked: boolean) {
+    const next = new Set(selected);
+    for (const value of values) {
+      if (checked) next.add(value);
+      else next.delete(value);
+    }
+    selected = [...next];
+  }
+
+  function toggleAt(index: number, checked: boolean, range: boolean) {
+    const symbol = data.symbols[index];
+    if (!symbol || !canDelete) return;
+
+    if (range && lastSelectedIndex !== null) {
+      const start = Math.min(lastSelectedIndex, index);
+      const end = Math.max(lastSelectedIndex, index);
+      updateSelection(data.symbols.slice(start, end + 1).map((item) => item.id), checked);
+    } else {
+      updateSelection([symbol.id], checked);
+    }
+    lastSelectedIndex = index;
+  }
+
+  function beginPointerSelection(event: PointerEvent, index: number) {
+    const symbol = data.symbols[index];
+    if (event.button !== 0 || !symbol || !canDelete) return;
+    event.preventDefault();
+    event.currentTarget instanceof HTMLElement && event.currentTarget.focus();
+
+    const checked = !selectedSet.has(symbol.id);
+    toggleAt(index, checked, event.shiftKey);
+    if (!event.shiftKey) {
+      dragging = true;
+      dragChecked = checked;
+    }
+  }
+
+  function extendPointerSelection(index: number) {
+    if (dragging) toggleAt(index, dragChecked, false);
+  }
+
+  function endPointerSelection() {
+    dragging = false;
+  }
+
+  function handleCheckboxChange(event: Event, index: number) {
+    const input = event.currentTarget as HTMLInputElement;
+    const symbol = data.symbols[index];
+    if (symbol && input.checked !== selectedSet.has(symbol.id)) {
+      toggleAt(index, input.checked, false);
+    }
+  }
+
+  function toggleAll(checked: boolean) {
+    selected = checked ? data.symbols.map((symbol) => symbol.id) : [];
+    lastSelectedIndex = null;
+  }
+
+  function openSelectionMenu(event: MouseEvent, index: number) {
+    if (!canDelete || !data.symbols[index]) return;
+    event.preventDefault();
+    const padding = 8;
+    selectionMenu = {
+      x: Math.max(padding, Math.min(event.clientX, window.innerWidth - 210 - padding)),
+      y: Math.max(padding, Math.min(event.clientY, window.innerHeight - 88 - padding)),
+      index
+    };
+  }
+
+  function selectNearby(index: number) {
+    const anchor = data.symbols[index];
+    if (!anchor || !canDelete) return;
+    const anchorTime = Date.parse(anchor.uploadedAt);
+    if (!Number.isFinite(anchorTime)) return;
+    const fiveMinutes = 5 * 60 * 1000;
+    updateSelection(
+      data.symbols
+        .filter((symbol) => {
+          const time = Date.parse(symbol.uploadedAt);
+          return Number.isFinite(time) && Math.abs(time - anchorTime) <= fiveMinutes;
+        })
+        .map((symbol) => symbol.id),
+      true
+    );
+    lastSelectedIndex = index;
+  }
+
+  function selectSameVersion(index: number) {
+    const anchor = data.symbols[index];
+    if (!anchor?.version || !canDelete) return;
+    updateSelection(
+      data.symbols.filter((symbol) => symbol.version === anchor.version).map((symbol) => symbol.id),
+      true
+    );
+    lastSelectedIndex = index;
+  }
+
+  function requestDelete(ids: string[], message: string) {
+    deleteIds = ids;
+    pendingConfirm = { message, confirmLabel: ids.length === 1 ? 'Delete' : `Delete ${ids.length}` };
+  }
+
+  function requestBulkDelete() {
+    const ids = [...selected];
+    if (ids.length === 0) return;
+    const selectedSymbols = data.symbols.filter((symbol) => selectedSet.has(symbol.id));
+    const referencedBy = selectedSymbols.reduce((total, symbol) => total + symbol.referencedBy, 0);
+    const references = referencedBy > 0
+      ? ` They are referenced by ${referencedBy} crash group${referencedBy === 1 ? '' : 's'}.`
+      : '';
+    requestDelete(
+      ids,
+      `Delete ${ids.length} selected symbol${ids.length === 1 ? '' : 's'}?${references} This cannot be undone.`
+    );
+  }
 </script>
+
+<svelte:window onpointerup={endPointerSelection} onpointercancel={endPointerSelection} />
+
+{#if selectionMenu}
+  <RowSelectionMenu
+    x={selectionMenu.x}
+    y={selectionMenu.y}
+    version={data.symbols[selectionMenu.index]?.version ?? ''}
+    onselectnearby={() => selectNearby(selectionMenu!.index)}
+    onselectsameversion={() => selectSameVersion(selectionMenu!.index)}
+    onclose={() => (selectionMenu = null)}
+  />
+{/if}
 
 {#if pendingConfirm}
   <ConfirmDialog
     message={pendingConfirm.message}
     confirmLabel={pendingConfirm.confirmLabel}
-    onconfirm={() => { pendingConfirm!.form.requestSubmit(); pendingConfirm = null; }}
+    onconfirm={() => {
+      pendingConfirm = null;
+      if (deleteForm) {
+        deleting = true;
+        deleteForm.requestSubmit();
+      }
+    }}
     oncancel={() => (pendingConfirm = null)}
   />
 {/if}
@@ -69,9 +219,22 @@
       onChange={(v) => updateParam('sort', v)}
     />
     <span class="flex-1"></span>
+    {#if canDelete}
+      <span class="text-[11.5px] text-ink-muted dark:text-ink-mutedDark">
+        Shift-click or drag to select; right-click a row for grouping options
+      </span>
+    {/if}
     <span class="text-xs text-ink-muted dark:text-ink-mutedDark">
       {data.symbols.length} symbol{data.symbols.length === 1 ? '' : 's'}
     </span>
+    {#if canDelete}
+      <button
+        type="button"
+        disabled={selected.length === 0 || deleting}
+        class="rounded-md border border-red-500/50 px-3 py-1.5 text-[13px] font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-400"
+        onclick={requestBulkDelete}
+      >{deleting ? 'Deleting…' : `Delete selected (${selected.length})`}</button>
+    {/if}
     {#if canUpload}
       <button
         type="button"
@@ -120,11 +283,56 @@
     </form>
   {/if}
 
+  {#if form?.error}
+    <div class="shrink-0 border-b border-red-500/30 bg-red-500/10 px-5 py-2.5 text-[12.5px] text-red-700 dark:text-red-400">
+      {form.error}
+    </div>
+  {:else if form?.deleted !== undefined}
+    <div class="shrink-0 border-b border-accent/30 bg-accent-soft px-5 py-2.5 text-[12.5px] text-accent dark:bg-accent-softDark">
+      Deleted {form.deleted} symbol{form.deleted === 1 ? '' : 's'}.
+    </div>
+  {/if}
+
+  {#if canDelete}
+    <form
+      method="POST"
+      action="?/delete"
+      bind:this={deleteForm}
+      use:enhance={() => {
+        const submittedIds = new Set(deleteIds);
+        return async ({ result, update }) => {
+          try {
+            await update();
+            if (result.type === 'success') {
+              selected = selected.filter((id) => !submittedIds.has(id));
+              lastSelectedIndex = null;
+              deleteIds = [];
+            }
+          } finally {
+            deleting = false;
+          }
+        };
+      }}
+      class="hidden"
+    >
+      {#each deleteIds as id}<input type="hidden" name="symbol" value={id} />{/each}
+    </form>
+  {/if}
+
   <!-- Header -->
   <div
     class="grid shrink-0 items-center gap-4 border-b border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark px-5 py-2 text-[10.5px] font-medium uppercase tracking-wider text-ink-muted dark:text-ink-mutedDark"
-    style:grid-template-columns="1.3fr 80px 100px 1fr 90px 80px 1.2fr 180px 1fr 100px"
+    style:grid-template-columns="28px 1.3fr 80px 100px 1fr 90px 80px 1.2fr 180px 1fr 100px"
   >
+    {#if canDelete}
+      <input
+        type="checkbox"
+        aria-label="Select all symbols"
+        checked={allSelected}
+        disabled={data.symbols.length === 0 || deleting}
+        onchange={(event) => toggleAll(event.currentTarget.checked)}
+      />
+    {:else}<span></span>{/if}
     <span>Module</span>
     <span>Version</span>
     <span>Channel</span>
@@ -139,11 +347,29 @@
 
   <!-- Rows -->
   <div class="scroll-clean min-h-0 flex-1 overflow-auto">
-    {#each data.symbols as s (s.id)}
+    {#each data.symbols as s, index (s.id)}
       <div
+        role="row"
+        tabindex="-1"
         class="grid items-center gap-4 border-b border-line dark:border-line-dark px-5 py-2.5 text-[13px] hover:bg-surface-panel dark:hover:bg-surface-panelDark"
-        style:grid-template-columns="1.3fr 80px 100px 1fr 90px 80px 1.2fr 180px 1fr 100px"
+        style:grid-template-columns="28px 1.3fr 80px 100px 1fr 90px 80px 1.2fr 180px 1fr 100px"
+        oncontextmenu={(event) => openSelectionMenu(event, index)}
       >
+        {#if canDelete}
+          <input
+            type="checkbox"
+            value={s.id}
+            aria-label={`Select ${s.name} ${s.version}`}
+            checked={selected.includes(s.id)}
+            disabled={deleting}
+            class="cursor-pointer disabled:cursor-not-allowed"
+            title="Shift-click to select a range, or hold and drag across checkboxes"
+            onpointerdown={(event) => beginPointerSelection(event, index)}
+            onpointerenter={() => extendPointerSelection(index)}
+            onclick={(event) => event.detail > 0 && event.preventDefault()}
+            onchange={(event) => handleCheckboxChange(event, index)}
+          />
+        {:else}<span></span>{/if}
         <div class="min-w-0 truncate">
           <div class="truncate font-mono text-[12.5px] text-ink dark:text-ink-dark">{s.name}</div>
           <div class="truncate text-[10.5px] text-ink-muted dark:text-ink-mutedDark">{s.size}</div>
@@ -163,14 +389,12 @@
         <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">{s.referencedBy} crash group{s.referencedBy === 1 ? '' : 's'}</div>
         <div class="flex justify-end">
           {#if canDelete}
-            <form method="POST" action="?/delete" use:enhance>
-              <input type="hidden" name="id" value={s.id} />
-              <button
-                type="button"
-                class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark hover:text-red-600"
-                onclick={(e) => { pendingConfirm = { message: `Delete ${s.name} (${s.version})?`, confirmLabel: 'Delete', form: (e.currentTarget as HTMLElement).closest('form')! }; }}
-              >Delete</button>
-            </form>
+            <button
+              type="button"
+              disabled={deleting}
+              class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[11.5px] text-ink-muted dark:text-ink-mutedDark hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-40"
+              onclick={() => requestDelete([s.id], `Delete ${s.name} (${s.version})?`)}
+            >Delete</button>
           {/if}
         </div>
       </div>

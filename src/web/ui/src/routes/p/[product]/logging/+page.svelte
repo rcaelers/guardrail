@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import type { PageProps } from './$types';
+  import RowSelectionMenu from '$lib/components/RowSelectionMenu.svelte';
   import { fmtDate } from '$lib/utils/format';
 
   let { data, form }: PageProps = $props();
@@ -9,14 +10,11 @@
   let lastSelectedIndex = $state<number | null>(null);
   let dragging = $state(false);
   let dragChecked = $state(false);
+  let selectionMenu = $state<{ x: number; y: number; index: number } | null>(null);
 
   const retryable = $derived(data.importLogs.filter((entry) => entry.retryable));
   const selectedSet = $derived(new Set(selected));
   const allSelected = $derived(retryable.length > 0 && retryable.every((entry) => selected.includes(key(entry))));
-  const nearbyAnchor = $derived(lastSelectedIndex === null ? null : data.importLogs[lastSelectedIndex]);
-  const canSelectNearby = $derived(
-    nearbyAnchor !== null && nearbyAnchor.retryable && selectedSet.has(key(nearbyAnchor))
-  );
 
   function key(entry: { kind: string; id: string }): string {
     return `${entry.kind}:${entry.id}`;
@@ -84,20 +82,44 @@
     lastSelectedIndex = null;
   }
 
-  function selectNearby() {
-    if (!nearbyAnchor) return;
+  function openSelectionMenu(event: MouseEvent, index: number) {
+    if (!data.importLogs[index]?.retryable) return;
+    event.preventDefault();
+    const padding = 8;
+    selectionMenu = {
+      x: Math.max(padding, Math.min(event.clientX, window.innerWidth - 210 - padding)),
+      y: Math.max(padding, Math.min(event.clientY, window.innerHeight - 88 - padding)),
+      index
+    };
+  }
+
+  function selectNearby(index: number) {
+    const nearbyAnchor = data.importLogs[index];
+    if (!nearbyAnchor?.retryable) return;
     const anchorTime = Date.parse(nearbyAnchor.lastFailedAt);
     if (!Number.isFinite(anchorTime)) return;
     const fiveMinutes = 5 * 60 * 1000;
     const values = data.importLogs
       .filter((entry) => {
         if (!entry.retryable || entry.kind !== nearbyAnchor.kind) return false;
-        if (nearbyAnchor.version && entry.version !== nearbyAnchor.version) return false;
         const time = Date.parse(entry.lastFailedAt);
         return Number.isFinite(time) && Math.abs(time - anchorTime) <= fiveMinutes;
       })
       .map(key);
     updateSelection(values, true);
+    lastSelectedIndex = index;
+  }
+
+  function selectSameVersion(index: number) {
+    const anchor = data.importLogs[index];
+    if (!anchor?.retryable || !anchor.version) return;
+    updateSelection(
+      data.importLogs
+        .filter((entry) => entry.retryable && entry.kind === anchor.kind && entry.version === anchor.version)
+        .map(key),
+      true
+    );
+    lastSelectedIndex = index;
   }
 
   function statusClass(status: string): string {
@@ -108,25 +130,29 @@
 
 <svelte:window onpointerup={endPointerSelection} onpointercancel={endPointerSelection} />
 
+{#if selectionMenu}
+  <RowSelectionMenu
+    x={selectionMenu.x}
+    y={selectionMenu.y}
+    version={data.importLogs[selectionMenu.index]?.version ?? ''}
+    onselectnearby={() => selectNearby(selectionMenu!.index)}
+    onselectsameversion={() => selectSameVersion(selectionMenu!.index)}
+    onclose={() => (selectionMenu = null)}
+  />
+{/if}
+
 <div class="flex h-full min-h-0 flex-col">
   <div class="flex shrink-0 flex-wrap items-center gap-3 border-b border-line px-5 py-3 dark:border-line-dark">
     <div>
       <div class="text-[14px] font-semibold">Import logging</div>
       <div class="text-[11.5px] text-ink-muted dark:text-ink-mutedDark">
-        Shift-click for a range, or drag across checkboxes
+        Shift-click or drag to select; right-click a row for grouping options
       </div>
     </div>
     <span class="flex-1"></span>
     <span class="text-xs text-ink-muted dark:text-ink-mutedDark">
       {data.importLogs.length} issue{data.importLogs.length === 1 ? '' : 's'}
     </span>
-    <button
-      type="button"
-      disabled={!canSelectNearby || busy !== null}
-      title="Select retryable imports of the same type and version within five minutes of the last selected import"
-      class="rounded-md border border-line px-3 py-1.5 text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-40 dark:border-line-dark"
-      onclick={selectNearby}
-    >Select nearby</button>
     <button
       type="submit"
       form="retry-imports"
@@ -211,8 +237,11 @@
       {#each data.importLogs as entry, index (key(entry))}
         {@const value = key(entry)}
         <div
+          role="row"
+          tabindex="-1"
           class="grid items-center gap-4 border-b border-line px-5 py-3 text-[13px] hover:bg-surface-panel dark:border-line-dark dark:hover:bg-surface-panelDark"
           style:grid-template-columns="28px 82px 72px minmax(160px,0.8fr) 110px minmax(240px,1.5fr) 70px 140px"
+          oncontextmenu={(event) => openSelectionMenu(event, index)}
         >
           <input
             type="checkbox"
