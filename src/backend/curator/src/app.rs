@@ -96,7 +96,7 @@ impl GuardrailCuratorApp {
         .await;
 
         let store = common::init_s3_object_store(&settings.object_storage).await;
-        let repo = Repo::new(db);
+        let repo = Arc::new(Repo::new(db));
         let state = AppState::new(repo, settings, store);
 
         Self {

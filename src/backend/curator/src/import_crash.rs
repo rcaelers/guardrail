@@ -21,7 +21,7 @@ use repos::{
 
 pub struct ImportCrashProcessor {
     storage: Arc<dyn ObjectStore>,
-    repo: Repo,
+    repo: Arc<Repo>,
 }
 
 impl ImportCrashProcessor {
@@ -743,7 +743,7 @@ mod tests {
             .unwrap();
         let processor = ImportCrashProcessor {
             storage: storage.clone(),
-            repo: memory_repo().await,
+            repo: Arc::new(memory_repo().await),
         };
 
         let bytes = processor.get_processed_crash("crash-1").await.unwrap();
@@ -767,7 +767,7 @@ mod tests {
             .unwrap();
         let processor = ImportCrashProcessor {
             storage: storage.clone(),
-            repo: memory_repo().await,
+            repo: Arc::new(memory_repo().await),
         };
 
         processor

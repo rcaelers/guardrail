@@ -15,7 +15,7 @@ use repos::symbols::SymbolsRepo;
 
 pub struct ImportSymbolProcessor {
     storage: Arc<dyn ObjectStore>,
-    repo: repos::Repo,
+    repo: Arc<repos::Repo>,
 }
 
 impl ImportSymbolProcessor {
@@ -164,7 +164,7 @@ mod tests {
             .unwrap();
         let processor = ImportSymbolProcessor {
             storage: storage.clone(),
-            repo: memory_repo().await,
+            repo: Arc::new(memory_repo().await),
         };
 
         let bytes = processor.get_processed_symbol("upload-1").await.unwrap();
@@ -188,7 +188,7 @@ mod tests {
             .unwrap();
         let processor = ImportSymbolProcessor {
             storage: storage.clone(),
-            repo: memory_repo().await,
+            repo: Arc::new(memory_repo().await),
         };
 
         processor
