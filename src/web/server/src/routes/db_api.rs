@@ -2992,6 +2992,13 @@ fn safe_import_id(id: &str) -> bool {
     !id.is_empty() && id.len() <= 128 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
 }
 
+fn delete_error_is_not_found(error: &object_store::Error) -> bool {
+    matches!(error, object_store::Error::NotFound { .. })
+        // Garage returns a missing key from S3 DeleteObjects as a generic
+        // error instead of the object_store NotFound variant.
+        || error.to_string().contains("code: NoSuchKey")
+}
+
 async fn retry_imports(
     State(s): State<AppState>,
     session: Session,
@@ -3075,7 +3082,7 @@ async fn delete_imports(
         // retried or deleted again.
         for path in [&failure_path, &source_path] {
             if let Err(error) = s.storage.delete(&ObjectPath::from(path.as_str())).await
-                && !matches!(error, object_store::Error::NotFound { .. })
+                && !delete_error_is_not_found(&error)
             {
                 return Err(server_error(format!("delete {path}: {error}")));
             }
@@ -3714,6 +3721,24 @@ mod tests {
             access_err(crate::error::AppError::failure("bad")),
             (StatusCode::INTERNAL_SERVER_ERROR, "internal error".to_string())
         );
+    }
+
+    #[test]
+    fn garage_no_such_key_is_treated_as_an_idempotent_delete() {
+        let error = object_store::Error::Generic {
+            store: "S3",
+            source: Box::new(std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                "DeleteObjects request failed: Key not found (code: NoSuchKey)",
+            )),
+        };
+        assert!(delete_error_is_not_found(&error));
+
+        let error = object_store::Error::Generic {
+            store: "S3",
+            source: Box::new(std::io::Error::other("connection reset")),
+        };
+        assert!(!delete_error_is_not_found(&error));
     }
 
     #[test]
