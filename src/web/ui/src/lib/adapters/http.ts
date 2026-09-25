@@ -31,6 +31,7 @@ import type {
   GuardrailAdapter, Crash, CrashGroup, GroupCrashesResult, ListQuery, ListResult, Note, Status,
   User, Product, Role, MembershipWithUser, MembershipWithProduct,
   Symbol as SymbolRow, SymbolQuery,
+  ImportLogEntry, RetryImportRef,
   Invitation, CreateInvitationSpec, UpdateInvitationSpec,
   ApiToken, CreatedApiToken, CreateApiTokenSpec, CreateAdminApiTokenSpec, UpdateAdminApiTokenSpec, EntitlementDef,
   ProductEmailSettings, AppEmailSettings,
@@ -400,6 +401,16 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     async deleteSymbol(id) {
       const r = await jdel(`/symbols/${encodeURIComponent(id)}`);
       await assertOk(r, 'deleteSymbol');
+    },
+
+    // --- import failures ---
+    async listImportLogs(productId) {
+      const r = await req(`/products/${encodeURIComponent(productId)}/import-logs`);
+      return json<ImportLogEntry[]>(r, 'listImportLogs');
+    },
+    async retryImports(productId, imports: RetryImportRef[]) {
+      const r = await jpost(`/products/${encodeURIComponent(productId)}/import-logs`, { imports });
+      return json<{ queued: number }>(r, 'retryImports');
     },
 
     // --- api tokens ---

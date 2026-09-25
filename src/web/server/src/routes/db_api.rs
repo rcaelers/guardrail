@@ -18,12 +18,17 @@ use axum::{
     response::Response,
     routing::{delete, get, patch, post},
 };
-use chrono::Utc;
-use object_store::{ObjectStoreExt, path::Path as ObjectPath};
+use chrono::{Duration, Utc};
+use common::import_failure::{
+    ACTIVE_IMPORT_RETRY_SECONDS, ImportFailure, ImportFailureStatus, ImportKind,
+    STALLED_IMPORT_AGE_SECONDS,
+};
 use data::crash_group::{MergeSide, merge_blocker};
+use futures::StreamExt;
+use object_store::{ObjectStoreExt, path::Path as ObjectPath};
 use repos::crash_group::{CrashGroupRepo, MergeError};
 use repos::user::avatar_initials;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
@@ -78,6 +83,7 @@ pub fn router() -> Router<AppState> {
         .route("/products/{pid}/members", get(list_members))
         .route("/products/{pid}/members/{uid}", post(grant_access).delete(revoke_access))
         .route("/products/{pid}/symbols", get(list_symbols).post(upload_symbol))
+        .route("/products/{pid}/import-logs", get(list_import_logs).post(retry_imports))
         .route("/symbols/{id}", delete(delete_symbol))
         .route("/users", get(list_users).post(create_user))
         .route("/users/{id}", get(get_user).post(update_user).delete(delete_user))
@@ -2759,6 +2765,252 @@ async fn merge_groups(
         })?;
     Ok(StatusCode::NO_CONTENT)
 }
+
+// --------------------------------------------------------------------
+// import logging and retry
+// --------------------------------------------------------------------
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportLogEntry {
+    id: String,
+    kind: ImportKind,
+    product_id: String,
+    subject: String,
+    status: String,
+    error: String,
+    attempts: u32,
+    first_failed_at: String,
+    last_failed_at: String,
+    retryable: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RetryImportRef {
+    id: String,
+    kind: ImportKind,
+}
+
+#[derive(Deserialize)]
+struct RetryImportsBody {
+    imports: Vec<RetryImportRef>,
+}
+
+async fn read_storage_json(
+    storage: &Arc<dyn object_store::ObjectStore>,
+    path: &str,
+) -> Result<Value, (StatusCode, String)> {
+    let object = storage
+        .get(&ObjectPath::from(path))
+        .await
+        .map_err(|error| server_error(format!("read {path}: {error}")))?;
+    let bytes = object
+        .bytes()
+        .await
+        .map_err(|error| server_error(format!("read {path}: {error}")))?;
+    serde_json::from_slice(&bytes).map_err(|error| server_error(format!("parse {path}: {error}")))
+}
+
+fn import_context(kind: ImportKind, id: &str, value: &Value) -> Option<(String, String)> {
+    let (product_id, subject) = match kind {
+        ImportKind::Crash => (
+            value["crash_info"]["product_id"].as_str(),
+            value["report"]["title"].as_str().unwrap_or(id),
+        ),
+        ImportKind::Symbol => {
+            (value["product_id"].as_str(), value["module_id"].as_str().unwrap_or(id))
+        }
+    };
+    product_id
+        .filter(|value| !value.is_empty())
+        .map(|product_id| (product_id.to_string(), subject.to_string()))
+}
+
+fn import_object_id(path: &ObjectPath) -> Option<String> {
+    path.to_string()
+        .rsplit('/')
+        .next()
+        .and_then(|name| name.strip_suffix(".json"))
+        .filter(|id| !id.is_empty())
+        .map(str::to_string)
+}
+
+fn import_retry_active(failure: &ImportFailure, now: chrono::DateTime<Utc>) -> bool {
+    let Ok(last_failure) = chrono::DateTime::parse_from_rfc3339(&failure.last_failed_at) else {
+        return false;
+    };
+    let last_failure = last_failure.with_timezone(&Utc);
+    let grace = match failure.status {
+        // Curator's automatic retry policy finishes in roughly 30 seconds.
+        ImportFailureStatus::Failed => ACTIVE_IMPORT_RETRY_SECONDS,
+        // Manual retries get longer in case the worker queue is briefly backed up.
+        ImportFailureStatus::Retrying => STALLED_IMPORT_AGE_SECONDS,
+    };
+    last_failure > now - Duration::seconds(grace)
+}
+
+async fn import_failures(
+    storage: &Arc<dyn object_store::ObjectStore>,
+    product_id: &str,
+) -> Result<Vec<ImportLogEntry>, (StatusCode, String)> {
+    let mut failures = HashMap::<(ImportKind, String), ImportFailure>::new();
+    let mut failure_stream = storage.list(Some(&ObjectPath::from("import-failures/")));
+    while let Some(result) = failure_stream.next().await {
+        let meta =
+            result.map_err(|error| server_error(format!("list import failures: {error}")))?;
+        let path = meta.location.to_string();
+        match read_storage_json(storage, &path).await {
+            Ok(value) => match serde_json::from_value::<ImportFailure>(value) {
+                Ok(failure) => {
+                    failures.insert((failure.kind, failure.id.clone()), failure);
+                }
+                Err(error) => {
+                    tracing::error!(path, error = %error, "Invalid import failure marker")
+                }
+            },
+            Err((_, error)) => tracing::error!(path, error, "Failed to read import failure marker"),
+        }
+    }
+
+    let product_key = repos::record_key(product_id);
+    let now = Utc::now();
+    let stalled_before = now - Duration::seconds(STALLED_IMPORT_AGE_SECONDS);
+    let mut entries = Vec::new();
+    for (kind, prefix) in [
+        (ImportKind::Crash, "processed-crashes/"),
+        (ImportKind::Symbol, "processed-symbols/"),
+    ] {
+        let mut source_stream = storage.list(Some(&ObjectPath::from(prefix)));
+        while let Some(result) = source_stream.next().await {
+            let meta = result.map_err(|error| server_error(format!("list {prefix}: {error}")))?;
+            let Some(id) = import_object_id(&meta.location) else {
+                continue;
+            };
+            let path = meta.location.to_string();
+            let source = match read_storage_json(storage, &path).await {
+                Ok(source) => source,
+                Err((_, error)) => {
+                    tracing::error!(path, error, "Failed to read processed import");
+                    continue;
+                }
+            };
+            let Some((source_product_id, subject)) = import_context(kind, &id, &source) else {
+                tracing::error!(path, "Processed import has no product_id");
+                continue;
+            };
+            if repos::record_key(&source_product_id) != product_key {
+                continue;
+            }
+
+            if let Some(failure) = failures.remove(&(kind, id.clone())) {
+                let retrying = import_retry_active(&failure, now);
+                let stale_retry = failure.status == ImportFailureStatus::Retrying && !retrying;
+                entries.push(ImportLogEntry {
+                    id,
+                    kind,
+                    product_id: source_product_id,
+                    subject,
+                    status: if retrying {
+                        "retrying"
+                    } else if stale_retry {
+                        "stalled"
+                    } else {
+                        "failed"
+                    }
+                    .to_string(),
+                    error: if stale_retry {
+                        format!(
+                            "The queued retry did not complete within five minutes. Previous error: {}",
+                            failure.error
+                        )
+                    } else {
+                        failure.error
+                    },
+                    attempts: failure.attempts,
+                    first_failed_at: failure.first_failed_at,
+                    last_failed_at: failure.last_failed_at,
+                    retryable: !retrying,
+                });
+            } else if meta.last_modified <= stalled_before {
+                let at = meta.last_modified.to_rfc3339();
+                entries.push(ImportLogEntry {
+                    id,
+                    kind,
+                    product_id: source_product_id,
+                    subject,
+                    status: "stalled".to_string(),
+                    error: "The processed import was not committed to the database.".to_string(),
+                    attempts: 0,
+                    first_failed_at: at.clone(),
+                    last_failed_at: at,
+                    retryable: true,
+                });
+            }
+        }
+    }
+    entries.sort_by(|left, right| right.last_failed_at.cmp(&left.last_failed_at));
+    Ok(entries)
+}
+
+async fn list_import_logs(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path(pid): Path<String>,
+) -> Result<Json<Vec<ImportLogEntry>>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
+        .await
+        .map_err(access_err)?;
+    Ok(Json(import_failures(&s.storage, &pid).await?))
+}
+
+fn safe_import_id(id: &str) -> bool {
+    !id.is_empty() && id.len() <= 128 && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+}
+
+async fn retry_imports(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path(pid): Path<String>,
+    Json(body): Json<RetryImportsBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
+        .await
+        .map_err(access_err)?;
+    if body.imports.is_empty() || body.imports.len() > 200 {
+        return Err(bad("select between 1 and 200 imports"));
+    }
+
+    let product_key = repos::record_key(&pid);
+    let mut queued = 0usize;
+    for import in body.imports {
+        if !safe_import_id(&import.id) {
+            return Err(bad("invalid import id"));
+        }
+        let source_path = import.kind.source_path(&import.id);
+        let source = read_storage_json(&s.storage, &source_path).await?;
+        let Some((source_product_id, _subject)) = import_context(import.kind, &import.id, &source)
+        else {
+            return Err(bad("processed import has no product_id"));
+        };
+        if repos::record_key(&source_product_id) != product_key {
+            return Err((StatusCode::FORBIDDEN, "import belongs to another product".to_string()));
+        }
+
+        if let Err(error) = s
+            .retry_request_queue
+            .enqueue(&pid, import.kind, &import.id)
+            .await
+        {
+            return Err(server_error(error));
+        }
+        queued += 1;
+    }
+    Ok(Json(json!({ "queued": queued })))
+}
+
 // --------------------------------------------------------------------
 // symbols
 // --------------------------------------------------------------------

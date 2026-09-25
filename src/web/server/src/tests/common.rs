@@ -21,6 +21,7 @@ pub(super) use testware::{
 use crate::access::SESSION_KEY;
 use crate::auth_cache::AuthCache;
 use crate::auth_user::{AuthenticatedUser, User};
+use crate::retry_queue::NoopImportRetryRequestQueue;
 use crate::routes::{auth, db_api, home, impersonation, invite};
 use crate::state::AppState;
 use repos::Repo;
@@ -184,6 +185,7 @@ impl TestApp {
             provisioner,
             email_sender: None,
             storage,
+            retry_request_queue: Arc::new(NoopImportRetryRequestQueue),
             auth_cache: AuthCache::default(),
         };
         let session_store = MemoryStore::default();

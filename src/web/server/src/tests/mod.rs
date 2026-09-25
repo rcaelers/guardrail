@@ -6,6 +6,7 @@ mod auth;
 mod crashes;
 mod db_api;
 mod home;
+mod import_logs;
 mod invitations;
 mod products;
 mod security;

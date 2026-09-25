@@ -31,7 +31,10 @@
   const TABS = $derived([
     ['crashes', 'Crashes'] as [string, string],
     ['symbols', 'Symbols'] as [string, string],
-    ...(canAccessSettings ? [['settings', 'Settings']] as Array<[string, string]> : []),
+    ...(canAccessSettings ? [
+      ['logging', 'Logging'],
+      ['settings', 'Settings']
+    ] as Array<[string, string]> : []),
   ]);
 </script>
 
@@ -65,7 +68,17 @@
           class:text-accent={active}
           class:text-ink-muted={!active}
           class:dark:text-ink-mutedDark={!active}
-        >{label}</a>
+        >
+          <span class="flex items-center gap-1.5">
+            {label}
+            {#if slug === 'logging' && data.importFailureCount > 0}
+              <span
+                class="inline-flex min-w-4 items-center justify-center rounded-full bg-amber-400 px-1 text-[10px] font-semibold leading-4 text-amber-950"
+                title={`${data.importFailureCount} import${data.importFailureCount === 1 ? '' : 's'} need attention`}
+              >{data.importFailureCount}</span>
+            {/if}
+          </span>
+        </a>
       {/each}
     </nav>
 

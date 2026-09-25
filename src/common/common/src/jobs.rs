@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::import_failure::ImportKind;
+
 /// Job queued by API when a minidump is uploaded.
 /// Consumed by the processor.
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -28,9 +30,19 @@ pub struct ImportSymbolJob {
     pub symbol_upload_id: String,
 }
 
+/// Control-plane request submitted by the web UI.
+/// Consumed by the curator, which validates and requeues the concrete import.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct RetryImportJob {
+    pub product_id: String,
+    pub kind: ImportKind,
+    pub import_id: String,
+}
+
 pub mod queue {
     pub const MINIDUMP_JOBS: &str = "guardrail::queues::MinidumpJobs";
     pub const SYMBOL_JOBS: &str = "guardrail::queues::SymbolJobs";
     pub const IMPORT_CRASH_JOBS: &str = "guardrail::queues::ImportCrashJobs";
     pub const IMPORT_SYMBOL_JOBS: &str = "guardrail::queues::ImportSymbolJobs";
+    pub const RETRY_IMPORT_JOBS: &str = "guardrail::queues::RetryImportJobs";
 }

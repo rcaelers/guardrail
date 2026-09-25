@@ -8,6 +8,7 @@ use surrealdb::engine::any::Any;
 use tracing::{error, info, instrument};
 
 use crate::error::JobError;
+use crate::import_failure;
 use crate::jobs::ImportSymbolJob;
 use crate::state::AppState;
 use data::symbols::NewSymbols;
@@ -113,7 +114,7 @@ impl ImportSymbolProcessor {
 
         let id = SymbolsRepo::create(db, new_symbols).await.map_err(|e| {
             error!("Failed to store symbol metadata: {:?}", e);
-            JobError::Failure("failed to store symbol metadata".to_string())
+            JobError::Failure(format!("failed to store symbol metadata: {e}"))
         })?;
 
         info!("Created symbol record with ID: {}", id);
@@ -134,10 +135,35 @@ impl ImportSymbolProcessor {
     pub async fn process(job: ImportSymbolJob, state: Data<AppState>) -> Result<(), JobError> {
         info!("Incoming import symbol job");
         let processor = ImportSymbolProcessor::new(state.clone());
-        processor.handle_job(job.symbol_upload_id.clone()).await?;
-        info!("Successfully imported symbol upload: {}", job.symbol_upload_id);
-
-        Ok(())
+        match processor.handle_job(job.symbol_upload_id.clone()).await {
+            Ok(()) => {
+                import_failure::clear(
+                    &processor.storage,
+                    common::import_failure::ImportKind::Symbol,
+                    &job.symbol_upload_id,
+                )
+                .await;
+                info!("Successfully imported symbol upload: {}", job.symbol_upload_id);
+                Ok(())
+            }
+            Err(error) => {
+                if let Err(marker_error) = import_failure::record(
+                    &processor.storage,
+                    common::import_failure::ImportKind::Symbol,
+                    &job.symbol_upload_id,
+                    &error.to_string(),
+                )
+                .await
+                {
+                    tracing::error!(
+                        symbol_upload_id = %job.symbol_upload_id,
+                        error = %marker_error,
+                        "Failed to persist symbol import failure"
+                    );
+                }
+                Err(error)
+            }
+        }
     }
 }
 

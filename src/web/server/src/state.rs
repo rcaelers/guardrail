@@ -6,6 +6,7 @@ use repos::Repo;
 
 use crate::auth_cache::AuthCache;
 use crate::provisioner::IdentityProvisioner;
+use crate::retry_queue::ImportRetryRequestQueue;
 use crate::settings::Settings;
 
 #[derive(Clone)]
@@ -16,5 +17,6 @@ pub struct AppState {
     pub(crate) provisioner: Option<Arc<dyn IdentityProvisioner>>,
     pub(crate) email_sender: Option<Arc<dyn EmailSender>>,
     pub(crate) storage: Arc<dyn ObjectStore>,
+    pub(crate) retry_request_queue: Arc<dyn ImportRetryRequestQueue>,
     pub(crate) auth_cache: AuthCache,
 }

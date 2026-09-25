@@ -20,6 +20,8 @@ email = { path = "../../common/email" }
 
 askama.workspace = true
 async-trait.workspace = true
+apalis.workspace = true
+apalis-redis.workspace = true
 axum.workspace = true
 axum-server.workspace = true
 chrono.workspace = true

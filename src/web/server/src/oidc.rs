@@ -591,6 +591,7 @@ mod tests {
             provisioner: None,
             email_sender: None,
             storage,
+            retry_request_queue: Arc::new(crate::retry_queue::NoopImportRetryRequestQueue),
             auth_cache: AuthCache::default(),
         }
     }

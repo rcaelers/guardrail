@@ -25,6 +25,7 @@ use crate::auth_cache::AuthCache;
 use crate::auth_user::AuthenticatedUser;
 use crate::pocket_id;
 use crate::provisioner::IdentityProvisioner;
+use crate::retry_queue::ValkeyImportRetryRequestQueue;
 use crate::routes::{auth, db_api, home, impersonation, invite};
 use crate::settings::Settings;
 use crate::state::AppState;
@@ -167,6 +168,11 @@ impl GuardrailWebApp {
 
         let storage = init_s3_object_store(&settings.object_storage).await;
 
+        // Connect lazily: an unavailable queue must not take down the read-only
+        // web UI. A retry request will report and retain the queue error.
+        let retry_request_queue =
+            Arc::new(ValkeyImportRetryRequestQueue::new(settings.valkey.uri.clone()));
+
         let email_sender: Option<Arc<dyn EmailSender>> = if settings.email.from.is_empty() {
             None
         } else if let Some(key) = settings
@@ -188,6 +194,7 @@ impl GuardrailWebApp {
             provisioner,
             email_sender,
             storage,
+            retry_request_queue,
             auth_cache: AuthCache::default(),
         };
 

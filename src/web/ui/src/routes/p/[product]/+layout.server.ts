@@ -18,12 +18,23 @@ export const load: LayoutServerLoad = async ({ params, locals, request }) => {
       const next = encodeURIComponent(`/p/${params.product}/crashes`);
       throw redirect(303, `/login?next=${next}`);
     }
-    return { product, role: null };
+    return { product, role: null, importFailureCount: 0 };
   }
 
   const role = await adapter.roleOf(locals.user.id, product.id);
   if (!role && !locals.user.isAdmin)
     throw error(403, `You don't have access to ${product.name}`);
 
-  return { product, role };
+  let importFailureCount = 0;
+  if (role === 'maintainer' || locals.user.isAdmin) {
+    try {
+      importFailureCount = (await adapter.listImportLogs(product.id)).length;
+    } catch (cause) {
+      // Import logging is an operational aid. Do not make every product page
+      // unavailable when object storage or its listing endpoint is unhealthy.
+      console.error('Unable to load import warning count', cause);
+    }
+  }
+
+  return { product, role, importFailureCount };
 };

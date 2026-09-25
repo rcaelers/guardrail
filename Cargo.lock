@@ -1478,7 +1478,9 @@ dependencies = [
  "apalis-core",
  "apalis-cron",
  "apalis-redis",
+ "async-trait",
  "bytes",
+ "chrono",
  "clap",
  "common",
  "cron",
@@ -6980,6 +6982,8 @@ dependencies = [
 name = "web"
 version = "0.1.0"
 dependencies = [
+ "apalis",
+ "apalis-redis",
  "askama",
  "async-trait",
  "axum",

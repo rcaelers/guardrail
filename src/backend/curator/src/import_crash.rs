@@ -8,6 +8,7 @@ use surrealdb::engine::any::Any;
 use tracing::{error, info, instrument, warn};
 
 use crate::error::JobError;
+use crate::import_failure;
 use crate::jobs::ImportCrashJob;
 use crate::state::AppState;
 use data::{
@@ -99,7 +100,7 @@ impl ImportCrashProcessor {
 
         let product = ProductRepo::get_by_id(db, &product_id)
             .await
-            .map_err(|_| JobError::Failure(format!("failed to get product {product_id}")))?
+            .map_err(|e| JobError::Failure(format!("failed to get product {product_id}: {e}")))?
             .ok_or_else(|| JobError::Failure(format!("no such product {product_id}")))?;
 
         let fingerprint = crash_info["fingerprint"]
@@ -145,7 +146,7 @@ impl ImportCrashProcessor {
 
         let id = CrashRepo::create(db, crash).await.map_err(|e| {
             error!("Failed to store crash report for {} ({:?})", product.name, e);
-            JobError::Failure("failed to store crash report".to_string())
+            JobError::Failure(format!("failed to store crash report: {e}"))
         })?;
 
         if let Err(e) = Self::create_annotations(db, &id, &product.id, &crash_info).await {
@@ -339,10 +340,35 @@ impl ImportCrashProcessor {
     pub async fn process(job: ImportCrashJob, state: Data<AppState>) -> Result<(), JobError> {
         info!("Incoming import crash job");
         let processor = ImportCrashProcessor::new(state.clone());
-        processor.handle_job(job.crash_id.clone()).await?;
-        info!("Successfully imported crash ID: {}", job.crash_id);
-
-        Ok(())
+        match processor.handle_job(job.crash_id.clone()).await {
+            Ok(()) => {
+                import_failure::clear(
+                    &processor.storage,
+                    common::import_failure::ImportKind::Crash,
+                    &job.crash_id,
+                )
+                .await;
+                info!("Successfully imported crash ID: {}", job.crash_id);
+                Ok(())
+            }
+            Err(error) => {
+                if let Err(marker_error) = import_failure::record(
+                    &processor.storage,
+                    common::import_failure::ImportKind::Crash,
+                    &job.crash_id,
+                    &error.to_string(),
+                )
+                .await
+                {
+                    tracing::error!(
+                        crash_id = %job.crash_id,
+                        error = %marker_error,
+                        "Failed to persist crash import failure"
+                    );
+                }
+                Err(error)
+            }
+        }
     }
 }
 

@@ -477,6 +477,31 @@ export interface SymbolQuery {
 }
 
 // ------------------------------------------------------------------
+// Import failures.
+// ------------------------------------------------------------------
+
+export type ImportKind = 'crash' | 'symbol';
+export type ImportLogStatus = 'failed' | 'stalled' | 'retrying';
+
+export interface ImportLogEntry {
+  id: string;
+  kind: ImportKind;
+  productId: string;
+  subject: string;
+  status: ImportLogStatus;
+  error: string;
+  attempts: number;
+  firstFailedAt: string;
+  lastFailedAt: string;
+  retryable: boolean;
+}
+
+export interface RetryImportRef {
+  id: string;
+  kind: ImportKind;
+}
+
+// ------------------------------------------------------------------
 // Crash-list query.
 // ------------------------------------------------------------------
 
@@ -635,6 +660,10 @@ export interface GuardrailAdapter {
     uploadedBy: string;
   }): Promise<Symbol>;
   deleteSymbol(id: string): Promise<void>;
+
+  // --- import failures ---
+  listImportLogs(productId: string): Promise<ImportLogEntry[]>;
+  retryImports(productId: string, imports: RetryImportRef[]): Promise<{ queued: number }>;
 
   // --- api tokens ---
   listApiTokens(productId: string): Promise<ApiToken[]>;

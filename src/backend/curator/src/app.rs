@@ -12,16 +12,17 @@ use surrealdb::opt::auth::Root;
 use tracing::{debug, error, info, warn};
 
 use crate::settings::Settings;
-use common::jobs::{ImportSymbolJob, queue};
+use common::jobs::queue;
 use common::retry_startup;
 use repos::Repo;
 
 use crate::import_crash::ImportCrashProcessor;
 use crate::import_symbol::ImportSymbolProcessor;
-use crate::jobs::ImportCrashJob;
+use crate::jobs::{ImportCrashJob, ImportSymbolJob, RetryImportJob};
 use crate::maintenance;
 use crate::product_listener;
 use crate::product_sync;
+use crate::retry_import::{RetryImportProcessor, RetryImportState, ValkeyImportJobQueue};
 use crate::state::AppState;
 
 #[derive(Clone)]
@@ -169,6 +170,10 @@ impl GuardrailCuratorApp {
             conn.clone(),
             RedisConfig::new(queue::IMPORT_SYMBOL_JOBS),
         );
+        let redis_retry_import = RedisStorage::<RetryImportJob>::new_with_config(
+            conn,
+            RedisConfig::new(queue::RETRY_IMPORT_JOBS),
+        );
 
         if let Err(e) =
             maintenance::MaintenanceJob::run_all_maintenance_tasks(&state, &redis_import_crash)
@@ -181,10 +186,11 @@ impl GuardrailCuratorApp {
         // heartbeat score is less than keep_alive seconds old. After a quick pod restart the
         // previous score can be newer than the new pod's clock (clock skew), causing the check
         // `now - last_seen < threshold` to fire and immediately kill both workers. Clear the
-        // stale entries so the initial poll_compact registration always succeeds.
+        // stale entries so each initial poll_compact registration succeeds.
         let worker_queue_names = [
             (queue::IMPORT_CRASH_JOBS, "import-crash"),
             (queue::IMPORT_SYMBOL_JOBS, "import-symbol"),
+            (queue::RETRY_IMPORT_JOBS, "retry-import"),
         ];
         let mut redis_cleanup = self.redis_manager.clone();
         for (queue_name, worker_name) in worker_queue_names {
@@ -210,6 +216,14 @@ impl GuardrailCuratorApp {
         let state_import_crash = state.clone();
         let state_import_symbol = state.clone();
         let redis_import_crash_worker = redis_import_crash.clone();
+        let retry_import_state = RetryImportState::new(
+            state.clone(),
+            Arc::new(ValkeyImportJobQueue::new(
+                redis_import_crash.clone(),
+                redis_import_symbol.clone(),
+            )),
+        );
+        let redis_retry_import_worker = redis_retry_import.clone();
         let maintenance_state = MaintenanceState {
             app_state: state.clone(),
             redis: redis_import_crash.clone(),
@@ -251,6 +265,14 @@ impl GuardrailCuratorApp {
                     .enable_tracing()
                     .concurrency(2)
                     .build(ImportSymbolProcessor::process)
+            })
+            .register(move |_idx| {
+                WorkerBuilder::new("retry-import")
+                    .backend(redis_retry_import_worker.clone())
+                    .data(retry_import_state.clone())
+                    .enable_tracing()
+                    .concurrency(1)
+                    .build(RetryImportProcessor::process)
             })
             .register(move |_idx| {
                 WorkerBuilder::new("maintenance")
