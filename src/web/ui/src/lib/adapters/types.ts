@@ -488,6 +488,7 @@ export interface ImportLogEntry {
   kind: ImportKind;
   productId: string;
   subject: string;
+  version: string;
   status: ImportLogStatus;
   error: string;
   attempts: number;
@@ -664,6 +665,7 @@ export interface GuardrailAdapter {
   // --- import failures ---
   listImportLogs(productId: string): Promise<ImportLogEntry[]>;
   retryImports(productId: string, imports: RetryImportRef[]): Promise<{ queued: number }>;
+  deleteImports(productId: string, imports: RetryImportRef[]): Promise<{ deleted: number }>;
 
   // --- api tokens ---
   listApiTokens(productId: string): Promise<ApiToken[]>;

@@ -5,23 +5,99 @@
 
   let { data, form }: PageProps = $props();
   let selected = $state<string[]>([]);
-  let retrying = $state(false);
+  let busy = $state<'retry' | 'delete' | null>(null);
+  let lastSelectedIndex = $state<number | null>(null);
+  let dragging = $state(false);
+  let dragChecked = $state(false);
 
   const retryable = $derived(data.importLogs.filter((entry) => entry.retryable));
+  const selectedSet = $derived(new Set(selected));
   const allSelected = $derived(retryable.length > 0 && retryable.every((entry) => selected.includes(key(entry))));
+  const nearbyAnchor = $derived(lastSelectedIndex === null ? null : data.importLogs[lastSelectedIndex]);
+  const canSelectNearby = $derived(
+    nearbyAnchor !== null && nearbyAnchor.retryable && selectedSet.has(key(nearbyAnchor))
+  );
 
   function key(entry: { kind: string; id: string }): string {
     return `${entry.kind}:${entry.id}`;
   }
 
-  function toggle(value: string, checked: boolean) {
-    selected = checked
-      ? [...new Set([...selected, value])]
-      : selected.filter((item) => item !== value);
+  function updateSelection(values: string[], checked: boolean) {
+    const next = new Set(selected);
+    for (const value of values) {
+      if (checked) next.add(value);
+      else next.delete(value);
+    }
+    selected = [...next];
+  }
+
+  function toggleAt(index: number, checked: boolean, range: boolean) {
+    const entry = data.importLogs[index];
+    if (!entry?.retryable) return;
+
+    if (range && lastSelectedIndex !== null) {
+      const start = Math.min(lastSelectedIndex, index);
+      const end = Math.max(lastSelectedIndex, index);
+      updateSelection(
+        data.importLogs.slice(start, end + 1).filter((item) => item.retryable).map(key),
+        checked
+      );
+    } else {
+      updateSelection([key(entry)], checked);
+    }
+    lastSelectedIndex = index;
+  }
+
+  function beginPointerSelection(event: PointerEvent, index: number) {
+    const entry = data.importLogs[index];
+    if (event.button !== 0 || !entry?.retryable) return;
+    event.preventDefault();
+    event.currentTarget instanceof HTMLElement && event.currentTarget.focus();
+
+    const checked = !selectedSet.has(key(entry));
+    toggleAt(index, checked, event.shiftKey);
+    if (!event.shiftKey) {
+      dragging = true;
+      dragChecked = checked;
+    }
+  }
+
+  function extendPointerSelection(index: number) {
+    if (!dragging) return;
+    toggleAt(index, dragChecked, false);
+  }
+
+  function endPointerSelection() {
+    dragging = false;
+  }
+
+  function handleCheckboxChange(event: Event, index: number) {
+    const input = event.currentTarget as HTMLInputElement;
+    const entry = data.importLogs[index];
+    if (entry && input.checked !== selectedSet.has(key(entry))) {
+      toggleAt(index, input.checked, false);
+    }
   }
 
   function toggleAll(checked: boolean) {
     selected = checked ? retryable.map(key) : [];
+    lastSelectedIndex = null;
+  }
+
+  function selectNearby() {
+    if (!nearbyAnchor) return;
+    const anchorTime = Date.parse(nearbyAnchor.lastFailedAt);
+    if (!Number.isFinite(anchorTime)) return;
+    const fiveMinutes = 5 * 60 * 1000;
+    const values = data.importLogs
+      .filter((entry) => {
+        if (!entry.retryable || entry.kind !== nearbyAnchor.kind) return false;
+        if (nearbyAnchor.version && entry.version !== nearbyAnchor.version) return false;
+        const time = Date.parse(entry.lastFailedAt);
+        return Number.isFinite(time) && Math.abs(time - anchorTime) <= fiveMinutes;
+      })
+      .map(key);
+    updateSelection(values, true);
   }
 
   function statusClass(status: string): string {
@@ -30,12 +106,14 @@
   }
 </script>
 
+<svelte:window onpointerup={endPointerSelection} onpointercancel={endPointerSelection} />
+
 <div class="flex h-full min-h-0 flex-col">
   <div class="flex shrink-0 flex-wrap items-center gap-3 border-b border-line px-5 py-3 dark:border-line-dark">
     <div>
       <div class="text-[14px] font-semibold">Import logging</div>
       <div class="text-[11.5px] text-ink-muted dark:text-ink-mutedDark">
-        Processed crash and symbol imports that need attention
+        Shift-click for a range, or drag across checkboxes
       </div>
     </div>
     <span class="flex-1"></span>
@@ -43,11 +121,25 @@
       {data.importLogs.length} issue{data.importLogs.length === 1 ? '' : 's'}
     </span>
     <button
+      type="button"
+      disabled={!canSelectNearby || busy !== null}
+      title="Select retryable imports of the same type and version within five minutes of the last selected import"
+      class="rounded-md border border-line px-3 py-1.5 text-[13px] font-medium disabled:cursor-not-allowed disabled:opacity-40 dark:border-line-dark"
+      onclick={selectNearby}
+    >Select nearby</button>
+    <button
       type="submit"
       form="retry-imports"
-      disabled={selected.length === 0 || retrying}
+      formaction="?/delete"
+      disabled={selected.length === 0 || busy !== null}
+      class="rounded-md border border-red-500/50 px-3 py-1.5 text-[13px] font-medium text-red-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-red-400"
+    >{busy === 'delete' ? 'Deleting…' : `Delete selected (${selected.length})`}</button>
+    <button
+      type="submit"
+      form="retry-imports"
+      disabled={selected.length === 0 || busy !== null}
       class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
-    >{retrying ? 'Queueing…' : `Retry selected (${selected.length})`}</button>
+    >{busy === 'retry' ? 'Queueing…' : `Retry selected (${selected.length})`}</button>
   </div>
 
   {#if data.importLogs.length > 0}
@@ -62,7 +154,11 @@
     </div>
   {:else if form?.ok}
     <div class="shrink-0 border-b border-accent/30 bg-accent-soft px-5 py-2.5 text-[12.5px] text-accent dark:bg-accent-softDark">
-      Queued {form.queued} import{form.queued === 1 ? '' : 's'} for retry.
+      {#if form.queued !== undefined}
+        Queued {form.queued} import{form.queued === 1 ? '' : 's'} for retry.
+      {:else}
+        Deleted {form.deleted} retained import{form.deleted === 1 ? '' : 's'}.
+      {/if}
     </div>
   {/if}
 
@@ -70,19 +166,30 @@
     id="retry-imports"
     method="POST"
     action="?/retry"
-    use:enhance={() => {
-      retrying = true;
-      return async ({ update }) => {
-        await update();
-        selected = [];
-        retrying = false;
+    use:enhance={({ submitter, cancel }) => {
+      const deleting = submitter?.getAttribute('formaction') === '?/delete';
+      if (deleting && !window.confirm(`Permanently delete ${selected.length} retained import${selected.length === 1 ? '' : 's'}? This cannot be undone.`)) {
+        cancel();
+        return;
+      }
+      busy = deleting ? 'delete' : 'retry';
+      return async ({ result, update }) => {
+        try {
+          await update();
+          if (result.type === 'success') {
+            selected = [];
+            lastSelectedIndex = null;
+          }
+        } finally {
+          busy = null;
+        }
       };
     }}
     class="flex min-h-0 flex-1 flex-col"
   >
     <div
       class="grid shrink-0 items-center gap-4 border-b border-line bg-surface-panel px-5 py-2 text-[10.5px] font-medium uppercase tracking-wider text-ink-muted dark:border-line-dark dark:bg-surface-panelDark dark:text-ink-mutedDark"
-      style:grid-template-columns="28px 82px 100px minmax(160px,0.8fr) minmax(260px,1.6fr) 80px 140px"
+      style:grid-template-columns="28px 82px 72px minmax(160px,0.8fr) 110px minmax(240px,1.5fr) 70px 140px"
     >
       <input
         type="checkbox"
@@ -94,17 +201,18 @@
       <span>Status</span>
       <span>Type</span>
       <span>Item</span>
+      <span>Version</span>
       <span>Error</span>
       <span>Attempts</span>
       <span>Last failure</span>
     </div>
 
     <div class="scroll-clean min-h-0 flex-1 overflow-auto">
-      {#each data.importLogs as entry (key(entry))}
+      {#each data.importLogs as entry, index (key(entry))}
         {@const value = key(entry)}
         <div
           class="grid items-center gap-4 border-b border-line px-5 py-3 text-[13px] hover:bg-surface-panel dark:border-line-dark dark:hover:bg-surface-panelDark"
-          style:grid-template-columns="28px 82px 100px minmax(160px,0.8fr) minmax(260px,1.6fr) 80px 140px"
+          style:grid-template-columns="28px 82px 72px minmax(160px,0.8fr) 110px minmax(240px,1.5fr) 70px 140px"
         >
           <input
             type="checkbox"
@@ -113,7 +221,12 @@
             aria-label={`Select ${entry.kind} ${entry.subject}`}
             checked={selected.includes(value)}
             disabled={!entry.retryable}
-            onchange={(event) => toggle(value, event.currentTarget.checked)}
+            class="cursor-pointer disabled:cursor-not-allowed"
+            title={entry.retryable ? 'Shift-click to select a range, or hold and drag across checkboxes' : 'This import is currently retrying'}
+            onpointerdown={(event) => beginPointerSelection(event, index)}
+            onpointerenter={() => extendPointerSelection(index)}
+            onclick={(event) => event.detail > 0 && event.preventDefault()}
+            onchange={(event) => handleCheckboxChange(event, index)}
           />
           <span class={`w-fit rounded-full px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wide ${statusClass(entry.status)}`}>
             {entry.status}
@@ -123,6 +236,7 @@
             <div class="truncate font-mono text-[12px]" title={entry.subject}>{entry.subject}</div>
             <div class="truncate font-mono text-[10px] text-ink-muted dark:text-ink-mutedDark" title={entry.id}>{entry.id}</div>
           </div>
+          <span class="truncate font-mono text-[12px]" title={entry.version}>{entry.version || '—'}</span>
           <div class="min-w-0 truncate text-[12px] text-ink-muted dark:text-ink-mutedDark" title={entry.error}>
             {entry.error}
           </div>

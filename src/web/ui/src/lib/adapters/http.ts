@@ -161,6 +161,12 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body)
     });
+  const jdelete = (path: string, body: unknown) =>
+    req(path, {
+      method: 'DELETE',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body)
+    });
   const jdel = (path: string) => req(path, { method: 'DELETE' });
 
   return {
@@ -411,6 +417,10 @@ export function httpAdapter(baseUrl: string, cookieHeader: string = ''): Guardra
     async retryImports(productId, imports: RetryImportRef[]) {
       const r = await jpost(`/products/${encodeURIComponent(productId)}/import-logs`, { imports });
       return json<{ queued: number }>(r, 'retryImports');
+    },
+    async deleteImports(productId, imports: RetryImportRef[]) {
+      const r = await jdelete(`/products/${encodeURIComponent(productId)}/import-logs`, { imports });
+      return json<{ deleted: number }>(r, 'deleteImports');
     },
 
     // --- api tokens ---

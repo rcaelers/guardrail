@@ -83,7 +83,12 @@ pub fn router() -> Router<AppState> {
         .route("/products/{pid}/members", get(list_members))
         .route("/products/{pid}/members/{uid}", post(grant_access).delete(revoke_access))
         .route("/products/{pid}/symbols", get(list_symbols).post(upload_symbol))
-        .route("/products/{pid}/import-logs", get(list_import_logs).post(retry_imports))
+        .route(
+            "/products/{pid}/import-logs",
+            get(list_import_logs)
+                .post(retry_imports)
+                .delete(delete_imports),
+        )
         .route("/symbols/{id}", delete(delete_symbol))
         .route("/users", get(list_users).post(create_user))
         .route("/users/{id}", get(get_user).post(update_user).delete(delete_user))
@@ -2777,6 +2782,7 @@ struct ImportLogEntry {
     kind: ImportKind,
     product_id: String,
     subject: String,
+    version: String,
     status: String,
     error: String,
     attempts: u32,
@@ -2825,6 +2831,20 @@ fn import_context(kind: ImportKind, id: &str, value: &Value) -> Option<(String, 
     product_id
         .filter(|value| !value.is_empty())
         .map(|product_id| (product_id.to_string(), subject.to_string()))
+}
+
+fn import_version(kind: ImportKind, value: &Value) -> String {
+    let version = match kind {
+        ImportKind::Crash => value["report"]["version"]
+            .as_str()
+            .or_else(|| value["crash_info"]["version"].as_str())
+            .or_else(|| value["crash_info"]["annotations"]["version"]["value"].as_str())
+            .or_else(|| value["crash_info"]["annotations"]["version"].as_str())
+            .or_else(|| value["crash_info"]["annotations"]["product_version"]["value"].as_str())
+            .or_else(|| value["crash_info"]["annotations"]["product_version"].as_str()),
+        ImportKind::Symbol => value["version"].as_str(),
+    };
+    version.unwrap_or_default().to_string()
 }
 
 fn import_object_id(path: &ObjectPath) -> Option<String> {
@@ -2902,6 +2922,7 @@ async fn import_failures(
             if repos::record_key(&source_product_id) != product_key {
                 continue;
             }
+            let version = import_version(kind, &source);
 
             if let Some(failure) = failures.remove(&(kind, id.clone())) {
                 let retrying = import_retry_active(&failure, now);
@@ -2911,6 +2932,7 @@ async fn import_failures(
                     kind,
                     product_id: source_product_id,
                     subject,
+                    version,
                     status: if retrying {
                         "retrying"
                     } else if stale_retry {
@@ -2939,6 +2961,7 @@ async fn import_failures(
                     kind,
                     product_id: source_product_id,
                     subject,
+                    version,
                     status: "stalled".to_string(),
                     error: "The processed import was not committed to the database.".to_string(),
                     attempts: 0,
@@ -3009,6 +3032,58 @@ async fn retry_imports(
         queued += 1;
     }
     Ok(Json(json!({ "queued": queued })))
+}
+
+async fn delete_imports(
+    State(s): State<AppState>,
+    session: Session,
+    headers: HeaderMap,
+    Path(pid): Path<String>,
+    Json(body): Json<RetryImportsBody>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    crate::access::require_product_maintainer(&session, &headers, &s.repo.db, &pid)
+        .await
+        .map_err(access_err)?;
+    if body.imports.is_empty() || body.imports.len() > 200 {
+        return Err(bad("select between 1 and 200 imports"));
+    }
+
+    // Validate every object before deleting anything, so a malformed or
+    // cross-product request cannot cause a partial deletion.
+    let product_key = repos::record_key(&pid);
+    let mut paths = Vec::with_capacity(body.imports.len());
+    for import in body.imports {
+        if !safe_import_id(&import.id) {
+            return Err(bad("invalid import id"));
+        }
+        let source_path = import.kind.source_path(&import.id);
+        let source = read_storage_json(&s.storage, &source_path).await?;
+        let Some((source_product_id, _subject)) = import_context(import.kind, &import.id, &source)
+        else {
+            return Err(bad("processed import has no product_id"));
+        };
+        if repos::record_key(&source_product_id) != product_key {
+            return Err((StatusCode::FORBIDDEN, "import belongs to another product".to_string()));
+        }
+        paths.push((source_path, import.kind.failure_path(&import.id)));
+    }
+
+    let mut deleted = 0usize;
+    for (source_path, failure_path) in paths {
+        // Remove the marker first. If deleting the source then fails, the
+        // retained source remains visible as a stalled import and can be
+        // retried or deleted again.
+        for path in [&failure_path, &source_path] {
+            if let Err(error) = s.storage.delete(&ObjectPath::from(path.as_str())).await
+                && !matches!(error, object_store::Error::NotFound { .. })
+            {
+                return Err(server_error(format!("delete {path}: {error}")));
+            }
+        }
+        deleted += 1;
+    }
+
+    Ok(Json(json!({ "deleted": deleted })))
 }
 
 // --------------------------------------------------------------------
