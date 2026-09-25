@@ -1,6 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { goto } from '$app/navigation';
+  import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import type { PageProps } from './$types';
   import Select from '$lib/components/Select.svelte';
@@ -21,9 +22,47 @@
   let deleteForm = $state<HTMLFormElement>();
   let deleting = $state(false);
   let pendingConfirm = $state<{ message: string; confirmLabel: string } | null>(null);
+  let referenceCounts = $state<Record<string, number> | null>(null);
+  let referenceCountsFailed = $state(false);
 
   const selectedSet = $derived(new Set(selected));
   const allSelected = $derived(data.symbols.length > 0 && data.symbols.every((symbol) => selected.includes(symbol.id)));
+  const referenceFilterKey = $derived([
+    data.filters.search,
+    data.filters.arch,
+    data.filters.format,
+    data.filters.sort
+  ].join('\u0000'));
+
+  $effect(() => {
+    referenceFilterKey;
+    if (!browser) return;
+
+    const controller = new AbortController();
+    const params = new URLSearchParams();
+    if (data.filters.search) params.set('q', data.filters.search);
+    if (data.filters.arch && data.filters.arch !== 'all') params.set('arch', data.filters.arch);
+    if (data.filters.format && data.filters.format !== 'all') params.set('format', data.filters.format);
+    if (data.filters.sort && data.filters.sort !== 'recent') params.set('sort', data.filters.sort);
+    const query = params.size > 0 ? `?${params}` : '';
+
+    referenceCounts = null;
+    referenceCountsFailed = false;
+    void fetch(`/p/${encodeURIComponent($page.params.product!)}/symbols/references${query}`, {
+      signal: controller.signal
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Reference count request failed (${response.status})`);
+        referenceCounts = await response.json() as Record<string, number>;
+      })
+      .catch((cause) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        console.error('Unable to load symbol reference counts', cause);
+        referenceCountsFailed = true;
+      });
+
+    return () => controller.abort();
+  });
 
   async function updateParam(key: string, value: string) {
     selected = [];
@@ -40,10 +79,6 @@
   let upVersion = $state('');
   let upArch = $state('x86_64');
   let upFormat = $state('PDB');
-
-  function uploaderName(id: string) {
-    return data.uploaders.find((u) => u.id === id)?.name ?? id;
-  }
 
   function updateSelection(values: string[], checked: boolean) {
     const next = new Set(selected);
@@ -151,10 +186,17 @@
     const ids = [...selected];
     if (ids.length === 0) return;
     const selectedSymbols = data.symbols.filter((symbol) => selectedSet.has(symbol.id));
-    const referencedBy = selectedSymbols.reduce((total, symbol) => total + symbol.referencedBy, 0);
-    const references = referencedBy > 0
-      ? ` They are referenced by ${referencedBy} crash group${referencedBy === 1 ? '' : 's'}.`
-      : '';
+    const referencedBy = selectedSymbols.reduce(
+      (total, symbol) => total + (referenceCounts?.[symbol.id] ?? 0),
+      0
+    );
+    const references = referenceCountsFailed
+      ? ' Reference counts are currently unavailable.'
+      : referenceCounts === null
+        ? ' Reference counts are still loading.'
+        : referencedBy > 0
+          ? ` They are referenced by ${referencedBy} crash group${referencedBy === 1 ? '' : 's'}.`
+          : '';
     requestDelete(
       ids,
       `Delete ${ids.length} selected symbol${ids.length === 1 ? '' : 's'}?${references} This cannot be undone.`
@@ -384,9 +426,18 @@
         <div class="truncate">{s.format}</div>
         <div class="truncate font-mono text-[11px] text-ink-muted dark:text-ink-mutedDark">{s.debugId}</div>
         <div class="truncate text-[12px] text-ink-muted dark:text-ink-mutedDark">
-          {fmtDate(s.uploadedAt)} · {uploaderName(s.uploadedBy)}
+          {fmtDate(s.uploadedAt)}{#if s.uploadedBy} · {s.uploadedBy}{/if}
         </div>
-        <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">{s.referencedBy} crash group{s.referencedBy === 1 ? '' : 's'}</div>
+        <div class="text-[12px] text-ink-muted dark:text-ink-mutedDark">
+          {#if referenceCounts}
+            {@const count = referenceCounts[s.id] ?? 0}
+            {count} crash group{count === 1 ? '' : 's'}
+          {:else if referenceCountsFailed}
+            <span title="Reference counts could not be loaded">Unavailable</span>
+          {:else}
+            <span title="Loading reference counts">Loading…</span>
+          {/if}
+        </div>
         <div class="flex justify-end">
           {#if canDelete}
             <button

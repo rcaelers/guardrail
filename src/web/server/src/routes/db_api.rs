@@ -3103,6 +3103,7 @@ struct SymbolsQuery {
     arch: Option<String>,
     format: Option<String>,
     sort: Option<String>,
+    references: Option<bool>,
 }
 
 /// Key identifying one build of one module: its debug file name (e.g.
@@ -3128,7 +3129,8 @@ async fn symbol_module_group_counts(
 ) -> Result<HashMap<(String, String), HashSet<String>>, (StatusCode, String)> {
     let rows = run_value(
         db,
-        "SELECT meta::id(group_id) AS groupId, report.modules AS modules
+        "SELECT meta::id(group_id) AS groupId,
+                report.modules.{ debug_file, debug_id } AS modules
          FROM crashes
          WHERE product_id = type::record('products', $pid) AND group_id != NONE",
         vec![("pid", Value::String(product_id.to_string()))],
@@ -3167,24 +3169,29 @@ async fn list_symbols(
         "SELECT {SYMBOL_PROJ} FROM symbols
               WHERE product_id = type::record('products', $pid)"
     );
-    let (rows_res, module_groups_res) = tokio::join!(
-        run_value(&db, &symbols_sql, vec![("pid", Value::String(pid.clone()))]),
-        symbol_module_group_counts(&db, &pid),
-    );
-    let mut rows = rows_res?;
-    let module_groups = module_groups_res?;
-    for row in rows.iter_mut() {
-        let name = row.get("name").and_then(|v| v.as_str());
-        let debug_id = row.get("debugId").and_then(|v| v.as_str());
-        let referenced_by = name
-            .zip(debug_id)
-            .and_then(|(name, debug_id)| module_groups.get(&debug_key(name, debug_id)))
-            .map(|groups| groups.len())
-            .unwrap_or(0);
-        if let Some(obj) = row.as_object_mut() {
-            obj.insert("referencedBy".into(), json!(referenced_by));
+    let mut rows = if q.references == Some(false) {
+        run_value(&db, &symbols_sql, vec![("pid", Value::String(pid.clone()))]).await?
+    } else {
+        let (rows_res, module_groups_res) = tokio::join!(
+            run_value(&db, &symbols_sql, vec![("pid", Value::String(pid.clone()))]),
+            symbol_module_group_counts(&db, &pid),
+        );
+        let mut rows = rows_res?;
+        let module_groups = module_groups_res?;
+        for row in rows.iter_mut() {
+            let name = row.get("name").and_then(|v| v.as_str());
+            let debug_id = row.get("debugId").and_then(|v| v.as_str());
+            let referenced_by = name
+                .zip(debug_id)
+                .and_then(|(name, debug_id)| module_groups.get(&debug_key(name, debug_id)))
+                .map(|groups| groups.len())
+                .unwrap_or(0);
+            if let Some(obj) = row.as_object_mut() {
+                obj.insert("referencedBy".into(), json!(referenced_by));
+            }
         }
-    }
+        rows
+    };
 
     if let Some(search) = q.search.as_deref().filter(|s| !s.trim().is_empty()) {
         let needle = search.to_lowercase();

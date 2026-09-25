@@ -345,6 +345,26 @@ async fn test_list_symbols_referenced_by() {
     create_test_crash_in_group_with_module(&app.db, pid, &g2, "app.pdb", &app_debug_id).await;
     create_test_crash_in_group_with_module(&app.db, pid, &g2, "app.pdb", &app_debug_id).await;
 
+    let (status, symbols_without_references) = app
+        .call_json(
+            "GET",
+            &format!("/products/{pid}/symbols?references=false"),
+            None,
+            Some(&f.admin),
+        )
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let app_pdb_without_references = symbols_without_references
+        .as_array()
+        .expect("symbols response should be an array")
+        .iter()
+        .find(|s| s["name"] == "app.pdb")
+        .expect("app.pdb symbol missing");
+    assert_eq!(
+        app_pdb_without_references["referencedBy"], 0,
+        "the fast list must skip reference counting"
+    );
+
     let (status, symbols) =
         app.call_json("GET", &format!("/products/{pid}/symbols"), None, Some(&f.admin)).await;
     assert_eq!(status, StatusCode::OK);

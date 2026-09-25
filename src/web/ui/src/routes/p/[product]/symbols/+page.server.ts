@@ -11,7 +11,7 @@ function canWrite(role: string | null | undefined): boolean {
   return role === 'readwrite' || role === 'maintainer';
 }
 
-export const load: PageServerLoad = async ({ url, parent, request, locals }) => {
+export const load: PageServerLoad = async ({ url, parent, request }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
   const { product } = await parent();
 
@@ -22,10 +22,11 @@ export const load: PageServerLoad = async ({ url, parent, request, locals }) => 
     sort: (url.searchParams.get('sort') ?? 'recent') as SymbolQuery['sort']
   };
 
-  const symbols = await adapter.listSymbols(product.id, q);
-  const uploaders = locals.user?.isAdmin ? await adapter.listUsers() : [];
+  const symbols = await adapter.listSymbols(product.id, { ...q, references: false });
 
-  return { symbols, uploaders, filters: q };
+  // Symbol rows currently have no uploader identity, so avoid blocking this
+  // page on the unrelated all-users request that used to run for admins.
+  return { symbols, filters: q };
 };
 
 export const actions: Actions = {

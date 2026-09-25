@@ -474,6 +474,8 @@ export interface SymbolQuery {
   arch?: SymbolArch | 'all';
   format?: SymbolFormat | 'all';
   sort?: 'recent' | 'name' | 'size';
+  /** Skip the expensive crash-report scan when reference counts are loaded separately. */
+  references?: boolean;
 }
 
 // ------------------------------------------------------------------

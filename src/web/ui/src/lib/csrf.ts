@@ -11,6 +11,7 @@
 // a server-side Origin check, not by this token.)
 
 import { browser } from '$app/environment';
+import { beginBusy } from '$lib/system-busy';
 
 export const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 export const CSRF_COOKIE = 'csrf';
@@ -33,18 +34,18 @@ export function installCsrfFetch(): void {
   const original = window.fetch.bind(window);
 
   window.fetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    let sameOrigin = false;
     try {
       const method = (
         init?.method ?? (input instanceof Request ? input.method : 'GET')
       ).toUpperCase();
+      const rawUrl = input instanceof Request ? input.url : String(input);
+      sameOrigin = new URL(rawUrl, location.href).origin === location.origin;
 
-      if (MUTATING_METHODS.has(method)) {
-        const url = input instanceof Request ? input.url : String(input);
-        const sameOrigin =
-          url.startsWith('/') || url.startsWith('?') || url.startsWith(location.origin);
+      if (sameOrigin && MUTATING_METHODS.has(method)) {
         const token = readCsrfToken();
 
-        if (sameOrigin && token) {
+        if (token) {
           const headers = new Headers(
             init?.headers ?? (input instanceof Request ? input.headers : undefined)
           );
@@ -57,6 +58,14 @@ export function installCsrfFetch(): void {
     } catch {
       // Never let CSRF wiring break a request; the server still enforces.
     }
-    return original(input, init);
+
+    const finishBusy = sameOrigin ? beginBusy() : undefined;
+    try {
+      const response = original(input, init);
+      return finishBusy ? response.finally(finishBusy) : response;
+    } catch (cause) {
+      finishBusy?.();
+      throw cause;
+    }
   };
 }
