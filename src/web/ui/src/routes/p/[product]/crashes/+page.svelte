@@ -134,7 +134,7 @@
     if (data.filters.limit !== 25) params.set('limit', String(data.filters.limit));
     const query = params.size ? `?${params}` : '';
 
-    void fetch(`/p/${encodeURIComponent(data.product.slug)}/crashes/details${query}`, {
+    void fetch(`/p/${encodeURIComponent(data.product.id)}/crashes/details${query}`, {
       signal: controller.signal
     })
       .then(async (response) => {
@@ -183,7 +183,7 @@
     if (data.filters.userText) params.set('hasUserText', 'true');
     if (data.filters.version !== 'all') params.set('version', data.filters.version);
     const response = await fetch(
-      `/p/${encodeURIComponent(data.product.slug)}/crashes/${encodeURIComponent(groupId)}/events?${params}`
+      `/p/${encodeURIComponent(data.product.id)}/crashes/${encodeURIComponent(groupId)}/events?${params}`
     );
     if (!response.ok) return null;
     const body = (await response.json()) as { crashes: CrashSummary[] };
