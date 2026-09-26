@@ -371,6 +371,32 @@ async fn test_list_groups() {
     );
 }
 
+#[tokio::test]
+async fn test_list_groups_without_details_uses_group_rows() {
+    let app = TestApp::new().await;
+    let f = Fixture::setup(&app).await;
+    let pid = &f.products[0].id;
+    let gid = create_test_crash_group(&app.db, pid).await;
+    create_test_crash_in_group(&app.db, pid, &gid).await;
+
+    let (status, body) = app
+        .call_json("GET", &format!("/crashes?productId={pid}&details=false"), None, Some(&f.admin))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["total"].as_u64(), Some(1));
+    assert_eq!(body["versions"].as_array().map(Vec::len), Some(0));
+
+    let group = body["groups"]
+        .as_array()
+        .expect("groups array")
+        .iter()
+        .find(|group| group["id"].as_str() == Some(gid.as_str()))
+        .expect("group in list");
+    assert_eq!(group["status"].as_str(), Some("new"));
+    assert!(group.get("crashes").is_none());
+    assert!(group.get("trend").is_none());
+}
+
 // API calls:
 // | Method | Route               |
 // | ------ | ------------------- |

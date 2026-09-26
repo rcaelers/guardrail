@@ -1706,8 +1706,61 @@ struct ListGroupsQuery {
     /// Keep only groups with at least one crash carrying a user description.
     #[serde(rename = "hasUserText")]
     has_user_text: Option<bool>,
+    /// Skip crash-level enrichment when the caller only needs the group rows.
+    details: Option<bool>,
     limit: Option<usize>,
     offset: Option<usize>,
+}
+
+fn can_list_groups_without_details(q: &ListGroupsQuery) -> bool {
+    q.details == Some(false)
+        && q.version
+            .as_deref()
+            .is_none_or(|version| version.is_empty() || version == "all")
+        && !q.has_user_text.unwrap_or(false)
+        && q.search
+            .as_deref()
+            .is_none_or(|search| search.trim().is_empty())
+        && matches!(q.sort.as_deref(), None | Some("") | Some("count") | Some("recent"))
+}
+
+async fn list_groups_without_details(
+    db: &Surreal<Any>,
+    q: &ListGroupsQuery,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let sql = format!(
+        "{GROUP_BASE_SELECT}
+        WHERE product_id = type::record('products', $pid)
+        ORDER BY count DESC"
+    );
+    let mut groups =
+        run_value(db, &sql, vec![("pid", Value::String(q.product_id.clone()))]).await?;
+
+    if let Some(status) = q
+        .status
+        .as_deref()
+        .filter(|status| *status != "all" && !status.is_empty())
+    {
+        groups.retain(|group| group.get("status").and_then(Value::as_str) == Some(status));
+    }
+    if q.sort.as_deref() == Some("recent") {
+        groups.sort_by(|a, b| {
+            b.get("lastSeen")
+                .and_then(Value::as_str)
+                .cmp(&a.get("lastSeen").and_then(Value::as_str))
+        });
+    }
+
+    let total = groups.len();
+    let offset = q.offset.unwrap_or(0);
+    let limit = q.limit.unwrap_or(groups.len());
+    let groups: Vec<Value> = groups.into_iter().skip(offset).take(limit).collect();
+
+    Ok(Json(json!({
+        "groups": groups,
+        "total": total,
+        "versions": [],
+    })))
 }
 
 async fn list_groups(
@@ -1716,6 +1769,9 @@ async fn list_groups(
     Query(q): Query<ListGroupsQuery>,
 ) -> Result<Json<Value>, (StatusCode, String)> {
     let db = s.user_db(&session).await?;
+    if can_list_groups_without_details(&q) {
+        return list_groups_without_details(&db, &q).await;
+    }
     let base_sql = format!(
         "{GROUP_BASE_SELECT}
         WHERE product_id = type::record('products', $pid)

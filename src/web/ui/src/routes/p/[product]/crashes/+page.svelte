@@ -1,8 +1,9 @@
 <script lang="ts">
   import { goto, invalidateAll, replaceState } from '$app/navigation';
+  import { browser } from '$app/environment';
   import { page } from '$app/stores';
   import type { PageData } from './$types';
-  import type { Crash, CrashGroup, CrashSummary, Status } from '$lib/adapters/types';
+  import type { Crash, CrashGroup, CrashSummary, ListResult, Status } from '$lib/adapters/types';
 
   import Select from '$lib/components/Select.svelte';
   import GroupRow from '$lib/components/GroupRow.svelte';
@@ -11,6 +12,15 @@
   import { pane } from '$lib/stores/pane.svelte';
 
   let { data }: { data: PageData } = $props();
+
+  let detailedList = $state<ListResult | null>(null);
+  let listDetailsFailed = $state(false);
+  const list = $derived(detailedList ?? data.list);
+  const listRevision = $derived(
+    data.list.groups
+      .map((group) => `${group.id}:${group.count}:${group.status}:${group.lastSeen}`)
+      .join('\u0000')
+  );
 
   const readOnly = $derived(data.role === 'readonly' && !data.user?.isAdmin);
   const canDelete = $derived(!readOnly);
@@ -70,19 +80,19 @@
   // re-ran the page load, and with it the group-list query — a scan across
   // every crash row in the product. Fetch the crash on its own and move the URL
   // with shallow routing, which leaves the already-correct list untouched.
-  // `data` still supplies the selection on first render and after a reload, so
-  // deep links and the back button keep working.
+  // Initial and deep-linked selections use the same endpoint after first paint.
   let picked = $state<{ crash: Crash; group: CrashGroup } | null>(null);
   let loadingCrashId = $state<string | null>(null);
+  let crashRequest = 0;
+  let autoSelectionKey = $state('');
 
   const activeCrash = $derived(picked?.crash ?? data.selectedCrash);
   const activeGroup = $derived(picked?.group ?? data.selectedGroup);
 
   // A pick belongs to the list it was made from. Changing a filter reloads the
-  // list and the server resolves a fresh default, but the picked crash may not
-  // even be in the new list — so hand the pane back to `data`. Selecting a
-  // crash moves the URL shallowly and leaves the filters alone, so this does
-  // not fire on selection.
+  // group rows and the client resolves a fresh default, but the picked crash
+  // may not even be in the new list. Selecting a crash moves the URL shallowly
+  // and leaves the filters alone, so this does not fire on selection.
   const filterKey = $derived(
     [
       data.filters.version,
@@ -94,28 +104,113 @@
       data.filters.limit
     ].join('\u0000')
   );
+  const selectionContextKey = $derived(
+    [filterKey, data.requestedCrashId ?? '', data.requestedGroupId ?? ''].join('\u0000')
+  );
   $effect(() => {
-    filterKey;
+    selectionContextKey;
+    crashRequest += 1;
     picked = null;
+    loadingCrashId = null;
   });
 
-  async function showCrash(crashId: string, force = false) {
+  $effect(() => {
+    filterKey;
+    listRevision;
+    const shouldLoad = data.deferListDetails;
+
+    detailedList = null;
+    listDetailsFailed = false;
+    if (!browser || !shouldLoad) return;
+
+    const controller = new AbortController();
+    const params = new URLSearchParams();
+    if (data.filters.version !== 'all') params.set('version', data.filters.version);
+    if (data.filters.status !== 'all') params.set('status', data.filters.status);
+    if (data.filters.search) params.set('q', data.filters.search);
+    if (data.filters.sort !== 'count') params.set('sort', data.filters.sort);
+    if (data.filters.userText) params.set('userText', 'yes');
+    if (data.filters.page > 1) params.set('page', String(data.filters.page));
+    if (data.filters.limit !== 25) params.set('limit', String(data.filters.limit));
+    const query = params.size ? `?${params}` : '';
+
+    void fetch(`/p/${encodeURIComponent(data.product.slug)}/crashes/details${query}`, {
+      signal: controller.signal
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Crash list details failed (${response.status})`);
+        detailedList = (await response.json()) as ListResult;
+      })
+      .catch((cause: unknown) => {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        console.error('Unable to load crash list details', cause);
+        listDetailsFailed = true;
+      });
+
+    return () => controller.abort();
+  });
+
+  async function showCrash(crashId: string, force = false, updateUrl = true) {
     if (!force && (activeCrash?.id === crashId || loadingCrashId === crashId)) return;
+    const request = ++crashRequest;
     loadingCrashId = crashId;
-    const url = new URL($page.url);
-    url.searchParams.delete('id');
-    url.searchParams.set('crash', crashId);
-    replaceState(url, {});
+    if (updateUrl) {
+      const url = new URL($page.url);
+      url.searchParams.delete('id');
+      url.searchParams.set('crash', crashId);
+      replaceState(url, {});
+    }
     try {
       const r = await fetch(
         `/p/${encodeURIComponent($page.params.product!)}/crashes/detail/${encodeURIComponent(crashId)}`
       );
       if (!r.ok) return;
-      picked = (await r.json()) as { crash: Crash; group: CrashGroup };
+      const bundle = (await r.json()) as { crash: Crash; group: CrashGroup };
+      if (request === crashRequest) picked = bundle;
     } finally {
-      if (loadingCrashId === crashId) loadingCrashId = null;
+      if (request === crashRequest) loadingCrashId = null;
     }
   }
+
+  async function firstCrashIdForGroup(groupId: string): Promise<string | null> {
+    const inline = crashesFor({
+      id: groupId,
+      crashes: list.groups.find((group) => group.id === groupId)?.crashes
+    })[0]?.id;
+    if (inline) return inline;
+
+    const params = new URLSearchParams({ limit: '1' });
+    if (data.filters.userText) params.set('hasUserText', 'true');
+    if (data.filters.version !== 'all') params.set('version', data.filters.version);
+    const response = await fetch(
+      `/p/${encodeURIComponent(data.product.slug)}/crashes/${encodeURIComponent(groupId)}/events?${params}`
+    );
+    if (!response.ok) return null;
+    const body = (await response.json()) as { crashes: CrashSummary[] };
+    return body.crashes[0]?.id ?? null;
+  }
+
+  $effect(() => {
+    const requestedCrashId = data.requestedCrashId;
+    const groupId = data.requestedGroupId ?? list.groups[0]?.id ?? null;
+    const target = requestedCrashId ? `crash:${requestedCrashId}` : groupId ? `group:${groupId}` : null;
+    const key = `${selectionContextKey}\u0000${target ?? ''}`;
+    if (!browser || !target || picked || loadingCrashId || autoSelectionKey === key) return;
+    autoSelectionKey = key;
+
+    queueMicrotask(async () => {
+      if (picked || loadingCrashId || autoSelectionKey !== key) return;
+      if (requestedCrashId) {
+        await showCrash(requestedCrashId, false, false);
+        return;
+      }
+      if (!groupId) return;
+      const crashId = await firstCrashIdForGroup(groupId);
+      if (crashId && !picked && !loadingCrashId && autoSelectionKey === key) {
+        await showCrash(crashId, false, false);
+      }
+    });
+  });
 
   // ---- URL-driven filters ----
   async function updateParam(key: string, value: string, reset = false) {
@@ -140,7 +235,7 @@
   }
 
   async function goToPage(n: number) {
-    const totalPages = Math.max(1, Math.ceil(data.list.total / data.filters.limit));
+    const totalPages = Math.max(1, Math.ceil(list.total / data.filters.limit));
     const clamped = Math.max(1, Math.min(totalPages, n));
     const url = new URL($page.url);
     if (clamped <= 1) url.searchParams.delete('page');
@@ -154,8 +249,8 @@
   async function selectGroup(id: string) {
     pane.open = true;
     if (!expanded.has(id)) toggleExpanded(id);
-    const first = crashesFor({ id, crashes: data.list.groups.find((g) => g.id === id)?.crashes })[0];
-    if (first) await showCrash(first.id);
+    const crashId = await firstCrashIdForGroup(id);
+    if (crashId) await showCrash(crashId);
   }
 
   // Selecting a specific crash within an (expanded) group.
@@ -191,12 +286,12 @@
 
   // ---- Form actions ----
   // invalidateAll refreshes the list; the detail pane is client-side state, so
-  // drop the pick and re-read it if the server load lands elsewhere.
+  // drop and reload the current pick afterward.
   async function refreshAfterMutation() {
     const id = activeCrash?.id ?? null;
     picked = null;
     await invalidateAll();
-    if (id && data.selectedCrash?.id !== id) await showCrash(id, true);
+    if (id) await showCrash(id, true);
   }
 
   async function setStatus(s: Status, fixedInVersion?: string | null) {
@@ -270,6 +365,9 @@
     forgetLoaded(groupId ?? activeCrash?.groupId ?? '');
     const url = new URL($page.url);
     if (activeCrash?.id === crashId) {
+      crashRequest += 1;
+      picked = null;
+      loadingCrashId = null;
       url.searchParams.delete('crash');
       url.searchParams.delete('id');
       pane.open = false;
@@ -289,6 +387,9 @@
     forgetLoaded(groupId);
     const url = new URL($page.url);
     if (activeGroup?.id === groupId || url.searchParams.get('id') === groupId) {
+      crashRequest += 1;
+      picked = null;
+      loadingCrashId = null;
       url.searchParams.delete('id');
       url.searchParams.delete('crash');
       pane.open = false;
@@ -341,7 +442,7 @@
       <Select
         label="Version"
         value={data.filters.version}
-        options={[['all', 'All'], ...data.list.versions.map((v): [string, string] => [v, v])]}
+        options={[['all', 'All'], ...list.versions.map((v): [string, string] => [v, v])]}
         onChange={(v) => updateParam('version', v, true)}
       />
       <Select
@@ -364,15 +465,21 @@
       />
       <span class="flex-1"></span>
       <span class="text-xs text-ink-muted dark:text-ink-mutedDark">
-        {#if data.list.total > data.filters.limit}
+        {#if list.total > data.filters.limit}
           {@const start = (data.filters.page - 1) * data.filters.limit + 1}
-          {@const end = Math.min(data.filters.page * data.filters.limit, data.list.total)}
-          {start}–{end} of {data.list.total.toLocaleString()} groups
+          {@const end = Math.min(data.filters.page * data.filters.limit, list.total)}
+          {start}–{end} of {list.total.toLocaleString()} groups
         {:else}
-          {data.list.total.toLocaleString()} groups
+          {list.total.toLocaleString()} groups
         {/if}
       </span>
     </div>
+
+    {#if listDetailsFailed}
+      <div class="shrink-0 border-b border-amber-300/70 bg-amber-50 px-5 py-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+        Crash groups are available, but previews, trends, and versions could not be loaded.
+      </div>
+    {/if}
 
     <!-- Column header -->
     <div
@@ -390,7 +497,7 @@
 
     <!-- Rows -->
     <div class="scroll-clean min-h-0 flex-1 overflow-auto">
-      {#each data.list.groups as g (g.id)}
+      {#each list.groups as g (g.id)}
         <GroupRow
           {g}
           selected={activeGroup?.id === g.id}
@@ -411,8 +518,8 @@
     </div>
 
     <!-- Pagination footer -->
-    {#if data.list.total > data.filters.limit}
-      {@const totalPages = Math.ceil(data.list.total / data.filters.limit)}
+    {#if list.total > data.filters.limit}
+      {@const totalPages = Math.ceil(list.total / data.filters.limit)}
       <div class="flex shrink-0 items-center justify-center gap-2 border-t border-line dark:border-line-dark px-5 py-2">
         <button
           type="button"

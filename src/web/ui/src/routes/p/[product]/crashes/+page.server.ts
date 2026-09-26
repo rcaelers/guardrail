@@ -25,63 +25,34 @@ export const load: PageServerLoad = async ({ url, parent, request }) => {
   const limit = [10, 25, 50, 100].includes(limitRaw) ? limitRaw : 25;
   const offset = (page - 1) * limit;
 
-  // Selection model: `crash` is the source of truth for what's shown in the
-  // detail pane. `id` (group) is supported for back-compat / convenience —
-  // resolves to that group's first crash. Defaults to the first group's
-  // first crash so something is always visible.
-  const crashId = url.searchParams.get('crash');
-  const groupId = url.searchParams.get('id');
+  // The common list views can be drawn entirely from the denormalised group
+  // rows. Crash previews, trends and the version list require scanning the
+  // product's crash rows, so let the browser add those after first paint.
+  const deferListDetails =
+    version === 'all' &&
+    !userText &&
+    search.trim() === '' &&
+    (sort === 'count' || sort === 'recent');
 
-  const listPromise = adapter.listGroups({
+  const list = await adapter.listGroups({
     productId: product.id,
     version: version === 'all' ? undefined : version,
     status: status === 'all' ? undefined : (status as Status),
     search,
     sort,
     hasUserText: userText || undefined,
+    details: deferListDetails ? false : undefined,
     limit,
     offset
   });
 
-  // Resolve the selected crash. If the URL gives us a crash id, fetch
-  // the list and the crash in parallel. If only a group id (or nothing)
-  // is provided, we need the list first to pick a default group, then
-  // getCrash for the detail. Going through getCrash means the list can
-  // carry lightweight crash summaries (no full minidump blob per member).
-  let selectedGroup = null;
-  let selectedCrash = null;
-
-  let list;
-  if (crashId) {
-    const [l, bundle] = await Promise.all([listPromise, adapter.getCrash(crashId)]);
-    list = l;
-    if (bundle) { selectedGroup = bundle.group; selectedCrash = bundle.crash; }
-  } else {
-    list = await listPromise;
-    const targetGroupId = groupId ?? list.groups[0]?.id ?? null;
-    if (targetGroupId) {
-      // The list ships a preview of each group's newest crashes, so the group
-      // is usually already resolvable without a getGroup round trip; only a
-      // group from another page of the list needs the extra fetch.
-      const preview = list.groups.find((g) => g.id === targetGroupId)?.crashes?.[0]?.id ?? null;
-      const targetCrashId = preview ?? (await adapter.getGroup(targetGroupId))?.crashes[0]?.id ?? null;
-      if (targetCrashId) {
-        const bundle = await adapter.getCrash(targetCrashId);
-        if (bundle) { selectedGroup = bundle.group; selectedCrash = bundle.crash; }
-      }
-    }
-  }
-
-  // Guard: if caller passed an id from a different product, drop it.
-  if (selectedGroup && selectedGroup.productId !== product.id) {
-    selectedGroup = null;
-    selectedCrash = null;
-  }
-
   return {
     list,
-    selectedGroup,
-    selectedCrash,
+    selectedGroup: null,
+    selectedCrash: null,
+    requestedCrashId: url.searchParams.get('crash'),
+    requestedGroupId: url.searchParams.get('id'),
+    deferListDetails,
     filters: { version, status, search, sort, userText, page, limit }
   };
 };

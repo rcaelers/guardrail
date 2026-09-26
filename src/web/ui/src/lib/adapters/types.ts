@@ -516,6 +516,8 @@ export interface ListQuery {
   sort?: 'count' | 'recent' | 'similarity' | 'version';
   /** Keep only groups with at least one crash carrying a user description. */
   hasUserText?: boolean;
+  /** Omit crash previews, trends, and versions for a fast group-only response. */
+  details?: boolean;
   limit?: number;
   offset?: number;
 }
