@@ -1,9 +1,11 @@
 use redis::AsyncCommands;
 use redis::aio::ConnectionManager;
 use std::collections::HashMap;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
-use common::product_info::{ProductInfo, product_cache_key, product_token_cache_key};
+use common::product_info::{
+    PRODUCT_CACHE_READY_KEY, ProductInfo, product_cache_key, product_token_cache_key,
+};
 
 use crate::error::ApiError;
 
@@ -65,7 +67,10 @@ impl ProductCache {
                         })?;
                         Ok(Some(info))
                     }
-                    None => Ok(None),
+                    None => {
+                        Self::ensure_cache_ready(conn).await?;
+                        Ok(None)
+                    }
                 }
             }
             Backend::Memory(map) => Ok(map.get(&product_token_cache_key(token)).cloned()),
@@ -97,15 +102,36 @@ impl ProductCache {
         }
     }
 
+    /// Ready only once the curator has filled the cache; with an empty cache
+    /// every upload would be rejected as an unknown product.
     pub async fn is_healthy(&self) -> bool {
         match &self.backend {
-            Backend::Redis(conn) => {
-                let result: Result<String, _> =
-                    redis::cmd("PING").query_async(&mut conn.clone()).await;
-                result.is_ok()
-            }
+            Backend::Redis(conn) => conn
+                .clone()
+                .exists::<_, bool>(PRODUCT_CACHE_READY_KEY)
+                .await
+                .unwrap_or(false),
             Backend::Memory(_) => true,
         }
+    }
+
+    /// A miss only means "unknown product" once the curator has filled the
+    /// cache. Before that (new or wiped Valkey) answer 503, so the client keeps
+    /// the crash report and retries instead of it being rejected for good.
+    async fn ensure_cache_ready(conn: &ConnectionManager) -> Result<(), ApiError> {
+        let ready = conn
+            .clone()
+            .exists::<_, bool>(PRODUCT_CACHE_READY_KEY)
+            .await
+            .map_err(|e| {
+                error!(error = ?e, "Failed to check product cache marker in Valkey");
+                ApiError::ServiceUnavailable("cache unavailable".to_string())
+            })?;
+        if !ready {
+            warn!("Product cache in Valkey is not populated yet");
+            return Err(ApiError::ServiceUnavailable("product cache not ready".to_string()));
+        }
+        Ok(())
     }
 }
 
@@ -162,5 +188,27 @@ mod tests {
     async fn memory_cache_is_healthy() {
         let cache = ProductCache::from_map(HashMap::new());
         assert!(cache.is_healthy().await);
+    }
+
+    /// Needs a scratch Valkey, e.g. GUARDRAIL_TEST_VALKEY_URI=redis://127.0.0.1:6379/15
+    #[tokio::test]
+    #[ignore = "requires GUARDRAIL_TEST_VALKEY_URI"]
+    async fn valkey_cache_miss_is_unavailable_until_cache_is_ready() {
+        let uri = std::env::var("GUARDRAIL_TEST_VALKEY_URI").expect("GUARDRAIL_TEST_VALKEY_URI");
+        let client = redis::Client::open(uri).unwrap();
+        let mut conn = ConnectionManager::new(client).await.unwrap();
+        let _: () = redis::cmd("FLUSHDB").query_async(&mut conn).await.unwrap();
+        let cache = ProductCache::new(conn.clone());
+
+        assert!(!cache.is_healthy().await);
+        assert!(matches!(
+            cache.get_product_by_token("unknown").await,
+            Err(ApiError::ServiceUnavailable(_))
+        ));
+
+        let _: () = conn.set(PRODUCT_CACHE_READY_KEY, "1").await.unwrap();
+
+        assert!(cache.is_healthy().await);
+        assert!(cache.get_product_by_token("unknown").await.unwrap().is_none());
     }
 }

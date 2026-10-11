@@ -132,6 +132,7 @@ impl GuardrailCuratorApp {
         info!("Starting initial product sync");
         self.sync_products().await;
         self.spawn_product_listener();
+        self.spawn_product_cache_watcher();
         info!("Starting workers");
         self.run_workers(shutdown).await;
         info!("Workers have stopped");
@@ -144,6 +145,16 @@ impl GuardrailCuratorApp {
         {
             error!("Failed to run startup product sync: {}", e);
         }
+    }
+
+    pub fn spawn_product_cache_watcher(&self) {
+        info!("Starting product cache watcher");
+        let repo = self.state.repo.clone();
+        let redis = self.redis_manager.clone();
+        let valkey_uri = self.state.settings.valkey.uri.clone();
+        tokio::spawn(async move {
+            product_sync::watch_product_cache(&repo, &valkey_uri, redis).await;
+        });
     }
 
     pub fn spawn_product_listener(&self) {

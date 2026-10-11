@@ -36,6 +36,10 @@ pub fn product_cache_key(product_identifier: &str) -> String {
     format!("guardrail::product:by-name:{}", product_identifier.trim().to_ascii_lowercase())
 }
 
+/// Written by the curator once every product is in the cache. When it is
+/// missing, Valkey is new or was wiped and a lookup miss means nothing.
+pub const PRODUCT_CACHE_READY_KEY: &str = "guardrail::product:cache-ready";
+
 pub fn product_token_cache_key(token: &str) -> String {
     format!("guardrail::product:by-token:{token}")
 }
