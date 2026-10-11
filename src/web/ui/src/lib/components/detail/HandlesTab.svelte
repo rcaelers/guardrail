@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Crash } from '$lib/adapters/types';
+  import type { Crash } from '#lib/adapters/types.js';
 
   let { crash }: { crash: Crash } = $props();
 

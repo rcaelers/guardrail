@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { UserDescription } from '$lib/adapters/types';
-  import { fmtDate } from '$lib/utils/format';
+  import type { UserDescription } from '#lib/adapters/types.js';
+  import { fmtDate } from '#lib/utils/format.js';
   let { user }: { user: UserDescription | null } = $props();
 </script>
 

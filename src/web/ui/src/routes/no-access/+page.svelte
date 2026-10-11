@@ -1,5 +1,5 @@
 <script lang="ts">
-  import UserMenu from '$lib/components/UserMenu.svelte';
+  import UserMenu from '#lib/components/UserMenu.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
 </script>

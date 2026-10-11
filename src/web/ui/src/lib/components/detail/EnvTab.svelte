@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Environment } from '$lib/adapters/types';
+  import type { Environment } from '#lib/adapters/types.js';
   let { env }: { env: Environment } = $props();
   const entries = $derived(Object.entries(env));
 </script>

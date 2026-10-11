@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { Product } from '$lib/adapters/types';
+  import type { Product } from '#lib/adapters/types.js';
   import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
 
   let {
     products,
@@ -16,8 +16,13 @@
   let open = $state(false);
   let btn: HTMLButtonElement | undefined;
 
-  function close() { open = false; }
-  function toggle() { open = !open; }
+  function close() {
+    open = false;
+  }
+
+  function toggle() {
+    open = !open;
+  }
 
   const current = $derived(products.find((p) => p.id === currentId) ?? null);
 
@@ -34,8 +39,10 @@
     if (btn && btn.contains(e.target as Node)) return;
     close();
   }}
-  onkeydown={(e) => { if (e.key === 'Escape') close(); }}
-/>
+  onkeydown={(e) => {
+    if (e.key === 'Escape') close();
+  }}
+></svelte:window>
 
 <div class="relative">
   <button
@@ -53,7 +60,22 @@
     {:else}
       <span class="text-[13px] text-ink-muted dark:text-ink-mutedDark">No product</span>
     {/if}
-    <svg width="10" height="10" viewBox="0 0 10 10" class="opacity-60"><path d="M2 3.5l3 3 3-3" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      class="opacity-60"
+    >
+      <path
+        d="M2 3.5l3 3 3-3"
+        stroke="currentColor"
+        fill="none"
+        stroke-width="1.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      ></path>
+    </svg>
   </button>
 
   {#if open}

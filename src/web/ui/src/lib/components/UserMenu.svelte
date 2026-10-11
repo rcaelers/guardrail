@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { User } from '$lib/adapters/types';
+  import type { User } from '#lib/adapters/types.js';
 
   let { user, isAdmin = false, profileUrl = null }: { user: User; isAdmin?: boolean; profileUrl?: string | null } = $props();
 

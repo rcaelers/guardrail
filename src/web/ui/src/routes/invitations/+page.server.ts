@@ -1,7 +1,7 @@
 import type { PageServerLoad, Actions } from './$types';
-import { createAdapter } from '$lib/adapters';
+import { createAdapter } from '#lib/adapters/index.js';
 import { error, fail, redirect } from '@sveltejs/kit';
-import type { Role } from '$lib/adapters/types';
+import type { Role } from '#lib/adapters/types.js';
 
 export const load: PageServerLoad = async ({ locals, url, request }) => {
   if (!locals.user) throw redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);

@@ -2,10 +2,10 @@
 // maintainer role (or admin).
 
 import type { PageServerLoad, Actions } from './$types';
-import { createAdapter } from '$lib/adapters';
+import { createAdapter } from '#lib/adapters/index.js';
 import { error, fail } from '@sveltejs/kit';
-import type { Role } from '$lib/adapters/types';
-import { requireProductAccess } from '$lib/server/product-access';
+import type { Role } from '#lib/adapters/types.js';
+import { requireProductAccess } from '#lib/server/product-access.js';
 
 function canManage(role: string | null | undefined, isAdmin: boolean): boolean {
   return isAdmin || role === 'maintainer';

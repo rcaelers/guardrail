@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { Crash } from '$lib/adapters/types';
-  import { mainModuleName } from '$lib/utils/crash-report';
+  import type { Crash } from '#lib/adapters/types.js';
+  import { mainModuleName } from '#lib/utils/crash-report.js';
 
   let { crash }: { crash: Crash } = $props();
 

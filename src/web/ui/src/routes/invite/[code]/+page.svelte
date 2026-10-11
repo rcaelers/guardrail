@@ -1,6 +1,6 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import type { PageData, ActionData } from './$types';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -82,7 +82,12 @@
       if (!p) popupBlocked = true;
     }
 
-    return async ({ result, update }: { result: import('@sveltejs/kit').ActionResult; update: () => Promise<void> }) => {
+    return async (
+      { result, update }: { 
+        result: import('$app/forms').ActionResult;
+        update: () => Promise<void>
+       }
+    ) => {
       if (result.type === 'success') {
         const url = (result.data as Record<string, unknown> | undefined)?.setup_url as string | undefined;
         const popupUrl = url ? buildPopupUrl(url) : null;
@@ -140,10 +145,28 @@
           </p>
         {/if}
       {:else}
-        <div class="flex items-center gap-2 text-[13px] text-ink-muted dark:text-ink-mutedDark">
-          <svg class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+        <div
+          class="flex items-center gap-2 text-[13px] text-ink-muted dark:text-ink-mutedDark"
+        >
+          <svg
+            class="h-4 w-4 animate-spin"
+            viewBox="0 0 24 24"
+            fill="none"
+          >
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            ></circle>
+
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+            ></path>
           </svg>
           Signing in…
         </div>

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { LogFile } from '$lib/adapters/types';
-  import { fmtInt } from '$lib/utils/format';
+  import type { LogFile } from '#lib/adapters/types.js';
+  import { fmtInt } from '#lib/utils/format.js';
 
   let { logs }: { logs: LogFile[] } = $props();
   let active = $state(0);

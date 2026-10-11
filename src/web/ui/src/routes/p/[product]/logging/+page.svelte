@@ -1,8 +1,8 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import type { PageProps } from './$types';
-  import RowSelectionMenu from '$lib/components/RowSelectionMenu.svelte';
-  import { fmtDate } from '$lib/utils/format';
+  import RowSelectionMenu from '#lib/components/RowSelectionMenu.svelte';
+  import { fmtDate } from '#lib/utils/format.js';
 
   let { data, form }: PageProps = $props();
   let selected = $state<string[]>([]);

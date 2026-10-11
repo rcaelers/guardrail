@@ -1,5 +1,5 @@
 import type { PageServerLoad, Actions } from './$types';
-import { createAdapter } from '$lib/adapters';
+import { createAdapter } from '#lib/adapters/index.js';
 import { error, fail, redirect } from '@sveltejs/kit';
 
 export const load: PageServerLoad = async ({ locals, url, request }) => {

@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { goto, invalidateAll, replaceState } from '$app/navigation';
-  import { browser } from '$app/environment';
-  import { page } from '$app/stores';
+  import { goto, refreshAll } from '$app/navigation';
+  import { browser } from '$app/env';
+  import { page } from '$app/state';
   import type { PageData } from './$types';
-  import type { Crash, CrashGroup, CrashSummary, ListResult, Status } from '$lib/adapters/types';
+  import type { Crash, CrashGroup, CrashSummary, ListResult, Status } from '#lib/adapters/types.js';
 
-  import Select from '$lib/components/Select.svelte';
-  import GroupRow from '$lib/components/GroupRow.svelte';
-  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
-  import DetailPanel from '$lib/components/detail/DetailPanel.svelte';
-  import { pane } from '$lib/stores/pane.svelte';
+  import Select from '#lib/components/Select.svelte';
+  import GroupRow from '#lib/components/GroupRow.svelte';
+  import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
+  import DetailPanel from '#lib/components/detail/DetailPanel.svelte';
+  import { pane } from '#lib/stores/pane.svelte.js';
 
   let { data }: { data: PageData } = $props();
 
@@ -64,11 +64,10 @@
       if (data.filters.version && data.filters.version !== 'all')
         params.set('version', data.filters.version);
       const query = params.size ? `?${params}` : '';
-      const r = await fetch(
-        `/p/${encodeURIComponent($page.params.product!)}/crashes/${encodeURIComponent(groupId)}/events${query}`
-      );
+      const r = await fetch(`/p/${encodeURIComponent(page.params.product!)}/crashes/${encodeURIComponent(groupId)}/events${query}`);
+
       if (!r.ok) return;
-      const body = (await r.json()) as { crashes: CrashSummary[] };
+      const body = await r.json() as { crashes: CrashSummary[] };
       loadedCrashes[groupId] = body.crashes;
     } finally {
       loadingCrashes[groupId] = false;
@@ -138,14 +137,14 @@
       signal: controller.signal
     })
       .then(async (response) => {
-        if (!response.ok) throw new Error(`Crash list details failed (${response.status})`);
-        detailedList = (await response.json()) as ListResult;
-      })
-      .catch((cause: unknown) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        console.error('Unable to load crash list details', cause);
-        listDetailsFailed = true;
-      });
+      if (!response.ok) throw new Error(`Crash list details failed (${response.status})`);
+
+      detailedList = await response.json() as ListResult;
+    }).catch((cause: unknown) => {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      console.error('Unable to load crash list details', cause);
+      listDetailsFailed = true;
+    });
 
     return () => controller.abort();
   });
@@ -155,17 +154,16 @@
     const request = ++crashRequest;
     loadingCrashId = crashId;
     if (updateUrl) {
-      const url = new URL($page.url);
+      const url = new URL(page.url.href);
       url.searchParams.delete('id');
       url.searchParams.set('crash', crashId);
-      replaceState(url, {});
+      goto(url, { shallow: true, replace: true });
     }
     try {
-      const r = await fetch(
-        `/p/${encodeURIComponent($page.params.product!)}/crashes/detail/${encodeURIComponent(crashId)}`
-      );
+      const r = await fetch(`/p/${encodeURIComponent(page.params.product!)}/crashes/detail/${encodeURIComponent(crashId)}`);
+
       if (!r.ok) return;
-      const bundle = (await r.json()) as { crash: Crash; group: CrashGroup };
+      const bundle = await r.json() as { crash: Crash; group: CrashGroup };
       if (request === crashRequest) picked = bundle;
     } finally {
       if (request === crashRequest) loadingCrashId = null;
@@ -186,7 +184,7 @@
       `/p/${encodeURIComponent(data.product.id)}/crashes/${encodeURIComponent(groupId)}/events?${params}`
     );
     if (!response.ok) return null;
-    const body = (await response.json()) as { crashes: CrashSummary[] };
+    const body = await response.json() as { crashes: CrashSummary[] };
     return body.crashes[0]?.id ?? null;
   }
 
@@ -214,33 +212,35 @@
 
   // ---- URL-driven filters ----
   async function updateParam(key: string, value: string, reset = false) {
-    const url = new URL($page.url);
-    if (!value || value === 'all' || value === '') url.searchParams.delete(key);
-    else url.searchParams.set(key, value);
+    const url = new URL(page.url.href);
+
+    if (!value || value === 'all' || value === '') url.searchParams.delete(key); else url.searchParams.set(key, value);
+
     if (reset) {
       url.searchParams.delete('id');
       url.searchParams.delete('crash');
       url.searchParams.delete('page');
     }
-    await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
+    await goto(url, { reset: false, replace: true });
   }
 
   async function setPageSize(size: string) {
-    const url = new URL($page.url);
+    const url = new URL(page.url.href);
     url.searchParams.set('limit', size);
     url.searchParams.delete('page');
     url.searchParams.delete('id');
     url.searchParams.delete('crash');
-    await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
+    await goto(url, { reset: false, replace: true });
   }
 
   async function goToPage(n: number) {
     const totalPages = Math.max(1, Math.ceil(list.total / data.filters.limit));
     const clamped = Math.max(1, Math.min(totalPages, n));
-    const url = new URL($page.url);
-    if (clamped <= 1) url.searchParams.delete('page');
-    else url.searchParams.set('page', String(clamped));
-    await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
+    const url = new URL(page.url.href);
+
+    if (clamped <= 1) url.searchParams.delete('page'); else url.searchParams.set('page', String(clamped));
+
+    await goto(url, { reset: false, replace: true });
   }
 
   // Selecting a group shows its newest crash and expands the row so the other
@@ -267,7 +267,7 @@
     e.preventDefault();
     const startX = e.clientX;
     const startPct = pane.pct;
-    const rect = splitEl!.getBoundingClientRect();
+    const rect = (splitEl!).getBoundingClientRect();
 
     function move(ev: MouseEvent) {
       const dx = ev.clientX - startX;
@@ -285,12 +285,12 @@
   }
 
   // ---- Form actions ----
-  // invalidateAll refreshes the list; the detail pane is client-side state, so
+  // refreshAll refreshes the list; the detail pane is client-side state, so
   // drop and reload the current pick afterward.
   async function refreshAfterMutation() {
     const id = activeCrash?.id ?? null;
     picked = null;
-    await invalidateAll();
+    await refreshAll();
     if (id) await showCrash(id, true);
   }
 
@@ -363,7 +363,7 @@
     const r = await fetch('?/deleteCrash', { method: 'POST', body });
     if (!r.ok) return;
     forgetLoaded(groupId ?? activeCrash?.groupId ?? '');
-    const url = new URL($page.url);
+    const url = new URL(page.url.href);
     if (activeCrash?.id === crashId) {
       crashRequest += 1;
       picked = null;
@@ -371,9 +371,9 @@
       url.searchParams.delete('crash');
       url.searchParams.delete('id');
       pane.open = false;
-      await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
+      await goto(url, { reset: false, replace: true });
     }
-    await invalidateAll();
+    await refreshAll();
   }
 
   async function deleteGroup(groupId: string) {
@@ -385,7 +385,7 @@
     next.delete(groupId);
     expanded = next;
     forgetLoaded(groupId);
-    const url = new URL($page.url);
+    const url = new URL(page.url.href);
     if (activeGroup?.id === groupId || url.searchParams.get('id') === groupId) {
       crashRequest += 1;
       picked = null;
@@ -393,9 +393,9 @@
       url.searchParams.delete('id');
       url.searchParams.delete('crash');
       pane.open = false;
-      await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
+      await goto(url, { reset: false, replace: true });
     }
-    await invalidateAll();
+    await refreshAll();
   }
 </script>
 
@@ -404,11 +404,11 @@
     message={pendingConfirm.message}
     confirmLabel={pendingConfirm.confirmLabel}
     onconfirm={() => {
-      const action = pendingConfirm!.action;
+      const action = (pendingConfirm!).action;
       pendingConfirm = null;
       void action();
     }}
-    oncancel={() => (pendingConfirm = null)}
+    oncancel={() => pendingConfirm = null}
   />
 {/if}
 
@@ -499,14 +499,14 @@
     <div class="scroll-clean min-h-0 flex-1 overflow-auto">
       {#each list.groups as g (g.id)}
         <GroupRow
-          {g}
+          g={g}
           selected={activeGroup?.id === g.id}
           expanded={expanded.has(g.id)}
           crashes={crashesFor(g)}
           total={g.matchingCount ?? g.count}
           loadingMore={loadingCrashes[g.id] ?? false}
           selectedCrashId={activeCrash?.id ?? null}
-          {canDelete}
+          canDelete={canDelete}
           onSelect={selectGroup}
           onToggle={toggleExpanded}
           onLoadMore={loadAllCrashes}
@@ -566,7 +566,7 @@
       aria-valuemax={68}
       tabindex="0"
       onmousedown={onDragStart}
-      ondblclick={() => (pane.pct = 42)}
+      ondblclick={() => pane.pct = 42}
       onkeydown={(e) => {
         if (e.key === 'ArrowLeft') { pane.pct = Math.min(68, pane.pct + 2); e.preventDefault(); }
         else if (e.key === 'ArrowRight') { pane.pct = Math.max(22, pane.pct - 2); e.preventDefault(); }
@@ -598,9 +598,9 @@
         onDeleteNote={confirmDeleteNote}
         onDeleteCrash={confirmDeleteCrash}
         onDeleteGroup={confirmDeleteGroup}
-        {readOnly}
-        {canMerge}
-        onClose={() => (pane.open = false)}
+        readOnly={readOnly}
+        canMerge={canMerge}
+        onClose={() => pane.open = false}
       />
     {/if}
   </div>
@@ -609,7 +609,7 @@
   {#if !pane.open && activeCrash}
     <button
       type="button"
-      onclick={() => (pane.open = true)}
+      onclick={() => pane.open = true}
       class="flex w-[40px] shrink-0 cursor-pointer items-center justify-center border-l border-line dark:border-line-dark bg-surface-panel dark:bg-surface-panelDark text-[11px] text-ink-muted dark:text-ink-mutedDark"
       title="Show detail"
     >

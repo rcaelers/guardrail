@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Role } from '$lib/adapters/types';
+  import type { Role } from '#lib/adapters/types.js';
 
   let { role }: { role: Role | null } = $props();
 

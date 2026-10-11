@@ -1,9 +1,9 @@
 // Admin: users management.
 
 import type { PageServerLoad, Actions } from './$types';
-import { createAdapter } from '$lib/adapters';
+import { createAdapter } from '#lib/adapters/index.js';
 import { error, fail } from '@sveltejs/kit';
-import type { Role } from '$lib/adapters/types';
+import type { Role } from '#lib/adapters/types.js';
 
 function requireAdmin(locals: App.Locals) {
   if (!locals.user) throw error(401);

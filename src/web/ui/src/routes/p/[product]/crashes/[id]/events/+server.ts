@@ -5,9 +5,9 @@
 // pulls the group's remaining crashes without a full page navigation.
 
 import type { RequestHandler } from './$types';
-import { error, json } from '@sveltejs/kit';
-import { createAdapter } from '$lib/adapters';
-import { requireProductAccess } from '$lib/server/product-access';
+import { error } from '@sveltejs/kit';
+import { createAdapter } from '#lib/adapters/index.js';
+import { requireProductAccess } from '#lib/server/product-access.js';
 
 export const GET: RequestHandler = async ({ params, url, locals, request }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
@@ -34,5 +34,5 @@ export const GET: RequestHandler = async ({ params, url, locals, request }) => {
   const foreign = result.crashes.find((c) => c.productId !== product.id);
   if (foreign) throw error(404, `Group ${params.id} is not in ${product.name}`);
 
-  return json(result);
+  return Response.json(result);
 };

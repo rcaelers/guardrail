@@ -1,8 +1,8 @@
 import type { PageServerLoad, Actions } from './$types';
 import { error, fail, redirect } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
+import { GUARDRAIL_API_URL } from '$app/env/private';
 
-const apiBase = env.GUARDRAIL_API_URL ?? 'http://web:80/api/v1';
+const apiBase = GUARDRAIL_API_URL ?? 'http://web:80/api/v1';
 
 export const load: PageServerLoad = async ({ params }) => {
   const r = await fetch(`${apiBase}/invitations/redeem/${encodeURIComponent(params.code)}`, {

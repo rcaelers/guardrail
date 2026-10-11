@@ -1,9 +1,9 @@
 <script lang="ts">
   import '../app.css';
-  import { browser } from '$app/environment';
+  import { browser } from '$app/env';
   import { onNavigate } from '$app/navigation';
-  import { installCsrfFetch } from '$lib/csrf';
-  import { beginBusy, systemBusy } from '$lib/system-busy';
+  import { installCsrfFetch } from '#lib/csrf.js';
+  import { beginBusy, systemBusy } from '#lib/system-busy.js';
   import type { LayoutData } from './$types';
 
   // Attach the CSRF header to same-origin mutating fetches app-wide.
@@ -11,10 +11,13 @@
 
   // Keep the indicator active for the complete navigation lifecycle. The
   // fetch wrapper covers enhanced form actions and direct API requests.
-  onNavigate(() => beginBusy());
+  onNavigate(({ shallow, type }) => {
+    if (shallow && type === 'goto') return;
+
+    return beginBusy();
+  });
 
   let { data, children }: { data: LayoutData; children: any } = $props();
-
   let dark = $state(false);
 
   $effect(() => {

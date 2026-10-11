@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Breadcrumb } from '$lib/adapters/types';
+  import type { Breadcrumb } from '#lib/adapters/types.js';
   let { breadcrumbs }: { breadcrumbs: Breadcrumb[] } = $props();
   const levelClass = (l: string) =>
     l === 'error' ? 'text-signal-danger dark:text-signal-dangerDark' :

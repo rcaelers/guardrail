@@ -1,7 +1,7 @@
 // Session filter state — a Svelte 5 runed store.
-// Import once: `import { filters } from '$lib/stores/filters.svelte';`
+// Import once: `import { filters } from '#lib/stores/filters.svelte';`
 
-import type { Status } from '$lib/adapters/types';
+import type { Status } from '#lib/adapters/types.js';
 
 class FilterStore {
   version = $state<string>('all');

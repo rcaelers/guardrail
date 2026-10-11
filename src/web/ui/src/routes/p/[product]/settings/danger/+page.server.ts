@@ -1,9 +1,9 @@
 // Product deletion. Maintainer or admin only. Requires typing the product name.
 
 import type { Actions } from './$types';
-import { createAdapter } from '$lib/adapters';
+import { createAdapter } from '#lib/adapters/index.js';
 import { error, fail, redirect } from '@sveltejs/kit';
-import { requireProductAccess } from '$lib/server/product-access';
+import { requireProductAccess } from '#lib/server/product-access.js';
 
 export const actions: Actions = {
   visibility: async ({ request, locals, params }) => {

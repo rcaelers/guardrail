@@ -6,7 +6,7 @@
 
 import type { LayoutServerLoad } from './$types';
 import { error, redirect } from '@sveltejs/kit';
-import { createAdapter } from '$lib/adapters';
+import { createAdapter } from '#lib/adapters/index.js';
 
 export const load: LayoutServerLoad = async ({ params, locals, request }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');

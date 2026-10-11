@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { CrashAttachment } from '$lib/adapters/types';
-  import { fmtBytes, fmtDate } from '$lib/utils/format';
+  import type { CrashAttachment } from '#lib/adapters/types.js';
+  import { fmtBytes, fmtDate } from '#lib/utils/format.js';
 
   let { attachments, productId }: { attachments: CrashAttachment[]; productId: string } = $props();
 

@@ -5,15 +5,14 @@
 
 import type { LayoutServerLoad } from './$types';
 import { redirect } from '@sveltejs/kit';
-import { createAdapter } from '$lib/adapters';
-import { env } from '$env/dynamic/private';
+import { createAdapter } from '#lib/adapters/index.js';
+import { GUARDRAIL_API_URL } from '$app/env/private';
 
 async function fetchSelfServiceUrl(request: Request): Promise<string | null> {
   try {
-    const webBase = (env.GUARDRAIL_API_URL ?? '').replace(/\/api\/v1\/?$/, '');
-    const resp = await fetch(`${webBase}/auth/config`, {
-      headers: { cookie: request.headers.get('cookie') ?? '' }
-    });
+    const webBase = (GUARDRAIL_API_URL ?? '').replace(/\/api\/v1\/?$/, '');
+    const resp = await fetch(`${webBase}/auth/config`, { headers: { cookie: request.headers.get('cookie') ?? '' } });
+
     if (!resp.ok) return null;
     const data = await resp.json() as { self_service_url?: string | null };
     return data.self_service_url ?? null;
@@ -26,13 +25,9 @@ export const load: LayoutServerLoad = async ({ locals, url, request }) => {
   const path = url.pathname;
   // /login and /auth/* are handled by the Rust server or the login page itself —
   // don't gate them or the OIDC redirect loop never terminates.
-  const isLogin =
-    path === '/login' ||
-    path.startsWith('/login/') ||
-    path.startsWith('/auth/') ||
-    path.startsWith('/invite/');
-  const isPublicAllowed = path === '/' || path.startsWith('/p/');
+  const isLogin = path === '/login' || path.startsWith('/login/') || path.startsWith('/auth/') || path.startsWith('/invite/');
 
+  const isPublicAllowed = path === '/' || path.startsWith('/p/');
   const realUser = locals.realUser ?? null;
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
   const selfServiceUrl = await fetchSelfServiceUrl(request);

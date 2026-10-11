@@ -1,4 +1,4 @@
-import type { Crash, DumpFrame, DumpThread } from '$lib/adapters/types';
+import type { Crash, DumpFrame, DumpThread } from '#lib/adapters/types.js';
 
 export function shortenExceptionType(value: string | undefined | null): string {
   if (!value) return '';

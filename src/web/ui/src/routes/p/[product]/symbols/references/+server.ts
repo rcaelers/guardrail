@@ -1,7 +1,6 @@
-import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { createAdapter } from '$lib/adapters';
-import type { SymbolQuery } from '$lib/adapters/types';
+import { createAdapter } from '#lib/adapters/index.js';
+import type { SymbolQuery } from '#lib/adapters/types.js';
 
 export const GET: RequestHandler = async ({ params, request, url }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
@@ -13,5 +12,5 @@ export const GET: RequestHandler = async ({ params, request, url }) => {
     references: true
   };
   const symbols = await adapter.listSymbols(params.product!, query);
-  return json(Object.fromEntries(symbols.map((symbol) => [symbol.id, symbol.referencedBy])));
+  return Response.json(Object.fromEntries(symbols.map((symbol) => [symbol.id, symbol.referencedBy])));
 };

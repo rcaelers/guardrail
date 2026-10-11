@@ -1,8 +1,8 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import type { PageData, ActionData } from './$types';
-  import type { CreatedApiToken, EntitlementDef } from '$lib/adapters/types';
-  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+  import type { CreatedApiToken, EntitlementDef } from '#lib/adapters/types.js';
+  import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 

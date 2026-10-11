@@ -1,10 +1,10 @@
+import type { Handle, HandleServerError } from '@sveltejs/kit/hooks';
+
 // Resolve the current user from the session cookie on every request,
 // so routes can read `event.locals.user` instead of re-parsing cookies.
-
-import type { Handle, HandleServerError } from '@sveltejs/kit';
-import { env } from '$env/dynamic/private';
-import { createAdapter } from '$lib/adapters';
-import { CSRF_COOKIE, CSRF_FIELD, CSRF_HEADER, MUTATING_METHODS } from '$lib/csrf';
+import { GUARDRAIL_API_URL } from '$app/env/private';
+import { createAdapter } from '#lib/adapters/index.js';
+import { CSRF_COOKIE, CSRF_FIELD, CSRF_HEADER, MUTATING_METHODS } from '#lib/csrf.js';
 
 function newCsrfToken(): string {
   return crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
@@ -82,7 +82,7 @@ export const handle: Handle = async ({ event, resolve }) => {
     event.locals.user = await adapter.getMe();
     getMeMs = Date.now() - t0;
     if (event.locals.user) {
-      const webBase = (env.GUARDRAIL_API_URL ?? '').replace(/\/api\/v1\/?$/, '');
+      const webBase = (GUARDRAIL_API_URL ?? '').replace(/\/api\/v1\/?$/, '');
       try {
         const t1 = Date.now();
         const r = await fetch(`${webBase}/auth/real-user`, {
@@ -107,36 +107,39 @@ export const handle: Handle = async ({ event, resolve }) => {
 
   console.log(
     JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level: 'INFO',
-      message: 'finished processing request',
-      method,
-      uri: path,
-      status: response.status,
-      latency: `${Date.now() - start} ms`,
-      ...(getMeMs !== undefined && { 'latency.getMe': `${getMeMs} ms` }),
-      ...(realUserMs !== undefined && { 'latency.realUser': `${realUserMs} ms` }),
-      ...(resolveMs !== undefined && { 'latency.resolve': `${resolveMs} ms` })
-    })
-  );
+    timestamp: new Date().toISOString(),
+    level: 'INFO',
+    message: 'finished processing request',
+    method,
+    uri: path,
+    status: response.status,
+    latency: `${Date.now() - start} ms`,
+    ...getMeMs !== undefined && { 'latency.getMe': `${getMeMs} ms` },
+    ...realUserMs !== undefined && { 'latency.realUser': `${realUserMs} ms` },
+    ...resolveMs !== undefined && { 'latency.resolve': `${resolveMs} ms` }
+  }));
 
   return response;
 };
 
-export const handleError: HandleServerError = ({ error, event, status, message }) => {
+// SvelteKit 3 also passes expected errors (error(404), framework 404s, failed
+// validations) through this hook; only unexpected failures are logged, as before.
+// Returning nothing keeps SvelteKit's status and safe message.
+export const handleError: HandleServerError = ({ kind, error, event }) => {
+  if (kind !== 'unknown') {
+    return;
+  }
   const err = error instanceof Error ? error : new Error(String(error));
   console.error(
     JSON.stringify({
-      level: 'error',
-      message: 'SvelteKit request failed',
-      method: event.request.method,
-      path: event.url.pathname,
-      query: event.url.search,
-      status,
-      errorMessage: err.message,
-      stack: err.stack
+    level: 'error',
+    message: 'SvelteKit request failed',
+    method: event.request.method,
+    path: event.url.pathname,
+    query: event.url.search,
+    status: 500,
+    errorMessage: err.message,
+    stack: err.stack
     })
   );
-
-  return { message };
 };

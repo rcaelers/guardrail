@@ -1,5 +1,5 @@
 import type { PageServerLoad, Actions } from './$types';
-import { createAdapter } from '$lib/adapters';
+import { createAdapter } from '#lib/adapters/index.js';
 import { error, fail } from '@sveltejs/kit';
 
 function requireAdmin(locals: App.Locals) {

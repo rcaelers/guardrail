@@ -2,10 +2,10 @@
 // product; applies role gating to mutations.
 
 import type { PageServerLoad, Actions } from './$types';
-import { createAdapter } from '$lib/adapters';
+import { createAdapter } from '#lib/adapters/index.js';
 import { error, fail, redirect } from '@sveltejs/kit';
-import type { Status } from '$lib/adapters/types';
-import { requireProductAccess } from '$lib/server/product-access';
+import type { Status } from '#lib/adapters/types.js';
+import { requireProductAccess } from '#lib/server/product-access.js';
 
 function canWrite(role: string | null | undefined): boolean {
   return role === 'readwrite' || role === 'maintainer';

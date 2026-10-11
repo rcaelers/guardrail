@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { invalidateAll, goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { refreshAll, goto } from '$app/navigation';
+  import { page } from '$app/state';
   import type { PageData } from './$types';
-  import type { Status } from '$lib/adapters/types';
-  import DetailPanel from '$lib/components/detail/DetailPanel.svelte';
-  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+  import type { Status } from '#lib/adapters/types.js';
+  import DetailPanel from '#lib/components/detail/DetailPanel.svelte';
+  import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
 
   let { data }: { data: PageData } = $props();
 
   const readOnly = $derived(data.role === 'readonly');
   const canMerge = $derived(data.role === 'maintainer');
-  const backHref = $derived(`/p/${$page.params.product}/crashes`);
+  const backHref = $derived(`/p/${page.params.product}/crashes`);
   let pendingDeleteNote = $state<string | null>(null);
 
   async function setStatus(s: Status, fixedInVersion?: string | null) {
@@ -18,32 +18,32 @@
     body.set('status', s);
     body.set('fixedInVersion', fixedInVersion ?? '');
     await fetch('?/setStatus', { method: 'POST', body });
-    await invalidateAll();
+    await refreshAll();
   }
   async function addNote(noteBody: string) {
     const body = new FormData();
     body.set('body', noteBody);
     await fetch('?/addNote', { method: 'POST', body });
-    await invalidateAll();
+    await refreshAll();
   }
   async function updateNote(noteId: string, noteBody: string) {
     const body = new FormData();
     body.set('noteId', noteId);
     body.set('body', noteBody);
     await fetch('?/updateNote', { method: 'POST', body });
-    await invalidateAll();
+    await refreshAll();
   }
   async function deleteNote(noteId: string) {
     const body = new FormData();
     body.set('noteId', noteId);
     await fetch('?/deleteNote', { method: 'POST', body });
-    await invalidateAll();
+    await refreshAll();
   }
   async function merge(mergedId: string) {
     const body = new FormData();
     body.set('mergedId', mergedId);
     await fetch('?/merge', { method: 'POST', body });
-    await invalidateAll();
+    await refreshAll();
   }
 </script>
 
@@ -56,7 +56,7 @@
       pendingDeleteNote = null;
       void deleteNote(id);
     }}
-    oncancel={() => (pendingDeleteNote = null)}
+    oncancel={() => pendingDeleteNote = null}
   />
 {/if}
 
@@ -72,9 +72,9 @@
       onMerge={merge}
       onAddNote={addNote}
       onUpdateNote={updateNote}
-      onDeleteNote={(id) => (pendingDeleteNote = id)}
-      {readOnly}
-      {canMerge}
+      onDeleteNote={(id) => pendingDeleteNote = id}
+      readOnly={readOnly}
+      canMerge={canMerge}
       onClose={() => goto(backHref)}
     />
   </div>

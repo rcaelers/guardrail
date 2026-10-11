@@ -1,8 +1,8 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
-  import { invalidateAll } from '$app/navigation';
+  import { refreshAll } from '$app/navigation';
   import type { PageData, ActionData } from './$types';
-  import type { ValidationScript } from '$lib/adapters/types';
+  import type { ValidationScript } from '#lib/adapters/types.js';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -17,10 +17,10 @@
   $effect(() => {
     if (form?.ok && form?.action === 'uploadScript') {
       scriptFiles = undefined;
-      invalidateAll();
+      refreshAll();
     }
     if (form?.ok && form?.action === 'deleteScript') {
-      invalidateAll();
+      refreshAll();
     }
   });
 

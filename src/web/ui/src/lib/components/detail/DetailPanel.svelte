@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Crash, CrashGroup, Status } from '$lib/adapters/types';
+  import type { Crash, CrashGroup, Status } from '#lib/adapters/types.js';
   import StatusPill from '../StatusPill.svelte';
   import SignalChip from '../SignalChip.svelte';
   import StackTab from './StackTab.svelte';
@@ -11,7 +11,7 @@
   import AnnotationsTab from './AnnotationsTab.svelte';
   import RelatedTab from './RelatedTab.svelte';
   import NotesTab from './NotesTab.svelte';
-  import { fmtDate, fmtInt } from '$lib/utils/format';
+  import { fmtDate, fmtInt } from '#lib/utils/format.js';
   import {
     crashAddress,
     crashOs,
@@ -21,7 +21,7 @@
     topFrameFile,
     topFrameLabel,
     topFrameLine
-  } from '$lib/utils/crash-report';
+  } from '#lib/utils/crash-report.js';
 
   interface Props {
     group: CrashGroup;

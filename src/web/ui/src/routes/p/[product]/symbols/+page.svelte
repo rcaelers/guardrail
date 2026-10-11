@@ -1,13 +1,13 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import { goto } from '$app/navigation';
-  import { browser } from '$app/environment';
-  import { page } from '$app/stores';
+  import { browser } from '$app/env';
+  import { page } from '$app/state';
   import type { PageProps } from './$types';
-  import Select from '$lib/components/Select.svelte';
-  import { fmtDate } from '$lib/utils/format';
-  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
-  import RowSelectionMenu from '$lib/components/RowSelectionMenu.svelte';
+  import Select from '#lib/components/Select.svelte';
+  import { fmtDate } from '#lib/utils/format.js';
+  import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
+  import RowSelectionMenu from '#lib/components/RowSelectionMenu.svelte';
 
   let { data, form }: PageProps = $props();
 
@@ -48,18 +48,16 @@
 
     referenceCounts = null;
     referenceCountsFailed = false;
-    void fetch(`/p/${encodeURIComponent($page.params.product!)}/symbols/references${query}`, {
-      signal: controller.signal
-    })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Reference count request failed (${response.status})`);
-        referenceCounts = await response.json() as Record<string, number>;
+
+    void fetch(`/p/${encodeURIComponent(page.params.product!)}/symbols/references${query}`, { signal: controller.signal }).then(async (response) => {
+      if (!response.ok) throw new Error(`Reference count request failed (${response.status})`);
+      referenceCounts = await response.json() as Record<string, number>;
       })
       .catch((cause) => {
-        if (cause instanceof DOMException && cause.name === 'AbortError') return;
-        console.error('Unable to load symbol reference counts', cause);
-        referenceCountsFailed = true;
-      });
+      if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      console.error('Unable to load symbol reference counts', cause);
+      referenceCountsFailed = true;
+    });
 
     return () => controller.abort();
   });
@@ -68,10 +66,12 @@
     selected = [];
     lastSelectedIndex = null;
     selectionMenu = null;
-    const url = new URL($page.url);
-    if (!value || value === 'all' || value === '') url.searchParams.delete(key);
-    else url.searchParams.set(key, value);
-    await goto(url, { keepFocus: true, noScroll: true, replaceState: true });
+
+    const url = new URL(page.url.href);
+
+    if (!value || value === 'all' || value === '') url.searchParams.delete(key); else url.searchParams.set(key, value);
+
+    await goto(url, { reset: false, replace: true });
   }
 
   let showUpload = $state(false);
@@ -204,16 +204,19 @@
   }
 </script>
 
-<svelte:window onpointerup={endPointerSelection} onpointercancel={endPointerSelection} />
+<svelte:window
+  onpointerup={endPointerSelection}
+  onpointercancel={endPointerSelection}
+></svelte:window>
 
 {#if selectionMenu}
   <RowSelectionMenu
     x={selectionMenu.x}
     y={selectionMenu.y}
     version={data.symbols[selectionMenu.index]?.version ?? ''}
-    onselectnearby={() => selectNearby(selectionMenu!.index)}
-    onselectsameversion={() => selectSameVersion(selectionMenu!.index)}
-    onclose={() => (selectionMenu = null)}
+    onselectnearby={() => selectNearby((selectionMenu!).index)}
+    onselectsameversion={() => selectSameVersion((selectionMenu!).index)}
+    onclose={() => selectionMenu = null}
   />
 {/if}
 
@@ -228,7 +231,7 @@
         deleteForm.requestSubmit();
       }
     }}
-    oncancel={() => (pendingConfirm = null)}
+    oncancel={() => pendingConfirm = null}
   />
 {/if}
 
@@ -280,7 +283,7 @@
     {#if canUpload}
       <button
         type="button"
-        onclick={() => (showUpload = !showUpload)}
+        onclick={() => showUpload = !showUpload}
         class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white"
       >Upload</button>
     {/if}
@@ -319,8 +322,16 @@
         </select>
       </label>
       <div class="ml-auto flex gap-2">
-        <button type="button" onclick={() => (showUpload = false)} class="rounded-md border border-line dark:border-line-dark bg-transparent px-3 py-1.5 text-[13px]">Cancel</button>
-        <button type="submit" class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white">Upload symbol</button>
+        <button
+          type="button"
+          onclick={() => showUpload = false}
+          class="rounded-md border border-line dark:border-line-dark bg-transparent px-3 py-1.5 text-[13px]"
+        >Cancel</button>
+
+        <button
+          type="submit"
+          class="rounded-md bg-accent px-3 py-1.5 text-[13px] font-medium text-white"
+        >Upload symbol</button>
       </div>
     </form>
   {/if}

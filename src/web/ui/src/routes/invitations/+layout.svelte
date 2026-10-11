@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { browser } from '$app/environment';
-  import { page } from '$app/stores';
-  import UserMenu from '$lib/components/UserMenu.svelte';
-  import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+  import { browser } from '$app/env';
+  import { page } from '$app/state';
+  import UserMenu from '#lib/components/UserMenu.svelte';
+  import ThemeToggle from '#lib/components/ThemeToggle.svelte';
   import type { LayoutData } from './$types';
 
   let { data, children }: { data: LayoutData; children: any } = $props();
@@ -10,7 +10,11 @@
   const isAdmin = $derived(data.user?.isAdmin ?? false);
 
   let dark = $state(false);
-  $effect(() => { if (browser) dark = localStorage.getItem('gr-dark') === '1'; });
+
+  $effect(() => {
+    if (browser) dark = localStorage.getItem('gr-dark') === '1';
+  });
+
   $effect(() => {
     if (!browser) return;
     document.documentElement.classList.toggle('dark', dark);
@@ -26,7 +30,7 @@
   ];
 
   const current = $derived.by(() => {
-    const segs = $page.url.pathname.split('/');
+    const segs = page.url.pathname.split('/');
     if (segs[1] === 'invitations') return 'invitations';
     return segs[2] ?? '';
   });
@@ -46,9 +50,21 @@
       </div>
     </a>
     <span class="flex-1"></span>
-    <a href="/" class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[12px] text-ink-muted dark:text-ink-mutedDark">← Back to app</a>
-    <ThemeToggle {dark} setDark={(v) => (dark = v)} />
-    {#if data.user}<UserMenu user={data.user} isAdmin={data.user.isAdmin} profileUrl={data.selfServiceUrl} />{/if}
+
+    <a
+      href="/"
+      class="rounded-md border border-line dark:border-line-dark bg-transparent px-2.5 py-1 text-[12px] text-ink-muted dark:text-ink-mutedDark"
+    >← Back to app</a>
+
+    <ThemeToggle dark={dark} setDark={(v) => dark = v} />
+
+    {#if data.user}
+      <UserMenu
+        user={data.user}
+        isAdmin={data.user.isAdmin}
+        profileUrl={data.selfServiceUrl}
+      />
+    {/if}
   </header>
 
   <div class="flex min-h-0 flex-1">
@@ -61,7 +77,7 @@
           {#each NAV as [slug, label, href]}
             {@const active = current === slug}
             <a
-              {href}
+              href={href}
               class="block rounded-md px-2.5 py-1.5"
               class:bg-accent-soft={active}
               class:dark:bg-accent-softDark={active}

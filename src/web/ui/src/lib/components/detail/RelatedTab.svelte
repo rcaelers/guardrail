@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { page } from '$app/stores';
-  import type { RelatedRef } from '$lib/adapters/types';
-  import { fmtInt } from '$lib/utils/format';
-  import StatusPill from '$lib/components/StatusPill.svelte';
+  import { page } from '$app/state';
+  import type { RelatedRef } from '#lib/adapters/types.js';
+  import { fmtInt } from '#lib/utils/format.js';
+  import StatusPill from '#lib/components/StatusPill.svelte';
 
   interface Props { related: RelatedRef[]; onMerge: (mergedId: string) => void; canMerge?: boolean; }
   let { related, onMerge, canMerge = true }: Props = $props();
 
   // Link back to the same product-scoped crashes list.
-  const productId = $derived($page.params.product);
+  const productId = $derived(page.params.product);
 
-  const pct = (s?: number) => (s === undefined ? '' : `${Math.round(s * 100)}%`);
+  const pct = (s?: number) => s === undefined ? '' : `${Math.round(s * 100)}%`;
 </script>
 
 {#if related.length === 0}

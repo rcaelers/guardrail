@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import type { LayoutData } from './$types';
   let { data, children }: { data: LayoutData; children: any } = $props();
 
-  const productId = $derived($page.params.product);
+  const productId = $derived(page.params.product);
   const current = $derived.by(() => {
-    const segs = $page.url.pathname.split('/');
+    const segs = page.url.pathname.split('/');
     return segs[4] ?? 'members';
   });
 
@@ -13,13 +13,29 @@
 
   const NAV = $derived([
     ['members', 'Members'] as [string, string],
-    ...(canManage ? [['tokens', 'API tokens']] as Array<[string, string]> : []),
-    ...(canManage ? [['invitations', 'Invitations']] as Array<[string, string]> : []),
-    ...(canManage ? [['email', 'Email']] as Array<[string, string]> : []),
-    ...(canManage ? [['ingestion', 'Product token']] as Array<[string, string]> : []),
-    ...(canManage ? [['processor', 'Processor']] as Array<[string, string]> : []),
-    ...(canManage ? [['crash', 'Crash ingestion']] as Array<[string, string]> : []),
-    ...(canManage ? [['danger', 'Visibility & danger']] as Array<[string, string]> : []),
+    ...canManage
+      ? [['tokens', 'API tokens']] as Array<[string, string]>
+      : [],
+
+    ...canManage
+      ? [['invitations', 'Invitations']] as Array<[string, string]>
+      : [],
+    ...canManage ? [['email', 'Email']] as Array<[string, string]> : [],
+    ...canManage
+      ? [['ingestion', 'Product token']] as Array<[string, string]>
+      : [],
+
+    ...canManage
+      ? [['processor', 'Processor']] as Array<[string, string]>
+      : [],
+
+    ...canManage
+      ? [['crash', 'Crash ingestion']] as Array<[string, string]>
+      : [],
+
+    ...canManage
+      ? [['danger', 'Visibility & danger']] as Array<[string, string]>
+      : []
   ]);
 </script>
 

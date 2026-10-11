@@ -1,7 +1,7 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import type { PageData, ActionData } from './$types';
-  import type { CreatedApiToken } from '$lib/adapters/types';
+  import type { CreatedApiToken } from '#lib/adapters/types.js';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 

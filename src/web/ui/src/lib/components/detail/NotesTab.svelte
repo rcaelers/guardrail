@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { Note } from '$lib/adapters/types';
-  import { fmtDate } from '$lib/utils/format';
+  import type { Note } from '#lib/adapters/types.js';
+  import { fmtDate } from '#lib/utils/format.js';
 
   interface Props {
     notes: Note[];

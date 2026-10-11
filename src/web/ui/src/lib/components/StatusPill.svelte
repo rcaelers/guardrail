@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Status } from '$lib/adapters/types';
+  import type { Status } from '#lib/adapters/types.js';
   let { status }: { status: Status } = $props();
 
   const color: Record<Status, string> = {

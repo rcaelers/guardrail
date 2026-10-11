@@ -1,17 +1,17 @@
 <script lang="ts">
   import type { LayoutData } from './$types';
-  import { page } from '$app/stores';
-  import { browser } from '$app/environment';
-  import ProductSwitcher from '$lib/components/ProductSwitcher.svelte';
-  import UserMenu from '$lib/components/UserMenu.svelte';
-  import RoleBadge from '$lib/components/RoleBadge.svelte';
-  import ThemeToggle from '$lib/components/ThemeToggle.svelte';
+  import { page } from '$app/state';
+  import { browser } from '$app/env';
+  import ProductSwitcher from '#lib/components/ProductSwitcher.svelte';
+  import UserMenu from '#lib/components/UserMenu.svelte';
+  import RoleBadge from '#lib/components/RoleBadge.svelte';
+  import ThemeToggle from '#lib/components/ThemeToggle.svelte';
 
   let { data, children }: { data: LayoutData; children: any } = $props();
 
   // Derive the active tab from the URL so switching products preserves it.
   const tab = $derived.by(() => {
-    const segments = $page.url.pathname.split('/'); // ['', 'p', pid, tab, ...]
+    const segments = page.url.pathname.split('/'); // ['', 'p', pid, tab, ...]
     return segments[3] ?? 'crashes';
   });
 
@@ -31,10 +31,9 @@
   const TABS = $derived([
     ['crashes', 'Crashes'] as [string, string],
     ['symbols', 'Symbols'] as [string, string],
-    ...(canAccessSettings ? [
-      ['logging', 'Logging'],
-      ['settings', 'Settings']
-    ] as Array<[string, string]> : []),
+    ...canAccessSettings
+      ? [['logging', 'Logging'], ['settings', 'Settings']] as Array<[string, string]>
+      : []
   ]);
 </script>
 
@@ -52,16 +51,20 @@
 
     <span class="h-5 w-px bg-line dark:bg-line-dark"></span>
 
-    <ProductSwitcher products={data.products ?? []} currentId={data.product.id} {tab} />
-    <RoleBadge role={data.role} />
+    <ProductSwitcher
+      products={data.products ?? []}
+      currentId={data.product.id}
+      tab={tab}
+    />
 
+    <RoleBadge role={data.role} />
     <!-- Tabs -->
     <nav class="ml-3 flex gap-0.5 text-[13px]">
       {#each TABS as [slug, label]}
         {@const href = `/p/${data.product.id}/${slug}`}
         {@const active = tab === slug}
         <a
-          {href}
+          href={href}
           class="rounded-md px-2.5 py-1.5"
           class:bg-accent-soft={active}
           class:dark:bg-accent-softDark={active}
@@ -83,7 +86,7 @@
     </nav>
 
     <span class="flex-1"></span>
-    <ThemeToggle {dark} setDark={(v) => (dark = v)} />
+    <ThemeToggle dark={dark} setDark={(v) => dark = v} />
     {#if data.user}
       <UserMenu user={data.user} isAdmin={data.user.isAdmin} profileUrl={data.selfServiceUrl} />
     {:else}

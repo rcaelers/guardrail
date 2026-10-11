@@ -1,8 +1,8 @@
 import type { RequestHandler } from './$types';
-import { env } from '$env/dynamic/private';
+import { GUARDRAIL_API_URL } from '$app/env/private';
 
 export const POST: RequestHandler = async ({ request, cookies }) => {
-  const webBase = (env.GUARDRAIL_API_URL ?? '').replace(/\/api\/v1\/?$/, '');
+  const webBase = (GUARDRAIL_API_URL ?? '').replace(/\/api\/v1\/?$/, '');
   const cookieHeader = request.headers.get('cookie') ?? '';
 
   // Use redirect:'manual' so Node.js doesn't follow the 302 server-side.

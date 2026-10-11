@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { Crash } from '$lib/adapters/types';
-  import { getCrashingThread, mainModuleName, shortenSourcePath } from '$lib/utils/crash-report';
+  import type { Crash } from '#lib/adapters/types.js';
+  import { getCrashingThread, mainModuleName, shortenSourcePath } from '#lib/utils/crash-report.js';
 
   let { crash }: { crash: Crash } = $props();
 

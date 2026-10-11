@@ -1,7 +1,7 @@
 import type { RequestHandler } from './$types';
 import { error } from '@sveltejs/kit';
-import { createAdapter } from '$lib/adapters';
-import { requireProductAccess } from '$lib/server/product-access';
+import { createAdapter } from '#lib/adapters/index.js';
+import { requireProductAccess } from '#lib/server/product-access.js';
 
 export const GET: RequestHandler = async ({ params, locals, request }) => {
   if (!locals.user) throw error(401);

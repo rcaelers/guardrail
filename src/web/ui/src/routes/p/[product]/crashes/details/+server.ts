@@ -3,10 +3,10 @@
 // discovery from delaying the Crashes tab's first paint.
 
 import type { RequestHandler } from './$types';
-import { error, json } from '@sveltejs/kit';
-import { createAdapter } from '$lib/adapters';
-import type { Status } from '$lib/adapters/types';
-import { requireProductAccess } from '$lib/server/product-access';
+import { error } from '@sveltejs/kit';
+import { createAdapter } from '#lib/adapters/index.js';
+import type { Status } from '#lib/adapters/types.js';
+import { requireProductAccess } from '#lib/server/product-access.js';
 
 export const GET: RequestHandler = async ({ params, url, locals, request }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
@@ -28,7 +28,7 @@ export const GET: RequestHandler = async ({ params, url, locals, request }) => {
   const limitRaw = parseInt(url.searchParams.get('limit') ?? '25', 10);
   const limit = [10, 25, 50, 100].includes(limitRaw) ? limitRaw : 25;
 
-  return json(
+  return Response.json(
     await adapter.listGroups({
       productId: product.id,
       version: version === 'all' ? undefined : version,

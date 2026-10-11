@@ -10,8 +10,8 @@
 // bypass the SvelteKit server entirely; those are guarded by SameSite=Lax plus
 // a server-side Origin check, not by this token.)
 
-import { browser } from '$app/environment';
-import { beginBusy } from '$lib/system-busy';
+import { browser } from '$app/env';
+import { beginBusy } from '#lib/system-busy.js';
 
 export const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 export const CSRF_COOKIE = 'csrf';
@@ -52,7 +52,7 @@ export function installCsrfFetch(): void {
           if (!headers.has(CSRF_HEADER)) {
             headers.set(CSRF_HEADER, token);
           }
-          init = { ...(init ?? {}), headers };
+          init = { ...init ?? {}, headers };
         }
       }
     } catch {

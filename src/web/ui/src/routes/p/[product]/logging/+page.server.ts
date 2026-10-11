@@ -1,8 +1,8 @@
 import type { Actions, PageServerLoad } from './$types';
-import type { ImportKind, RetryImportRef } from '$lib/adapters/types';
-import { createAdapter } from '$lib/adapters';
+import type { ImportKind, RetryImportRef } from '#lib/adapters/types.js';
+import { createAdapter } from '#lib/adapters/index.js';
 import { error, fail } from '@sveltejs/kit';
-import { requireProductAccess } from '$lib/server/product-access';
+import { requireProductAccess } from '#lib/server/product-access.js';
 
 export const load: PageServerLoad = async ({ parent, request }) => {
   const { product } = await parent();

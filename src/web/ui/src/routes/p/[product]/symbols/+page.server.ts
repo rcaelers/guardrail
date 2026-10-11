@@ -2,10 +2,10 @@
 // URL params); mutations are gated on role.
 
 import type { PageServerLoad, Actions } from './$types';
-import { createAdapter } from '$lib/adapters';
+import { createAdapter } from '#lib/adapters/index.js';
 import { error, fail } from '@sveltejs/kit';
-import type { SymbolQuery } from '$lib/adapters/types';
-import { requireProductAccess } from '$lib/server/product-access';
+import type { SymbolQuery } from '#lib/adapters/types.js';
+import { requireProductAccess } from '#lib/server/product-access.js';
 
 function canWrite(role: string | null | undefined): boolean {
   return role === 'readwrite' || role === 'maintainer';

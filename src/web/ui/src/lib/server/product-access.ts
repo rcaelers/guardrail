@@ -2,7 +2,7 @@
 // receive `parent()` like load functions do.
 
 import { error } from '@sveltejs/kit';
-import type { GuardrailAdapter, User } from '$lib/adapters/types';
+import type { GuardrailAdapter, User } from '#lib/adapters/types.js';
 
 export async function requireProductAccess(user: User, productSlug: string, adapter: GuardrailAdapter) {
   const product = await adapter.getProduct(productSlug);

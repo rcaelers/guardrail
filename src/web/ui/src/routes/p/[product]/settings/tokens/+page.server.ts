@@ -1,7 +1,7 @@
 import type { PageServerLoad, Actions } from './$types';
-import { createAdapter } from '$lib/adapters';
+import { createAdapter } from '#lib/adapters/index.js';
 import { error, fail } from '@sveltejs/kit';
-import { requireProductAccess } from '$lib/server/product-access';
+import { requireProductAccess } from '#lib/server/product-access.js';
 
 export const load: PageServerLoad = async ({ parent, request, locals }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');

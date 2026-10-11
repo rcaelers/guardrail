@@ -1,9 +1,9 @@
 <script lang="ts">
   import { enhance } from '$app/forms';
   import type { PageData, ActionData } from './$types';
-  import type { Product } from '$lib/adapters/types';
-  import { fmtDate } from '$lib/utils/format';
-  import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+  import type { Product } from '#lib/adapters/types.js';
+  import { fmtDate } from '#lib/utils/format.js';
+  import ConfirmDialog from '#lib/components/ConfirmDialog.svelte';
 
   let { data, form }: { data: PageData; form: ActionData } = $props();
 

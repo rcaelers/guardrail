@@ -6,9 +6,9 @@
 // and swaps the detail pane on its own.
 
 import type { RequestHandler } from './$types';
-import { error, json } from '@sveltejs/kit';
-import { createAdapter } from '$lib/adapters';
-import { requireProductAccess } from '$lib/server/product-access';
+import { error } from '@sveltejs/kit';
+import { createAdapter } from '#lib/adapters/index.js';
+import { requireProductAccess } from '#lib/server/product-access.js';
 
 export const GET: RequestHandler = async ({ params, locals, request }) => {
   const adapter = createAdapter(request.headers.get('cookie') ?? '');
@@ -23,5 +23,5 @@ export const GET: RequestHandler = async ({ params, locals, request }) => {
   if (bundle.crash.productId !== product.id)
     throw error(404, `Crash ${params.crashId} is not in ${product.name}`);
 
-  return json(bundle);
+  return Response.json(bundle);
 };

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { CrashSummary, CrashGroupSummary } from '$lib/adapters/types';
+  import type { CrashSummary, CrashGroupSummary } from '#lib/adapters/types.js';
   import SignalChip from './SignalChip.svelte';
   import StatusPill from './StatusPill.svelte';
   import Sparkline from './Sparkline.svelte';
-  import { fmtDate, fmtInt } from '$lib/utils/format';
+  import { fmtDate, fmtInt } from '#lib/utils/format.js';
 
   interface Props {
     g: CrashGroupSummary;

@@ -1,6 +1,6 @@
 // Detail-pane width + open state, persisted to localStorage.
 
-import { browser } from '$app/environment';
+import { browser } from '$app/env';
 
 class PaneStore {
   pct = $state<number>(42);
