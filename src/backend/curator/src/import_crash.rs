@@ -363,11 +363,16 @@ impl ImportCrashProcessor {
     }
 
     #[instrument(skip(job, state), fields(crash_id = %job.crash_id))]
-    pub async fn process(job: ImportCrashJob, state: Data<AppState>) -> Result<(), JobError> {
+    pub async fn process(
+        job: ImportCrashJob,
+        state: Data<AppState>,
+        redis: Data<redis::aio::ConnectionManager>,
+    ) -> Result<(), JobError> {
         info!("Incoming import crash job");
         let processor = ImportCrashProcessor::new(state.clone());
         match processor.handle_job(job.crash_id.clone()).await {
             Ok(()) => {
+                crate::pipeline::record_crash_import(&mut (*redis).clone()).await;
                 import_failure::clear(
                     &processor.storage,
                     common::import_failure::ImportKind::Crash,

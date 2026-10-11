@@ -105,7 +105,9 @@ impl GuardrailCuratorApp {
         let redis_health = self.redis_manager.clone();
         let db_live = self.state.repo.db.clone();
         let settings_live = self.state.settings.clone();
-        common::spawn_health_server_with_liveness(
+        let redis_pipeline = self.redis_manager.clone();
+        crate::pipeline::start_clock(&mut self.redis_manager.clone()).await;
+        common::spawn_health_server_with_checks(
             9090,
             Box::new(move || {
                 let db = db_health.clone();
@@ -125,6 +127,14 @@ impl GuardrailCuratorApp {
                 let settings = settings_live.clone();
                 Box::pin(async move { !crate::db::is_handle_broken(&db, &settings.database).await })
             }),
+            // For monitoring only: fails when no crash was imported for two days.
+            vec![(
+                "/pipeline",
+                Box::new(move || {
+                    let mut redis = redis_pipeline.clone();
+                    Box::pin(async move { crate::pipeline::is_flowing(&mut redis).await })
+                }),
+            )],
         );
         info!("Starting initial product sync");
         self.sync_products().await;
@@ -230,6 +240,7 @@ impl GuardrailCuratorApp {
             .expect("Invalid cron schedule for maintenance");
 
         let state_import_crash = state.clone();
+        let redis_import_crash_clock = self.redis_manager.clone();
         let state_import_symbol = state.clone();
         let redis_import_crash_worker = redis_import_crash.clone();
         let retry_import_state = RetryImportState::new(
@@ -263,6 +274,7 @@ impl GuardrailCuratorApp {
                 WorkerBuilder::new("import-crash")
                     .backend(redis_import_crash_worker.clone())
                     .data(state_import_crash.clone())
+                    .data(redis_import_crash_clock.clone())
                     .retry(RetryPolicy::retries(5).with_backoff(backoff))
                     .enable_tracing()
                     .concurrency(2)

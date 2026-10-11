@@ -5,6 +5,7 @@ use std::sync::Arc;
 use crate::product_cache::ProductCache;
 use crate::rate_limit::RateLimiter;
 use crate::settings::Settings;
+use crate::upload_stats::UploadStats;
 use crate::worker::Worker;
 
 #[derive(FromRef, Debug, Clone)]
@@ -15,4 +16,5 @@ pub struct AppState {
     pub worker: Arc<dyn Worker>,
     /// `None` disables rate limiting (tests / when unconfigured).
     pub rate_limiter: Option<Arc<RateLimiter>>,
+    pub upload_stats: UploadStats,
 }

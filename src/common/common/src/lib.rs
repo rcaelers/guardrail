@@ -136,6 +136,17 @@ pub fn spawn_health_server_with_liveness(
     ready_check: HealthCheck,
     live_check: HealthCheck,
 ) {
+    spawn_health_server_with_checks(port, ready_check, live_check, Vec::new());
+}
+
+/// Like [`spawn_health_server_with_liveness`], plus extra checks served at
+/// their own paths (200 when the check passes, 503 otherwise) for monitoring.
+pub fn spawn_health_server_with_checks(
+    port: u16,
+    ready_check: HealthCheck,
+    live_check: HealthCheck,
+    extra_checks: Vec<(&'static str, HealthCheck)>,
+) {
     use axum::{Router, extract::State, http::StatusCode, routing::get};
 
     #[derive(Clone)]
@@ -164,10 +175,20 @@ pub fn spawn_health_server_with_liveness(
         ready: std::sync::Arc::new(ready_check),
         live: std::sync::Arc::new(live_check),
     };
-    let app = Router::new()
+    let mut app = Router::new()
         .route("/live", get(live))
-        .route("/ready", get(ready))
-        .with_state(checks);
+        .route("/ready", get(ready));
+    for (path, check) in extra_checks {
+        let check = std::sync::Arc::new(check);
+        app = app.route(
+            path,
+            get(move || {
+                let check = check.clone();
+                async move { status(check().await) }
+            }),
+        );
+    }
+    let app = app.with_state(checks);
 
     tokio::spawn(async move {
         let listener = match tokio::net::TcpListener::bind(("0.0.0.0", port)).await {

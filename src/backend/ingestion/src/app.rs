@@ -26,6 +26,7 @@ use crate::product_cache::ProductCache;
 use crate::rate_limit::RateLimiter;
 use crate::routes;
 use crate::state::AppState;
+use crate::upload_stats::UploadStats;
 use crate::worker::WorkQueue;
 
 pub const MAX_UPLOAD_BYTES: usize = 20 * 1024 * 1024;
@@ -60,6 +61,7 @@ impl GuardrailIngestionApp {
             redis_manager.clone(),
             settings.rate_limit.clone(),
         )));
+        let upload_stats = UploadStats::new(redis_manager.clone());
         let product_cache = ProductCache::new(redis_manager);
 
         let redis_minidump = RedisStorage::new_with_config(
@@ -74,6 +76,7 @@ impl GuardrailIngestionApp {
             storage: store,
             worker,
             rate_limiter,
+            upload_stats,
         };
 
         Self { state }
@@ -176,6 +179,7 @@ mod tests {
             storage: Arc::new(InMemory::new()),
             worker: Arc::new(TestWorker::new()),
             rate_limiter: None,
+            upload_stats: crate::upload_stats::UploadStats::memory(),
         }
     }
 
@@ -254,6 +258,7 @@ mod tests {
             storage: Arc::new(InMemory::new()),
             worker: Arc::new(TestWorker::new()),
             rate_limiter: None,
+            upload_stats: crate::upload_stats::UploadStats::memory(),
         };
         let router = GuardrailIngestionApp::new(state).router().await;
 

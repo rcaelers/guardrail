@@ -6,6 +6,7 @@ mod import_failure;
 pub mod import_symbol;
 pub mod jobs;
 pub mod maintenance;
+pub mod pipeline;
 pub mod product_listener;
 pub mod product_sync;
 mod retry_import;

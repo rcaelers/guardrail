@@ -12,6 +12,7 @@ use tracing::{debug, error, info, instrument};
 use crate::annotations::{AnnotationEntry, TrackedAnnotations};
 use crate::error::ApiError;
 use crate::state::AppState;
+use crate::upload_stats::UploadOutcome;
 use crate::utils::stream_to_s3;
 
 pub struct MinidumpApi;
@@ -446,6 +447,11 @@ impl MinidumpApi {
         };
 
         let r = Self::handle_upload(state.clone(), &token, multipart, &mut crash_info).await;
+        let outcome = match &r {
+            Ok(()) => UploadOutcome::Accepted,
+            Err(e) => UploadOutcome::from_error(e),
+        };
+        state.upload_stats.record(outcome).await;
         if let Err(e) = r {
             error!(error = ?e, "Failed to handle minidump upload");
 
@@ -992,6 +998,7 @@ mod tests {
             storage: Arc::new(InMemory::new()),
             worker,
             rate_limiter: None,
+            upload_stats: crate::upload_stats::UploadStats::memory(),
         };
         let mut info = crash_info();
         info.minidump = None;

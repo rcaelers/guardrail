@@ -102,6 +102,7 @@ async fn setup_with_storage_and_cache(
         storage: store.clone(),
         worker: worker.clone(),
         rate_limiter: None,
+        upload_stats: ingestion::upload_stats::UploadStats::memory(),
     };
     let app: Router = Router::new()
         .nest("/api", routes(state.clone()).await)
@@ -1004,6 +1005,37 @@ async fn test_minidump_upload_unknown_product() {
     assert_count_crashes(store.clone(), 0).await;
     assert_count_minidumps(store.clone(), 0).await;
     assert_count_attachments(store.clone(), 0).await;
+}
+
+#[tokio::test]
+async fn test_upload_health_fails_when_uploads_are_rejected_as_unknown_product() {
+    let (app, _store, boundary, _worker, _body) = setup().await;
+
+    let upload_health = |app: Router| async move {
+        let request = Request::builder()
+            .uri("/api/upload-health")
+            .body(Body::empty())
+            .unwrap();
+        app.oneshot(request).await.unwrap().status()
+    };
+    assert_eq!(upload_health(app.clone()).await, StatusCode::OK);
+
+    for _ in 0..5 {
+        let body = create_body_from_config(&MinidumpBodyConfig {
+            boundary: &boundary,
+            ..Default::default()
+        });
+        let request = Request::builder()
+            .method("POST")
+            .uri("/api/minidump/unknown0000000000000000000000001/upload")
+            .header("Content-Type", format!("multipart/form-data; boundary={boundary}"))
+            .body(Body::from(body))
+            .unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    assert_eq!(upload_health(app).await, StatusCode::SERVICE_UNAVAILABLE);
 }
 
 #[tokio::test]

@@ -23,6 +23,7 @@ pub async fn routes(app_state: AppState) -> Router<AppState> {
         // Health check endpoints (also exposed under /minidump/ for ingress reachability)
         .route("/live", get(health::live))
         .route("/ready", get(health::ready))
+        .route("/upload-health", get(health::upload_health))
         .route("/minidump/live", get(health::live))
         .route("/minidump/ready", get(health::ready))
 }

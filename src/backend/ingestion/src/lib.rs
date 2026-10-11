@@ -6,5 +6,6 @@ pub mod rate_limit;
 pub mod routes;
 pub mod settings;
 pub mod state;
+pub mod upload_stats;
 pub mod utils;
 pub mod worker;

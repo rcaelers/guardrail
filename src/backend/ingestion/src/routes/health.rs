@@ -1,10 +1,36 @@
-use axum::{extract::State, http::StatusCode};
+use axum::{Json, extract::State, http::StatusCode};
 use tracing::error;
+
+use crate::upload_stats::UploadHealth;
 
 use crate::state::AppState;
 
 pub async fn live() -> StatusCode {
     StatusCode::OK
+}
+
+/// Fails when real uploads are being rejected while the service itself is up.
+/// Internal only: the public route only forwards /api/minidump.
+pub async fn upload_health(State(state): State<AppState>) -> (StatusCode, Json<serde_json::Value>) {
+    match state.upload_stats.health().await {
+        Ok(health) => {
+            let status = if health.healthy {
+                StatusCode::OK
+            } else {
+                error!(problems = ?health.problems, "Uploads are being rejected");
+                StatusCode::SERVICE_UNAVAILABLE
+            };
+            (status, Json(health_json(&health)))
+        }
+        Err(e) => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(serde_json::json!({ "healthy": false, "problems": [e.to_string()] })),
+        ),
+    }
+}
+
+fn health_json(health: &UploadHealth) -> serde_json::Value {
+    serde_json::to_value(health).unwrap_or_default()
 }
 
 pub async fn ready(State(state): State<AppState>) -> StatusCode {
@@ -32,6 +58,7 @@ mod tests {
             storage: Arc::new(InMemory::new()),
             worker: Arc::new(TestWorker::new()),
             rate_limiter: None,
+            upload_stats: crate::upload_stats::UploadStats::memory(),
         }
     }
 
