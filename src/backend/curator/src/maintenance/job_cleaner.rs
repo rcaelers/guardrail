@@ -18,7 +18,7 @@ impl JobCleaner {
         redis: &RedisStorage<ImportCrashJob>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     where
-        RedisStorage<ImportCrashJob>: ListTasks<ImportCrashJob>,
+        RedisStorage<ImportCrashJob>: ListTasks,
     {
         info!("Starting cleanup of crash info files for completed jobs");
 
@@ -45,7 +45,7 @@ impl JobCleaner {
         status: Status,
     ) -> Result<HashSet<String>, JobError>
     where
-        RedisStorage<ImportCrashJob>: ListTasks<ImportCrashJob>,
+        RedisStorage<ImportCrashJob>: ListTasks,
     {
         let mut crash_ids = HashSet::new();
         let mut page = 1u32;
@@ -84,9 +84,11 @@ impl JobCleaner {
         Ok(crash_ids)
     }
 
-    /// Extract crash_id from an ImportCrashJob
-    pub fn extract_crash_id_from_job(job: &ImportCrashJob) -> Option<String> {
-        Some(job.crash_id.clone())
+    /// Extract crash_id from a listed task's JSON-encoded ImportCrashJob
+    pub fn extract_crash_id_from_job(job: &[u8]) -> Option<String> {
+        serde_json::from_slice::<ImportCrashJob>(job)
+            .ok()
+            .map(|job| job.crash_id)
     }
 
     pub async fn remove_crash_info_files(
@@ -136,12 +138,15 @@ mod tests {
 
     #[test]
     fn extract_crash_id_from_job_returns_job_id() {
+        let job = serde_json::to_vec(&ImportCrashJob {
+            crash_id: "crash-1".to_string(),
+        })
+        .unwrap();
         assert_eq!(
-            JobCleaner::extract_crash_id_from_job(&ImportCrashJob {
-                crash_id: "crash-1".to_string(),
-            }),
+            JobCleaner::extract_crash_id_from_job(&job),
             Some("crash-1".to_string())
         );
+        assert_eq!(JobCleaner::extract_crash_id_from_job(b"not json"), None);
     }
 
     #[tokio::test]

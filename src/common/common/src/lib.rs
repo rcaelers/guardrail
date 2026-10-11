@@ -4,6 +4,7 @@ pub mod product_info;
 pub mod settings;
 pub mod shutdown;
 pub mod token;
+pub mod workers;
 pub mod version;
 
 use object_store::{ObjectStore, aws::AmazonS3Builder};

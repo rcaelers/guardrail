@@ -7,8 +7,8 @@ use apalis::layers::retry::HasherRng;
 use apalis::layers::retry::backoff::MakeBackoff;
 use apalis::layers::retry::{RetryPolicy, backoff::ExponentialBackoffMaker};
 use apalis::prelude::*;
-use apalis_redis::{ConnectionManager, RedisConfig, RedisStorage};
-use tracing::{debug, error, info, warn};
+use apalis_redis::{Config as RedisConfig, ConnectionManager, RedisStorage};
+use tracing::{debug, error, info};
 
 use crate::settings::Settings;
 use common::jobs::{MinidumpJob, queue};
@@ -176,23 +176,15 @@ impl GuardrailCuratorApp {
         let state = self.state.clone();
         let conn = self.conn.clone();
 
-        let redis_import_crash = RedisStorage::<ImportCrashJob>::new_with_config(
-            conn.clone(),
-            RedisConfig::new(queue::IMPORT_CRASH_JOBS),
-        );
-        let redis_import_symbol = RedisStorage::<ImportSymbolJob>::new_with_config(
-            conn.clone(),
-            RedisConfig::new(queue::IMPORT_SYMBOL_JOBS),
-        );
-        let redis_retry_import = RedisStorage::<RetryImportJob>::new_with_config(
-            conn.clone(),
-            RedisConfig::new(queue::RETRY_IMPORT_JOBS),
-        );
+        let redis_import_crash = RedisStorage::<ImportCrashJob>::new(conn.clone())
+            .with_config(RedisConfig::default().queue(queue::IMPORT_CRASH_JOBS));
+        let redis_import_symbol = RedisStorage::<ImportSymbolJob>::new(conn.clone())
+            .with_config(RedisConfig::default().queue(queue::IMPORT_SYMBOL_JOBS));
+        let redis_retry_import = RedisStorage::<RetryImportJob>::new(conn.clone())
+            .with_config(RedisConfig::default().queue(queue::RETRY_IMPORT_JOBS));
         let requeue_targets = maintenance::RequeueTargets {
-            minidump: RedisStorage::<MinidumpJob>::new_with_config(
-                conn,
-                RedisConfig::new(queue::MINIDUMP_JOBS),
-            ),
+            minidump: RedisStorage::<MinidumpJob>::new(conn)
+                .with_config(RedisConfig::default().queue(queue::MINIDUMP_JOBS)),
             import_crash: redis_import_crash.clone(),
             import_symbol: redis_import_symbol.clone(),
             counters: self.redis_manager.clone(),
@@ -218,23 +210,11 @@ impl GuardrailCuratorApp {
             (queue::IMPORT_SYMBOL_JOBS, "import-symbol"),
             (queue::RETRY_IMPORT_JOBS, "retry-import"),
         ];
-        let mut redis_cleanup = self.redis_manager.clone();
-        for (queue_name, worker_name) in worker_queue_names {
-            let workers_key = format!("{}:workers", queue_name);
-            let inflight_key = format!("{}:inflight:{}", queue_name, worker_name);
-            match redis::cmd("ZREM")
-                .arg(&workers_key)
-                .arg(&inflight_key)
-                .query_async::<i64>(&mut redis_cleanup)
-                .await
-            {
-                Ok(0) => debug!("No stale registration to clear for {}", worker_name),
-                Ok(_) => warn!("Cleared stale worker registration for {}", worker_name),
-                Err(e) => {
-                    error!("Failed to clear stale worker registration for {}: {}", worker_name, e)
-                }
-            }
-        }
+        common::workers::clear_stale_registrations(
+            &mut self.redis_manager.clone(),
+            &worker_queue_names,
+        )
+        .await;
 
         let maintenance_schedule = cron::Schedule::from_str("0 0 * * * * *")
             .expect("Invalid cron schedule for maintenance");
@@ -308,7 +288,7 @@ impl GuardrailCuratorApp {
             })
             .register(move |_idx| {
                 WorkerBuilder::new("maintenance")
-                    .backend(apalis_cron::CronStream::new(maintenance_schedule.clone()))
+                    .backend(apalis_cron::CronScheduler::new(maintenance_schedule.clone()))
                     .data(maintenance_state.clone())
                     .enable_tracing()
                     .build(handle_maintenance_tick)

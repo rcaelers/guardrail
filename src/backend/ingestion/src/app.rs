@@ -1,4 +1,4 @@
-use apalis_redis::{RedisConfig, RedisStorage};
+use apalis_redis::{Config as RedisConfig, RedisStorage};
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
@@ -64,10 +64,8 @@ impl GuardrailIngestionApp {
         let upload_stats = UploadStats::new(redis_manager.clone());
         let product_cache = ProductCache::new(redis_manager);
 
-        let redis_minidump = RedisStorage::new_with_config(
-            redis_conn.clone(),
-            RedisConfig::new(queue::MINIDUMP_JOBS),
-        );
+        let redis_minidump = RedisStorage::new(redis_conn.clone())
+            .with_config(RedisConfig::default().queue(queue::MINIDUMP_JOBS));
         let worker = Arc::new(WorkQueue::new(redis_minidump));
 
         let state = AppState {

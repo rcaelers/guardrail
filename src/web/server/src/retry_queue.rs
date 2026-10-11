@@ -1,5 +1,5 @@
 use apalis::prelude::*;
-use apalis_redis::{ConnectionManager, RedisConfig, RedisStorage};
+use apalis_redis::{Config as RedisConfig, ConnectionManager, RedisStorage};
 use async_trait::async_trait;
 use common::import_failure::ImportKind;
 use common::jobs::{RetryImportJob, queue};
@@ -39,7 +39,8 @@ impl ValkeyImportRetryRequestQueue {
 impl ImportRetryRequestQueue for ValkeyImportRetryRequestQueue {
     async fn enqueue(&self, product_id: &str, kind: ImportKind, id: &str) -> Result<(), String> {
         let connection = self.connection().await?;
-        RedisStorage::new_with_config(connection, RedisConfig::new(queue::RETRY_IMPORT_JOBS))
+        RedisStorage::new(connection)
+            .with_config(RedisConfig::default().queue(queue::RETRY_IMPORT_JOBS))
             .push(RetryImportJob {
                 product_id: product_id.to_string(),
                 kind,

@@ -27,7 +27,7 @@ impl MaintenanceJob {
         requeue_targets: &RequeueTargets,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     where
-        RedisStorage<ImportCrashJob>: ListTasks<ImportCrashJob>,
+        RedisStorage<ImportCrashJob>: ListTasks,
     {
         info!("Starting all maintenance tasks");
 

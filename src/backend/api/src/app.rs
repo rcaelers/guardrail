@@ -1,4 +1,4 @@
-use apalis_redis::{RedisConfig, RedisStorage};
+use apalis_redis::{Config as RedisConfig, RedisStorage};
 use axum::Router;
 use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
@@ -72,8 +72,8 @@ impl GuardrailApiApp {
 
         let repo = Arc::new(Repo::new(db));
 
-        let redis_symbol =
-            RedisStorage::new_with_config(redis_conn.clone(), RedisConfig::new(queue::SYMBOL_JOBS));
+        let redis_symbol = RedisStorage::new(redis_conn.clone())
+            .with_config(RedisConfig::default().queue(queue::SYMBOL_JOBS));
         let worker = Arc::new(WorkQueue::new(redis_symbol));
 
         let state = AppState {
@@ -162,7 +162,6 @@ impl GuardrailApiApp {
                 .unwrap();
         }
     }
-
 }
 
 #[cfg(test)]

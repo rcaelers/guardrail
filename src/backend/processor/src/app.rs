@@ -6,8 +6,8 @@ use apalis::layers::retry::HasherRng;
 use apalis::layers::retry::backoff::MakeBackoff;
 use apalis::layers::retry::{RetryPolicy, backoff::ExponentialBackoffMaker};
 use apalis::prelude::*;
-use apalis_redis::{ConnectionManager, RedisConfig, RedisStorage};
-use tracing::{debug, error, info, warn};
+use apalis_redis::{Config as RedisConfig, ConnectionManager, RedisStorage};
+use tracing::{debug, error, info};
 
 use crate::settings::Settings;
 use common::jobs::queue;
@@ -85,22 +85,14 @@ impl GuardrailProcessorApp {
         let state = self.state.clone();
         let conn = self.conn.clone();
 
-        let redis_minidump = RedisStorage::<MinidumpJob>::new_with_config(
-            conn.clone(),
-            RedisConfig::new(queue::MINIDUMP_JOBS),
-        );
-        let redis_symbol = RedisStorage::<SymbolJob>::new_with_config(
-            conn.clone(),
-            RedisConfig::new(queue::SYMBOL_JOBS),
-        );
-        let redis_import_crash = RedisStorage::<ImportCrashJob>::new_with_config(
-            conn.clone(),
-            RedisConfig::new(queue::IMPORT_CRASH_JOBS),
-        );
-        let redis_import_symbol = RedisStorage::<ImportSymbolJob>::new_with_config(
-            conn.clone(),
-            RedisConfig::new(queue::IMPORT_SYMBOL_JOBS),
-        );
+        let redis_minidump = RedisStorage::<MinidumpJob>::new(conn.clone())
+            .with_config(RedisConfig::default().queue(queue::MINIDUMP_JOBS));
+        let redis_symbol = RedisStorage::<SymbolJob>::new(conn.clone())
+            .with_config(RedisConfig::default().queue(queue::SYMBOL_JOBS));
+        let redis_import_crash = RedisStorage::<ImportCrashJob>::new(conn.clone())
+            .with_config(RedisConfig::default().queue(queue::IMPORT_CRASH_JOBS));
+        let redis_import_symbol = RedisStorage::<ImportSymbolJob>::new(conn.clone())
+            .with_config(RedisConfig::default().queue(queue::IMPORT_SYMBOL_JOBS));
 
         let state1 = state.clone();
         let redis_minidump1 = redis_minidump.clone();
@@ -118,23 +110,11 @@ impl GuardrailProcessorApp {
             (queue::MINIDUMP_JOBS, "minidump-processor"),
             (queue::SYMBOL_JOBS, "symbol-processor"),
         ];
-        let mut redis_cleanup = self.redis_manager.clone();
-        for (queue_name, worker_name) in worker_queue_names {
-            let workers_key = format!("{}:workers", queue_name);
-            let inflight_key = format!("{}:inflight:{}", queue_name, worker_name);
-            match redis::cmd("ZREM")
-                .arg(&workers_key)
-                .arg(&inflight_key)
-                .query_async::<i64>(&mut redis_cleanup)
-                .await
-            {
-                Ok(0) => debug!("No stale registration to clear for {}", worker_name),
-                Ok(_) => warn!("Cleared stale worker registration for {}", worker_name),
-                Err(e) => {
-                    error!("Failed to clear stale worker registration for {}: {}", worker_name, e)
-                }
-            }
-        }
+        common::workers::clear_stale_registrations(
+            &mut self.redis_manager.clone(),
+            &worker_queue_names,
+        )
+        .await;
 
         let shutdown_guard = ShutdownGuard::new();
         let stop_guard = shutdown_guard.clone();

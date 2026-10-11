@@ -28,6 +28,7 @@ natord.workspace = true
 object_store = { workspace = true }
 axum = { workspace = true }
 tokio.workspace = true
+redis.workspace = true
 
 [features]
 default = []

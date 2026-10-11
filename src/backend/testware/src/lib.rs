@@ -250,16 +250,13 @@ pub async fn create_random_test_user(db: &Surreal<Any>) -> String {
 pub fn hash_token(token: &str) -> String {
     use argon2::{
         Argon2,
-        password_hash::{PasswordHasher, SaltString, rand_core::OsRng},
+        password_hash::{PasswordHasher, phc::PasswordHash},
     };
 
-    let salt = SaltString::generate(&mut OsRng);
-    let argon2 = Argon2::default();
-
-    argon2
-        .hash_password(token.as_bytes(), &salt)
-        .expect("Failed to hash token")
-        .to_string()
+    let hash: PasswordHash = Argon2::default()
+        .hash_password(token.as_bytes())
+        .expect("Failed to hash token");
+    hash.to_string()
 }
 
 pub fn init_logging() {
