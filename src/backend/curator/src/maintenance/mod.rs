@@ -9,10 +9,13 @@ use crate::state::AppState;
 mod job_cleaner;
 mod orphaned_attachment_cleaner;
 mod orphaned_minidump_cleaner;
+mod stalled_work_requeuer;
 
 use job_cleaner::JobCleaner;
 use orphaned_attachment_cleaner::OrphanedAttachmentCleaner;
 use orphaned_minidump_cleaner::OrphanedMinidumpCleaner;
+pub use stalled_work_requeuer::RequeueTargets;
+use stalled_work_requeuer::StalledWorkRequeuer;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MaintenanceJob;
@@ -21,11 +24,16 @@ impl MaintenanceJob {
     pub async fn run_all_maintenance_tasks(
         app_state: &AppState,
         redis: &RedisStorage<ImportCrashJob>,
+        requeue_targets: &RequeueTargets,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
     where
         RedisStorage<ImportCrashJob>: ListTasks<ImportCrashJob>,
     {
         info!("Starting all maintenance tasks");
+
+        if let Err(e) = StalledWorkRequeuer::run(app_state, requeue_targets).await {
+            error!("Failed to requeue stalled work: {}", e);
+        }
 
         if let Err(e) = OrphanedMinidumpCleaner::run(app_state).await {
             error!("Failed to remove orphaned S3 minidumps: {}", e);

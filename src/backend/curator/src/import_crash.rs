@@ -56,6 +56,11 @@ impl ImportCrashProcessor {
     async fn handle_job(&self, crash_id: String) -> Result<(), JobError> {
         info!("ImportCrashProcessor handling job: {}", crash_id);
 
+        if self.is_already_imported(&crash_id).await? {
+            info!("Crash {} is already imported, skipping", crash_id);
+            return Ok(());
+        }
+
         let data = self.get_processed_crash(&crash_id).await?;
         let processed: Value = serde_json::from_slice(&data).map_err(|e| {
             error!("Failed to parse processed crash JSON: {:?}", e);
@@ -121,7 +126,9 @@ impl ImportCrashProcessor {
             .filter(|s| !s.is_empty());
 
         let group_id = if let Some(fp) = fingerprint.as_deref() {
-            match Self::find_or_create_crash_group(db, &product.id, fp, &signal, crash_version).await {
+            match Self::find_or_create_crash_group(db, &product.id, fp, &signal, crash_version)
+                .await
+            {
                 Ok(id) => Some(id),
                 Err(e) => {
                     error!(fingerprint = %fp, error = ?e, "Failed to assign crash group; crash will be stored without one");
@@ -324,6 +331,25 @@ impl ImportCrashProcessor {
             })?;
         }
         Ok(())
+    }
+
+    /// The stalled-work sweeper can requeue a crash whose job is still queued. The
+    /// processed file is deleted after a successful import, so a missing file plus
+    /// an existing crash record means this job is a duplicate.
+    async fn is_already_imported(&self, crash_id: &str) -> Result<bool, JobError> {
+        let path = Path::from(format!("processed-crashes/{crash_id}.json"));
+        match self.storage.head(&path).await {
+            Ok(_) => return Ok(false),
+            Err(object_store::Error::NotFound { .. }) => {}
+            Err(e) => {
+                error!("Failed to check processed crash {path}: {e}");
+                return Err(JobError::Failure("failed to check processed crash".to_string()));
+            }
+        }
+        let crash = CrashRepo::get_by_id(&self.repo.db, crash_id)
+            .await
+            .map_err(|e| JobError::Failure(format!("failed to look up crash {crash_id}: {e}")))?;
+        Ok(crash.is_some())
     }
 
     #[instrument(skip(self), fields(crash_id = %crash_id))]

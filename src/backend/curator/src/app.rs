@@ -12,8 +12,9 @@ use surrealdb::opt::auth::Root;
 use tracing::{debug, error, info, warn};
 
 use crate::settings::Settings;
-use common::jobs::queue;
+use common::jobs::{MinidumpJob, queue};
 use common::retry_startup;
+use common::shutdown::ShutdownGuard;
 use repos::Repo;
 
 use crate::import_crash::ImportCrashProcessor;
@@ -29,13 +30,19 @@ use crate::state::AppState;
 struct MaintenanceState {
     app_state: AppState,
     redis: RedisStorage<ImportCrashJob>,
+    requeue_targets: maintenance::RequeueTargets,
 }
 
 async fn handle_maintenance_tick(
     _tick: apalis_cron::Tick,
     state: Data<MaintenanceState>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    maintenance::MaintenanceJob::run_all_maintenance_tasks(&state.app_state, &state.redis).await?;
+    maintenance::MaintenanceJob::run_all_maintenance_tasks(
+        &state.app_state,
+        &state.redis,
+        &state.requeue_targets,
+    )
+    .await?;
     Ok(())
 }
 
@@ -171,13 +178,25 @@ impl GuardrailCuratorApp {
             RedisConfig::new(queue::IMPORT_SYMBOL_JOBS),
         );
         let redis_retry_import = RedisStorage::<RetryImportJob>::new_with_config(
-            conn,
+            conn.clone(),
             RedisConfig::new(queue::RETRY_IMPORT_JOBS),
         );
+        let requeue_targets = maintenance::RequeueTargets {
+            minidump: RedisStorage::<MinidumpJob>::new_with_config(
+                conn,
+                RedisConfig::new(queue::MINIDUMP_JOBS),
+            ),
+            import_crash: redis_import_crash.clone(),
+            import_symbol: redis_import_symbol.clone(),
+            counters: self.redis_manager.clone(),
+        };
 
-        if let Err(e) =
-            maintenance::MaintenanceJob::run_all_maintenance_tasks(&state, &redis_import_crash)
-                .await
+        if let Err(e) = maintenance::MaintenanceJob::run_all_maintenance_tasks(
+            &state,
+            &redis_import_crash,
+            &requeue_targets,
+        )
+        .await
         {
             error!("Failed to run startup maintenance tasks: {}", e);
         }
@@ -227,7 +246,11 @@ impl GuardrailCuratorApp {
         let maintenance_state = MaintenanceState {
             app_state: state.clone(),
             redis: redis_import_crash.clone(),
+            requeue_targets,
         };
+
+        let shutdown_guard = ShutdownGuard::new();
+        let stop_guard = shutdown_guard.clone();
 
         Monitor::new()
             .register(move |_idx| {
@@ -281,13 +304,16 @@ impl GuardrailCuratorApp {
                     .enable_tracing()
                     .build(handle_maintenance_tick)
             })
-            .on_event(|worker, e| match e {
+            .on_event(move |worker, e| match e {
                 Event::Error(err) => error!(worker = %worker.name(), error = %err, "Worker error"),
                 Event::Start => info!(worker = %worker.name(), "Worker started"),
-                Event::Stop => info!(worker = %worker.name(), "Worker stopped"),
+                Event::Stop => {
+                    info!(worker = %worker.name(), "Worker stopped");
+                    stop_guard.worker_stopped(worker.name());
+                }
                 e => debug!(worker = %worker.name(), event = %e, "Worker event"),
             })
-            .run_with_signal(shutdown)
+            .run_with_signal(shutdown_guard.watch(shutdown))
             .await
             .expect("Failed to run the monitor");
     }

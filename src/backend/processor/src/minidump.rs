@@ -213,6 +213,15 @@ impl MinidumpProcessor {
 
         let processor =
             MinidumpProcessor::new_with_override(state.clone(), product_settings.as_ref());
+
+        // The stalled-work sweeper can requeue a crash whose job is still queued.
+        // The crash_info file is deleted once a crash is processed, so a missing
+        // file means this job is a duplicate.
+        if !processor.crash_info_exists(&crash_id).await? {
+            info!("Crash info for {} is gone; already processed, skipping", crash_id);
+            return Ok(());
+        }
+
         processor
             .handle_job(crash_id.clone(), job.crash.clone(), &redis_storage)
             .await?;
@@ -220,6 +229,18 @@ impl MinidumpProcessor {
         info!("Successfully processed minidump for crash ID: {}", crash_id);
 
         Ok(())
+    }
+
+    async fn crash_info_exists(&self, crash_id: &str) -> Result<bool, JobError> {
+        let path = Path::from(format!("crashes/{crash_id}.json"));
+        match self.storage.head(&path).await {
+            Ok(_) => Ok(true),
+            Err(object_store::Error::NotFound { .. }) => Ok(false),
+            Err(e) => {
+                error!("Failed to check crash info {path}: {e}");
+                Err(JobError::Failure("failed to check crash info".to_string()))
+            }
+        }
     }
 
     #[instrument(skip(self, crash_info), fields(crash_id = %crash_id))]
@@ -410,6 +431,19 @@ mod tests {
             processor.get_minidump_object("minidumps/missing").await,
             Err(JobError::Failure(message)) if message == "Failed to retrieve minidump"
         ));
+    }
+
+    #[tokio::test]
+    async fn crash_info_exists_detects_already_processed_crashes() {
+        let store = Arc::new(object_store::memory::InMemory::new());
+        store
+            .put(&Path::from("crashes/pending.json"), PutPayload::from_static(b"{}"))
+            .await
+            .unwrap();
+        let processor = processor_with_storage(store);
+
+        assert!(processor.crash_info_exists("pending").await.unwrap());
+        assert!(!processor.crash_info_exists("processed").await.unwrap());
     }
 
     #[tokio::test]

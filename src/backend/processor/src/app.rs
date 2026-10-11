@@ -12,6 +12,7 @@ use tracing::{debug, error, info, warn};
 use crate::settings::Settings;
 use common::jobs::queue;
 use common::retry_startup;
+use common::shutdown::ShutdownGuard;
 
 use crate::jobs::{ImportCrashJob, ImportSymbolJob, MinidumpJob, SymbolJob};
 use crate::minidump::MinidumpProcessor;
@@ -135,6 +136,9 @@ impl GuardrailProcessorApp {
             }
         }
 
+        let shutdown_guard = ShutdownGuard::new();
+        let stop_guard = shutdown_guard.clone();
+
         Monitor::new()
             .register(move |_idx| {
                 let backoff = ExponentialBackoffMaker::new(
@@ -174,13 +178,16 @@ impl GuardrailProcessorApp {
                     .concurrency(2)
                     .build(SymbolProcessor::process)
             })
-            .on_event(|worker, e| match e {
+            .on_event(move |worker, e| match e {
                 Event::Error(err) => error!(worker = %worker.name(), error = %err, "Worker error"),
                 Event::Start => info!(worker = %worker.name(), "Worker started"),
-                Event::Stop => info!(worker = %worker.name(), "Worker stopped"),
+                Event::Stop => {
+                    info!(worker = %worker.name(), "Worker stopped");
+                    stop_guard.worker_stopped(worker.name());
+                }
                 e => debug!(worker = %worker.name(), event = %e, "Worker event"),
             })
-            .run_with_signal(shutdown)
+            .run_with_signal(shutdown_guard.watch(shutdown))
             .await
             .expect("Failed to run the monitor");
     }

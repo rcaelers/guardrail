@@ -49,6 +49,21 @@ impl ImportSymbolProcessor {
     async fn handle_job(&self, symbol_upload_id: String) -> Result<(), JobError> {
         info!("ImportSymbolProcessor handling job: {}", symbol_upload_id);
 
+        // The processed file is deleted after a successful import, so a missing
+        // file means the stalled-work sweeper requeued a job that already ran.
+        let path = Path::from(format!("processed-symbols/{symbol_upload_id}.json"));
+        match self.storage.head(&path).await {
+            Ok(_) => {}
+            Err(object_store::Error::NotFound { .. }) => {
+                info!("Symbol upload {} is already imported, skipping", symbol_upload_id);
+                return Ok(());
+            }
+            Err(e) => {
+                error!("Failed to check processed symbol {path}: {e}");
+                return Err(JobError::Failure("failed to check processed symbol".to_string()));
+            }
+        }
+
         let data = self.get_processed_symbol(&symbol_upload_id).await?;
         let symbol_info: Value = serde_json::from_slice(&data).map_err(|e| {
             error!("Failed to parse processed symbol JSON: {:?}", e);
