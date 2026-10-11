@@ -1,6 +1,9 @@
 use futures::StreamExt;
 use redis::AsyncCommands;
 use redis::aio::ConnectionManager;
+use std::future::Future;
+use std::sync::Arc;
+use std::time::Duration;
 use surrealdb::Notification;
 use surrealdb::Surreal;
 use surrealdb::engine::any::Any;
@@ -10,19 +13,56 @@ use common::product_info::{product_cache_keys, product_token_cache_key};
 use data::product::Product;
 
 use crate::product_sync::sync_product_by_id;
+use crate::settings::Settings;
 
-pub async fn listen_for_product_changes(
-    db: Surreal<Any>,
-    mut redis: ConnectionManager,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let db_settings = db.clone();
-    let db_scripts = db.clone();
-    let redis_settings = redis.clone();
-    let redis_scripts = redis.clone();
+type ListenerResult = Result<(), Box<dyn std::error::Error + Send + Sync>>;
 
-    tokio::spawn(listen_for_product_settings_changes(db_settings, redis_settings));
-    tokio::spawn(listen_for_validation_script_changes(db_scripts, redis_scripts));
+const RESTART_DELAY: Duration = Duration::from_secs(5);
 
+/// Starts the products, product_settings and validation_scripts listeners.
+///
+/// Each listener runs on its own SurrealDB connection and opens a new one on
+/// every restart, so a broken session (as seen after SurrealDB outages) cannot
+/// outlive a retry.
+pub fn spawn_product_listeners(settings: Arc<Settings>, redis: ConnectionManager) {
+    spawn_listener("products", settings.clone(), redis.clone(), run_products_listener);
+    spawn_listener(
+        "product_settings",
+        settings.clone(),
+        redis.clone(),
+        run_product_settings_listener,
+    );
+    spawn_listener("validation_scripts", settings, redis, run_validation_scripts_listener);
+}
+
+fn spawn_listener<F, Fut>(
+    name: &'static str,
+    settings: Arc<Settings>,
+    redis: ConnectionManager,
+    run: F,
+) where
+    F: Fn(Surreal<Any>, ConnectionManager) -> Fut + Send + 'static,
+    Fut: Future<Output = ListenerResult> + Send,
+{
+    tokio::spawn(async move {
+        loop {
+            match crate::db::connect(&settings.database).await {
+                Ok(db) => match run(db, redis.clone()).await {
+                    Ok(()) => {
+                        warn!(listener = name, "LIVE SELECT stream ended unexpectedly, restarting")
+                    }
+                    Err(e) => error!(listener = name, error = %e, "Listener failed, restarting"),
+                },
+                Err(e) => {
+                    error!(listener = name, error = %e, "Listener cannot connect to SurrealDB")
+                }
+            }
+            tokio::time::sleep(RESTART_DELAY).await;
+        }
+    });
+}
+
+async fn run_products_listener(db: Surreal<Any>, mut redis: ConnectionManager) -> ListenerResult {
     let mut result = db
         .query("LIVE SELECT *, meta::id(id) as id FROM products")
         .await?;
@@ -69,24 +109,13 @@ pub async fn listen_for_product_changes(
         }
     }
 
-    warn!("LIVE SELECT stream ended unexpectedly");
     Ok(())
 }
 
-async fn listen_for_product_settings_changes(db: Surreal<Any>, mut redis: ConnectionManager) {
-    loop {
-        match run_product_settings_listener(&db, &mut redis).await {
-            Ok(()) => warn!("product_settings LIVE SELECT stream ended unexpectedly, restarting"),
-            Err(e) => error!(error = ?e, "product_settings listener failed, restarting"),
-        }
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    }
-}
-
 async fn run_product_settings_listener(
-    db: &Surreal<Any>,
-    redis: &mut ConnectionManager,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    db: Surreal<Any>,
+    mut redis: ConnectionManager,
+) -> ListenerResult {
     let mut result = db
         .query("LIVE SELECT meta::id(product_id) AS product_id FROM product_settings")
         .await?;
@@ -104,7 +133,7 @@ async fn run_product_settings_listener(
                     .map(str::to_string);
                 if let Some(pid) = product_id {
                     info!(product_id = %pid, "product_settings changed, re-syncing");
-                    sync_product_by_id(db, &pid, redis).await;
+                    sync_product_by_id(&db, &pid, &mut redis).await;
                 }
             }
             Err(e) => {
@@ -116,20 +145,10 @@ async fn run_product_settings_listener(
     Ok(())
 }
 
-async fn listen_for_validation_script_changes(db: Surreal<Any>, mut redis: ConnectionManager) {
-    loop {
-        match run_validation_scripts_listener(&db, &mut redis).await {
-            Ok(()) => warn!("validation_scripts LIVE SELECT stream ended unexpectedly, restarting"),
-            Err(e) => error!(error = ?e, "validation_scripts listener failed, restarting"),
-        }
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    }
-}
-
 async fn run_validation_scripts_listener(
-    db: &Surreal<Any>,
-    redis: &mut ConnectionManager,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    db: Surreal<Any>,
+    mut redis: ConnectionManager,
+) -> ListenerResult {
     let mut result = db
         .query("LIVE SELECT meta::id(product_id) AS product_id FROM validation_scripts")
         .await?;
@@ -147,7 +166,7 @@ async fn run_validation_scripts_listener(
                     .map(str::to_string);
                 if let Some(pid) = product_id {
                     info!(product_id = %pid, "validation_scripts changed, re-syncing");
-                    sync_product_by_id(db, &pid, redis).await;
+                    sync_product_by_id(&db, &pid, &mut redis).await;
                 }
             }
             Err(e) => {

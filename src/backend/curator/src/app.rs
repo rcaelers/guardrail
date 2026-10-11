@@ -8,7 +8,6 @@ use apalis::layers::retry::backoff::MakeBackoff;
 use apalis::layers::retry::{RetryPolicy, backoff::ExponentialBackoffMaker};
 use apalis::prelude::*;
 use apalis_redis::{ConnectionManager, RedisConfig, RedisStorage};
-use surrealdb::opt::auth::Root;
 use tracing::{debug, error, info, warn};
 
 use crate::settings::Settings;
@@ -69,21 +68,7 @@ impl GuardrailCuratorApp {
     pub async fn from_settings(settings: Arc<Settings>) -> Self {
         let db = retry_startup("SurrealDB", || {
             let settings = settings.clone();
-            async move {
-                let db = surrealdb::engine::any::connect(&settings.database.endpoint).await?;
-
-                db.signin(Root {
-                    username: settings.database.username.clone(),
-                    password: settings.database.password.clone(),
-                })
-                .await?;
-
-                db.use_ns(&settings.database.namespace)
-                    .use_db(&settings.database.database)
-                    .await?;
-
-                Ok::<_, surrealdb::Error>(db)
-            }
+            async move { crate::db::connect(&settings.database).await }
         })
         .await;
 
@@ -118,17 +103,29 @@ impl GuardrailCuratorApp {
         info!("Starting health server on port 9090");
         let db_health = self.state.repo.db.clone();
         let redis_health = self.redis_manager.clone();
-        common::spawn_health_server(9090, move || {
-            let db = db_health.clone();
-            let mut redis = redis_health.clone();
-            Box::pin(async move {
-                db.health().await.is_ok()
-                    && redis::cmd("PING")
-                        .query_async::<String>(&mut redis)
-                        .await
-                        .is_ok()
-            })
-        });
+        let db_live = self.state.repo.db.clone();
+        let settings_live = self.state.settings.clone();
+        common::spawn_health_server_with_liveness(
+            9090,
+            Box::new(move || {
+                let db = db_health.clone();
+                let mut redis = redis_health.clone();
+                Box::pin(async move {
+                    db.health().await.is_ok()
+                        && redis::cmd("PING")
+                            .query_async::<String>(&mut redis)
+                            .await
+                            .is_ok()
+                })
+            }),
+            // The workers share this connection; only a restart recovers it
+            // once it is broken.
+            Box::new(move || {
+                let db = db_live.clone();
+                let settings = settings_live.clone();
+                Box::pin(async move { !crate::db::is_handle_broken(&db, &settings.database).await })
+            }),
+        );
         info!("Starting initial product sync");
         self.sync_products().await;
         self.spawn_product_listener();
@@ -158,22 +155,11 @@ impl GuardrailCuratorApp {
     }
 
     pub fn spawn_product_listener(&self) {
-        info!("Starting product change listener");
-        let listener_db = self.state.repo.db.clone();
-        let listener_redis = self.redis_manager.clone();
-        tokio::spawn(async move {
-            loop {
-                if let Err(e) = product_listener::listen_for_product_changes(
-                    listener_db.clone(),
-                    listener_redis.clone(),
-                )
-                .await
-                {
-                    error!("Product change listener failed: {}, restarting...", e);
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                }
-            }
-        });
+        info!("Starting product change listeners");
+        product_listener::spawn_product_listeners(
+            self.state.settings.clone(),
+            self.redis_manager.clone(),
+        );
     }
 
     pub async fn run_workers(&self, shutdown: impl Future<Output = std::io::Result<()>> + Send) {

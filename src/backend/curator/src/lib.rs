@@ -1,4 +1,5 @@
 pub mod app;
+pub mod db;
 pub mod error;
 pub mod import_crash;
 mod import_failure;

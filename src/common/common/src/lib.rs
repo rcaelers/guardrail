@@ -112,6 +112,9 @@ where
     }
 }
 
+pub type HealthCheck =
+    Box<dyn Fn() -> std::pin::Pin<Box<dyn Future<Output = bool> + Send>> + Send + Sync>;
+
 pub fn spawn_health_server(
     port: u16,
     ready_check: impl Fn() -> std::pin::Pin<Box<dyn Future<Output = bool> + Send>>
@@ -119,29 +122,52 @@ pub fn spawn_health_server(
     + Sync
     + 'static,
 ) {
+    spawn_health_server_with_liveness(
+        port,
+        Box::new(ready_check),
+        Box::new(|| Box::pin(async { true })),
+    );
+}
+
+/// Like [`spawn_health_server`], but `/live` fails when `live_check` does, so
+/// Kubernetes restarts a process that is up but can no longer recover itself.
+pub fn spawn_health_server_with_liveness(
+    port: u16,
+    ready_check: HealthCheck,
+    live_check: HealthCheck,
+) {
     use axum::{Router, extract::State, http::StatusCode, routing::get};
 
-    type CheckFn = std::sync::Arc<
-        dyn Fn() -> std::pin::Pin<Box<dyn Future<Output = bool> + Send>> + Send + Sync,
-    >;
-
-    async fn live() -> StatusCode {
-        StatusCode::OK
+    #[derive(Clone)]
+    struct Checks {
+        ready: std::sync::Arc<HealthCheck>,
+        live: std::sync::Arc<HealthCheck>,
     }
 
-    async fn ready(State(check): State<CheckFn>) -> StatusCode {
-        if check().await {
+    fn status(ok: bool) -> StatusCode {
+        if ok {
             StatusCode::OK
         } else {
             StatusCode::SERVICE_UNAVAILABLE
         }
     }
 
-    let check: CheckFn = std::sync::Arc::new(ready_check);
+    async fn live(State(checks): State<Checks>) -> StatusCode {
+        status((checks.live)().await)
+    }
+
+    async fn ready(State(checks): State<Checks>) -> StatusCode {
+        status((checks.ready)().await)
+    }
+
+    let checks = Checks {
+        ready: std::sync::Arc::new(ready_check),
+        live: std::sync::Arc::new(live_check),
+    };
     let app = Router::new()
         .route("/live", get(live))
         .route("/ready", get(ready))
-        .with_state(check);
+        .with_state(checks);
 
     tokio::spawn(async move {
         let listener = match tokio::net::TcpListener::bind(("0.0.0.0", port)).await {
