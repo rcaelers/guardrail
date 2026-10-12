@@ -101,3 +101,62 @@ async fn replacement_worker_starts_after_stale_registration_is_cleared() {
     assert!(processes(&mut processed, "after-restart").await, "replacement runs");
     replacement.abort();
 }
+
+#[tokio::test]
+#[ignore = "requires GUARDRAIL_TEST_VALKEY_URI"]
+async fn worker_finishes_jobs_after_legacy_done_set_is_upgraded() {
+    let conn = connect().await;
+    let mut redis = conn.clone();
+    let queue = format!("guardrail::test::{}", uuid::Uuid::new_v4());
+    let done_key = format!("{queue}:done");
+
+    // apalis-redis rc.8 recorded finished jobs in a sorted set.
+    let _: () = redis::cmd("ZADD")
+        .arg(&done_key)
+        .arg(1)
+        .arg("old-job-1")
+        .arg(2)
+        .arg("old-job-2")
+        .query_async(&mut redis)
+        .await
+        .unwrap();
+
+    // The current version cannot record a finished job in it, and the worker dies.
+    let (failing, _processed) = start_worker(&conn, &queue);
+    push(&conn, &queue, "with-legacy-key").await;
+    let exit = tokio::time::timeout(Duration::from_secs(10), failing)
+        .await
+        .expect("worker exits")
+        .expect("worker task completes");
+    let error = exit
+        .expect_err("worker fails on the legacy key")
+        .to_string();
+    assert!(error.contains("WRONGTYPE"), "unexpected worker error: {error}");
+
+    common::workers::upgrade_legacy_queue_keys(&mut redis, &[queue.as_str()]).await;
+    let key_type: String = redis::cmd("TYPE")
+        .arg(&done_key)
+        .query_async(&mut redis)
+        .await
+        .unwrap();
+    assert_eq!(key_type, "set");
+    let members: Vec<String> = redis::cmd("SMEMBERS")
+        .arg(&done_key)
+        .query_async(&mut redis)
+        .await
+        .unwrap();
+    assert!(
+        members.contains(&"old-job-1".to_string()) && members.contains(&"old-job-2".to_string())
+    );
+    // Running it again changes nothing.
+    common::workers::upgrade_legacy_queue_keys(&mut redis, &[queue.as_str()]).await;
+
+    common::workers::clear_stale_registrations(&mut redis, &[(queue.as_str(), WORKER)]).await;
+    let (worker, mut processed) = start_worker(&conn, &queue);
+    push(&conn, &queue, "after-upgrade").await;
+    assert!(processes(&mut processed, "after-upgrade").await, "worker runs");
+    // Give the worker time to record the job as done, then make sure it is still alive.
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    assert!(!worker.is_finished(), "worker survives recording a finished job");
+    worker.abort();
+}

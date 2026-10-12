@@ -35,6 +35,15 @@ impl ShutdownGuard {
         self.requested.load(Ordering::SeqCst)
     }
 
+    /// Exits the process when a worker fails. Used as the monitor's restart
+    /// policy: a failed worker leaves the process up but idle, and restarting
+    /// the process also re-runs the startup preparation of the queues.
+    pub fn worker_failed(&self, worker: &str, error: &dyn std::fmt::Display) -> bool {
+        tracing::error!(worker = %worker, error = %error, "Worker failed");
+        self.worker_stopped(worker);
+        false
+    }
+
     /// Exits the process when a worker stops without a shutdown request.
     pub fn worker_stopped(&self, worker: &str) {
         if !self.is_requested() {

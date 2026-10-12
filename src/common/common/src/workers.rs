@@ -29,3 +29,37 @@ pub async fn clear_stale_registrations(redis: &mut ConnectionManager, workers: &
         }
     }
 }
+
+/// Converts a queue's finished-job sets to the format apalis-redis >= rc.9 uses.
+///
+/// Older versions stored `{queue}:done` and `{queue}:dead` as sorted sets; newer
+/// ones `SADD` to them, which fails with WRONGTYPE on the old keys and kills the
+/// worker the first time it finishes a job. The conversion keeps every member,
+/// is atomic per key and does nothing once a key is a plain set.
+pub async fn upgrade_legacy_queue_keys(redis: &mut ConnectionManager, queues: &[&str]) {
+    let script = redis::Script::new(UPGRADE_SORTED_SET_SCRIPT);
+    for queue_name in queues {
+        for suffix in ["done", "dead"] {
+            let key = format!("{queue_name}:{suffix}");
+            match script.key(&key).invoke_async::<i64>(redis).await {
+                Ok(-1) => debug!("{} needs no upgrade", key),
+                Ok(n) => warn!("Converted legacy sorted set {} to a set ({} entries)", key, n),
+                Err(e) => error!("Failed to upgrade legacy queue key {}: {}", key, e),
+            }
+        }
+    }
+}
+
+/// Returns the number of converted members, or -1 when the key is not a
+/// sorted set (missing, or already converted).
+const UPGRADE_SORTED_SET_SCRIPT: &str = r#"
+if redis.call('TYPE', KEYS[1]).ok ~= 'zset' then
+    return -1
+end
+local members = redis.call('ZRANGE', KEYS[1], 0, -1)
+redis.call('DEL', KEYS[1])
+for i = 1, #members, 1000 do
+    redis.call('SADD', KEYS[1], unpack(members, i, math.min(i + 999, #members)))
+end
+return #members
+"#;

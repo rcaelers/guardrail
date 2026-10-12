@@ -210,6 +210,11 @@ impl GuardrailCuratorApp {
             (queue::IMPORT_SYMBOL_JOBS, "import-symbol"),
             (queue::RETRY_IMPORT_JOBS, "retry-import"),
         ];
+        common::workers::upgrade_legacy_queue_keys(
+            &mut self.redis_manager.clone(),
+            &[queue::IMPORT_CRASH_JOBS, queue::IMPORT_SYMBOL_JOBS, queue::RETRY_IMPORT_JOBS],
+        )
+        .await;
         common::workers::clear_stale_registrations(
             &mut self.redis_manager.clone(),
             &worker_queue_names,
@@ -239,6 +244,7 @@ impl GuardrailCuratorApp {
 
         let shutdown_guard = ShutdownGuard::new();
         let stop_guard = shutdown_guard.clone();
+        let failure_guard = shutdown_guard.clone();
 
         Monitor::new()
             .register(move |_idx| {
@@ -293,6 +299,7 @@ impl GuardrailCuratorApp {
                     .enable_tracing()
                     .build(handle_maintenance_tick)
             })
+            .should_restart(move |worker, error| failure_guard.worker_failed(worker.name(), error))
             .on_event(move |worker, e| match e {
                 Event::Error(err) => error!(worker = %worker.name(), error = %err, "Worker error"),
                 Event::Start => info!(worker = %worker.name(), "Worker started"),

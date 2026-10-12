@@ -72,6 +72,14 @@ impl Stage {
 /// nothing picks them up again. This sweeper pushes a fresh job for every file
 /// that has been waiting longer than [`STALE_AFTER`]. The workers skip jobs
 /// whose work is already done, so requeuing a job that is still queued is safe.
+enum Requeue {
+    Pushed,
+    /// Still waiting after the maximum number of requeues.
+    GaveUp,
+    /// A recorded import failure, which is retried from the UI.
+    RetriedFromUi,
+}
+
 pub struct StalledWorkRequeuer;
 
 impl StalledWorkRequeuer {
@@ -82,15 +90,23 @@ impl StalledWorkRequeuer {
         info!("Starting requeue of stalled work");
         let cutoff = Utc::now() - STALE_AFTER;
         let mut targets = targets.clone();
+        // Work that should have been done by now; reported by the curator's
+        // /pipeline check. Recorded import failures wait for a retry from the UI.
+        let mut stuck = 0usize;
 
         for stage in [Stage::Minidump, Stage::ImportCrash, Stage::ImportSymbol] {
             let stalled = Self::find_stalled(&app_state.storage, stage, cutoff).await?;
             let mut requeued = 0usize;
             for id in &stalled {
                 match Self::requeue(&app_state.storage, &mut targets, stage, id).await {
-                    Ok(true) => requeued += 1,
-                    Ok(false) => {}
+                    Ok(Requeue::Pushed) => {
+                        requeued += 1;
+                        stuck += 1;
+                    }
+                    Ok(Requeue::GaveUp) => stuck += 1,
+                    Ok(Requeue::RetriedFromUi) => {}
                     Err(e) => {
+                        stuck += 1;
                         error!(stage = stage.name(), id = %id, error = %e, "Failed to requeue stalled work")
                     }
                 }
@@ -103,7 +119,8 @@ impl StalledWorkRequeuer {
             );
         }
 
-        info!("Completed requeue of stalled work");
+        crate::pipeline::record_stuck_work(&mut targets.counters, stuck).await;
+        info!(stuck, "Completed requeue of stalled work");
         Ok(())
     }
 
@@ -125,18 +142,17 @@ impl StalledWorkRequeuer {
         Ok(ids)
     }
 
-    /// Returns whether a job was pushed.
     async fn requeue(
         storage: &Arc<dyn ObjectStore>,
         targets: &mut RequeueTargets,
         stage: Stage,
         id: &str,
-    ) -> Result<bool, String> {
+    ) -> Result<Requeue, String> {
         // A recorded import failure is retried from the UI, not by the sweeper.
         if let Some(kind) = stage.import_kind()
             && import_failure::load(storage, kind, id).await.is_some()
         {
-            return Ok(false);
+            return Ok(Requeue::RetriedFromUi);
         }
 
         let attempt = Self::next_attempt(&mut targets.counters, stage, id).await?;
@@ -148,7 +164,7 @@ impl StalledWorkRequeuer {
                     "Stalled work still not done after {MAX_REQUEUES} requeues; giving up"
                 );
             }
-            return Ok(false);
+            return Ok(Requeue::GaveUp);
         }
 
         match stage {
@@ -181,7 +197,7 @@ impl StalledWorkRequeuer {
             }
         }
         info!(stage = stage.name(), id = %id, attempt, "Requeued stalled work");
-        Ok(true)
+        Ok(Requeue::Pushed)
     }
 
     async fn next_attempt(

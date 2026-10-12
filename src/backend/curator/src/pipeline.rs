@@ -7,6 +7,12 @@ use tracing::{debug, error};
 /// Unix time of the last crash imported into the database.
 const LAST_CRASH_IMPORT_KEY: &str = "guardrail::pipeline:last-crash-import";
 
+/// Number of jobs the last stalled-work sweep found waiting for over an hour.
+const STUCK_WORK_KEY: &str = "guardrail::pipeline:stuck-work";
+
+/// The sweep runs hourly; an expired value means it stopped reporting.
+const STUCK_WORK_TTL_SECONDS: u64 = 2 * 3600;
+
 /// Workrave sends several crashes a day, so two silent days mean crashes are
 /// being lost somewhere between the client and the database.
 const MAX_SILENCE: Duration = Duration::from_secs(48 * 3600);
@@ -14,6 +20,15 @@ const MAX_SILENCE: Duration = Duration::from_secs(48 * 3600);
 pub async fn record_crash_import(redis: &mut ConnectionManager) {
     if let Err(e) = redis.set::<_, _, ()>(LAST_CRASH_IMPORT_KEY, now()).await {
         debug!(error = ?e, "Failed to record crash import time");
+    }
+}
+
+pub async fn record_stuck_work(redis: &mut ConnectionManager, count: usize) {
+    if let Err(e) = redis
+        .set_ex::<_, _, ()>(STUCK_WORK_KEY, count, STUCK_WORK_TTL_SECONDS)
+        .await
+    {
+        debug!(error = ?e, "Failed to record stuck work");
     }
 }
 
@@ -25,9 +40,17 @@ pub async fn start_clock(redis: &mut ConnectionManager) {
     }
 }
 
-/// Whether crashes still reach the database. Fails open when Valkey is
-/// unreachable, which the Valkey and readiness checks already report.
+/// Whether crashes still reach the database: some arrived recently and none
+/// are stuck waiting for a worker. Fails open when Valkey is unreachable,
+/// which the Valkey and readiness checks already report.
 pub async fn is_flowing(redis: &mut ConnectionManager) -> bool {
+    if let Ok(Some(stuck)) = redis.get::<_, Option<u64>>(STUCK_WORK_KEY).await
+        && stuck > 0
+    {
+        error!(stuck, "Work is waiting for over an hour; a worker is not processing it");
+        return false;
+    }
+
     match redis.get::<_, Option<u64>>(LAST_CRASH_IMPORT_KEY).await {
         Ok(Some(last)) => {
             let flowing = is_recent(last, now());
