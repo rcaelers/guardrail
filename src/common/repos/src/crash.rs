@@ -28,6 +28,19 @@ impl CrashRepo {
         crate::take_one(&mut result, 0)
     }
 
+    /// The minidump ids of all crashes. Selects only that field: loading every
+    /// crash with its report made SurrealDB run out of memory.
+    pub async fn get_all_minidump_ids(
+        db: &Surreal<Any>,
+    ) -> Result<std::collections::HashSet<uuid::Uuid>, RepoError> {
+        let mut result = db
+            .query("SELECT VALUE minidump FROM crashes WHERE minidump != NONE")
+            .await
+            .map_err(handle_surreal_error)?;
+        let ids: Vec<uuid::Uuid> = crate::take_many(&mut result, 0)?;
+        Ok(ids.into_iter().collect())
+    }
+
     pub async fn get_all(db: &Surreal<Any>, params: QueryParams) -> Result<Vec<Crash>, RepoError> {
         let suffix = Repo::build_query_suffix(
             &params,

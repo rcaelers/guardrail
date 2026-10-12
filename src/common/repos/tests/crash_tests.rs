@@ -187,3 +187,30 @@ async fn test_count() {
 
     assert_eq!(new_count, initial_count + test_crashes.len() as i64);
 }
+
+#[tokio::test]
+async fn test_get_all_minidump_ids_returns_only_set_minidumps() {
+    let db = TestSetup::create_db().await;
+    let product = create_test_product(&db).await;
+    let with_minidump = |minidump| NewCrash {
+        id: None,
+        minidump,
+        report: Some(serde_json::json!({ "large": "report" })),
+        fingerprint: None,
+        group_id: None,
+        product_id: product.id.clone(),
+    };
+    let first = Uuid::new_v4();
+    let second = Uuid::new_v4();
+    CrashRepo::create(&db, with_minidump(Some(first)))
+        .await
+        .unwrap();
+    CrashRepo::create(&db, with_minidump(Some(second)))
+        .await
+        .unwrap();
+    CrashRepo::create(&db, with_minidump(None)).await.unwrap();
+
+    let ids = CrashRepo::get_all_minidump_ids(&db).await.unwrap();
+
+    assert_eq!(ids, std::collections::HashSet::from([first, second]));
+}

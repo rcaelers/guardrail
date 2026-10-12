@@ -8,7 +8,6 @@ use uuid::Uuid;
 
 use crate::error::JobError;
 use crate::state::AppState;
-use common::QueryParams;
 use repos::crash::CrashRepo;
 
 pub struct OrphanedMinidumpCleaner;
@@ -63,11 +62,7 @@ impl OrphanedMinidumpCleaner {
     }
 
     async fn get_database_minidumps(db: &Surreal<Any>) -> Result<HashSet<Uuid>, JobError> {
-        let crashes = CrashRepo::get_all(db, QueryParams::default()).await?;
-        let db_minidump_storage_ids: HashSet<Uuid> = crashes
-            .into_iter()
-            .filter_map(|crash| crash.minidump)
-            .collect();
+        let db_minidump_storage_ids = CrashRepo::get_all_minidump_ids(db).await?;
         info!("Found {} minidump references in database", db_minidump_storage_ids.len());
         Ok(db_minidump_storage_ids)
     }

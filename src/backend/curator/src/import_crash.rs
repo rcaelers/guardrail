@@ -333,23 +333,25 @@ impl ImportCrashProcessor {
         Ok(())
     }
 
-    /// The stalled-work sweeper can requeue a crash whose job is still queued. The
-    /// processed file is deleted after a successful import, so a missing file plus
-    /// an existing crash record means this job is a duplicate.
+    /// A crash can be imported more than once: the stalled-work sweeper requeues
+    /// work whose job may still be queued, and a minidump processed twice yields
+    /// a second import job. The crash record is created in one step, so an
+    /// existing record means this job is a duplicate; its processed file, if the
+    /// duplicate processing wrote one again, is removed.
     async fn is_already_imported(&self, crash_id: &str) -> Result<bool, JobError> {
-        let path = Path::from(format!("processed-crashes/{crash_id}.json"));
-        match self.storage.head(&path).await {
-            Ok(_) => return Ok(false),
-            Err(object_store::Error::NotFound { .. }) => {}
-            Err(e) => {
-                error!("Failed to check processed crash {path}: {e}");
-                return Err(JobError::Failure("failed to check processed crash".to_string()));
-            }
-        }
         let crash = CrashRepo::get_by_id(&self.repo.db, crash_id)
             .await
             .map_err(|e| JobError::Failure(format!("failed to look up crash {crash_id}: {e}")))?;
-        Ok(crash.is_some())
+        if crash.is_none() {
+            return Ok(false);
+        }
+        let path = Path::from(format!("processed-crashes/{crash_id}.json"));
+        match self.storage.head(&path).await {
+            Ok(_) => self.cleanup_processed_crash(crash_id.to_string()).await,
+            Err(object_store::Error::NotFound { .. }) => {}
+            Err(e) => error!("Failed to check processed crash {path}: {e}"),
+        }
+        Ok(true)
     }
 
     #[instrument(skip(self), fields(crash_id = %crash_id))]
@@ -933,5 +935,48 @@ mod merge_routing_tests {
             .unwrap()
             .unwrap();
         assert_eq!(found.id, other);
+    }
+
+    // A duplicate import job for a stored crash (a requeued job, or a minidump
+    // processed twice) succeeds and removes the processed file it left behind,
+    // instead of failing on the existing record.
+    #[tokio::test]
+    async fn importing_an_already_stored_crash_is_a_no_op() {
+        use object_store::{ObjectStore, ObjectStoreExt, PutPayload, path::Path};
+        use std::sync::Arc;
+
+        let db = TestSetup::create_db().await;
+        let product = testware::create_test_product(&db).await;
+        let crash_id = uuid::Uuid::new_v4().to_string();
+        repos::crash::CrashRepo::create(
+            &db,
+            data::crash::NewCrash {
+                id: Some(crash_id.clone()),
+                minidump: Some(uuid::Uuid::new_v4()),
+                report: None,
+                fingerprint: None,
+                group_id: None,
+                product_id: product.id.clone(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let storage: Arc<dyn ObjectStore> = Arc::new(object_store::memory::InMemory::new());
+        let processed = Path::from(format!("processed-crashes/{crash_id}.json"));
+        storage
+            .put(&processed, PutPayload::from_static(b"{}"))
+            .await
+            .unwrap();
+        let processor = ImportCrashProcessor {
+            storage: storage.clone(),
+            repo: Arc::new(repos::Repo::new(db)),
+        };
+
+        processor.handle_job(crash_id).await.expect("duplicate import succeeds");
+        assert!(matches!(
+            storage.head(&processed).await,
+            Err(object_store::Error::NotFound { .. })
+        ));
     }
 }
