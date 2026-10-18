@@ -127,7 +127,7 @@ impl GuardrailCuratorApp {
                 let settings = settings_live.clone();
                 Box::pin(async move { !crate::db::is_handle_broken(&db, &settings.database).await })
             }),
-            // For monitoring only: fails when no crash was imported for two days.
+            // For monitoring only: fails when no crash was imported for four days.
             vec![(
                 "/pipeline",
                 Box::new(move || {

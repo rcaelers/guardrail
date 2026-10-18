@@ -13,9 +13,10 @@ const STUCK_WORK_KEY: &str = "guardrail::pipeline:stuck-work";
 /// The sweep runs hourly; an expired value means it stopped reporting.
 const STUCK_WORK_TTL_SECONDS: u64 = 2 * 3600;
 
-/// Workrave sends several crashes a day, so two silent days mean crashes are
-/// being lost somewhere between the client and the database.
-const MAX_SILENCE: Duration = Duration::from_secs(48 * 3600);
+/// Workrave sends several crashes a day, so four silent days mean crashes are
+/// being lost somewhere between the client and the database. Shorter windows
+/// fire over quiet weekends.
+const MAX_SILENCE: Duration = Duration::from_secs(96 * 3600);
 
 pub async fn record_crash_import(redis: &mut ConnectionManager) {
     if let Err(e) = redis.set::<_, _, ()>(LAST_CRASH_IMPORT_KEY, now()).await {
@@ -83,11 +84,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn crashes_flow_until_two_silent_days() {
+    fn crashes_flow_until_four_silent_days() {
         let now = 1_000_000;
         assert!(is_recent(now, now));
-        assert!(is_recent(now - 47 * 3600, now));
-        assert!(!is_recent(now - 48 * 3600, now));
+        assert!(is_recent(now - 95 * 3600, now));
+        assert!(!is_recent(now - 96 * 3600, now));
         // A clock that moved backwards is not silence.
         assert!(is_recent(now + 60, now));
     }
